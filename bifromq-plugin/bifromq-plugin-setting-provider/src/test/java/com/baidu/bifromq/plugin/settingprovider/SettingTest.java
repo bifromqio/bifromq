@@ -13,15 +13,36 @@
 
 package com.baidu.bifromq.plugin.settingprovider;
 
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
+import lombok.SneakyThrows;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class SettingTest {
     private final String tenantId = "tenantA";
+
+    @Mock
+    private ISettingProvider provider;
+
+    private AutoCloseable closeable;
+
+    @BeforeMethod
+    public void setup() {
+        closeable = MockitoAnnotations.openMocks(this);
+        System.setProperty("setting_refresh_seconds", "1");
+    }
+
+    @SneakyThrows
+    @AfterMethod
+    public void tearDown() {
+        closeable.close();
+    }
 
     @Test
     public void enumInitialValue() {
@@ -31,32 +52,11 @@ public class SettingTest {
     }
 
     @Test
-    public void customValueExpiry() {
-        assertEquals((int) Setting.MaxTopicLevels.current(tenantId), 16);
-        AtomicInteger calls = new AtomicInteger();
-        AtomicReference<String> tenantIdRef = new AtomicReference<>(null);
-        Setting.MaxTopicLevels.setProvider(new ISettingProvider() {
-            @Override
-            public <R> R provide(Setting setting, String tenantId) {
-                tenantIdRef.set(tenantId);
-                if (calls.getAndIncrement() == 0) {
-                    Integer levels = 32;
-                    return (R) levels;
-                } else {
-                    Integer levels = 48;
-                    return (R) levels;
-                }
-            }
-        });
-        Setting.MaxTopicLevels.currentVals.invalidateAll();
+    public void provideValue() {
+        Setting.MaxTopicFiltersPerInbox.setProvider(provider);
+        when(provider.provide(Setting.MaxTopicFiltersPerInbox, tenantId)).thenReturn(200);
 
-        assertEquals((int) Setting.MaxTopicLevels.current(tenantId), 32);
-        assertEquals(tenantIdRef.get(), tenantId);
-
-        Setting.MaxTopicLevels.currentVals.invalidateAll();
-
-        assertEquals((int) Setting.MaxTopicLevels.current(tenantId), 48);
-        assertEquals(tenantIdRef.get(), tenantId);
+        assertEquals((int) Setting.MaxTopicFiltersPerInbox.current(tenantId), 200);
     }
 
     @Test

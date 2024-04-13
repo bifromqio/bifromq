@@ -25,16 +25,13 @@
     <artifactId>bifromq-plugin-setting-provider</artifactId>
     <dependencies>
         <dependency>
-            <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-common-type</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.github.ben-manes.caffeine</groupId>
-            <artifactId>caffeine</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.pf4j</groupId>
             <artifactId>pf4j</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

@@ -39,7 +39,8 @@ public class SettingProviderManager implements ISettingProvider {
                 Preconditions.checkArgument(availSettingProviders.containsKey(settingProviderFQN),
                     String.format("Setting provider Plugin '%s' not found", settingProviderFQN));
                 log.info("Setting provider plugin type: {}", settingProviderFQN);
-                provider = new MonitoredSettingProvider(availSettingProviders.get(settingProviderFQN));
+                provider = new CacheableSettingProvider(
+                    new MonitoredSettingProvider(availSettingProviders.get(settingProviderFQN)), CacheOptions.DEFAULT);
             }
         }
         for (Setting setting : Setting.values()) {
@@ -49,12 +50,7 @@ public class SettingProviderManager implements ISettingProvider {
 
     public <R> R provide(Setting setting, String tenantId) {
         assert !stopped.get();
-        return setting.current(tenantId);
-    }
-
-    // for testing
-    ISettingProvider get() {
-        return provider;
+        return provider.provide(setting, tenantId);
     }
 
     @Override

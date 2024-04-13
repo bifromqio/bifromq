@@ -13,10 +13,6 @@
 
 package com.baidu.bifromq.plugin.settingprovider;
 
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
-import com.github.benmanes.caffeine.cache.Scheduler;
-import java.time.Duration;
 import java.util.function.Predicate;
 import lombok.extern.slf4j.Slf4j;
 
@@ -55,26 +51,14 @@ public enum Setting {
 
     public final Class<?> valueType;
     private final Predicate<Object> validator;
-    final LoadingCache<String, Object> currentVals;
+    private final Object defVal;
     private volatile ISettingProvider settingProvider;
 
     Setting(Class<?> valueType, Predicate<Object> validator, Object defValue) {
         this.valueType = valueType;
         this.validator = validator;
-        final Object defVal = resolve(defValue);
+        this.defVal = resolve(defValue);
         assert isValid(defVal);
-        currentVals = Caffeine.newBuilder()
-            .expireAfterWrite(CacheOptions.EXPIRE_AFTER_WRITE)
-            .maximumSize(CacheOptions.MAX_CACHED_TENANTS)
-            .refreshAfterWrite(CacheOptions.REFRESH_AFTER_WRITE)
-            .scheduler(Scheduler.systemScheduler())
-            .build(tenantId -> {
-                if (settingProvider == null) {
-                    return defVal;
-                }
-                Object val = settingProvider.provide(this, tenantId);
-                return val == null ? defVal : val;
-            });
     }
 
     /**
@@ -83,10 +67,10 @@ public enum Setting {
      * @param tenantId the id of the calling tenant
      * @return The effective value of the setting for the client
      */
-    @SuppressWarnings("unchecked")
     public <R> R current(String tenantId) {
-        return (R) currentVals.get(tenantId);
+        return settingProvider == null ? initialValue() : settingProvider.provide(this, tenantId);
     }
+
 
     /**
      * Validate if provided value is a valid for the setting
@@ -101,9 +85,15 @@ public enum Setting {
         return this.validator.test(val);
     }
 
+    @SuppressWarnings("unchecked")
+    <R> R initialValue() {
+        return (R) defVal;
+    }
+
     void setProvider(ISettingProvider provider) {
         this.settingProvider = provider;
     }
+
 
     Object resolve(Object initial) {
         String override = System.getProperty(name());
@@ -125,50 +115,5 @@ public enum Setting {
             }
         }
         return initial;
-    }
-
-    private static class CacheOptions {
-        static final Duration REFRESH_AFTER_WRITE = refreshAfterWriteDuration();
-        static final Duration EXPIRE_AFTER_WRITE = expireAfterWriteDuration();
-        static final int MAX_CACHED_TENANTS = maxCachedTenants();
-
-        private static Duration refreshAfterWriteDuration() {
-            String override = System.getProperty("setting_refresh_seconds");
-            if (override != null) {
-                try {
-                    return Duration.ofSeconds(Long.parseLong(override));
-                } catch (Throwable e) {
-                    log.error("Unable to parse 'setting_refresh_seconds' value from system property: value={}",
-                        override);
-                }
-            }
-            return Duration.ofSeconds(5);
-        }
-
-        private static int maxCachedTenants() {
-            String override = System.getProperty("setting_tenant_cache_limit");
-            if (override != null) {
-                try {
-                    return Integer.parseInt(override);
-                } catch (Throwable e) {
-                    log.error("Unable to parse 'setting_tenant_cache_limit' value from system property: value={}",
-                        override);
-                }
-            }
-            return 100;
-        }
-
-        private static Duration expireAfterWriteDuration() {
-            String override = System.getProperty("setting_expire_seconds");
-            if (override != null) {
-                try {
-                    return Duration.ofSeconds(Long.parseLong(override));
-                } catch (Throwable e) {
-                    log.error("Unable to parse 'setting_expire_seconds' value from system property: value={}",
-                        override);
-                }
-            }
-            return Duration.ofSeconds(300);
-        }
     }
 }
