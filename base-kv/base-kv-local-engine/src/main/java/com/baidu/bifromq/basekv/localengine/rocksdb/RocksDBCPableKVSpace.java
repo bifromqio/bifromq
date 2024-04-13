@@ -126,6 +126,7 @@ public class RocksDBCPableKVSpace
         String cpId = genCheckpointId();
         File cpDir = Paths.get(cpRootDir.getAbsolutePath(), cpId).toFile();
         try {
+            log.debug("KVSpace[{}] checkpoint start: checkpointId={}", id, cpId);
             // flush before checkpointing
             db.put(cfHandle, LATEST_CP_KEY, cpId.getBytes());
             log.debug("KVSpace[{}] flush start", id);
@@ -148,20 +149,24 @@ public class RocksDBCPableKVSpace
     protected IRocksDBKVSpaceCheckpoint doLoadLatestCheckpoint() {
         byte[] cpIdBytes = db.get(cfHandle, LATEST_CP_KEY);
         if (cpIdBytes != null) {
-            String cpId = new String(cpIdBytes, UTF_8);
-            File cpDir = Paths.get(cpRootDir.getAbsolutePath(), cpId).toFile();
-            // cleanup obsolete checkpoints
-            for (String obsoleteId : obsoleteCheckpoints(cpId)) {
-                try {
-                    cleanCheckpoint(obsoleteId);
-                } catch (Throwable e) {
-                    log.error("Clean checkpoint[{}] for kvspace[{}] error", obsoleteId, id, e);
+            try {
+                String cpId = new String(cpIdBytes, UTF_8);
+                File cpDir = Paths.get(cpRootDir.getAbsolutePath(), cpId).toFile();
+                // cleanup obsolete checkpoints
+                for (String obsoleteId : obsoleteCheckpoints(cpId)) {
+                    try {
+                        cleanCheckpoint(obsoleteId);
+                    } catch (Throwable e) {
+                        log.error("Clean checkpoint[{}] for kvspace[{}] error", obsoleteId, id, e);
+                    }
                 }
+                log.debug("Load latest checkpoint[{}] of kvspace[{}] in engine[{}] at path[{}]",
+                    cpId, id, engine.id(), cpDir);
+                latestCheckpointId.set(cpId);
+                return new RocksDBKVSpaceCheckpoint(id, cpId, cpDir, this::isLatest);
+            } catch (Throwable e) {
+                log.warn("Failed to load latest checkpoint, checkpoint now", e);
             }
-            log.debug("Load latest checkpoint[{}] of kvspace[{}] in engine[{}] at path[{}]",
-                cpId, id, engine.id(), cpDir);
-            latestCheckpointId.set(cpId);
-            return new RocksDBKVSpaceCheckpoint(id, cpId, cpDir, this::isLatest);
         }
         return doCheckpoint();
     }
