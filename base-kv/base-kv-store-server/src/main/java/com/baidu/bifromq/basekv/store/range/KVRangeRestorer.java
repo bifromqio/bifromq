@@ -106,6 +106,10 @@ class KVRangeRestorer {
                                                 restorer.put(kv.getKey(), kv.getValue());
                                             }
                                             metricManager.reportRestore(bytes);
+                                            log.debug(
+                                                "Saved {} bytes snapshot data, send reply to {}: rangeId={}, sessionId={}",
+                                                bytes, m.getHostStoreId(), KVRangeIdUtil.toString(range.id()),
+                                                sessionId);
                                             if (request.getFlag() == SaveSnapshotDataRequest.Flag.End) {
                                                 if (!onDone.isCancelled()) {
                                                     restorer.done();
@@ -120,8 +124,6 @@ class KVRangeRestorer {
                                                         KVRangeIdUtil.toString(range.id()), sessionId);
                                                 }
                                             }
-                                            log.debug("Saved snapshot data, send reply to {}: rangeId={}, sessionId={}",
-                                                m.getHostStoreId(), KVRangeIdUtil.toString(range.id()), sessionId);
                                             messenger.send(KVRangeMessage.newBuilder()
                                                 .setRangeId(range.id())
                                                 .setHostStoreId(m.getHostStoreId())

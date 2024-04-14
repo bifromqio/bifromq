@@ -13,14 +13,14 @@
 
 package com.baidu.bifromq.basekv.raft;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
-import static org.testng.Assert.assertSame;
 
 import com.baidu.bifromq.basekv.raft.proto.AppendEntries;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
@@ -41,17 +41,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
-    private final Logger log = LoggerFactory.getLogger("RaftNodeStateCandidateTest");
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void openMocks() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -61,6 +58,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
     public void releaseMocks() throws Exception {
         closeable.close();
     }
+
     @Test
     public void testStartUp() {
         IRaftStateStore stateStorage = new InMemoryStateStore("testLocal", Snapshot.newBuilder()
@@ -73,7 +71,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
             .setInstallSnapshotTimeoutTick(5)
             .setMaxInflightAppends(3);
         // preVote && !leaderTransfer
-        new RaftNodeStateCandidate(1, 0, raftConfig, stateStorage, log,
+        new RaftNodeStateCandidate(1, 0, raftConfig, stateStorage,
             new LinkedHashMap<>(),
             messages -> assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                 put("v1", Collections.singletonList(RaftMessage.newBuilder()
@@ -106,7 +104,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
             .setMaxInflightAppends(3);
         // !preVote && !leaderTransfer
         RaftNodeStateCandidate raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, raftConfig,
-            stateStorage, log, new LinkedHashMap<>(),
+            stateStorage, new LinkedHashMap<>(),
             messages -> assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                 put("v1", Collections.singletonList(RaftMessage.newBuilder()
                     .setTerm(2)
@@ -133,7 +131,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
         stateStorage = new InMemoryStateStore("testLocal", Snapshot.newBuilder()
             .setClusterConfig(clusterConfig).build());
         // !preVote && !leaderTransfer
-        raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, raftConfig, stateStorage, log,
+        raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, raftConfig, stateStorage,
             new LinkedHashMap<>(),
             messages -> assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{
                 put("v1", Collections.singletonList(RaftMessage.newBuilder()
@@ -173,7 +171,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
 
         AtomicInteger onMessageReadyIndex = new AtomicInteger();
         RaftNodeStateCandidate raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, raftConfig,
-            stateStorage, log, new LinkedHashMap<>(),
+            stateStorage, new LinkedHashMap<>(),
             messages -> {
                 if (onMessageReadyIndex.get() == 0) {
                     onMessageReadyIndex.incrementAndGet();
@@ -246,7 +244,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateCandidate raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, defaultRaftConfig,
-            stateStorage, log, new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            stateStorage, new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
 
         CompletableFuture<Long> onDone = new CompletableFuture<>();
         raftNodeStateCandidate.propose(ByteString.copyFromUtf8("command"), onDone);
@@ -259,7 +257,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateCandidate raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, defaultRaftConfig,
-            stateStorage, log, new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            stateStorage, new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
 
         CompletableFuture<Long> onDone = new CompletableFuture<>();
         raftNodeStateCandidate.readIndex(onDone);
@@ -272,7 +270,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateCandidate raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, defaultRaftConfig,
-            stateStorage, log, new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            stateStorage, new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
 
         CompletableFuture<Void> onDone = new CompletableFuture<>();
         raftNodeStateCandidate.transferLeadership("v1", onDone);
@@ -285,8 +283,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateCandidate raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, defaultRaftConfig,
-            stateStorage, log, new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller,
-            onSnapshotInstalled);
+            stateStorage, new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
 
         CompletableFuture<Void> onDone = new CompletableFuture<>();
         raftNodeStateCandidate.changeClusterConfig("cId",
@@ -304,7 +301,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateCandidate raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, defaultRaftConfig,
-            stateStorage, log, new LinkedHashMap<>(),
+            stateStorage, new LinkedHashMap<>(),
             messages -> {
                 if (onMessageReadyIndex.get() == 1) {
                     onMessageReadyIndex.incrementAndGet();
@@ -331,7 +328,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
         assertSame(raftNodeState.getState(), RaftNodeStatus.Candidate);
 
         raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, defaultRaftConfig,
-            stateStorage, log, new LinkedHashMap<>(),
+            stateStorage, new LinkedHashMap<>(),
             messages -> {
                 if (onMessageReadyIndex.get() == 1) {
                     onMessageReadyIndex.incrementAndGet();
@@ -365,7 +362,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateCandidate raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, defaultRaftConfig,
-            stateStorage, log, new LinkedHashMap<>(),
+            stateStorage, new LinkedHashMap<>(),
             messages -> {
                 if (onMessageReadyIndex.get() == 0) {
                     onMessageReadyIndex.incrementAndGet();
@@ -411,7 +408,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateCandidate raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, defaultRaftConfig,
-            stateStorage, log, new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            stateStorage, new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
 
         RaftMessage preVoteReplyRejected = RaftMessage.newBuilder()
             .setTerm(2)
@@ -435,7 +432,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
 
         RaftNodeStateCandidate raftNodeStateCandidate =
             new RaftNodeStateCandidate(1, 0, defaultRaftConfig, stateStorage,
-                log, new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+                new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
 
         RaftMessage appendEntries = RaftMessage.newBuilder()
             .setTerm(1)
@@ -455,7 +452,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, defaultRaftConfig, stateStorage,
-            log, new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
 
         when(snapshotInstaller.install(any(ByteString.class), anyString())).thenReturn(new CompletableFuture<>());
         RaftMessage installSnapshot = RaftMessage.newBuilder()
@@ -476,7 +473,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateCandidate raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, defaultRaftConfig,
-            stateStorage, log, new LinkedHashMap<>(),
+            stateStorage, new LinkedHashMap<>(),
             messages -> {
                 if (onMessageReadyIndex.get() == 0) {
                     onMessageReadyIndex.incrementAndGet();
@@ -516,7 +513,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateCandidate raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, raftConfig, stateStorage,
-            log, new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
+            new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
         raftNodeStateCandidate.campaign(false, false);
 
         RaftMessage voteReply = RaftMessage.newBuilder()
@@ -542,7 +539,7 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
             .setClusterConfig(clusterConfig).build());
 
         RaftNodeStateCandidate raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0,
-            raftConfig, stateStorage, log, new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller,
+            raftConfig, stateStorage, new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller,
             onSnapshotInstalled);
         raftNodeStateCandidate.campaign(false, false);
 

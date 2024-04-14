@@ -68,7 +68,6 @@ import com.baidu.bifromq.basekv.proto.SplitRange;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.proto.TransferLeadership;
 import com.baidu.bifromq.basekv.proto.WALRaftMessages;
-import com.baidu.bifromq.basekv.raft.exception.ClusterConfigChangeException;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.RaftMessage;
@@ -672,34 +671,46 @@ public class KVRangeFSM implements IKVRangeFSM {
                 String taskId = state.getTaskId();
                 rangeWriter.bumpVer(false);
                 if (taskId.equals(config.getCorrelateId())) {
+                    // request config change success
+                    // request config applied
+                    if (config.getNextVotersCount() == 0 && config.getNextLearnersCount() == 0) {
+                        // if the config entry is resulted from user request, and removed from replica set,
+                        // put it to the state of Removed
+                        boolean remove = !members.contains(hostStoreId);
+                        if (remove) {
+                            log.debug("Replica removed[newConfig={}]", config);
+                            rangeWriter.state(State.newBuilder()
+                                .setType(Purged)
+                                .setTaskId(taskId)
+                                .build());
+                            onDone.complete(() -> {
+                                clusterConfigSubject.onNext(config);
+                                quitReason.complete(Purged);
+                                finishCommand(taskId);
+                                scheduleCompaction();
+                            });
+                        } else {
+                            rangeWriter.state(State.newBuilder()
+                                .setType(Normal)
+                                .setTaskId(taskId)
+                                .build());
+                            onDone.complete(() -> {
+                                clusterConfigSubject.onNext(config);
+                                finishCommand(taskId);
+                                scheduleCompaction();
+                            });
+                        }
+                    } else {
+                        onDone.complete(() -> clusterConfigSubject.onNext(config));
+                    }
+                } else {
+                    // request config change failed, the config entry is appended due to leader reelection
                     rangeWriter.state(State.newBuilder()
                         .setType(Normal)
                         .setTaskId(taskId)
                         .build());
-                    // if the config entry is resulted from user request, and removed from replica set,
-                    // put it to the state of Removed
-                    boolean remove = !members.contains(hostStoreId);
-                    if (remove) {
-                        log.debug("Replica removed[newConfig={}]", config);
-                        rangeWriter.state(State.newBuilder()
-                            .setType(Purged)
-                            .setTaskId(taskId)
-                            .build());
-                    }
-                    onDone.complete(() -> {
-                        clusterConfigSubject.onNext(config);
-                        finishCommand(taskId);
-                        if (remove) {
-                            quitReason.complete(Purged);
-                        }
-                        scheduleCompaction();
-                    });
-                } else {
-                    onDone.complete(() -> {
-                        clusterConfigSubject.onNext(config);
-                        finishCommandWithError(taskId, new KVRangeException.TryLater("Retry config change"));
-                        scheduleCompaction();
-                    });
+                    // no need to finish command here, it's already finished in RequestConfigChange entry application
+                    onDone.complete(() -> clusterConfigSubject.onNext(config));
                 }
             }
             case MergedQuiting -> {
@@ -743,14 +754,11 @@ public class KVRangeFSM implements IKVRangeFSM {
                                                      IKVReader dataReader,
                                                      IKVRangeWritable<?> rangeWriter) {
         CompletableFuture<Runnable> onDone = new CompletableFuture<>();
-//        long ver = rangeWriter.version();
-//        State state = rangeWriter.state();
-//        Boundary boundary = rangeWriter.boundary();
         long reqVer = command.getVer();
         String taskId = command.getTaskId();
         log.trace(
-            "Execute KVRange Command[term={}, index={}]: rangeId={}, storeId={}, ver={}, state={}, \n{}",
-            logTerm, logIndex, KVRangeIdUtil.toString(id), hostStoreId, ver,
+            "Execute KVRange Command[term={}, index={}, taskId={}]: rangeId={}, storeId={}, ver={}, state={}, \n{}",
+            logTerm, logIndex, taskId, KVRangeIdUtil.toString(id), hostStoreId, ver,
             state, command);
         switch (command.getCommandTypeCase()) {
             // admin commands
@@ -765,7 +773,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 }
                 if (state.getType() != Normal && state.getType() != Merged) {
                     onDone.complete(() -> finishCommandWithError(taskId, new KVRangeException.TryLater(
-                        "Transfer leader abort, range is in state:" + state.getType().name())));
+                        "Config change abort, range is in state:" + state.getType().name())));
                     break;
                 }
                 // notify new voters and learners host store to ensure the range exist
@@ -780,8 +788,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                         singleton(hostStoreId)
                     );
                 newHostingStoreIds.forEach(storeId ->
-                    log.debug("Send request to ensure range hosted: rangeId={}, storeId={}, newHostingStoreId={}",
-                        KVRangeIdUtil.toString(id), hostStoreId, storeId));
+                    log.debug(
+                        "Send request to ensure range hosted[taskId={}]: rangeId={}, storeId={}, newHostingStoreId={}",
+                        taskId, KVRangeIdUtil.toString(id), hostStoreId, storeId));
                 List<CompletableFuture<?>> onceFutures = newHostingStoreIds.stream()
                     .map(storeId -> messenger.once(m -> {
                         if (m.hasEnsureRangeReply()) {
@@ -794,12 +803,14 @@ public class KVRangeFSM implements IKVRangeFSM {
                     .orTimeout(5, TimeUnit.SECONDS)
                     .whenCompleteAsync((_v, _e) -> {
                         if (_e != null) {
-                            log.debug("Ensure range hosted failed: rangeId={}, storeId={}, newHostingStoreIds={}",
-                                KVRangeIdUtil.toString(id), hostStoreId, newHostingStoreIds);
+                            log.debug(
+                                "Ensure range hosted failed[taskId={}]: rangeId={}, storeId={}, newHostingStoreIds={}",
+                                taskId, KVRangeIdUtil.toString(id), hostStoreId, newHostingStoreIds, _e);
                             onceFutures.forEach(f -> f.cancel(true));
                         }
-                        log.debug("Changing Config: rangeId={}, storeId={}, nextVoters={}, nextLearners={}",
-                            KVRangeIdUtil.toString(id), hostStoreId, request.getVotersList(),
+                        log.debug(
+                            "Changing Config[taskId={}]: rangeId={}, storeId={}, nextVoters={}, nextLearners={}",
+                            taskId, KVRangeIdUtil.toString(id), hostStoreId, request.getVotersList(),
                             request.getLearnersList());
                         wal.changeClusterConfig(taskId,
                                 newHashSet(request.getVotersList()),
@@ -810,33 +821,17 @@ public class KVRangeFSM implements IKVRangeFSM {
                                         String.format("Config change aborted[taskId=%s] due to %s", taskId,
                                             e.getMessage());
                                     log.debug(errorMessage);
-                                    // we can finish the pending config-change request in follower here
-                                    if (!(e instanceof ClusterConfigChangeException.NotLeaderException) &&
-                                        !(e.getCause() instanceof ClusterConfigChangeException.NotLeaderException)) {
-                                        finishCommandWithError(taskId,
-                                            new KVRangeException.TryLater(errorMessage));
-                                    }
+                                    finishCommandWithError(taskId, new KVRangeException.TryLater(errorMessage));
                                     wal.stepDown();
                                 }
-                                if (state.getType() == Normal) {
-                                    // only transit to ConfigChanging from Normal
-                                    rangeWriter.state(State.newBuilder()
-                                        .setType(ConfigChanging)
-                                        .setTaskId(taskId)
-                                        .build());
-                                } else if (state.getType() == Merged) {
-                                    rangeWriter.state(State.newBuilder()
-                                        .setType(MergedQuiting)
-                                        .setTaskId(taskId)
-                                        .build());
-                                }
-                                rangeWriter.bumpVer(false);
-                                onDone.complete(NOOP);
+                                // postpone finishing command when config entry is applied
                             }, fsmExecutor);
+
                     }, fsmExecutor);
                 newHostingStoreIds.forEach(storeId -> {
-                    log.debug("Send range ensure request to store[{}]: rangeId={}",
-                        storeId, KVRangeIdUtil.toString(id));
+                    log.debug(
+                        "Send range ensure request to store[taskId={}]: rangeId={}, storeId={}, targetStoreId={}",
+                        taskId, hostStoreId, KVRangeIdUtil.toString(id), storeId);
                     messenger.send(KVRangeMessage.newBuilder()
                         .setRangeId(id)
                         .setHostStoreId(storeId)
@@ -859,6 +854,21 @@ public class KVRangeFSM implements IKVRangeFSM {
                             .build())
                         .build());
                 });
+
+                if (state.getType() == Normal) {
+                    // only transit to ConfigChanging from Normal
+                    rangeWriter.state(State.newBuilder()
+                        .setType(ConfigChanging)
+                        .setTaskId(taskId)
+                        .build());
+                } else if (state.getType() == Merged) {
+                    rangeWriter.state(State.newBuilder()
+                        .setType(MergedQuiting)
+                        .setTaskId(taskId)
+                        .build());
+                }
+                rangeWriter.bumpVer(false);
+                onDone.complete(NOOP);
             }
             case TRANSFERLEADERSHIP -> {
                 TransferLeadership request = command.getTransferLeadership();
@@ -878,8 +888,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 if (!wal.clusterConfig().getVotersList().contains(request.getNewLeader()) &&
                     !wal.clusterConfig().getNextVotersList().contains(request.getNewLeader())) {
                     onDone.complete(
-                        () -> finishCommandWithError(taskId,
-                            new KVRangeException.BadRequest("Invalid Leader")));
+                        () -> finishCommandWithError(taskId, new KVRangeException.BadRequest("Invalid Leader")));
                     break;
                 }
                 wal.transferLeadership(request.getNewLeader())
@@ -887,13 +896,13 @@ public class KVRangeFSM implements IKVRangeFSM {
                         if (e != null) {
                             log.debug("Failed to transfer leadership[newLeader={}] due to {}",
                                 request.getNewLeader(), e.getMessage());
-                            onDone.complete(
-                                () -> finishCommandWithError(taskId, new KVRangeException.TryLater(
-                                    "Failed to transfer leadership", e)));
+                            finishCommandWithError(taskId, new KVRangeException.TryLater(
+                                "Failed to transfer leadership", e));
                         } else {
-                            onDone.complete(() -> finishCommand(taskId));
+                            finishCommand(taskId);
                         }
                     }, fsmExecutor);
+                onDone.complete(NOOP);
             }
             case SPLITRANGE -> {
                 SplitRange request = command.getSplitRange();
@@ -935,8 +944,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                         .whenCompleteAsync((v, e) -> {
                             if (e != null) {
                                 log.warn(
-                                    "The rhs range will not be compatible locally: rangeId={}, storeId={}",
-                                    KVRangeIdUtil.toString(request.getNewId()), hostStoreId, e);
+                                    "The rhs range will not be compatible locally[taskId={}]: rangeId={}, storeId={}",
+                                    taskId, KVRangeIdUtil.toString(request.getNewId()), hostStoreId, e);
                                 onDone.completeExceptionally(e);
                             } else {
                                 rangeWriter.boundary(leftBoundary).bumpVer(true);
@@ -1364,7 +1373,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 return CompletableFuture.completedFuture(null);
             }
             log.debug("Restore from snapshot: rangeId={}, storeId={}\n{}",
-                KVRangeIdUtil.toString(id), hostStoreId, snapshot.toByteString());
+                KVRangeIdUtil.toString(id), hostStoreId, snapshot);
             CompletableFuture<KVRangeSnapshot> onInstalled = new CompletableFuture<>();
             // the restore future is cancelable
             CompletableFuture<Void> restoreFuture = restorer.restoreFrom(leader, snapshot);
@@ -1383,7 +1392,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                     return;
                 }
                 if (e != null) {
-                    log.debug("Restored from snapshot error: rangeId={} \n{}", KVRangeIdUtil.toString(id), snapshot, e);
+                    log.debug("Restored from snapshot error: rangeId={} \n{}", KVRangeIdUtil.toString(id), snapshot,
+                        e);
                     onInstalled.completeExceptionally(e);
                 } else {
                     log.debug("Restored from snapshot: rangeId={} \n{}", KVRangeIdUtil.toString(id), snapshot);
@@ -1417,7 +1427,8 @@ public class KVRangeFSM implements IKVRangeFSM {
     private void scheduleCompaction() {
         if (compacting.compareAndSet(false, true)) {
             compactionFuture = mgmtTaskRunner.add(() -> {
-                if (isNotOpening()) {
+                if (isNotOpening() || kvRange.state().getType() == ConfigChanging) {
+                    // don't let compaction interferes with config changing process
                     return CompletableFuture.completedFuture(null);
                 }
                 return metricManager.recordCompact(() -> {
@@ -1473,7 +1484,8 @@ public class KVRangeFSM implements IKVRangeFSM {
     private void handleWALMessages(String peerId, List<RaftMessage> messages) {
         if (messages.stream()
             .anyMatch(msg -> msg.hasInstallSnapshotReply() && msg.getInstallSnapshotReply().getRejected())) {
-            log.debug("Snapshot rejected, compact now");
+            log.debug("Snapshot rejected by peer[{}], compact now: rangeId={}, storeId={}",
+                peerId, KVRangeIdUtil.toString(id), hostStoreId);
             // follower reject my snapshot, probably because it's too old, let's make a new one immediately
             scheduleCompaction();
         }
@@ -1481,8 +1493,8 @@ public class KVRangeFSM implements IKVRangeFSM {
     }
 
     private void handleSnapshotSyncRequest(String follower, SnapshotSyncRequest request) {
-        log.debug("Init snap-dump session for follower[{}]: rangeId={}, storeId={}, sessionId={}",
-            follower, KVRangeIdUtil.toString(id), hostStoreId, request.getSessionId());
+        log.debug("Init snap-dump session for follower[{}]: rangeId={}, storeId={}, sessionId={}\n{}",
+            follower, KVRangeIdUtil.toString(id), hostStoreId, request.getSessionId(), request.getSnapshot());
         KVRangeDumpSession session = new KVRangeDumpSession(follower, request, kvRange, messenger, fsmExecutor,
             Duration.ofSeconds(opts.getSnapshotSyncIdleTimeoutSec()),
             opts.getSnapshotSyncBytesPerSec(), metricManager::reportDump);

@@ -48,7 +48,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
 
 class RaftNodeStateLeader extends RaftNodeState {
     private static class LeaderTransferTask {
@@ -80,7 +79,6 @@ class RaftNodeStateLeader extends RaftNodeState {
                         long commitIndex,
                         RaftConfig config,
                         IRaftStateStore stateStorage,
-                        Logger log,
                         LinkedHashMap<Long, ProposeTask> uncommittedProposals,
                         IRaftNode.IRaftMessageSender sender,
                         IRaftNode.IRaftEventListener listener,

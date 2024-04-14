@@ -44,14 +44,11 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.mockito.MockitoAnnotations;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
-    private final Logger log = LoggerFactory.getLogger("RaftNodeStateLeaderTest");
     private AutoCloseable closeable;
 
     @BeforeMethod
@@ -473,7 +470,7 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
         AtomicInteger onCommitIndex = new AtomicInteger();
         IRaftStateStore finalStateStorage = stateStorage;
         RaftNodeStateLeader leader = new RaftNodeStateLeader(1, 0, defaultRaftConfig, stateStorage,
-            log, new LinkedHashMap<>(), messages -> {
+            new LinkedHashMap<>(), messages -> {
             if (onMessageReadyIndex.get() == 0) {
                 onMessageReadyIndex.incrementAndGet();
                 assertEquals(messages, new HashMap<String, List<RaftMessage>>() {{

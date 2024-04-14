@@ -169,6 +169,7 @@ class KVRangeDumpSession {
             SaveSnapshotDataRequest.Builder reqBuilder = SaveSnapshotDataRequest.newBuilder()
                 .setSessionId(request.getSessionId())
                 .setReqId(reqId.getAndIncrement());
+            int dumpBytes = 0;
             while (true) {
                 if (!canceled.get()) {
                     try {
@@ -188,7 +189,7 @@ class KVRangeDumpSession {
                                 }
                                 break;
                             }
-                            recorder.record(bytes);
+                            dumpBytes += bytes;
                         } else {
                             // current iterator finished
                             reqBuilder.setFlag(SaveSnapshotDataRequest.Flag.End);
@@ -215,6 +216,7 @@ class KVRangeDumpSession {
                 .setSaveSnapshotDataRequest(reqBuilder.build())
                 .build();
             lastReplyTS = System.nanoTime();
+            recorder.record(dumpBytes);
             messenger.send(currentRequest);
         });
     }
