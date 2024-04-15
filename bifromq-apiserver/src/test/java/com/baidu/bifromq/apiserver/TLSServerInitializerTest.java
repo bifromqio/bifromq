@@ -26,6 +26,7 @@ import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;
+import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.ssl.SslContext;
 import java.util.List;
@@ -58,11 +59,12 @@ public class TLSServerInitializerTest extends MockableTest {
         serverInitializer.initChannel(mockChannel);
 
         ArgumentCaptor<ChannelHandler> handlersCaptor = ArgumentCaptor.forClass(ChannelHandler.class);
-        verify(mockPipeline, times(4)).addLast(handlersCaptor.capture());
+        verify(mockPipeline, times(5)).addLast(handlersCaptor.capture());
         verify(sslContext).newHandler(byteBufAllocator);
         List<ChannelHandler> handlers = handlersCaptor.getAllValues();
         assertTrue(handlers.get(1) instanceof HttpServerCodec);
-        assertTrue(handlers.get(2) instanceof HTTPRequestRouter);
-        assertSame(handlers.get(3), ExceptionHandler.INSTANCE);
+        assertTrue(handlers.get(2) instanceof HttpObjectAggregator);
+        assertTrue(handlers.get(3) instanceof HTTPRequestRouter);
+        assertSame(handlers.get(4), ExceptionHandler.INSTANCE);
     }
 }

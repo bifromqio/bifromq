@@ -25,6 +25,7 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;
+import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -51,10 +52,11 @@ public class NonTLSServerInitializerTest extends MockableTest {
         serverInitializer.initChannel(mockChannel);
 
         ArgumentCaptor<ChannelHandler> handlersCaptor = ArgumentCaptor.forClass(ChannelHandler.class);
-        verify(mockPipeline, times(3)).addLast(handlersCaptor.capture());
+        verify(mockPipeline, times(4)).addLast(handlersCaptor.capture());
         List<ChannelHandler> handlers = handlersCaptor.getAllValues();
         assertTrue(handlers.get(0) instanceof HttpServerCodec);
-        assertTrue(handlers.get(1) instanceof HTTPRequestRouter);
-        assertSame(handlers.get(2), ExceptionHandler.INSTANCE);
+        assertTrue(handlers.get(1) instanceof HttpObjectAggregator);
+        assertTrue(handlers.get(2) instanceof HTTPRequestRouter);
+        assertSame(handlers.get(3), ExceptionHandler.INSTANCE);
     }
 }
