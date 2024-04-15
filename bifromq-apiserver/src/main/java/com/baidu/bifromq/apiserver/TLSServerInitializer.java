@@ -17,6 +17,7 @@ import com.baidu.bifromq.apiserver.http.HTTPRequestRouter;
 import com.baidu.bifromq.apiserver.http.IHTTPRouteMap;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import io.netty.channel.socket.SocketChannel;
+import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.ssl.SslContext;
 
@@ -32,6 +33,7 @@ public class TLSServerInitializer extends AbstractServerInitializer {
     protected void initChannel(SocketChannel ch) {
         ch.pipeline().addLast(sslContext.newHandler(ch.alloc()));
         ch.pipeline().addLast(new HttpServerCodec());
+        ch.pipeline().addLast(new HttpObjectAggregator(1024 * 1024));
         ch.pipeline().addLast(new HTTPRequestRouter(routeMap, settingProvider));
         ch.pipeline().addLast(ExceptionHandler.INSTANCE);
     }

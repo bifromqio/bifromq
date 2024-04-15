@@ -18,6 +18,7 @@ import com.baidu.bifromq.apiserver.http.IHTTPRouteMap;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;
+import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 
 public class NonTLSServerInitializer extends AbstractServerInitializer {
@@ -30,6 +31,7 @@ public class NonTLSServerInitializer extends AbstractServerInitializer {
         final ChannelPipeline p = ch.pipeline();
         final HttpServerCodec sourceCodec = new HttpServerCodec();
         p.addLast(sourceCodec);
+        p.addLast(new HttpObjectAggregator(1024 * 1024));
         p.addLast(new HTTPRequestRouter(routeMap, settingProvider));
         p.addLast(ExceptionHandler.INSTANCE);
     }
