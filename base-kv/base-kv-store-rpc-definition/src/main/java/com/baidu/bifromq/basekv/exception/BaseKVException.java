@@ -14,6 +14,9 @@
 package com.baidu.bifromq.basekv.exception;
 
 public class BaseKVException extends RuntimeException {
+    public static BaseKVException rangeNotFound() {
+        return new BaseKVException("Range not found");
+    }
     public static BaseKVException serverNotFound() {
         return new BaseKVException("Server not found");
     }

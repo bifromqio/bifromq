@@ -34,7 +34,7 @@ public final class BaseKVStoreClientBuilder {
     ICRDTService crdtService;
 
     Executor executor;
-    int queryPipelinesPerStore;
+    int queryPipelinesPerRange;
 
     public IBaseKVStoreClient build() {
         return new BaseKVStoreClient(this);

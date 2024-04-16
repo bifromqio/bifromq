@@ -46,7 +46,7 @@ public class StateStoreConfig {
     @Getter
     @Setter
     public static class DistWorkerConfig {
-        private int queryPipelinePerStore = 1000;
+        private int queryPipelinePerRange = 2 * EnvProvider.INSTANCE.availableProcessors();
         private int compactWALThreshold = 2500;
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig dataEngineConfig = new RocksDBEngineConfig();
@@ -69,7 +69,7 @@ public class StateStoreConfig {
     @Getter
     @Setter
     public static class InboxStoreConfig {
-        private int queryPipelinePerStore = 100;
+        private int queryPipelinePerRange = 2 * EnvProvider.INSTANCE.availableProcessors();
         private int compactWALThreshold = 2500;
         private int gcIntervalSeconds = 600;
         @JsonSetter(nulls = Nulls.SKIP)
@@ -92,7 +92,7 @@ public class StateStoreConfig {
     @Getter
     @Setter
     public static class RetainStoreConfig {
-        private int queryPipelinePerStore = 100;
+        private int queryPipelinePerRange = 2 * EnvProvider.INSTANCE.availableProcessors();
         private int compactWALThreshold = 2500;
         private int gcIntervalSeconds = 600;
         @JsonSetter(nulls = Nulls.SKIP)

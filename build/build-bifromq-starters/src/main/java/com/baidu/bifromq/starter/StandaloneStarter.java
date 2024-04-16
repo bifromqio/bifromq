@@ -273,10 +273,10 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .crdtService(clientCrdtService)
             .executor(baseKVClientExecutor)
             .sslContext(clientSslContext)
-            .queryPipelinesPerStore(config
+            .queryPipelinesPerRange(config
                 .getStateStoreConfig()
                 .getRetainStoreConfig()
-                .getQueryPipelinePerStore())
+                .getQueryPipelinePerRange())
             .build();
         retainStore = IRetainStore.nonStandaloneBuilder()
             .rpcServerBuilder(sharedBaseKVRPCServerBuilder)
@@ -318,8 +318,8 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .crdtService(clientCrdtService)
             .executor(baseKVClientExecutor)
             .sslContext(clientSslContext)
-            .queryPipelinesPerStore(config.getStateStoreConfig().getInboxStoreConfig()
-                .getQueryPipelinePerStore())
+            .queryPipelinesPerRange(config.getStateStoreConfig().getInboxStoreConfig()
+                .getQueryPipelinePerRange())
             .build();
         inboxStore = IInboxStore.nonStandaloneBuilder()
             .rpcServerBuilder(sharedBaseKVRPCServerBuilder)
@@ -371,10 +371,10 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .crdtService(clientCrdtService)
             .executor(baseKVClientExecutor)
             .sslContext(clientSslContext)
-            .queryPipelinesPerStore(config
+            .queryPipelinesPerRange(config
                 .getStateStoreConfig()
                 .getDistWorkerConfig()
-                .getQueryPipelinePerStore())
+                .getQueryPipelinePerRange())
             .build();
         mqttBrokerClient = IMqttBrokerClient.newBuilder()
             .crdtService(clientCrdtService)
