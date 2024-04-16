@@ -61,7 +61,7 @@ public class APIServerTest extends MockableTest {
         super.setup();
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
         EventLoopGroup workerGroup = new NioEventLoopGroup(1);
-        apiServer = new APIServer(host, 0, 0,
+        apiServer = new APIServer(host, 0, 0, 256 * 1024,
             bossGroup, workerGroup, null, distClient, mqttBrokerClient, inboxClient,
                 sessionDictClient, retainClient, settingProvider);
         apiServer.start();

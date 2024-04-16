@@ -51,7 +51,7 @@ public class TLSServerInitializerTest extends MockableTest {
 
     @Test
     public void initChannel() {
-        TLSServerInitializer serverInitializer = new TLSServerInitializer(sslContext, routeMap, settingProvider);
+        TLSServerInitializer serverInitializer = new TLSServerInitializer(sslContext, routeMap, settingProvider, 256 * 1024);
         when(mockChannel.pipeline()).thenReturn(mockPipeline);
         when(mockChannel.alloc()).thenReturn(byteBufAllocator);
 

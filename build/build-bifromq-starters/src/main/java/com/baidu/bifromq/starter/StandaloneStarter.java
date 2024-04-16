@@ -602,7 +602,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             sslContext = buildServerSslContext(apiServerConfig.getHttpsListenerConfig().getSslConfig());
         }
         return new APIServer(apiHost, apiServerConfig.getHttpPort(), apiServerConfig.getHttpsListenerConfig().getPort(),
-            bossELG, workerELG, sslContext, distClient, mqttBrokerClient,
+            apiServerConfig.getMaxContentLength(), bossELG, workerELG, sslContext, distClient, mqttBrokerClient,
             inboxClient, sessionDictClient, retainClient, settingProviderMgr);
     }
 
