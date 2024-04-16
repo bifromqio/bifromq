@@ -25,6 +25,7 @@ public class APIServerConfig {
     private boolean enable = true;
     private String host; // optional, if null host address will be used for listening api calls
     private int httpPort = 8091; // the listening port for http api
+    private int maxContentLength = 256 * 1024;
     private int apiBossThreads = 1;
     private int apiWorkerThreads = 2;
     @JsonSetter(nulls = Nulls.SKIP)

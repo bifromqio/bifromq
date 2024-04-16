@@ -21,9 +21,11 @@ import io.netty.channel.socket.SocketChannel;
 abstract class AbstractServerInitializer extends ChannelInitializer<SocketChannel> {
     protected final ISettingProvider settingProvider;
     protected final IHTTPRouteMap routeMap;
+    protected final int maxContentLength;
 
-    public AbstractServerInitializer(IHTTPRouteMap routeMap, ISettingProvider settingProvider) {
+    public AbstractServerInitializer(IHTTPRouteMap routeMap, ISettingProvider settingProvider, int maxContentLength) {
         this.settingProvider = settingProvider;
         this.routeMap = routeMap;
+        this.maxContentLength = maxContentLength;
     }
 }

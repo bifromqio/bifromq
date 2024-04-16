@@ -46,7 +46,7 @@ public class NonTLSServerInitializerTest extends MockableTest {
 
     @Test
     public void initChannel() {
-        NonTLSServerInitializer serverInitializer = new NonTLSServerInitializer(routeMap, settingProvider);
+        NonTLSServerInitializer serverInitializer = new NonTLSServerInitializer(routeMap, settingProvider, 1024 * 1024);
         when(mockChannel.pipeline()).thenReturn(mockPipeline);
 
         serverInitializer.initChannel(mockChannel);

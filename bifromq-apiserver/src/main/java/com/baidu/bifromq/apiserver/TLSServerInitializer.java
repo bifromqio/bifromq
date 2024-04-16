@@ -24,8 +24,9 @@ import io.netty.handler.ssl.SslContext;
 public class TLSServerInitializer extends AbstractServerInitializer {
     private final SslContext sslContext;
 
-    public TLSServerInitializer(SslContext sslContext, IHTTPRouteMap routeMap, ISettingProvider settingProvider) {
-        super(routeMap, settingProvider);
+    public TLSServerInitializer(SslContext sslContext, IHTTPRouteMap routeMap, ISettingProvider settingProvider,
+                                int maxContentLength) {
+        super(routeMap, settingProvider, maxContentLength);
         this.sslContext = sslContext;
     }
 
@@ -33,7 +34,7 @@ public class TLSServerInitializer extends AbstractServerInitializer {
     protected void initChannel(SocketChannel ch) {
         ch.pipeline().addLast(sslContext.newHandler(ch.alloc()));
         ch.pipeline().addLast(new HttpServerCodec());
-        ch.pipeline().addLast(new HttpObjectAggregator(1024 * 1024));
+        ch.pipeline().addLast(new HttpObjectAggregator(maxContentLength));
         ch.pipeline().addLast(new HTTPRequestRouter(routeMap, settingProvider));
         ch.pipeline().addLast(ExceptionHandler.INSTANCE);
     }
