@@ -56,6 +56,7 @@ public class APIServer implements IAPIServer {
     public APIServer(String host,
                      int port,
                      int tlsPort,
+                     int maxContentLength,
                      EventLoopGroup bossGroup,
                      EventLoopGroup workerGroup,
                      SslContext sslContext,
@@ -73,10 +74,10 @@ public class APIServer implements IAPIServer {
         IHTTPRouteMap routeMap = new HTTPRouteMap(new HTTPRequestHandlersFactory(sessionDictClient,
                 distClient, mqttBrokerClient, inboxClient, retainClient, settingProvider));
         this.serverChannel =
-            buildServerChannel(port, new NonTLSServerInitializer(routeMap, settingProvider));
+            buildServerChannel(port, new NonTLSServerInitializer(routeMap, settingProvider, maxContentLength));
         if (sslContext != null) {
             this.tlsServerChannel =
-                buildServerChannel(tlsPort, new TLSServerInitializer(sslContext, routeMap, settingProvider));
+                buildServerChannel(tlsPort, new TLSServerInitializer(sslContext, routeMap, settingProvider, maxContentLength));
         } else {
             this.tlsServerChannel = null;
         }
