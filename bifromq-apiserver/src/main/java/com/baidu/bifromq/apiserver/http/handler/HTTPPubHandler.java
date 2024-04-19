@@ -27,12 +27,14 @@ import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.apiserver.utils.TopicUtil;
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -56,6 +58,9 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Path("/pub")
 public final class HTTPPubHandler implements IHTTPRequestHandler {
+    private static final ByteBuf UNACCEPTED_TOPIC = Unpooled.wrappedBuffer("Unaccepted Topic".getBytes());
+    private static final ByteBuf INVALID_QOS = Unpooled.wrappedBuffer("Invalid QoS".getBytes());
+    private static final ByteBuf INVALID_EXPIRY_SECONDS = Unpooled.wrappedBuffer("Invalid expiry seconds".getBytes());
     private final IDistClient distClient;
     private final ISettingProvider settingProvider;
 
@@ -71,7 +76,7 @@ public final class HTTPPubHandler implements IHTTPRequestHandler {
         @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id"),
         @Parameter(name = "topic", in = ParameterIn.HEADER, required = true, description = "the message topic"),
         @Parameter(name = "qos", in = ParameterIn.HEADER, required = true, description = "QoS of the message to be published"),
-        @Parameter(name = "expiry_seconds", in = ParameterIn.HEADER, description = "the message expiry seconds"),
+        @Parameter(name = "expiry_seconds", in = ParameterIn.HEADER, description = "the message expiry seconds, must be positive"),
         @Parameter(name = "client_type", in = ParameterIn.HEADER, required = true, description = "the caller client type"),
         @Parameter(name = "client_meta_*", in = ParameterIn.HEADER, description = "the metadata header about caller client, must be started with client_meta_"),
     })
@@ -94,11 +99,15 @@ public final class HTTPPubHandler implements IHTTPRequestHandler {
                 reqId, tenantId, topic, clientType, clientMeta);
             if (!TopicUtil.checkTopicFilter(topic, tenantId, settingProvider)) {
                 return CompletableFuture.completedFuture(
-                    new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN, Unpooled.EMPTY_BUFFER));
+                    new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN, UNACCEPTED_TOPIC));
             }
             if (qos < 0 || qos > 2) {
                 return CompletableFuture.completedFuture(
-                    new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, Unpooled.EMPTY_BUFFER));
+                    new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, INVALID_QOS));
+            }
+            if (expirySeconds <= 0) {
+                return CompletableFuture.completedFuture(
+                    new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, INVALID_EXPIRY_SECONDS));
             }
             ClientInfo clientInfo = ClientInfo.newBuilder()
                 .setTenantId(tenantId)
@@ -107,9 +116,11 @@ public final class HTTPPubHandler implements IHTTPRequestHandler {
                 .build();
             CompletableFuture<DistResult> distFuture = distClient.pub(reqId, topic,
                 Message.newBuilder()
+                    .setMessageId(0)
                     .setPubQoS(QoS.forNumber(qos))
                     .setPayload(toRetainedByteBuffer(req.content()))
                     .setExpiryInterval(expirySeconds)
+                    .setTimestamp(HLC.INST.getPhysical())
                     .build(),
                 clientInfo);
             return distFuture

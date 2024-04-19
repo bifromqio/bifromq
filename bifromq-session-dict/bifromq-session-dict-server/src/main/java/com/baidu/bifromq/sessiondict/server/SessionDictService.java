@@ -112,21 +112,24 @@ class SessionDictService extends SessionDictServiceGrpc.SessionDictServiceImplBa
                 new ISessionRegister.ClientKey(request.getUserId(), request.getClientId());
             AtomicReference<ISessionRegister> found = new AtomicReference<>();
             tenantSessions.computeIfPresent(tenantId, (k, v) -> {
-                found.set(v.clients.remove(clientKey));
-                if (v.clients.isEmpty()) {
-                    v = null;
-                    stopGauging(tenantId, MqttConnectionGauge);
+                ISessionRegister sessionRegister = v.clients.remove(clientKey);
+                if (sessionRegister != null) {
+                    found.set(sessionRegister);
+                    if (sessionRegister.owner(tenantId, clientKey)
+                        .getMetadataOrDefault(MQTT_CLIENT_SESSION_TYPE, MQTT_CLIENT_SESSION_TYPE_T_VALUE)
+                        .equals(MQTT_CLIENT_SESSION_TYPE_P_VALUE)) {
+                        v.persistentSessions.decrementAndGet();
+                    }
+                    if (v.clients.isEmpty()) {
+                        v = null;
+                        stopGauging(tenantId, MqttConnectionGauge);
+                    }
                 }
                 return v;
             });
 
             if (found.get() != null) {
                 try {
-                    ClientInfo sessionOwner = found.get().owner(tenantId, clientKey);
-                    if (sessionOwner.getMetadataOrDefault(MQTT_CLIENT_SESSION_TYPE, MQTT_CLIENT_SESSION_TYPE_T_VALUE)
-                        .equals(MQTT_CLIENT_SESSION_TYPE_P_VALUE)) {
-                        tenantSessions.get(tenantId).persistentSessions.decrementAndGet();
-                    }
                     found.get().kick(tenantId, clientKey, request.getKiller());
                 } catch (Throwable e) {
                     log.debug("Failed to kick", e);

@@ -15,6 +15,7 @@ package com.baidu.bifromq.apiserver.http.handler;
 
 import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_META_PREFIX;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_TYPE;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_EXPIRY_SECONDS;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_QOS;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_TOPIC;
 import static org.mockito.ArgumentMatchers.any;
@@ -26,6 +27,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertThrows;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.IDistClient;
@@ -78,7 +80,8 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
             eq(req.headers().get(HEADER_TOPIC.header)),
             argThat(m -> m.getPubQoS().equals(QoS.AT_LEAST_ONCE) &&
                 m.getPayload().equals(ByteString.copyFrom(content.nioBuffer())) &&
-                m.getExpiryInterval() == Integer.MAX_VALUE),
+                m.getExpiryInterval() == Integer.MAX_VALUE &&
+                m.getTimestamp() > 0),
             argThat(killer -> killer.getType().equals(req.headers().get(HEADER_CLIENT_TYPE.header)) &&
                 killer.getMetadataCount() == 1 &&
                 killer.getMetadataMap().get("age").equals("4")));
@@ -109,8 +112,30 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());
         assertEquals(response.status(), HttpResponseStatus.BAD_REQUEST);
-        assertEquals(response.content().readableBytes(), 0);
+        assertTrue(response.content().readableBytes() > 0);
     }
+
+    @Test
+    public void pubWithWrongExpirySeconds() {
+        DefaultFullHttpRequest req = buildRequest();
+        req.headers().set(HEADER_TOPIC.header, "/greeting");
+        req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
+        req.headers().set(HEADER_QOS.header, "3");
+        req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
+        req.headers().set(HEADER_EXPIRY_SECONDS.header, "0");
+        long reqId = 123;
+        String tenantId = "bifromq_dev";
+
+        HTTPPubHandler handler = new HTTPPubHandler(distClient, settingProvider);
+
+        when(distClient.pub(anyLong(), anyString(), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(DistResult.OK));
+        FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
+        assertEquals(response.protocolVersion(), req.protocolVersion());
+        assertEquals(response.status(), HttpResponseStatus.BAD_REQUEST);
+        assertTrue(response.content().readableBytes() > 0);
+    }
+
 
     public void dist(DistResult result, HttpResponseStatus expectedStatus) {
         DefaultFullHttpRequest req = buildRequest();
