@@ -44,6 +44,7 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.TOO_LARGE_UNSUBS
 import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACTION_DISALLOW;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.ReceivingMaximum;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.CLEARED;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.ERROR;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.RETAINED;
@@ -554,10 +555,52 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(publishMessage2);
         MqttMessage ackMessage = channel.readOutbound();
         assertEquals(((MqttMessageIdVariableHeader) ackMessage.variableHeader()).messageId(), 1);
+        channel.advanceTimeBy(5, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        channel.runPendingTasks();
+
         verifyEvent(PUB_ACKED, DISCARD);
+        // leave channel open in MQTT3
+        assertTrue(channel.isOpen());
     }
 
 
+    @Test
+    public void exceedReceiveMaximum() {
+        mockCheckPermission(true);
+        when(settingProvider.provide(eq(ReceivingMaximum), anyString())).thenReturn(1);
+        assertTrue(channel.isOpen());
+        channel.pipeline().removeLast();
+        // add new MQTT3TransientSessionHandler with MsgPubPerSec = 1
+        channel.pipeline().addLast(new ChannelDuplexHandler() {
+            @Override
+            public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+                super.channelActive(ctx);
+                ctx.pipeline().addLast(MQTT3TransientSessionHandler.builder()
+                    .settings(new TenantSettings(tenantId, settingProvider))
+                    .userSessionId(userSessionId(clientInfo))
+                    .keepAliveTimeSeconds(120)
+                    .clientInfo(clientInfo)
+                    .willMessage(null)
+                    .ctx(ctx)
+                    .build());
+                ctx.pipeline().remove(this);
+            }
+        });
+
+        MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 1);
+        MqttPublishMessage publishMessage2 = MQTTMessageUtils.publishQoS1Message("testTopic", 2);
+        channel.writeInbound(publishMessage);
+        channel.writeInbound(publishMessage2);
+
+        channel.advanceTimeBy(5, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        channel.runPendingTasks();
+
+        verifyEvent(DISCARD);
+        // leave channel open in MQTT3
+        assertTrue(channel.isOpen());
+    }
 
 //  =============================================== retain ============================================================
 

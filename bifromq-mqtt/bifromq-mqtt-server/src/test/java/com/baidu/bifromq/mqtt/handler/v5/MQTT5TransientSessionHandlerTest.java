@@ -19,7 +19,8 @@ import static com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5UnsubAckReasonCode.N
 import static com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5UnsubAckReasonCode.NotAuthorized;
 import static com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5UnsubAckReasonCode.Success;
 import static com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5UnsubAckReasonCode.UnspecifiedError;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.DISCARD;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.EXCEED_PUB_RATE;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.EXCEED_RECEIVING_LIMIT;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC_FILTER;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MSG_RETAINED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MSG_RETAINED_ERROR;
@@ -42,9 +43,11 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACTION_DISALLOW;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.ReceivingMaximum;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.CLEARED;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.ERROR;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.RETAINED;
+import static io.netty.handler.codec.mqtt.MqttMessageType.DISCONNECT;
 import static io.netty.handler.codec.mqtt.MqttMessageType.PUBREL;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.TOPIC_ALIAS;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.TOPIC_ALIAS_MAXIMUM;
@@ -52,6 +55,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.times;
@@ -63,16 +67,16 @@ import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.dist.client.DistResult;
+import com.baidu.bifromq.mqtt.handler.BaseSessionHandlerTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
-import com.baidu.bifromq.mqtt.handler.BaseSessionHandlerTest;
-import com.baidu.bifromq.mqtt.handler.v3.MQTT3TransientSessionHandler;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5SubAckReasonCode;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.authprovider.type.Granted;
 import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ExceedReceivingLimit;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
@@ -133,7 +137,7 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         // common mocks
         mockSettings();
         MqttProperties mqttProperties = new MqttProperties();
-        mqttProperties.add(new MqttProperties.IntegerProperty(TOPIC_ALIAS_MAXIMUM.value(), 10));;
+        mqttProperties.add(new MqttProperties.IntegerProperty(TOPIC_ALIAS_MAXIMUM.value(), 10));
         ChannelDuplexHandler sessionHandlerAdder = new ChannelDuplexHandler() {
             @Override
             public void channelActive(ChannelHandlerContext ctx) throws Exception {
@@ -475,12 +479,15 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         when(settingProvider.provide(eq(MsgPubPerSec), anyString())).thenReturn(1);
         assertTrue(channel.isOpen());
         channel.pipeline().removeLast();
-        // add new MQTT3TransientSessionHandler with MsgPubPerSec = 1
         channel.pipeline().addLast(new ChannelDuplexHandler() {
             @Override
             public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
                 super.channelActive(ctx);
-                ctx.pipeline().addLast(MQTT3TransientSessionHandler.builder()
+                ctx.pipeline().addLast(MQTT5TransientSessionHandler.builder()
+                    .connMsg(MqttMessageBuilders.connect()
+                        .protocolVersion(MqttVersion.MQTT_5)
+                        .properties(new MqttProperties())
+                        .build())
                     .settings(new TenantSettings(tenantId, settingProvider))
                     .userSessionId(userSessionId(clientInfo))
                     .keepAliveTimeSeconds(120)
@@ -498,7 +505,59 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(publishMessage2);
         MqttMessage ackMessage = channel.readOutbound();
         assertEquals(((MqttMessageIdVariableHeader) ackMessage.variableHeader()).messageId(), 1);
-        verifyEvent(PUB_ACKED, DISCARD);
+
+        channel.advanceTimeBy(5, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        channel.runPendingTasks();
+        MqttMessage message = channel.readOutbound();
+
+        assertEquals(message.fixedHeader().messageType(), DISCONNECT);
+        verifyEvent(PUB_ACKED, EXCEED_PUB_RATE);
+        assertFalse(channel.isOpen());
+    }
+
+    @Test
+    public void exceedReceiveMaximum() {
+        mockCheckPermission(true);
+        when(settingProvider.provide(eq(ReceivingMaximum), anyString())).thenReturn(1);
+        assertTrue(channel.isOpen());
+        channel.pipeline().removeLast();
+        // add new MQTT3TransientSessionHandler with MsgPubPerSec = 1
+        channel.pipeline().addLast(new ChannelDuplexHandler() {
+            @Override
+            public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+                super.channelActive(ctx);
+                ctx.pipeline().addLast(MQTT5TransientSessionHandler.builder()
+                    .connMsg(MqttMessageBuilders.connect()
+                        .protocolVersion(MqttVersion.MQTT_5)
+                        .properties(new MqttProperties())
+                        .build())
+                    .settings(new TenantSettings(tenantId, settingProvider))
+                    .userSessionId(userSessionId(clientInfo))
+                    .keepAliveTimeSeconds(120)
+                    .clientInfo(clientInfo)
+                    .willMessage(null)
+                    .ctx(ctx)
+                    .build());
+                ctx.pipeline().remove(this);
+            }
+        });
+
+        MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 1);
+        MqttPublishMessage publishMessage2 = MQTTMessageUtils.publishQoS1Message("testTopic", 2);
+        channel.writeInbound(publishMessage);
+        channel.writeInbound(publishMessage2);
+
+        channel.advanceTimeBy(5, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        channel.runPendingTasks();
+        verify(eventCollector).report(
+            argThat(event -> event.type() == EXCEED_RECEIVING_LIMIT
+                && ((ExceedReceivingLimit) event).limit() == 1
+                && ((ExceedReceivingLimit) event).clientInfo() != null));
+
+        // disconnect channel in MQTT5
+        assertFalse(channel.isOpen());
     }
 
 
@@ -591,7 +650,8 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.runPendingTasks();
 
         int messageCount = 3;
-        transientSessionHandler.publish(matchInfo(topicFilter), s2cMQTT5MessageList(topic, messageCount, QoS.AT_LEAST_ONCE));
+        transientSessionHandler.publish(matchInfo(topicFilter),
+            s2cMQTT5MessageList(topic, messageCount, QoS.AT_LEAST_ONCE));
         channel.runPendingTasks();
         // s2c pub received and ack
         for (int i = 0; i < messageCount; i++) {

@@ -825,7 +825,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
 
     private void scheduleResend() {
         resendTask =
-            ctx.executor().schedule(this::resend, ackTimeoutNanos(resendQueue.first()) - sessionCtx.nanoTime(), TimeUnit.NANOSECONDS);
+            ctx.executor().schedule(this::resend, ackTimeoutNanos(resendQueue.first()) - sessionCtx.nanoTime(),
+                TimeUnit.NANOSECONDS);
     }
 
     private void resend() {
@@ -910,11 +911,11 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     }
 
     private boolean isExceedReceivingMaximum() {
-        return receivingCount > settings.receiveMaximum;
+        return receivingCount >= settings.receiveMaximum;
     }
 
     private void incReceivingCount() {
-        receivingCount = Math.min(receivingCount + 1, settings.receiveMaximum);
+        receivingCount++;
     }
 
     private void decReceivingCount() {
