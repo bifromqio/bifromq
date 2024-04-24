@@ -6,6 +6,11 @@
 # if the node is responsible for cluster bootstrap. NOTE: there must be EXACTLY ONE bootstrap node in cluster deployment
 bootstrap: true
 
+
+# Enabling custom auth provider, specify the Fully Qualified Name of the auth provider class from your plugin.
+# or experiment with the built-in auth provider which is a simple webhook based implementation.
+# authProviderFQN: "com.baidu.demo.plugin.DemoAuthProvider"
+
 # Enabling runtime throttling at tenant-level, specify the Fully Qualified Name of the resource throttler class from your plugin.
 # or experiment with the built-in resource throttler which is a simple webhook based implementation.
 # resourceThrottlerFQN: "com.baidu.demo.plugin.DemoResourceThrottler"
