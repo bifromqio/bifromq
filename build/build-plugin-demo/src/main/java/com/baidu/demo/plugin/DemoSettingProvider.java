@@ -45,7 +45,7 @@ public class DemoSettingProvider implements ISettingProvider {
             try {
                 URI webhookURI = URI.create(webhookUrl);
                 delegate1 = new WebHookBasedSettingProvider(webhookURI);
-                log.info("Resource will be throttled at runtime by consulting: {}", webhookUrl);
+                log.info("DemoSettingProvider's webhook URL: {}", webhookUrl);
             } catch (Throwable e) {
                 delegate1 = new ISettingProvider() {
                     @Override

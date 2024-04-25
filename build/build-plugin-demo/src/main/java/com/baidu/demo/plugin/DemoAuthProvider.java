@@ -34,13 +34,13 @@ public class DemoAuthProvider implements IAuthProvider {
         IAuthProvider delegate1;
         String webhookUrl = System.getProperty(PLUGIN_AUTHPROVIDER_URL);
         if (webhookUrl == null) {
-            log.info("No webhook url specified, fallback to no auth.");
+            log.info("No webhook url specified, the fallback behavior will reject all auth/check requests.");
             delegate1 = new FallbackAuthProvider();
         } else {
             try {
                 URI webhookURI = URI.create(webhookUrl);
                 delegate1 = new WebHookBasedAuthProvider(webhookURI);
-                log.info("Resource will be throttled at runtime by consulting: {}", webhookUrl);
+                log.info("DemoAuthProvider's webhook URL: {}", webhookUrl);
             } catch (Throwable e) {
                 delegate1 = new FallbackAuthProvider();
             }

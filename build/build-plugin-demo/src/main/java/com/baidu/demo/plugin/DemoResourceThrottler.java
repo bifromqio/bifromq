@@ -36,7 +36,7 @@ public class DemoResourceThrottler implements IResourceThrottler {
             try {
                 URI webhookURI = URI.create(webhookUrl);
                 delegate1 = new WebHookBasedResourceThrottler(webhookURI);
-                log.info("Resource will be throttled at runtime by consulting: {}", webhookUrl);
+                log.info("DemoResourceThrottler's webhook URL: {}", webhookUrl);
             } catch (Throwable e) {
                 delegate1 = (tenantId, type) -> true;
             }
