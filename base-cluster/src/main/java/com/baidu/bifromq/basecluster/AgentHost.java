@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basecluster;
 
-import static com.github.benmanes.caffeine.cache.Scheduler.systemScheduler;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 
@@ -24,6 +23,7 @@ import com.baidu.bifromq.basecluster.memberlist.AutoDropper;
 import com.baidu.bifromq.basecluster.memberlist.AutoHealer;
 import com.baidu.bifromq.basecluster.memberlist.AutoSeeder;
 import com.baidu.bifromq.basecluster.memberlist.HostMemberList;
+import com.baidu.bifromq.basecluster.memberlist.IHostAddressResolver;
 import com.baidu.bifromq.basecluster.memberlist.IHostMemberList;
 import com.baidu.bifromq.basecluster.memberlist.MemberSelector;
 import com.baidu.bifromq.basecluster.memberlist.agent.IAgent;
@@ -33,13 +33,9 @@ import com.baidu.bifromq.basecluster.messenger.Messenger;
 import com.baidu.bifromq.basecluster.messenger.MessengerOptions;
 import com.baidu.bifromq.basecluster.proto.ClusterMessage;
 import com.baidu.bifromq.basecluster.transport.ITransport;
-import com.baidu.bifromq.basecluster.transport.TCPTransport;
-import com.baidu.bifromq.basecluster.transport.Transport;
 import com.baidu.bifromq.basecrdt.store.ICRDTStore;
 import com.baidu.bifromq.basecrdt.store.proto.CRDTStoreMessage;
 import com.baidu.bifromq.baseenv.EnvProvider;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.protobuf.ByteString;
@@ -72,10 +68,10 @@ final class AgentHost implements IAgentHost {
     private final AutoSeeder seeder;
     private final AutoDropper deadDropper;
     private final CompositeDisposable disposables = new CompositeDisposable();
-    private final LoadingCache<HostEndpoint, InetSocketAddress> hostAddressCache;
+    private final IHostAddressResolver hostAddressResolver;
     private final String[] tags;
 
-    AgentHost(ITransport transport, AgentHostOptions options) {
+    AgentHost(ITransport transport, IHostAddressResolver resolver, AgentHostOptions options) {
         checkArgument(!Strings.isNullOrEmpty(options.addr()) && !"0.0.0.0".equals(options.addr()),
             "Invalid bind address");
         checkArgument(Strings.isNullOrEmpty(options.clusterDomainName()) ||
@@ -96,16 +92,13 @@ final class AgentHost implements IAgentHost {
             .opts(messengerOptions)
             .scheduler(scheduler)
             .build();
-        hostAddressCache = Caffeine.newBuilder()
-            .scheduler(systemScheduler())
-            .expireAfterAccess(Duration.ofMinutes(5))
-            .build(hostEndpoint -> new InetSocketAddress(hostEndpoint.getAddress(), hostEndpoint.getPort()));
+        hostAddressResolver = resolver;
         this.store.start(messenger.receive()
             .filter(m -> m.value().message.hasCrdtStoreMessage())
             .map(m -> m.value().message.getCrdtStoreMessage()));
         tags = new String[] {"local", options.addr() + ":" + messenger.bindAddress().getPort()};
         this.memberList = new HostMemberList(options.addr(), messenger.bindAddress().getPort(),
-            messenger, scheduler, store, hostAddressCache::get, tags);
+            messenger, scheduler, store, hostAddressResolver, tags);
         IFailureDetector failureDetector = FailureDetector.builder()
             .local(new IProbingTarget() {
                 @Override
@@ -125,29 +118,14 @@ final class AgentHost implements IAgentHost {
             .messenger(messenger)
             .scheduler(scheduler)
             .build();
-        healer = new AutoHealer(messenger, scheduler, memberList, hostAddressCache::get, options.autoHealingTimeout(),
+        healer = new AutoHealer(messenger, scheduler, memberList, hostAddressResolver, options.autoHealingTimeout(),
             options.autoHealingInterval(), tags);
-        seeder = new AutoSeeder(messenger, scheduler, memberList, hostAddressCache::get, options.joinTimeout(),
+        seeder = new AutoSeeder(messenger, scheduler, memberList, hostAddressResolver, options.joinTimeout(),
             Duration.ofSeconds(options.joinRetryInSec()), tags);
-        deadDropper = new AutoDropper(messenger, scheduler, memberList, failureDetector, hostAddressCache::get,
+        deadDropper = new AutoDropper(messenger, scheduler, memberList, failureDetector, hostAddressResolver,
             options.suspicionMultiplier(), options.suspicionMaxTimeoutMultiplier(), tags);
-        memberSelector = new MemberSelector(memberList, scheduler, hostAddressCache::get);
+        memberSelector = new MemberSelector(memberList, scheduler, hostAddressResolver);
         disposables.add(store.storeMessages().subscribe(this::sendCRDTStoreMessage));
-    }
-
-    AgentHost(AgentHostOptions options) {
-        this(Transport.builder()
-            .env(options.env())
-            .bindAddr(new InetSocketAddress(options.addr(), options.port()))
-            .serverSslContext(options.serverSslContext())
-            .clientSslContext(options.clientSslContext())
-            .options(new Transport.TransportOptions()
-                .mtu(options.udpPacketLimit())
-                .tcpTransportOptions(new TCPTransport.TCPTransportOptions()
-                    .maxChannelsPerHost(options.maxChannelsPerHost())
-                    .idleTimeoutInSec(options.idleTimeoutInSec())
-                    .connTimeoutInMS(options.connTimeoutInMS())))
-            .build(), options);
     }
 
     @Override
@@ -224,7 +202,7 @@ final class AgentHost implements IAgentHost {
         ClusterMessage msg = ClusterMessage.newBuilder().setCrdtStoreMessage(storeMsg).build();
         try {
             HostEndpoint endpoint = HostEndpoint.parseFrom(storeMsg.getReceiver());
-            messenger.send(msg, hostAddressCache.get(endpoint), false);
+            messenger.send(msg, hostAddressResolver.resolve(endpoint), false);
         } catch (Exception e) {
             log.error("Target Host[{}] not found:\n{}", storeMsg.getReceiver(), storeMsg);
         }

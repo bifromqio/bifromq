@@ -15,6 +15,7 @@ package com.baidu.bifromq.basecluster;
 
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberAddr;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberMetadata;
+import com.baidu.bifromq.basecluster.memberlist.HostAddressResolver;
 import com.baidu.bifromq.basecluster.memberlist.agent.IAgent;
 import com.baidu.bifromq.basecluster.membership.proto.HostEndpoint;
 import com.baidu.bifromq.basecluster.transport.ITransport;
@@ -24,8 +25,8 @@ import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
-import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -122,7 +123,8 @@ public class AgentTestCluster {
         ITransport transport = network.create();
         options.addr("127.0.0.1");
         options.port(transport.bindAddress().getPort());
-        IAgentHost host = new AgentHost(transport, options);
+        IAgentHost host =
+            new AgentHost(transport, new HostAddressResolver(Duration.ofSeconds(1), Duration.ofSeconds(1)), options);
         host.start();
         hostEndpointMap.put(storeId, host.local());
         hostMap.put(host.local(), host);

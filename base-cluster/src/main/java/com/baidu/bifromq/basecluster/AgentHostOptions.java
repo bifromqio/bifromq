@@ -205,6 +205,12 @@ public class AgentHostOptions {
     @Builder.Default
     private Duration autoHealingInterval = Duration.ofSeconds(10);
 
+    @Builder.Default
+    private Duration addressExpiryInterval = Duration.ofMinutes(5);
+
+    @Builder.Default
+    private Duration addressRefreshInterval = Duration.ofMinutes(1);
+
     /**
      * The options for internal used CRDT store
      */

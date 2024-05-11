@@ -19,13 +19,13 @@ public class AgentHostTest {
     @Test(expectedExceptions = IllegalArgumentException.class)
     public void invalidBindAddr() {
         AgentHostOptions options = AgentHostOptions.builder().build();
-        AgentHost host = new AgentHost(options);
+        IAgentHost host = IAgentHost.newInstance(options);
     }
 
     @Test(expectedExceptions = IllegalArgumentException.class)
     public void invalidBindAddr1() {
         AgentHostOptions options = AgentHostOptions.builder().addr("0.0.0.0").build();
-        AgentHost host = new AgentHost(options);
+        IAgentHost host = IAgentHost.newInstance(options);
     }
 
     @Test(expectedExceptions = IllegalArgumentException.class)
@@ -33,6 +33,6 @@ public class AgentHostTest {
         AgentHostOptions options = AgentHostOptions.builder()
             .addr("127.0.0.1")
             .clusterDomainName("test.domain").build();
-        AgentHost host = new AgentHost(options);
+        IAgentHost host = IAgentHost.newInstance(options);
     }
 }

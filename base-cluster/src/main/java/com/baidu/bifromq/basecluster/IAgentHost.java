@@ -13,8 +13,13 @@
 
 package com.baidu.bifromq.basecluster;
 
+import com.baidu.bifromq.basecluster.memberlist.HostAddressResolver;
+import com.baidu.bifromq.basecluster.memberlist.IHostAddressResolver;
 import com.baidu.bifromq.basecluster.memberlist.agent.IAgent;
 import com.baidu.bifromq.basecluster.membership.proto.HostEndpoint;
+import com.baidu.bifromq.basecluster.transport.ITransport;
+import com.baidu.bifromq.basecluster.transport.TCPTransport;
+import com.baidu.bifromq.basecluster.transport.Transport;
 import io.reactivex.rxjava3.core.Observable;
 import java.net.InetSocketAddress;
 import java.util.Set;
@@ -22,7 +27,21 @@ import java.util.concurrent.CompletableFuture;
 
 public interface IAgentHost {
     static IAgentHost newInstance(AgentHostOptions options) {
-        return new AgentHost(options);
+        ITransport transport = Transport.builder()
+            .env(options.env())
+            .bindAddr(new InetSocketAddress(options.addr(), options.port()))
+            .serverSslContext(options.serverSslContext())
+            .clientSslContext(options.clientSslContext())
+            .options(new Transport.TransportOptions()
+                .mtu(options.udpPacketLimit())
+                .tcpTransportOptions(new TCPTransport.TCPTransportOptions()
+                    .maxChannelsPerHost(options.maxChannelsPerHost())
+                    .idleTimeoutInSec(options.idleTimeoutInSec())
+                    .connTimeoutInMS(options.connTimeoutInMS())))
+            .build();
+        IHostAddressResolver resolver =
+            new HostAddressResolver(options.addressExpiryInterval(), options.addressRefreshInterval());
+        return new AgentHost(transport, resolver, options);
     }
 
     HostEndpoint local();
