@@ -49,6 +49,10 @@ public class StandaloneConfigConsolidator {
         if (Strings.isNullOrEmpty(clusterConfig.getEnv())) {
             throw new IllegalArgumentException("Cluster env cannot be null or empty string");
         }
+        if (!Strings.isNullOrEmpty(clusterConfig.getClusterDomainName()) && clusterConfig.getPort() == 0) {
+            throw new IllegalArgumentException(
+                "Port number must be specified and make sure all members use same number if seed address is resolved from domain name");
+        }
     }
 
     private static void consolidateMQTTServerConfig(StandaloneConfig config) {

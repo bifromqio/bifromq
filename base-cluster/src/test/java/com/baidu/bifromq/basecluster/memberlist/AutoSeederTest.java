@@ -19,9 +19,7 @@ import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_ADDR_1;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_HOST_1_ENDPOINT;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atMost;
-import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,7 +37,6 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.schedulers.Timed;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import java.lang.reflect.Method;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Collections;
@@ -47,11 +44,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -139,32 +134,5 @@ public class AutoSeederTest {
             put(REMOTE_HOST_1_ENDPOINT, 0);
         }});
         joinResult.join();
-    }
-
-    @SneakyThrows
-    @Test
-    public void joinDomain() {
-        when(messenger.send(any(ClusterMessage.class), any(InetSocketAddress.class), anyBoolean()))
-            .thenReturn(new CompletableFuture<>());
-        String domain = "test.domain";
-        InetAddress addr = InetAddress.getByName(REMOTE_HOST_1_ENDPOINT.getAddress());
-        try (MockedStatic<InetAddress> mockAgent = mockStatic(InetAddress.class)) {
-            mockAgent.when(() -> InetAddress.getByName(any())).thenReturn(addr);
-            mockAgent.when(() -> InetAddress.getAllByName(domain))
-                .thenReturn(new InetAddress[] {addr});
-            AutoSeeder seeder =
-                new AutoSeeder(messenger, scheduler, memberList, addressResolver, joinTimeout, joinInterval);
-            seeder.join(domain, REMOTE_HOST_1_ENDPOINT.getPort()).join();
-        } catch (Throwable e) {
-            ArgumentCaptor<ClusterMessage> msgCap = ArgumentCaptor.forClass(ClusterMessage.class);
-            ArgumentCaptor<InetSocketAddress> addCap = ArgumentCaptor.forClass(InetSocketAddress.class);
-            ArgumentCaptor<Boolean> reliableCap = ArgumentCaptor.forClass(Boolean.class);
-            verify(messenger, atLeast(1)).send(msgCap.capture(), addCap.capture(), reliableCap.capture());
-            assertEquals(msgCap.getValue().getJoin().getMember().getEndpoint(), LOCAL_ENDPOINT);
-            assertEquals(msgCap.getValue().getJoin().getMember().getIncarnation(), 0);
-            assertFalse(msgCap.getValue().getJoin().hasExpectedHost());
-            assertEquals(addCap.getValue(), REMOTE_ADDR_1);
-            assertTrue(reliableCap.getValue());
-        }
     }
 }

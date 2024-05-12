@@ -27,12 +27,4 @@ public class AgentHostTest {
         AgentHostOptions options = AgentHostOptions.builder().addr("0.0.0.0").build();
         IAgentHost host = IAgentHost.newInstance(options);
     }
-
-    @Test(expectedExceptions = IllegalArgumentException.class)
-    public void clusterNameWithIncorrectPort() {
-        AgentHostOptions options = AgentHostOptions.builder()
-            .addr("127.0.0.1")
-            .clusterDomainName("test.domain").build();
-        IAgentHost host = IAgentHost.newInstance(options);
-    }
 }

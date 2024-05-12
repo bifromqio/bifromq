@@ -23,6 +23,8 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public enum BifroMQSysProp {
+    // The following system properties are used to configure the BifroMQ system
+    CLUSTER_DOMAIN_RESOLVE_TIMEOUT("cluster_domain_resolve_timeout_seconds", 120, IntegerParser.POSITIVE),
     INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE("ingress_slowdown_direct_memory_usage", 0.8,
         DoubleParser.from(0.1, 1.0, false)),
     // further check if utf8 string contains any control character or non character according to [MQTT-1.5.3]

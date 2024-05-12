@@ -33,11 +33,6 @@ import lombok.experimental.Accessors;
 public class AgentHostOptions {
 
     /**
-     * The domain name of the agent host cluster
-     */
-    private String clusterDomainName;
-
-    /**
      * Agent host under same env can communicate with each other
      */
     @Builder.Default

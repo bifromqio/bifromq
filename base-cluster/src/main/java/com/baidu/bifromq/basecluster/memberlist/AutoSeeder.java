@@ -26,17 +26,14 @@ import io.micrometer.core.instrument.Metrics;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -97,22 +94,6 @@ public final class AutoSeeder {
 
     }
 
-    public CompletableFuture<Void> join(String domainName, int port) {
-        try {
-            InetAddress[] addrs = InetAddress.getAllByName(domainName);
-            Set<InetSocketAddress> peers = Arrays.stream(addrs)
-                // peer must be serving on same port
-                .map(addr -> new InetSocketAddress(addr.getHostAddress(), port))
-                .collect(Collectors.toSet());
-            log.trace("resolved all peers: {} from domain: {}", peers.stream()
-                .map(InetSocketAddress::toString).collect(Collectors.joining(", ")), domainName);
-            return join(peers);
-        } catch (Throwable e) {
-            log.error("Cannot resolve cluster domain name: {}", domainName, e);
-            return CompletableFuture.failedFuture(e);
-        }
-    }
-
     public CompletableFuture<Void> join(Set<InetSocketAddress> seeds) {
         if (stopped.get()) {
             return CompletableFuture.failedFuture(new IllegalStateException("Seeder has stopped"));
@@ -125,7 +106,7 @@ public final class AutoSeeder {
             }
         }
         Set<InetSocketAddress> newSeeds = Sets.difference(seeds, known);
-        CompletableFuture<Void>[] joinFutures = joiningSeeds.getAll(newSeeds)
+        CompletableFuture<?>[] joinFutures = joiningSeeds.getAll(newSeeds)
             .values()
             .toArray(CompletableFuture[]::new);
         schedule(0);
@@ -162,15 +143,25 @@ public final class AutoSeeder {
     private void run() {
         Set<InetSocketAddress> toJoinSeeds = clearJoined(aliveMembers);
         for (InetSocketAddress seedAddr : toJoinSeeds) {
-            log.debug("Send join message to address[{}]", seedAddr);
+            if (seedAddr.isUnresolved()) {
+                // try resolve
+                seedAddr = new InetSocketAddress(seedAddr.getHostName(), seedAddr.getPort());
+                log.debug("Resolving hostname[{}] to {}",
+                    seedAddr.getHostName(), seedAddr.getAddress().getHostAddress());
+                if (seedAddr.isUnresolved()) {
+                    continue;
+                }
+            }
+            final InetSocketAddress finalSeedAddr = seedAddr;
+            log.debug("Send join message to address[{}]", finalSeedAddr);
             messenger.send(ClusterMessage.newBuilder()
                     .setJoin(Join.newBuilder()
                         .setMember(memberList.local())
                         .build())
-                    .build(), seedAddr, true)
+                    .build(), finalSeedAddr, true)
                 .whenComplete((v, e) -> {
                     if (e != null) {
-                        log.warn("failed to send join message to {}", seedAddr, e);
+                        log.warn("failed to send join message to {}", finalSeedAddr, e);
                     }
                 });
         }

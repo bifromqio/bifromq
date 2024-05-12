@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.starter;
 
+import static com.baidu.bifromq.starter.utils.ClusterDomainUtil.resolve;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_LOAD_EST_WINDOW_SECONDS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_LOAD_EST_WINDOW_SECONDS;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.RETAIN_STORE_LOAD_EST_WINDOW_SECONDS;
@@ -194,29 +195,42 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             pluginMgr, settingProviderMgr, eventCollectorMgr);
 
         AgentHostOptions agentHostOptions = AgentHostOptions.builder()
-            .clusterDomainName(config.getClusterConfig().getClusterDomainName())
             .env(config.getClusterConfig().getEnv())
             .addr(config.getClusterConfig().getHost())
             .port(config.getClusterConfig().getPort())
             .build();
         agentHost = IAgentHost.newInstance(agentHostOptions);
         agentHost.start();
+
+        String clusterDomainName = config.getClusterConfig().getClusterDomainName();
         String seeds = config.getClusterConfig().getSeedEndpoints();
+        if (!Strings.isNullOrEmpty(clusterDomainName)) {
+            log.debug("AgentHost[{}] join clusterDomainName: {}",
+                config.getClusterConfig().getEnv(), clusterDomainName);
+            resolve(config.getClusterConfig().getClusterDomainName(),
+                Duration.ofSeconds(BifroMQSysProp.CLUSTER_DOMAIN_RESOLVE_TIMEOUT.get()))
+                .thenApply(seedAddrs ->
+                    Arrays.stream(seedAddrs)
+                        .map(addr -> new InetSocketAddress(addr, config.getClusterConfig().getPort()))
+                        .collect(Collectors.toSet()))
+                .whenComplete((seedEndpoints, e) -> {
+                    if (e != null) {
+                        log.warn("ClusterDomainName[{}] is unresolvable", clusterDomainName, e);
+                    } else {
+                        log.info("ClusterDomainName[{}] resolved to seedEndpoints: {}",
+                            clusterDomainName, seedEndpoints);
+                        joinSeeds(seedEndpoints);
+                    }
+                });
+        }
         if (!Strings.isNullOrEmpty(seeds)) {
-            log.debug("AgentHost join seedEndpoints: {}", seeds);
+            log.debug("AgentHost[{}] join seedEndpoints: {}", config.getClusterConfig().getEnv(), seeds);
             Set<InetSocketAddress> seedEndpoints = Arrays.stream(seeds.split(","))
                 .map(endpoint -> {
                     String[] hostPort = endpoint.trim().split(":");
                     return new InetSocketAddress(hostPort[0], Integer.parseInt(hostPort[1]));
                 }).collect(Collectors.toSet());
-            agentHost.join(seedEndpoints)
-                .whenComplete((v, e) -> {
-                    if (e != null) {
-                        log.warn("AgentHost failed to join seedEndpoint: {}", seeds, e);
-                    } else {
-                        log.info("AgentHost joined seedEndpoint: {}", seeds);
-                    }
-                });
+            joinSeeds(seedEndpoints);
         }
         log.debug("Agent host started");
 
@@ -661,6 +675,17 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         }
 
         log.info("Consolidated Config(YAML): \n{}", ConfigUtil.serialize(config));
+    }
+
+    private void joinSeeds(Set<InetSocketAddress> seeds) {
+        agentHost.join(seeds)
+            .whenComplete((v, e) -> {
+                if (e != null) {
+                    log.warn("AgentHost failed to join seedEndpoint: {}", seeds, e);
+                } else {
+                    log.info("AgentHost joined seedEndpoint: {}", seeds);
+                }
+            });
     }
 
     public static void main(String[] args) {

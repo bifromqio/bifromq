@@ -74,8 +74,6 @@ final class AgentHost implements IAgentHost {
     AgentHost(ITransport transport, IHostAddressResolver resolver, AgentHostOptions options) {
         checkArgument(!Strings.isNullOrEmpty(options.addr()) && !"0.0.0.0".equals(options.addr()),
             "Invalid bind address");
-        checkArgument(Strings.isNullOrEmpty(options.clusterDomainName()) ||
-            !Strings.isNullOrEmpty(options.clusterDomainName()) && options.port() > 0, "Invalid port number");
         this.transport = transport;
         this.options = options.toBuilder().build();
         MessengerOptions messengerOptions = new MessengerOptions();
@@ -165,14 +163,6 @@ final class AgentHost implements IAgentHost {
         if (state.compareAndSet(State.INIT, State.STARTING)) {
             messenger.start(memberSelector);
             deadDropper.start();
-            if (!Strings.isNullOrEmpty(options.clusterDomainName())) {
-                if (options.port() > 0) {
-                    seeder.join(options.clusterDomainName(), options.port());
-                } else {
-                    throw new IllegalArgumentException(
-                        "Port number must be explicitly specified if cluster domain enabled");
-                }
-            }
             state.set(State.STARTED);
         }
     }
