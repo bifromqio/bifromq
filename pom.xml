@@ -100,18 +100,17 @@
         <rocksdb.version>7.10.2</rocksdb.version>
         <netty.version>4.1.94.Final</netty.version>
         <micrometer.version>1.11.1</micrometer.version>
-        <jctools.version>4.0.1</jctools.version>
 
         <slf4j.version>1.7.30</slf4j.version>
         <logback.version>1.2.13</logback.version>
-        <lombok.version>1.18.24</lombok.version>
+        <lombok.version>1.18.32</lombok.version>
         <swagger.version>2.2.15</swagger.version>
 
         <!-- test dependencies-->
-        <awaitility.version>4.2.0</awaitility.version>
+        <awaitility.version>4.2.1</awaitility.version>
         <paho.mqtt.version>1.2.5</paho.mqtt.version>
-        <mockito.version>4.6.0</mockito.version>
-        <testng.version>7.9.0</testng.version>
+        <mockito.version>5.11.0</mockito.version>
+        <testng.version>7.10.2</testng.version>
         <jmh.version>1.36</jmh.version>
 
         <!-- maven.plugin.version-->
@@ -555,11 +554,6 @@
                 <version>${lombok.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.jctools</groupId>
-                <artifactId>jctools-core</artifactId>
-                <version>${jctools.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>io.reactivex.rxjava3</groupId>
                 <artifactId>rxjava</artifactId>
                 <version>${rxjava3.version}</version>
@@ -601,15 +595,10 @@
             </dependency>
             <dependency>
                 <groupId>org.mockito</groupId>
-                <artifactId>mockito-core</artifactId>
+                <artifactId>mockito-bom</artifactId>
+                <type>pom</type>
                 <version>${mockito.version}</version>
-                <scope>test</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.mockito</groupId>
-                <artifactId>mockito-inline</artifactId>
-                <version>${mockito.version}</version>
-                <scope>test</scope>
+                <scope>import</scope>
             </dependency>
             <dependency>
                 <groupId>org.testng</groupId>
