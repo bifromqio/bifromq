@@ -659,6 +659,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     }
 
     private void printConfigs(StandaloneConfig config) {
+        log.info("Available Processors: {}", EnvProvider.INSTANCE.availableProcessors());
         List<String> arguments = ManagementFactory.getRuntimeMXBean().getInputArguments();
         log.info("JVM arguments: \n  {}", String.join("\n  ", arguments));
 
