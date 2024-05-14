@@ -23,8 +23,10 @@ import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
+import com.baidu.bifromq.sessiondict.rpc.proto.KillAllReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
 import com.baidu.bifromq.type.ClientInfo;
+import com.google.common.base.Strings;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -57,8 +59,8 @@ public final class HTTPKickHandler implements IHTTPRequestHandler {
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
         @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id"),
-        @Parameter(name = "user_id", in = ParameterIn.HEADER, required = true, description = "the user id of the MQTT client connection to be disconnected"),
-        @Parameter(name = "client_id", in = ParameterIn.HEADER, required = true, description = "the client id of the mqtt session"),
+        @Parameter(name = "user_id", in = ParameterIn.HEADER, required = false, description = "the user id of the MQTT client connection to be disconnected"),
+        @Parameter(name = "client_id", in = ParameterIn.HEADER, required = false, description = "the client id of the mqtt session"),
         @Parameter(name = "client_type", in = ParameterIn.HEADER, required = true, description = "the caller client type"),
         @Parameter(name = "client_meta_*", in = ParameterIn.HEADER, description = "the metadata header about the caller client, must be started with client_meta_"),
     })
@@ -72,14 +74,24 @@ public final class HTTPKickHandler implements IHTTPRequestHandler {
                                                       @Parameter(hidden = true) String tenantId,
                                                       @Parameter(hidden = true) FullHttpRequest req) {
         try {
-            String userId = getHeader(HEADER_USER_ID, req, true);
-            String clientId = getHeader(HEADER_CLIENT_ID, req, true);
+            String userId = getHeader(HEADER_USER_ID, req, false);
+            String clientId = getHeader(HEADER_CLIENT_ID, req, false);
             String clientType = getHeader(HEADER_CLIENT_TYPE, req, true);
             Map<String, String> clientMeta = getClientMeta(req);
 
             log.trace(
                 "Handling http kill request: reqId={}, tenantId={}, userId={}, clientId={}, clientType={}, clientMeta={}",
                 reqId, tenantId, userId, clientId, clientType, clientMeta);
+            if (Strings.isNullOrEmpty(userId) || Strings.isNullOrEmpty(clientId)) {
+                return sessionDictClient.killAll(reqId, tenantId, userId, ClientInfo.newBuilder()
+                        .setTenantId(tenantId)
+                        .setType(clientType)
+                        .putAllMetadata(clientMeta)
+                        .build())
+                    .thenApply(
+                        v -> new DefaultFullHttpResponse(req.protocolVersion(), v.getResult() == KillAllReply.Result.OK
+                            ? OK : NOT_FOUND, Unpooled.EMPTY_BUFFER));
+            }
             return sessionDictClient.kill(reqId, tenantId, userId, clientId, ClientInfo.newBuilder()
                     .setTenantId(tenantId)
                     .setType(clientType)

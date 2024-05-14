@@ -18,7 +18,7 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.testng.Assert.assertEquals;
@@ -79,7 +79,7 @@ public class SessionRegisterTest {
 
     @AfterMethod
     @SneakyThrows
-    public void teardown() {
+    public void tearDown() {
         closeable.close();
     }
 
@@ -171,7 +171,7 @@ public class SessionRegisterTest {
             assertEquals(quit.getKiller(), owner2);
 
             // won't trigger second reg
-            verify(listener, times(1)).on(any(), anyBoolean(), any());
+            verify(listener, times(1)).on(any(), eq(false), any());
         });
     }
 
@@ -187,6 +187,7 @@ public class SessionRegisterTest {
             register.kick(tenantId, new ISessionRegister.ClientKey(userId, clientId), killer);
             ArgumentCaptor<Quit> quitCaptor = ArgumentCaptor.forClass(Quit.class);
             verify(responseObserver).onNext(quitCaptor.capture());
+            verify(listener).on(owner, false, register);
             Quit quit = quitCaptor.getValue();
             assertEquals(quit.getOwner(), owner);
             assertEquals(quit.getKiller(), killer);

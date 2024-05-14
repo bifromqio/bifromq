@@ -81,7 +81,7 @@ public class SessionRegisterTest {
 
     @AfterMethod
     @SneakyThrows
-    public void teardown() {
+    public void tearDown() {
         closeable.close();
     }
 

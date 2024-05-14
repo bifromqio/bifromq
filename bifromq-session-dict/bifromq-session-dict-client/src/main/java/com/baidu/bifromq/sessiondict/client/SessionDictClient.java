@@ -14,10 +14,11 @@
 package com.baidu.bifromq.sessiondict.client;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
-import com.baidu.bifromq.sessiondict.RPCBluePrint;
 import com.baidu.bifromq.sessiondict.SessionRegisterKeyUtil;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetRequest;
+import com.baidu.bifromq.sessiondict.rpc.proto.KillAllReply;
+import com.baidu.bifromq.sessiondict.rpc.proto.KillAllRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictServiceGrpc;
@@ -28,11 +29,14 @@ import com.baidu.bifromq.sessiondict.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.type.ClientInfo;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
+import com.google.common.base.Strings;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.reactivex.rxjava3.core.Observable;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -41,14 +45,8 @@ final class SessionDictClient implements ISessionDictClient {
     private final IRPCClient rpcClient;
     private final LoadingCache<String, SessionRegPipeline> regPipeline;
 
-    SessionDictClient(SessionDictClientBuilder builder) {
-        this.rpcClient = IRPCClient.newBuilder()
-            .bluePrint(RPCBluePrint.INSTANCE)
-            .executor(builder.executor)
-            .eventLoopGroup(builder.eventLoopGroup)
-            .sslContext(builder.sslContext)
-            .crdtService(builder.crdtService)
-            .build();
+    SessionDictClient(IRPCClient rpcClient) {
+        this.rpcClient = rpcClient;
         regPipeline = Caffeine.newBuilder()
             .weakValues()
             .executor(MoreExecutors.directExecutor())
@@ -76,12 +74,56 @@ final class SessionDictClient implements ISessionDictClient {
                 .setTenantId(tenantId)
                 .setUserId(userId)
                 .setClientId(clientId)
-                .setKiller(killer)
-                .build(), SessionDictServiceGrpc.getKillMethod())
+                .setKiller(killer).build(), SessionDictServiceGrpc.getKillMethod())
             .exceptionally(e -> KillReply.newBuilder()
                 .setReqId(reqId)
                 .setResult(KillReply.Result.ERROR)
                 .build());
+    }
+
+    @Override
+    public CompletableFuture<KillAllReply> killAll(long reqId,
+                                                   String tenantId,
+                                                   @Nullable String userId,
+                                                   ClientInfo killer) {
+        KillAllRequest.Builder reqBuilder = KillAllRequest.newBuilder()
+            .setReqId(reqId)
+            .setTenantId(tenantId)
+            .setKiller(killer);
+        if (!Strings.isNullOrEmpty(userId)) {
+            reqBuilder.setUserId(userId);
+        }
+        return (CompletableFuture<KillAllReply>) rpcClient.serverList()
+            .firstElement()
+            .map(Map::keySet)
+            .toCompletionStage()
+            .thenApply(servers ->
+                servers.stream().map(serverId -> rpcClient.invoke(tenantId, serverId, reqBuilder.build(),
+                    SessionDictServiceGrpc.getKillAllMethod())).toList())
+            .thenCompose(killAllFutures -> CompletableFuture.allOf(killAllFutures.toArray(CompletableFuture[]::new))
+                .thenApply(v -> killAllFutures.stream().map(CompletableFuture::join).toList()))
+            .thenApply(killAllReplies -> {
+                if (killAllReplies.stream()
+                    .allMatch(reply -> reply.getResult() == KillAllReply.Result.OK)) {
+                    return KillAllReply.newBuilder()
+                        .setReqId(reqId)
+                        .setResult(KillAllReply.Result.OK)
+                        .build();
+                } else {
+                    return KillAllReply.newBuilder()
+                        .setReqId(reqId)
+                        .setResult(KillAllReply.Result.ERROR)
+                        .build();
+                }
+            })
+            .exceptionally(e -> {
+                log.debug("Kill all failed", e);
+                return KillAllReply.newBuilder()
+                    .setReqId(reqId)
+                    .setResult(KillAllReply.Result.ERROR)
+                    .build();
+            });
+
     }
 
     @Override

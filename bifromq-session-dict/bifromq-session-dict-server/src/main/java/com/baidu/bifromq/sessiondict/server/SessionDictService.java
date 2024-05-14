@@ -14,21 +14,14 @@
 package com.baidu.bifromq.sessiondict.server;
 
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
-import static com.baidu.bifromq.metrics.ITenantMeter.gauging;
-import static com.baidu.bifromq.metrics.ITenantMeter.stopGauging;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttConnectionGauge;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttLivePersistentSessionGauge;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_BROKER_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION_TYPE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION_TYPE_P_VALUE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION_TYPE_T_VALUE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetRequest;
+import com.baidu.bifromq.sessiondict.rpc.proto.KillAllReply;
+import com.baidu.bifromq.sessiondict.rpc.proto.KillAllRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
@@ -40,66 +33,27 @@ import com.baidu.bifromq.sessiondict.rpc.proto.UnsubReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.type.ClientInfo;
 import io.grpc.stub.StreamObserver;
-import java.util.Collections;
-import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class SessionDictService extends SessionDictServiceGrpc.SessionDictServiceImplBase {
-    private record SessionCollection(AtomicInteger persistentSessions,
-                                     Map<ISessionRegister.ClientKey, ISessionRegister> clients) {
-        static final SessionCollection EMPTY = new SessionCollection(new AtomicInteger(), Collections.emptyMap());
-    }
-
-    private final Map<String, SessionCollection> tenantSessions;
+    private final SessionStore sessionStore;
     private final IMqttBrokerClient mqttBrokerClient;
 
     SessionDictService(IMqttBrokerClient mqttBrokerClient) {
         this.mqttBrokerClient = mqttBrokerClient;
-        tenantSessions = new ConcurrentHashMap<>();
+        this.sessionStore = new SessionStore();
     }
 
     @Override
     public StreamObserver<Session> dict(StreamObserver<Quit> responseObserver) {
         return new SessionRegister(((sessionOwner, reg, register) -> {
-            String tenantId = sessionOwner.getTenantId();
-            ISessionRegister.ClientKey clientKey =
-                new ISessionRegister.ClientKey(sessionOwner.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),
-                    sessionOwner.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""));
             if (reg) {
-                ISessionRegister prevRegister = tenantSessions.computeIfAbsent(tenantId, k -> {
-                    SessionCollection sessionCollection =
-                        new SessionCollection(new AtomicInteger(), new ConcurrentHashMap<>());
-                    gauging(tenantId, MqttConnectionGauge, sessionCollection.clients::size);
-                    gauging(tenantId, MqttLivePersistentSessionGauge, sessionCollection.persistentSessions::get);
-                    return sessionCollection;
-                }).clients.put(clientKey, register);
-                if (sessionOwner.getMetadataOrDefault(MQTT_CLIENT_SESSION_TYPE, MQTT_CLIENT_SESSION_TYPE_T_VALUE)
-                    .equals(MQTT_CLIENT_SESSION_TYPE_P_VALUE)) {
-                    tenantSessions.get(tenantId).persistentSessions.incrementAndGet();
-                }
-                if (prevRegister != null) {
-                    // kick the session registered via previous register
-                    prevRegister.kick(tenantId, clientKey, sessionOwner);
-                }
+                sessionStore.add(sessionOwner, register);
             } else {
-                tenantSessions.computeIfPresent(tenantId, (k, v) -> {
-                    v.clients.remove(clientKey, register);
-                    if (sessionOwner.getMetadataOrDefault(MQTT_CLIENT_SESSION_TYPE, MQTT_CLIENT_SESSION_TYPE_T_VALUE)
-                        .equals(MQTT_CLIENT_SESSION_TYPE_P_VALUE)) {
-                        tenantSessions.get(tenantId).persistentSessions.decrementAndGet();
-                    }
-                    if (v.clients.isEmpty()) {
-                        v = null;
-                        stopGauging(tenantId, MqttConnectionGauge);
-                        stopGauging(tenantId, MqttLivePersistentSessionGauge);
-                    }
-                    return v;
-                });
+                sessionStore.remove(sessionOwner, register);
             }
         }), responseObserver);
     }
@@ -110,40 +64,54 @@ class SessionDictService extends SessionDictServiceGrpc.SessionDictServiceImplBa
             String tenantId = request.getTenantId();
             ISessionRegister.ClientKey clientKey =
                 new ISessionRegister.ClientKey(request.getUserId(), request.getClientId());
-            AtomicReference<ISessionRegister> found = new AtomicReference<>();
-            tenantSessions.computeIfPresent(tenantId, (k, v) -> {
-                ISessionRegister sessionRegister = v.clients.remove(clientKey);
-                if (sessionRegister != null) {
-                    found.set(sessionRegister);
-                    if (sessionRegister.owner(tenantId, clientKey)
-                        .getMetadataOrDefault(MQTT_CLIENT_SESSION_TYPE, MQTT_CLIENT_SESSION_TYPE_T_VALUE)
-                        .equals(MQTT_CLIENT_SESSION_TYPE_P_VALUE)) {
-                        v.persistentSessions.decrementAndGet();
-                    }
-                    if (v.clients.isEmpty()) {
-                        v = null;
-                        stopGauging(tenantId, MqttConnectionGauge);
-                    }
-                }
-                return v;
-            });
-
-            if (found.get() != null) {
-                try {
-                    found.get().kick(tenantId, clientKey, request.getKiller());
-                } catch (Throwable e) {
-                    log.debug("Failed to kick", e);
-                    return CompletableFuture.completedFuture(KillReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setResult(KillReply.Result.ERROR)
-                        .build());
-                }
+            try {
+                kick(tenantId, clientKey, request.getKiller());
+                return CompletableFuture.completedFuture(KillReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(KillReply.Result.OK)
+                    .build());
+            } catch (Throwable e) {
+                log.debug("Failed to kick", e);
+                return CompletableFuture.completedFuture(KillReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(KillReply.Result.ERROR)
+                    .build());
             }
-            return CompletableFuture.completedFuture(KillReply.newBuilder()
-                .setReqId(request.getReqId())
-                .setResult(KillReply.Result.OK)
-                .build());
         }, responseObserver);
+    }
+
+    @Override
+    public void killAll(KillAllRequest request, StreamObserver<KillAllReply> responseObserver) {
+        response(ignore -> {
+            String tenantId = request.getTenantId();
+            Set<ISessionRegister.ClientKey> clientKeys;
+            if (request.hasUserId()) {
+                clientKeys = sessionStore.findClients(tenantId, request.getUserId());
+            } else {
+                clientKeys = sessionStore.findClients(tenantId);
+            }
+            try {
+                // TODO: support disconnect a constant rate
+                clientKeys.forEach(clientKey -> kick(tenantId, clientKey, request.getKiller()));
+                return CompletableFuture.completedFuture(KillAllReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(KillAllReply.Result.OK)
+                    .build());
+            } catch (Throwable e) {
+                log.debug("Failed to kick", e);
+                return CompletableFuture.completedFuture(KillAllReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setResult(KillAllReply.Result.ERROR)
+                    .build());
+            }
+        }, responseObserver);
+    }
+
+    private void kick(String tenantId, ISessionRegister.ClientKey clientKey, ClientInfo killer) {
+        ISessionRegister sessionRegister = sessionStore.get(tenantId, clientKey);
+        if (sessionRegister != null) {
+            sessionRegister.kick(tenantId, clientKey, killer);
+        }
     }
 
     @Override
@@ -151,8 +119,7 @@ class SessionDictService extends SessionDictServiceGrpc.SessionDictServiceImplBa
         response(tenantId -> {
             ISessionRegister.ClientKey clientKey =
                 new ISessionRegister.ClientKey(request.getUserId(), request.getClientId());
-            ISessionRegister register = tenantSessions.getOrDefault(tenantId, SessionCollection.EMPTY)
-                .clients.get(clientKey);
+            ISessionRegister register = sessionStore.get(tenantId, clientKey);
             if (register == null) {
                 return CompletableFuture.completedFuture(GetReply.newBuilder()
                     .setReqId(request.getReqId())
@@ -179,8 +146,7 @@ class SessionDictService extends SessionDictServiceGrpc.SessionDictServiceImplBa
         response(tenantId -> {
             ISessionRegister.ClientKey clientKey =
                 new ISessionRegister.ClientKey(request.getUserId(), request.getClientId());
-            ISessionRegister register = tenantSessions.getOrDefault(tenantId, SessionCollection.EMPTY)
-                .clients.get(clientKey);
+            ISessionRegister register = sessionStore.get(tenantId, clientKey);
             if (register == null) {
                 return CompletableFuture.completedFuture(SubReply.newBuilder()
                     .setReqId(request.getReqId())
@@ -213,8 +179,7 @@ class SessionDictService extends SessionDictServiceGrpc.SessionDictServiceImplBa
         response(tenantId -> {
             ISessionRegister.ClientKey clientKey =
                 new ISessionRegister.ClientKey(request.getUserId(), request.getClientId());
-            ISessionRegister register = tenantSessions.getOrDefault(tenantId, SessionCollection.EMPTY)
-                .clients.get(clientKey);
+            ISessionRegister register = sessionStore.get(tenantId, clientKey);
             if (register == null) {
                 return CompletableFuture.completedFuture(UnsubReply.newBuilder()
                     .setReqId(request.getReqId())
@@ -242,6 +207,6 @@ class SessionDictService extends SessionDictServiceGrpc.SessionDictServiceImplBa
     }
 
     void close() {
-        tenantSessions.forEach((tenantId, collection) -> collection.clients.values().forEach(ISessionRegister::stop));
+        sessionStore.stop();
     }
 }

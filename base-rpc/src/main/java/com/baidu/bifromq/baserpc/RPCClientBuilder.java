@@ -37,7 +37,6 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedTransferQueue;
@@ -103,6 +102,7 @@ public final class RPCClientBuilder {
             private final BehaviorSubject<IUpdateListener.IServerSelector> serverSelectorSubject =
                 BehaviorSubject.create();
             private final BehaviorSubject<IRPCClient.ConnState> connStateSubject = BehaviorSubject.create();
+            // key: server id, value: server attributes
             private final Observable<Map<String, Map<String, String>>> serverListSubject;
             private final LoadBalancerProvider loadBalancerProvider;
             private final Executor rpcExecutor;

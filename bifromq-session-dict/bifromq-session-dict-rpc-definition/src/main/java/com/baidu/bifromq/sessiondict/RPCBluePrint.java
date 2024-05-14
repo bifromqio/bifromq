@@ -28,6 +28,7 @@ public class RPCBluePrint {
             BluePrint.WCHUnaryMethod.<KillRequest>builder()
                 .keyHashFunc(r -> SessionRegisterKeyUtil.toRegisterKey(r.getTenantId(), r.getUserId(), r.getClientId()))
                 .build())
+        .methodSemantic(SessionDictServiceGrpc.getKillAllMethod(), BluePrint.DDUnaryMethod.getInstance())
         .methodSemantic(SessionDictServiceGrpc.getGetMethod(), BluePrint.WCHUnaryMethod.<GetRequest>builder()
             .keyHashFunc(r -> SessionRegisterKeyUtil.toRegisterKey(r.getTenantId(), r.getUserId(), r.getClientId()))
             .build())

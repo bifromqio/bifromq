@@ -13,6 +13,7 @@ option optimize_for = SPEED;
 service SessionDictService {
   rpc dict (stream Session) returns (stream Quit);
   rpc kill (KillRequest) returns(KillReply);
+  rpc killAll (KillAllRequest) returns(KillAllReply);
   rpc get(GetRequest) returns(GetReply);
   rpc sub(SubRequest) returns(SubReply);
   rpc unsub(UnsubRequest) returns(UnsubReply);
@@ -39,6 +40,22 @@ message KillRequest {
 }
 
 message KillReply {
+  enum Result{
+    OK = 0;
+    ERROR = 1;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+
+message KillAllRequest {
+  uint64 reqId = 1;
+  string tenantId = 2;
+  optional string userId = 3;
+  commontype.ClientInfo killer = 4;
+}
+
+message KillAllReply {
   enum Result{
     OK = 0;
     ERROR = 1;

@@ -20,6 +20,8 @@ import static com.baidu.bifromq.apiserver.Headers.HEADER_USER_ID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -65,22 +67,60 @@ public class HTTPKickHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPKick
 
         HTTPKickHandler handler = new HTTPKickHandler(sessionDictClient);
         handler.handle(reqId, tenantId, req);
-        ArgumentCaptor<Long> reqIdCap = ArgumentCaptor.forClass(Long.class);
-        ArgumentCaptor<String> tenantIdCap = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> userIdCap = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> clientIdCap = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<ClientInfo> killerCap = ArgumentCaptor.forClass(ClientInfo.class);
-        verify(sessionDictClient).kill(reqIdCap.capture(), tenantIdCap.capture(),
-                userIdCap.capture(), clientIdCap.capture(), killerCap.capture());
-        assertEquals(reqIdCap.getValue(), reqId);
-        assertEquals(userIdCap.getValue(), req.headers().get(HEADER_USER_ID.header));
-        assertEquals(clientIdCap.getValue(), req.headers().get(HEADER_CLIENT_ID.header));
+        verify(sessionDictClient).kill(
+            eq(reqId),
+            eq(tenantId),
+            eq(req.headers().get(HEADER_USER_ID.header)),
+            eq(req.headers().get(HEADER_CLIENT_ID.header)),
+            killerCap.capture());
         ClientInfo killer = killerCap.getValue();
         assertEquals(killer.getTenantId(), tenantId);
         assertEquals(killer.getType(), req.headers().get(HEADER_CLIENT_TYPE.header));
         assertEquals(killer.getMetadataCount(), 1);
         assertEquals(killer.getMetadataMap().get("age"), "4");
     }
+
+    @Test
+    public void kickUser() {
+        DefaultFullHttpRequest req = buildRequest();
+        req.headers().set(HEADER_USER_ID.header, "admin_user");
+        req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
+        req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
+        long reqId = 123;
+        String tenantId = "bifromq_dev";
+
+        HTTPKickHandler handler = new HTTPKickHandler(sessionDictClient);
+        handler.handle(reqId, tenantId, req);
+        ArgumentCaptor<ClientInfo> killerCap = ArgumentCaptor.forClass(ClientInfo.class);
+        verify(sessionDictClient).killAll(eq(reqId), eq(tenantId),
+            eq(req.headers().get(HEADER_USER_ID.header)), killerCap.capture());
+        ClientInfo killer = killerCap.getValue();
+        assertEquals(killer.getTenantId(), tenantId);
+        assertEquals(killer.getType(), req.headers().get(HEADER_CLIENT_TYPE.header));
+        assertEquals(killer.getMetadataCount(), 1);
+        assertEquals(killer.getMetadataMap().get("age"), "4");
+    }
+
+    @Test
+    public void kickTenant() {
+        DefaultFullHttpRequest req = buildRequest();
+        req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
+        req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
+        long reqId = 123;
+        String tenantId = "bifromq_dev";
+
+        HTTPKickHandler handler = new HTTPKickHandler(sessionDictClient);
+        handler.handle(reqId, tenantId, req);
+        ArgumentCaptor<ClientInfo> killerCap = ArgumentCaptor.forClass(ClientInfo.class);
+        verify(sessionDictClient).killAll(eq(reqId), eq(tenantId), isNull(), killerCap.capture());
+        ClientInfo killer = killerCap.getValue();
+        assertEquals(killer.getTenantId(), tenantId);
+        assertEquals(killer.getType(), req.headers().get(HEADER_CLIENT_TYPE.header));
+        assertEquals(killer.getMetadataCount(), 1);
+        assertEquals(killer.getMetadataMap().get("age"), "4");
+    }
+
 
     @Test
     public void kickSucceed() {

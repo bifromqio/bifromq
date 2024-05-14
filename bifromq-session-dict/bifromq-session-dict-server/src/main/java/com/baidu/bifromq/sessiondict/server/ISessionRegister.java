@@ -14,9 +14,14 @@
 package com.baidu.bifromq.sessiondict.server;
 
 import com.baidu.bifromq.type.ClientInfo;
+import java.util.Comparator;
 
 public interface ISessionRegister {
     record ClientKey(String userId, String clientId) {
+        static Comparator<ClientKey> ClientKeyComparator = (key1, key2) -> Comparator
+            .comparing(ISessionRegister.ClientKey::userId)
+            .thenComparing(ISessionRegister.ClientKey::clientId)
+            .compare(key1, key2);
     }
 
     interface IRegistrationListener {

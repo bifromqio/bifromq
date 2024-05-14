@@ -14,6 +14,8 @@
 package com.baidu.bifromq.sessiondict.client;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.sessiondict.RPCBluePrint;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
@@ -26,13 +28,19 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Setter
 public final class SessionDictClientBuilder implements ISessionDictClientBuilder {
-    ICRDTService crdtService;
-    EventLoopGroup eventLoopGroup;
-    SslContext sslContext;
-    Executor executor;
+    private ICRDTService crdtService;
+    private EventLoopGroup eventLoopGroup;
+    private SslContext sslContext;
+    private Executor executor;
 
     @Override
     public ISessionDictClient build() {
-        return new SessionDictClient(this);
+        return new SessionDictClient(IRPCClient.newBuilder()
+            .bluePrint(RPCBluePrint.INSTANCE)
+            .executor(executor)
+            .eventLoopGroup(eventLoopGroup)
+            .sslContext(sslContext)
+            .crdtService(crdtService)
+            .build());
     }
 }

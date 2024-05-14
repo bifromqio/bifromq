@@ -103,6 +103,7 @@ class SessionRegister extends AckStream<Session, Quit> implements ISessionRegist
                 .setOwner(found.get())
                 .setKiller(kicker)
                 .build());
+            regListener.on(found.get(), false, this);
             return true;
         }
         return false;
