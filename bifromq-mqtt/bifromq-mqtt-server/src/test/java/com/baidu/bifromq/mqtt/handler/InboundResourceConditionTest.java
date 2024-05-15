@@ -66,4 +66,25 @@ public class InboundResourceConditionTest extends MockableTest {
             assertTrue(condition.get());
         }
     }
+
+    @Test
+    public void testHeapMemPressure() {
+        try (MockedStatic<MemInfo> mockedStatic = mockStatic(MemInfo.class)) {
+            mockedStatic.when(MemInfo::heapMemoryUsage).thenReturn(0.9);
+            InboundResourceCondition condition =
+                new InboundResourceCondition(resourceThrottler, eventCollector, clientInfo);
+            when(resourceThrottler.hasResource(clientInfo.getTenantId(),
+                TenantResourceType.TotalInboundBytesPerSecond)).thenReturn(true);
+            assertTrue(condition.get());
+
+            mockedStatic.when(MemInfo::heapMemoryUsage).thenReturn(0.2);
+            assertFalse(condition.get());
+
+            when(resourceThrottler.hasResource(clientInfo.getTenantId(),
+                TenantResourceType.TotalInboundBytesPerSecond)).thenReturn(false);
+            assertTrue(condition.get());
+        }
+    }
+
+
 }

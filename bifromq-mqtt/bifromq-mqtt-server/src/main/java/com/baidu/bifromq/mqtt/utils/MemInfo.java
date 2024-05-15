@@ -15,20 +15,36 @@ package com.baidu.bifromq.mqtt.utils;
 
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.util.internal.PlatformDependent;
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryUsage;
 import java.time.Duration;
 
 public class MemInfo {
     private static final long READ_GAP_NANOS = Duration.ofMillis(100).toNanos();
-    private static volatile long lastReadNanos;
+    private static volatile long lastDirectUsageReadNanos;
+    private static volatile long lastHeapUsageReadNanos;
     private static volatile double directMemoryUsage;
+    private static volatile double heapMemoryUsage;
 
     public static double directMemoryUsage() {
         long now = System.nanoTime();
-        if ((now - lastReadNanos) > READ_GAP_NANOS) {
+        if ((now - lastDirectUsageReadNanos) > READ_GAP_NANOS) {
             directMemoryUsage = PooledByteBufAllocator.DEFAULT.metric().usedDirectMemory() /
                 (double) PlatformDependent.maxDirectMemory();
-            lastReadNanos = now;
+            lastDirectUsageReadNanos = now;
         }
         return directMemoryUsage;
+    }
+
+    public static double heapMemoryUsage() {
+        long now = System.nanoTime();
+        if ((now - lastHeapUsageReadNanos) > READ_GAP_NANOS) {
+            MemoryUsage memoryUsage = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
+            long usedHeapMemory = memoryUsage.getUsed();
+            long maxHeapMemory = memoryUsage.getMax();
+            heapMemoryUsage = (double) usedHeapMemory / maxHeapMemory;
+            lastHeapUsageReadNanos = now;
+        }
+        return heapMemoryUsage;
     }
 }

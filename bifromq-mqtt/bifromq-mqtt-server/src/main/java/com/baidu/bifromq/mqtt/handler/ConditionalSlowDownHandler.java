@@ -50,8 +50,8 @@ public class ConditionalSlowDownHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
         if (slowDownCondition.get()) {
-            log.debug("Stop read: directMemoryUsage={}, remote={}", MemInfo.directMemoryUsage(),
-                ctx.channel().remoteAddress());
+            log.debug("Stop read: directMemoryUsage={}, heapMemoryUsage={}, remote={}",
+                MemInfo.directMemoryUsage(), MemInfo.heapMemoryUsage(), ctx.channel().remoteAddress());
             ctx.channel().config().setAutoRead(false);
             scheduleResumeRead();
         }
@@ -78,8 +78,8 @@ public class ConditionalSlowDownHandler extends ChannelInboundHandlerAdapter {
         if (!slowDownCondition.get()) {
             if (!ctx.channel().config().isAutoRead()) {
                 ctx.channel().config().setAutoRead(true);
-                log.debug("Resume read: directMemoryUsage={}, remote={}", MemInfo.directMemoryUsage(),
-                    ctx.channel().remoteAddress());
+                log.debug("Resume read: directMemoryUsage={}, heapMemoryUsage={}, remote={}",
+                    MemInfo.directMemoryUsage(), MemInfo.heapMemoryUsage(), ctx.channel().remoteAddress());
                 ctx.read();
             }
         } else {

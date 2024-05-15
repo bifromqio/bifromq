@@ -20,11 +20,14 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.type.ClientInfo;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import java.util.function.Supplier;
 
-public class InboundResourceCondition extends MemPressureCondition {
+public class InboundResourceCondition implements Supplier<Boolean> {
     private final IResourceThrottler resourceThrottler;
     private final IEventCollector eventCollector;
     private final ClientInfo clientInfo;
+    private final DirectMemPressureCondition directMemPressureCondition = DirectMemPressureCondition.INSTANCE;
+    private final HeapMemPressureCondition heapMemPressureCondition = HeapMemPressureCondition.INSTANCE;
 
     public InboundResourceCondition(IResourceThrottler resourceThrottler,
                                     IEventCollector eventCollector,
@@ -36,9 +39,15 @@ public class InboundResourceCondition extends MemPressureCondition {
 
     @Override
     public Boolean get() {
-        if (super.get()) {
+        if (directMemPressureCondition.get()) {
             eventCollector.report(getLocal(ResourceThrottled.class)
                 .reason("DirectMemoryUsage")
+                .clientInfo(clientInfo));
+            return true;
+        }
+        if (heapMemPressureCondition.get()) {
+            eventCollector.report(getLocal(ResourceThrottled.class)
+                .reason("HeapMemoryUsage")
                 .clientInfo(clientInfo));
             return true;
         }
