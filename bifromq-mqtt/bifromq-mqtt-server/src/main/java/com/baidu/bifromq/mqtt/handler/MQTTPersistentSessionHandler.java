@@ -51,8 +51,8 @@ import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.mqtt.session.IMQTTPersistentSession;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
+import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Dropped;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS1Dropped;
@@ -251,13 +251,13 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     protected final CompletableFuture<IMQTTProtocolHelper.SubResult> subTopicFilter(long reqId, String topicFilter,
                                                                                     TopicFilterOption option) {
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalPersistentSubscriptions)) {
-            eventCollector.report(getLocal(ResourceThrottled.class)
+            eventCollector.report(getLocal(OutOfTenantResource.class)
                 .reason(TotalPersistentSubscriptions.name())
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(EXCEED_LIMIT);
         }
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalPersistentSubscribePerSecond)) {
-            eventCollector.report(getLocal(ResourceThrottled.class)
+            eventCollector.report(getLocal(OutOfTenantResource.class)
                 .reason(TotalPersistentSubscribePerSecond.name())
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(EXCEED_LIMIT);
@@ -319,7 +319,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                                                                                         String topicFilter) {
         // check unsub rate
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalPersistentUnsubscribePerSecond)) {
-            eventCollector.report(getLocal(ResourceThrottled.class)
+            eventCollector.report(getLocal(OutOfTenantResource.class)
                 .reason(TotalPersistentUnsubscribePerSecond.name())
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(ERROR);

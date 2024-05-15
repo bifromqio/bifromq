@@ -13,24 +13,19 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
-import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.mqtt.MockableTest;
-import com.baidu.bifromq.mqtt.utils.MemInfo;
-import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.mqtt.handler.condition.InboundResourceCondition;
 import com.baidu.bifromq.type.ClientInfo;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.bifromq.plugin.resourcethrottler.TenantResourceType;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
 import org.testng.annotations.Test;
 
 public class InboundResourceConditionTest extends MockableTest {
-    @Mock
-    public IEventCollector eventCollector;
     @Mock
     public IResourceThrottler resourceThrottler;
     public ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId("tenantA").build();
@@ -38,53 +33,13 @@ public class InboundResourceConditionTest extends MockableTest {
     @Test
     public void testNoInboundResource() {
         InboundResourceCondition condition =
-            new InboundResourceCondition(resourceThrottler, eventCollector, clientInfo);
+            new InboundResourceCondition(resourceThrottler, clientInfo);
         when(resourceThrottler.hasResource(clientInfo.getTenantId(),
             TenantResourceType.TotalInboundBytesPerSecond)).thenReturn(false);
-        assertTrue(condition.get());
+        assertTrue(condition.meet());
 
         when(resourceThrottler.hasResource(clientInfo.getTenantId(),
             TenantResourceType.TotalInboundBytesPerSecond)).thenReturn(true);
-        assertFalse(condition.get());
+        assertFalse(condition.meet());
     }
-
-    @Test
-    public void testNoMemPressure() {
-        try (MockedStatic<MemInfo> mockedStatic = mockStatic(MemInfo.class)) {
-            mockedStatic.when(MemInfo::directMemoryUsage).thenReturn(0.9);
-            InboundResourceCondition condition =
-                new InboundResourceCondition(resourceThrottler, eventCollector, clientInfo);
-            when(resourceThrottler.hasResource(clientInfo.getTenantId(),
-                TenantResourceType.TotalInboundBytesPerSecond)).thenReturn(true);
-            assertTrue(condition.get());
-
-            mockedStatic.when(MemInfo::directMemoryUsage).thenReturn(0.2);
-            assertFalse(condition.get());
-
-            when(resourceThrottler.hasResource(clientInfo.getTenantId(),
-                TenantResourceType.TotalInboundBytesPerSecond)).thenReturn(false);
-            assertTrue(condition.get());
-        }
-    }
-
-    @Test
-    public void testHeapMemPressure() {
-        try (MockedStatic<MemInfo> mockedStatic = mockStatic(MemInfo.class)) {
-            mockedStatic.when(MemInfo::heapMemoryUsage).thenReturn(0.9);
-            InboundResourceCondition condition =
-                new InboundResourceCondition(resourceThrottler, eventCollector, clientInfo);
-            when(resourceThrottler.hasResource(clientInfo.getTenantId(),
-                TenantResourceType.TotalInboundBytesPerSecond)).thenReturn(true);
-            assertTrue(condition.get());
-
-            mockedStatic.when(MemInfo::heapMemoryUsage).thenReturn(0.2);
-            assertFalse(condition.get());
-
-            when(resourceThrottler.hasResource(clientInfo.getTenantId(),
-                TenantResourceType.TotalInboundBytesPerSecond)).thenReturn(false);
-            assertTrue(condition.get());
-        }
-    }
-
-
 }

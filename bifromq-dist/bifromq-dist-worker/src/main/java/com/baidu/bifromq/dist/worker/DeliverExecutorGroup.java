@@ -28,7 +28,7 @@ import com.baidu.bifromq.dist.entity.Matching;
 import com.baidu.bifromq.dist.entity.NormalMatching;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
+import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.baidu.bifromq.util.SizeUtil;
@@ -124,7 +124,7 @@ class DeliverExecutorGroup {
                         if (!hasPFanOutBandwidth) {
                             hasPFannedOutUnderThrottled = true;
                             for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
-                                eventCollector.report(getLocal(ResourceThrottled.class)
+                                eventCollector.report(getLocal(OutOfTenantResource.class)
                                     .reason(TotalPersistentFanOutBytesPerSeconds.name())
                                     .clientInfo(publisherPack.getPublisher())
                                 );
@@ -136,7 +136,7 @@ class DeliverExecutorGroup {
                     if (!hasTFanOutBandwidth) {
                         hasTFannedOutUnderThrottled = true;
                         for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
-                            eventCollector.report(getLocal(ResourceThrottled.class)
+                            eventCollector.report(getLocal(OutOfTenantResource.class)
                                 .reason(TenantResourceType.TotalTransientFanOutBytesPerSeconds.name())
                                 .clientInfo(publisherPack.getPublisher())
                             );

@@ -46,6 +46,7 @@ import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5SubAckReasonCode;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5UnsubAckReasonCode;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.eventcollector.Event;
+import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.BadPacket;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByServer;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ExceedPubRate;
@@ -162,6 +163,9 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 .reasonCode(MQTT5DisconnectReasonCode.QuotaExceeded)
                 .reasonString(resourceType.name())
                 .build(),
+            getLocal(OutOfTenantResource.class)
+                .reason(resourceType.name())
+                .clientInfo(clientInfo),
             getLocal(ResourceThrottled.class)
                 .reason(resourceType.name())
                 .clientInfo(clientInfo));

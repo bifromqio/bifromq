@@ -56,10 +56,10 @@ import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
-import com.baidu.bifromq.mqtt.handler.ConditionalSlowDownHandler;
+import com.baidu.bifromq.mqtt.handler.ConditionalRejectHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageDebounceHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTPreludeHandler;
-import com.baidu.bifromq.mqtt.handler.DirectMemPressureCondition;
+import com.baidu.bifromq.mqtt.handler.condition.HeapMemPressureCondition;
 import com.baidu.bifromq.mqtt.service.ILocalDistService;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.mqtt.service.LocalDistService;
@@ -88,6 +88,7 @@ import com.baidu.bifromq.sessiondict.client.ISessionRegister;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Tags;
 import io.netty.channel.ChannelInitializer;
@@ -200,8 +201,8 @@ public abstract class BaseMQTTTest {
                 pipeline.addLast("trafficShaper", new ChannelTrafficShapingHandler(512 * 1024, 512 * 1024));
                 pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(256 * 1024)); //256kb
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                pipeline.addLast(ConditionalSlowDownHandler.NAME,
-                    new ConditionalSlowDownHandler(DirectMemPressureCondition.INSTANCE));
+                pipeline.addLast(ConditionalRejectHandler.NAME,
+                    new ConditionalRejectHandler(Sets.newHashSet(HeapMemPressureCondition.INSTANCE), eventCollector));
                 pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(2));
             }
         };

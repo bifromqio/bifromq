@@ -44,6 +44,7 @@ import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.plugin.authprovider.type.Reject;
+import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.AuthError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.IdentifierRejected;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.MalformedClientIdentifier;
@@ -211,6 +212,9 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
             .connAck()
             .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
             .build(),
+            getLocal(OutOfTenantResource.class)
+                .reason(resourceType.name())
+                .clientInfo(clientInfo),
             getLocal(ResourceThrottled.class)
                 .reason(resourceType.name())
                 .clientInfo(clientInfo));

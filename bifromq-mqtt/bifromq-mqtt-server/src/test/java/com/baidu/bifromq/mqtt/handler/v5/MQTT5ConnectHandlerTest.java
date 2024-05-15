@@ -16,6 +16,7 @@ package com.baidu.bifromq.mqtt.handler.v5;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_CLIENT_IDENTIFIER;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_USERNAME;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_WILL_TOPIC;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.OUT_OF_TENANT_RESOURCE;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.RESOURCE_THROTTLED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_CLIENT_IDENTIFIER_NOT_VALID;
@@ -41,6 +42,7 @@ import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthData;
 import com.baidu.bifromq.plugin.authprovider.type.Success;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
@@ -248,6 +250,8 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         MqttConnAckMessage connAckMessage = channel.readOutbound();
         assertEquals(connAckMessage.variableHeader().connectReturnCode(),
             CONNECTION_REFUSED_QUOTA_EXCEEDED);
+        verify(eventCollector).report(argThat(event -> event.type() == OUT_OF_TENANT_RESOURCE &&
+            ((OutOfTenantResource) event).reason().equals(TenantResourceType.TotalConnections.name())));
         verify(eventCollector).report(argThat(event -> event.type() == RESOURCE_THROTTLED &&
             ((ResourceThrottled) event).reason().equals(TenantResourceType.TotalConnections.name())));
         assertFalse(channel.isOpen());
@@ -270,6 +274,8 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         MqttConnAckMessage connAckMessage = channel.readOutbound();
         assertEquals(connAckMessage.variableHeader().connectReturnCode(),
             CONNECTION_REFUSED_QUOTA_EXCEEDED);
+        verify(eventCollector).report(argThat(event -> event.type() == OUT_OF_TENANT_RESOURCE &&
+            ((OutOfTenantResource) event).reason().equals(TenantResourceType.TotalSessionMemoryBytes.name())));
         verify(eventCollector).report(argThat(event -> event.type() == RESOURCE_THROTTLED &&
             ((ResourceThrottled) event).reason().equals(TenantResourceType.TotalSessionMemoryBytes.name())));
         assertFalse(channel.isOpen());
@@ -292,6 +298,8 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         MqttConnAckMessage connAckMessage = channel.readOutbound();
         assertEquals(connAckMessage.variableHeader().connectReturnCode(),
             CONNECTION_REFUSED_QUOTA_EXCEEDED);
+        verify(eventCollector).report(argThat(event -> event.type() == OUT_OF_TENANT_RESOURCE &&
+            ((OutOfTenantResource) event).reason().equals(TenantResourceType.TotalConnectPerSecond.name())));
         verify(eventCollector).report(argThat(event -> event.type() == RESOURCE_THROTTLED &&
             ((ResourceThrottled) event).reason().equals(TenantResourceType.TotalConnectPerSecond.name())));
         assertFalse(channel.isOpen());

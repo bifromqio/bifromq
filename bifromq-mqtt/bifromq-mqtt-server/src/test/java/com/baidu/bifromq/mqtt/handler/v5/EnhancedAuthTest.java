@@ -22,11 +22,11 @@ import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
 import com.baidu.bifromq.mqtt.MockableTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
-import com.baidu.bifromq.mqtt.handler.ConditionalSlowDownHandler;
+import com.baidu.bifromq.mqtt.handler.ConditionalRejectHandler;
 import com.baidu.bifromq.mqtt.handler.ConnectionRateLimitHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTConnectHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageDebounceHandler;
-import com.baidu.bifromq.mqtt.handler.MemPressureCondition;
+import com.baidu.bifromq.mqtt.handler.condition.HeapMemPressureCondition;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5AuthReasonCode;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.mqtt.service.LocalSessionRegistry;
@@ -42,6 +42,7 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
@@ -119,8 +120,8 @@ public class EnhancedAuthTest extends MockableTest {
                     new ChannelTrafficShapingHandler(512 * 1024, 512 * 1024));
                 pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder());
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                pipeline.addLast(ConditionalSlowDownHandler.NAME,
-                    new ConditionalSlowDownHandler(MemPressureCondition.INSTANCE));
+                pipeline.addLast(ConditionalRejectHandler.NAME,
+                    new ConditionalRejectHandler(Sets.newHashSet(HeapMemPressureCondition.INSTANCE), eventCollector));
                 pipeline.addLast(connectHandler);
             }
         });

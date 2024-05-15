@@ -70,7 +70,7 @@ import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.store.gc.IInboxStoreGCProcessor;
 import com.baidu.bifromq.inbox.store.gc.InboxStoreGCProcessor;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
+import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.WillDistError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.WillDisted;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.MsgRetained;
@@ -732,13 +732,13 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
 
         private CompletableFuture<RetainReply.Result> retain(long reqId, LWT lwt, ClientInfo publisher) {
             if (!resourceThrottler.hasResource(publisher.getTenantId(), TotalRetainTopics)) {
-                eventCollector.report(getLocal(ResourceThrottled.class)
+                eventCollector.report(getLocal(OutOfTenantResource.class)
                     .reason(TotalRetainTopics.name())
                     .clientInfo(publisher));
                 return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
             }
             if (!resourceThrottler.hasResource(publisher.getTenantId(), TotalRetainMessageSpaceBytes)) {
-                eventCollector.report(getLocal(ResourceThrottled.class)
+                eventCollector.report(getLocal(OutOfTenantResource.class)
                     .reason(TotalRetainMessageSpaceBytes.name())
                     .clientInfo(publisher));
                 return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);

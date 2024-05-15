@@ -106,4 +106,5 @@ public enum EventType {
     OVERFLOWED,
 
     // retain service
+    OUT_OF_TENANT_RESOURCE
 }

@@ -11,22 +11,25 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.handler;
+package com.baidu.bifromq.mqtt.handler.condition;
 
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE;
 
 import com.baidu.bifromq.mqtt.utils.MemInfo;
-import java.util.function.Supplier;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
-public class HeapMemPressureCondition implements Supplier<Boolean> {
+public class HeapMemPressureCondition implements Condition {
     public static final HeapMemPressureCondition INSTANCE = new HeapMemPressureCondition();
     private static final double MAX_HEAP_MEMORY_USAGE = INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE.get();
 
-    @Override
-    public Boolean get() {
+    public boolean meet() {
         return MemInfo.heapMemoryUsage() > MAX_HEAP_MEMORY_USAGE;
+    }
+
+    @Override
+    public String toString() {
+        return "HighHeapMemoryUsage";
     }
 }

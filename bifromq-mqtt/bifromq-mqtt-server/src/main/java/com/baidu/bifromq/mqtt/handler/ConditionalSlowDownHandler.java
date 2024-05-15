@@ -13,9 +13,20 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
+import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_SLOWDOWN_SECONDS;
+
+import com.baidu.bifromq.mqtt.handler.condition.Condition;
+import com.baidu.bifromq.mqtt.handler.condition.InboundResourceCondition;
 import com.baidu.bifromq.mqtt.utils.MemInfo;
+import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
+import com.baidu.bifromq.type.ClientInfo;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import java.time.Duration;
+import java.util.Set;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -25,12 +36,24 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ConditionalSlowDownHandler extends ChannelInboundHandlerAdapter {
     public static final String NAME = "SlowDownHandler";
-    private final Supplier<Boolean> slowDownCondition;
+    private static final long MAX_SLOWDOWN_TIME =
+        Duration.ofSeconds(((Integer) MAX_SLOWDOWN_SECONDS.get()).longValue()).toNanos();
+    private final Set<Condition> slowDownConditions;
+    private final Supplier<Long> nanoProvider;
+    private final IEventCollector eventCollector;
+    private final ClientInfo clientInfo;
     private ChannelHandlerContext ctx;
     private ScheduledFuture<?> resumeTask;
+    private long slowDownAt = Long.MAX_VALUE;
 
-    public ConditionalSlowDownHandler(Supplier<Boolean> slowDownCondition) {
-        this.slowDownCondition = slowDownCondition;
+    public ConditionalSlowDownHandler(Set<Condition> slowDownConditions,
+                                      IEventCollector eventCollector,
+                                      Supplier<Long> nanoProvider,
+                                      ClientInfo clientInfo) {
+        this.slowDownConditions = slowDownConditions;
+        this.eventCollector = eventCollector;
+        this.nanoProvider = nanoProvider;
+        this.clientInfo = clientInfo;
     }
 
     @Override
@@ -49,20 +72,27 @@ public class ConditionalSlowDownHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
-        if (slowDownCondition.get()) {
-            log.debug("Stop read: directMemoryUsage={}, heapMemoryUsage={}, remote={}",
-                MemInfo.directMemoryUsage(), MemInfo.heapMemoryUsage(), ctx.channel().remoteAddress());
-            ctx.channel().config().setAutoRead(false);
-            scheduleResumeRead();
+        for (Condition slowDownCondition : slowDownConditions) {
+            if (slowDownCondition.meet()) {
+                log.debug("Stop read: directMemoryUsage={}, heapMemoryUsage={}, remote={}",
+                    MemInfo.directMemoryUsage(), MemInfo.heapMemoryUsage(), ctx.channel().remoteAddress());
+                ctx.channel().config().setAutoRead(false);
+                slowDownAt = nanoProvider.get();
+                scheduleResumeRead();
+                break;
+            }
         }
         ctx.fireChannelRead(msg);
     }
 
     @Override
     public void channelReadComplete(ChannelHandlerContext ctx) {
-        if (!slowDownCondition.get()) {
+        if (slowDownConditions.stream().noneMatch(Condition::meet)) {
             ctx.channel().config().setAutoRead(true);
             ctx.read();
+            slowDownAt = Long.MAX_VALUE;
+        } else {
+            closeIfNeeded();
         }
         ctx.fireChannelReadComplete();
     }
@@ -70,21 +100,44 @@ public class ConditionalSlowDownHandler extends ChannelInboundHandlerAdapter {
     private void scheduleResumeRead() {
         if (resumeTask == null || resumeTask.isDone()) {
             resumeTask = ctx.executor()
-                .schedule(this::resumeRead, ThreadLocalRandom.current().nextLong(100, 1000), TimeUnit.MILLISECONDS);
+                .schedule(this::resumeRead, ThreadLocalRandom.current().nextLong(100, 1001), TimeUnit.MILLISECONDS);
         }
     }
 
     private void resumeRead() {
-        if (!slowDownCondition.get()) {
+        if (slowDownConditions.stream().noneMatch(Condition::meet)) {
             if (!ctx.channel().config().isAutoRead()) {
                 ctx.channel().config().setAutoRead(true);
                 log.debug("Resume read: directMemoryUsage={}, heapMemoryUsage={}, remote={}",
                     MemInfo.directMemoryUsage(), MemInfo.heapMemoryUsage(), ctx.channel().remoteAddress());
                 ctx.read();
+                slowDownAt = Long.MAX_VALUE;
             }
         } else {
-            resumeTask = null;
-            scheduleResumeRead();
+            if (!closeIfNeeded()) {
+                resumeTask = null;
+                scheduleResumeRead();
+            }
         }
+    }
+
+    private boolean closeIfNeeded() {
+        if (nanoProvider.get() - slowDownAt > MAX_SLOWDOWN_TIME) {
+            ctx.close();
+            for (Condition slowDownCondition : slowDownConditions) {
+                if (slowDownCondition.meet()) {
+                    if (slowDownCondition instanceof InboundResourceCondition) {
+                        eventCollector.report(getLocal(OutOfTenantResource.class)
+                            .reason(slowDownCondition.toString())
+                            .clientInfo(clientInfo));
+                    }
+                    eventCollector.report(getLocal(ResourceThrottled.class)
+                        .reason(slowDownCondition.toString())
+                        .clientInfo(clientInfo));
+                }
+            }
+            return true;
+        }
+        return false;
     }
 }

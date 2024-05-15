@@ -68,6 +68,7 @@ import com.baidu.bifromq.plugin.authprovider.type.Failed;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthData;
 import com.baidu.bifromq.plugin.authprovider.type.Success;
+import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.AuthError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.EnhancedAuthAbortByClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.MalformedClientIdentifier;
@@ -413,9 +414,13 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 .reasonString(resourceType.name())
                 .build())
             .build(),
+            getLocal(OutOfTenantResource.class)
+                .reason(resourceType.name())
+                .clientInfo(clientInfo),
             getLocal(ResourceThrottled.class)
                 .reason(resourceType.name())
-                .clientInfo(clientInfo));
+                .clientInfo(clientInfo)
+        );
     }
 
     @Override

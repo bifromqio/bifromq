@@ -15,9 +15,9 @@ package com.baidu.demo.plugin;
 
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.ChannelClosedEvent;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ClientDisconnectEvent;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import org.pf4j.Extension;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,17 +31,17 @@ public final class EventLogger implements IEventCollector {
         if (LOG.isDebugEnabled()) {
             switch (event.type()) {
                 case DISCARD,
-                    WILL_DIST_ERROR,
-                    QOS0_DIST_ERROR,
-                    QOS1_DIST_ERROR,
-                    QOS2_DIST_ERROR,
-                    OVERFLOWED,
-                    QOS0_DROPPED,
-                    QOS1_DROPPED,
-                    QOS2_DROPPED,
-                    OVERSIZE_PACKET_DROPPED,
-                    MSG_RETAINED_ERROR,
-                    DELIVER_ERROR -> LOG.debug("Message dropped due to {}", event.type());
+                     WILL_DIST_ERROR,
+                     QOS0_DIST_ERROR,
+                     QOS1_DIST_ERROR,
+                     QOS2_DIST_ERROR,
+                     OVERFLOWED,
+                     QOS0_DROPPED,
+                     QOS1_DROPPED,
+                     QOS2_DROPPED,
+                     OVERSIZE_PACKET_DROPPED,
+                     MSG_RETAINED_ERROR,
+                     DELIVER_ERROR -> LOG.debug("Message dropped due to {}", event.type());
                 default -> {
                     if (event instanceof ChannelClosedEvent || event instanceof ClientDisconnectEvent) {
                         LOG.debug("Channel closed due to {}", event.type());
@@ -49,8 +49,8 @@ public final class EventLogger implements IEventCollector {
                 }
             }
         } else if (LOG.isWarnEnabled()) {
-            if (event instanceof ResourceThrottled throttled) {
-                LOG.warn("Exceeding resource limit: {}", throttled.reason());
+            if (event instanceof OutOfTenantResource throttled) {
+                LOG.warn("Out of tenant resource: {}", throttled.reason());
             }
         }
     }

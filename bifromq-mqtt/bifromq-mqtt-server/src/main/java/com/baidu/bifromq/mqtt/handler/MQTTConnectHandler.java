@@ -31,6 +31,9 @@ import com.baidu.bifromq.inbox.rpc.proto.GetReply;
 import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
+import com.baidu.bifromq.mqtt.handler.condition.DirectMemPressureCondition;
+import com.baidu.bifromq.mqtt.handler.condition.HeapMemPressureCondition;
+import com.baidu.bifromq.mqtt.handler.condition.InboundResourceCondition;
 import com.baidu.bifromq.mqtt.handler.record.GoAway;
 import com.baidu.bifromq.mqtt.session.IMQTTPersistentSession;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
@@ -44,6 +47,7 @@ import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.bifromq.plugin.resourcethrottler.TenantResourceType;
+import com.google.common.collect.Sets;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
@@ -347,9 +351,12 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
             .build();
         ctx.pipeline().addBefore(ctx.executor(), MqttDecoder.class.getName(), MQTTPacketFilter.NAME,
             new MQTTPacketFilter(maxPacketSize, settings, clientInfo, eventCollector));
-        ctx.pipeline().replace(ctx.pipeline().get(ConditionalSlowDownHandler.NAME),
-            ConditionalSlowDownHandler.NAME, new ConditionalSlowDownHandler(
-                new InboundResourceCondition(resourceThrottler, eventCollector, clientInfo)));
+        ctx.pipeline().replace(ctx.pipeline().get(ConditionalRejectHandler.NAME),
+            ConditionalSlowDownHandler.NAME, new ConditionalSlowDownHandler(Sets.newHashSet(
+                DirectMemPressureCondition.INSTANCE,
+                HeapMemPressureCondition.INSTANCE,
+                new InboundResourceCondition(resourceThrottler, clientInfo)),
+                eventCollector, sessionCtx::nanoTime, clientInfo));
 
         MQTTSessionHandler sessionHandler = buildTransientSessionHandler(
             connMsg,
@@ -397,9 +404,12 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
             .build();
         ctx.pipeline().addBefore(ctx.executor(), MqttDecoder.class.getName(), MQTTPacketFilter.NAME,
             new MQTTPacketFilter(maxPacketSize, settings, clientInfo, eventCollector));
-        ctx.pipeline().replace(ctx.pipeline().get(ConditionalSlowDownHandler.NAME),
-            ConditionalSlowDownHandler.NAME, new ConditionalSlowDownHandler(
-                new InboundResourceCondition(resourceThrottler, eventCollector, clientInfo)));
+        ctx.pipeline().replace(ctx.pipeline().get(ConditionalRejectHandler.NAME),
+            ConditionalSlowDownHandler.NAME, new ConditionalSlowDownHandler(Sets.newHashSet(
+                DirectMemPressureCondition.INSTANCE,
+                HeapMemPressureCondition.INSTANCE,
+                new InboundResourceCondition(resourceThrottler, clientInfo)),
+                eventCollector, sessionCtx::nanoTime, clientInfo));
 
         MQTTSessionHandler sessionHandler = buildPersistentSessionHandler(connMsg,
             settings,

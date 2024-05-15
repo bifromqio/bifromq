@@ -70,6 +70,7 @@ import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.PingReq;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.PubActionDisallow;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.SubActionDisallow;
@@ -523,7 +524,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                     if (checkResult.hasGranted()) {
                         if (isSharedSubscription(topicFilter)
                             && !resourceThrottler.hasResource(clientInfo.getTenantId(), TotalSharedSubscriptions)) {
-                            eventCollector.report(getLocal(ResourceThrottled.class)
+                            eventCollector.report(getLocal(OutOfTenantResource.class)
                                 .reason(TotalSharedSubscriptions.name())
                                 .clientInfo(clientInfo));
                             return CompletableFuture.completedFuture(IMQTTProtocolHelper.SubResult.EXCEED_LIMIT);
@@ -541,14 +542,14 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                                     SEND_AT_SUBSCRIBE_IF_NOT_YET_EXISTS))) {
                                             if (!resourceThrottler.hasResource(clientInfo.getTenantId(),
                                                 TotalRetainMatchPerSeconds)) {
-                                                eventCollector.report(getLocal(ResourceThrottled.class)
+                                                eventCollector.report(getLocal(OutOfTenantResource.class)
                                                     .reason(TotalRetainMatchPerSeconds.name())
                                                     .clientInfo(clientInfo));
                                                 return CompletableFuture.completedFuture(EXCEED_LIMIT);
                                             }
                                             if (!resourceThrottler.hasResource(clientInfo.getTenantId(),
                                                 TotalRetainMatchBytesPerSecond)) {
-                                                eventCollector.report(getLocal(ResourceThrottled.class)
+                                                eventCollector.report(getLocal(OutOfTenantResource.class)
                                                     .reason(TotalRetainMatchBytesPerSecond.name())
                                                     .clientInfo(clientInfo));
                                                 return CompletableFuture.completedFuture(EXCEED_LIMIT);
@@ -1318,25 +1319,25 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 reqId, message.getPubQoS(), topic, message.getPayload().size());
         }
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalRetainMessageSpaceBytes)) {
-            eventCollector.report(getLocal(ResourceThrottled.class)
+            eventCollector.report(getLocal(OutOfTenantResource.class)
                 .reason(TotalRetainMessageSpaceBytes.name())
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
         }
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalRetainTopics)) {
-            eventCollector.report(getLocal(ResourceThrottled.class)
+            eventCollector.report(getLocal(OutOfTenantResource.class)
                 .reason(TotalRetainTopics.name())
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
         }
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalRetainedMessagesPerSeconds)) {
-            eventCollector.report(getLocal(ResourceThrottled.class)
+            eventCollector.report(getLocal(OutOfTenantResource.class)
                 .reason(TotalRetainedMessagesPerSeconds.name())
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
         }
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalRetainedBytesPerSecond)) {
-            eventCollector.report(getLocal(ResourceThrottled.class)
+            eventCollector.report(getLocal(OutOfTenantResource.class)
                 .reason(TotalRetainedBytesPerSecond.name())
                 .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);

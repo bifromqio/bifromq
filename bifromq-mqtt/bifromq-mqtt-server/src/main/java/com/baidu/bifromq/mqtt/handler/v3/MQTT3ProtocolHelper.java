@@ -28,6 +28,7 @@ import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
+import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.BadPacket;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByServer;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Idle;
@@ -119,9 +120,14 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public ProtocolResponse onResourceExhaustedDisconnect(TenantResourceType resourceType) {
-        return goAwayNow((getLocal(ResourceThrottled.class)
-            .reason(resourceType.name())
-            .clientInfo(clientInfo)));
+        return goAwayNow(
+            getLocal(OutOfTenantResource.class)
+                .reason(resourceType.name())
+                .clientInfo(clientInfo),
+            getLocal(ResourceThrottled.class)
+                .reason(resourceType.name())
+                .clientInfo(clientInfo)
+        );
     }
 
     @Override

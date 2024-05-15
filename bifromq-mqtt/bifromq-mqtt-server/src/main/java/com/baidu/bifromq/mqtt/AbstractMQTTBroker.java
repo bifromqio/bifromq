@@ -18,13 +18,15 @@ import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.mqtt.handler.ByteBufToWebSocketFrameEncoder;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.ClientAddrHandler;
-import com.baidu.bifromq.mqtt.handler.ConditionalSlowDownHandler;
+import com.baidu.bifromq.mqtt.handler.ConditionalRejectHandler;
 import com.baidu.bifromq.mqtt.handler.ConnectionRateLimitHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageDebounceHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTPreludeHandler;
-import com.baidu.bifromq.mqtt.handler.MemPressureCondition;
+import com.baidu.bifromq.mqtt.handler.condition.DirectMemPressureCondition;
+import com.baidu.bifromq.mqtt.handler.condition.HeapMemPressureCondition;
 import com.baidu.bifromq.mqtt.handler.ws.WebSocketFrameToByteBufDecoder;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
+import com.google.common.collect.Sets;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.netty4.NettyEventExecutorMetrics;
 import io.netty.bootstrap.ServerBootstrap;
@@ -169,8 +171,10 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 // insert PacketFilter here
                 pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                pipeline.addLast(ConditionalSlowDownHandler.NAME,
-                    new ConditionalSlowDownHandler(MemPressureCondition.INSTANCE));
+                pipeline.addLast(ConditionalRejectHandler.NAME,
+                    new ConditionalRejectHandler(
+                        Sets.newHashSet(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE),
+                        sessionContext.eventCollector));
                 pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
             }
         });
@@ -189,8 +193,10 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 // insert PacketFilter here
                 pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                pipeline.addLast(ConditionalSlowDownHandler.NAME,
-                    new ConditionalSlowDownHandler(MemPressureCondition.INSTANCE));
+                pipeline.addLast(ConditionalRejectHandler.NAME,
+                    new ConditionalRejectHandler(
+                        Sets.newHashSet(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE),
+                        sessionContext.eventCollector));
                 pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
             }
         });
@@ -216,8 +222,10 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 // insert PacketFilter here
                 pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                pipeline.addLast(ConditionalSlowDownHandler.NAME,
-                    new ConditionalSlowDownHandler(MemPressureCondition.INSTANCE));
+                pipeline.addLast(ConditionalRejectHandler.NAME,
+                    new ConditionalRejectHandler(
+                        Sets.newHashSet(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE),
+                        sessionContext.eventCollector));
                 pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
             }
         });
@@ -244,8 +252,10 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 // insert PacketFilter between Encoder
                 pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                pipeline.addLast(ConditionalSlowDownHandler.NAME,
-                    new ConditionalSlowDownHandler(MemPressureCondition.INSTANCE));
+                pipeline.addLast(ConditionalRejectHandler.NAME,
+                    new ConditionalRejectHandler(
+                        Sets.newHashSet(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE),
+                        sessionContext.eventCollector));
                 pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
             }
         });
