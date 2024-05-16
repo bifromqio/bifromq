@@ -312,10 +312,12 @@ public class LocalDistService implements ILocalDistService {
                 }
                 tenantMeter.recordSummary(MqttTransientFanOutBytes, msgPackSize * Math.max(fanout, 1));
             }
-            Sets.union(ok, skip).forEach(matchInfo -> resultsBuilder.addResult(DeliveryResult.newBuilder()
-                .setMatchInfo(matchInfo)
-                .setCode(DeliveryResult.Code.OK)
-                .build()));
+            // don't include duplicated matchInfo in the result
+            Sets.difference(Sets.union(ok, skip), noSub)
+                .forEach(matchInfo -> resultsBuilder.addResult(DeliveryResult.newBuilder()
+                    .setMatchInfo(matchInfo)
+                    .setCode(DeliveryResult.Code.OK)
+                    .build()));
             noSub.forEach(matchInfo -> resultsBuilder.addResult(DeliveryResult.newBuilder()
                 .setMatchInfo(matchInfo)
                 .setCode(DeliveryResult.Code.NO_SUB)
