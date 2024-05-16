@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
-import static com.baidu.bifromq.dist.client.ByteBufUtil.toRetainedByteBuffer;
-
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
@@ -28,7 +26,7 @@ public final class MQTT3MessageUtils {
         return toMessage(pubMsg.variableHeader().packetId(),
             pubMsg.fixedHeader().qosLevel(),
             pubMsg.fixedHeader().isRetain(),
-            toRetainedByteBuffer(pubMsg.payload()));
+            ByteString.copyFrom(pubMsg.payload().nioBuffer()));
     }
 
     static Message toMessage(long packetId,

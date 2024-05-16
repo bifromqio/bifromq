@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.mqtt.handler.v5;
 
-import static com.baidu.bifromq.dist.client.ByteBufUtil.toRetainedByteBuffer;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.AUTHENTICATION_DATA;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.AUTHENTICATION_METHOD;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.CONTENT_TYPE;
@@ -289,7 +288,7 @@ public class MQTT5MessageUtils {
             pubMsg.fixedHeader().qosLevel(),
             pubMsg.fixedHeader().isRetain(),
             pubMsg.variableHeader().properties(),
-            toRetainedByteBuffer(pubMsg.payload()));
+            ByteString.copyFrom(pubMsg.payload().nioBuffer()));
     }
 
     static Message toMessage(long packetId,

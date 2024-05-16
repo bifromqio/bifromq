@@ -18,7 +18,6 @@ import static com.baidu.bifromq.apiserver.Headers.HEADER_EXPIRY_SECONDS;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_QOS;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getClientMeta;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
-import static com.baidu.bifromq.dist.client.ByteBufUtil.toRetainedByteBuffer;
 import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
 import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
@@ -32,6 +31,7 @@ import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
+import com.google.protobuf.ByteString;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -112,7 +112,7 @@ public final class HTTPRetainHandler implements IHTTPRequestHandler {
             return retainClient.retain(reqId,
                     topic,
                     QoS.AT_MOST_ONCE,
-                    toRetainedByteBuffer(req.content()),
+                    ByteString.copyFrom(req.content().nioBuffer()),
                     expirySeconds,
                     clientInfo)
                 .thenApply(retainReply -> {

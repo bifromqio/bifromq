@@ -18,7 +18,6 @@ import static com.baidu.bifromq.apiserver.Headers.HEADER_EXPIRY_SECONDS;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_QOS;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getClientMeta;
 import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
-import static com.baidu.bifromq.dist.client.ByteBufUtil.toRetainedByteBuffer;
 import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
 import static io.netty.handler.codec.http.HttpResponseStatus.FORBIDDEN;
 import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR;
@@ -34,6 +33,7 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
+import com.google.protobuf.ByteString;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
@@ -118,7 +118,7 @@ public final class HTTPPubHandler implements IHTTPRequestHandler {
                 Message.newBuilder()
                     .setMessageId(0)
                     .setPubQoS(QoS.forNumber(qos))
-                    .setPayload(toRetainedByteBuffer(req.content()))
+                    .setPayload(ByteString.copyFrom(req.content().nioBuffer()))
                     .setExpiryInterval(expirySeconds)
                     .setTimestamp(HLC.INST.getPhysical())
                     .build(),
