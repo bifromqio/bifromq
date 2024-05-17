@@ -17,8 +17,12 @@ import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLo
 import static com.baidu.bifromq.plugin.eventcollector.distservice.DistError.DistErrorCode.DROP_EXCEED_LIMIT;
 import static com.baidu.bifromq.plugin.eventcollector.distservice.DistError.DistErrorCode.RPC_FAILURE;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_CALL_QUEUES;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_SLOWDOWN_TIMEOUT_SECONDS;
 
 import com.baidu.bifromq.baserpc.ResponsePipeline;
+import com.baidu.bifromq.baserpc.utils.MemInfo;
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
@@ -30,12 +34,17 @@ import com.baidu.bifromq.plugin.eventcollector.distservice.Disted;
 import com.baidu.bifromq.type.PublisherMessagePack;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import io.grpc.stub.StreamObserver;
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
+    private static final double SLOWDOWN_DIRECT_MEM_USAGE = INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE.get();
+    private static final double SLOWDOWN_HEAP_MEM_USAGE = INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE.get();
+    private static final Duration SLOWDOWN_TIMEOUT =
+        Duration.ofSeconds(((Integer) MAX_SLOWDOWN_TIMEOUT_SECONDS.get()).longValue());
     private final IEventCollector eventCollector;
     private final IDistCallScheduler distCallScheduler;
     private final LoadingCache<String, RunningAverage> tenantFanouts;
@@ -45,7 +54,8 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
                          StreamObserver<DistReply> responseObserver,
                          IEventCollector eventCollector,
                          LoadingCache<String, RunningAverage> tenantFanouts) {
-        super(responseObserver);
+        super(responseObserver, () -> MemInfo.directMemoryUsage() > SLOWDOWN_DIRECT_MEM_USAGE
+            || MemInfo.heapMemoryUsage() > SLOWDOWN_HEAP_MEM_USAGE, SLOWDOWN_TIMEOUT);
         this.distCallScheduler = distCallScheduler;
         this.eventCollector = eventCollector;
         this.tenantFanouts = tenantFanouts;

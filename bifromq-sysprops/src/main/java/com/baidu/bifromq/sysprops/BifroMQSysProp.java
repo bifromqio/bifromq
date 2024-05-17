@@ -25,11 +25,11 @@ import lombok.extern.slf4j.Slf4j;
 public enum BifroMQSysProp {
     // The following system properties are used to configure the BifroMQ system
     CLUSTER_DOMAIN_RESOLVE_TIMEOUT("cluster_domain_resolve_timeout_seconds", 120, IntegerParser.POSITIVE),
-    INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE("ingress_slowdown_direct_memory_usage", 0.8,
+    INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE("ingress_slowdown_direct_memory_usage", 0.95,
         DoubleParser.from(0.1, 1.0, false)),
-    INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE("ingress_slowdown_heap_memory_usage", 0.8,
+    INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE("ingress_slowdown_heap_memory_usage", 0.9,
         DoubleParser.from(0.1, 1.0, false)),
-    MAX_SLOWDOWN_SECONDS("max_slowdown_seconds", 30, IntegerParser.POSITIVE),
+    MAX_SLOWDOWN_TIMEOUT_SECONDS("max_slowdown_timeout_seconds", 5, IntegerParser.POSITIVE),
     // further check if utf8 string contains any control character or non character according to [MQTT-1.5.3]
     MQTT_UTF8_SANITY_CHECK("mqtt_utf8_sanity_check", false, BooleanParser.INSTANCE),
     MAX_MQTT3_CLIENT_ID_LENGTH("max_mqtt3_client_id_length", 65535, IntegerParser.from(23, 65536)),

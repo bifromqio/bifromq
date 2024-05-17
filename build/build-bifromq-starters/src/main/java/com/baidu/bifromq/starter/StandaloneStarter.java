@@ -127,6 +127,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
     @Override
     protected void init(StandaloneConfig config) {
+        defaultSysProps();
         StandaloneConfigConsolidator.consolidate(config);
         printConfigs(config);
 
@@ -687,6 +688,11 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                     log.info("AgentHost joined seedEndpoint: {}", seeds);
                 }
             });
+    }
+
+    private void defaultSysProps() {
+        // force using a single ByteBufAllocator for netty in both grpc and mqtt broker, to make memory tuning easier
+        System.setProperty("io.grpc.netty.useCustomAllocator", "false");
     }
 
     public static void main(String[] args) {

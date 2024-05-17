@@ -13,18 +13,29 @@
 
 package com.baidu.bifromq.inbox.server;
 
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_SLOWDOWN_TIMEOUT_SECONDS;
+
 import com.baidu.bifromq.baserpc.RPCContext;
 import com.baidu.bifromq.baserpc.ResponsePipeline;
+import com.baidu.bifromq.baserpc.utils.MemInfo;
 import com.baidu.bifromq.inbox.records.ScopedInbox;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import io.grpc.stub.StreamObserver;
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply> {
+    private static final double SLOWDOWN_DIRECT_MEM_USAGE = INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE.get();
+    private static final double SLOWDOWN_HEAP_MEM_USAGE = INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE.get();
+    private static final Duration SLOWDOWN_TIMEOUT =
+        Duration.ofSeconds(((Integer) MAX_SLOWDOWN_TIMEOUT_SECONDS.get()).longValue());
+
     interface IWriteCallback {
         void afterWrite(ScopedInbox scopedInbox, String delivererKey);
     }
@@ -40,7 +51,8 @@ class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply> {
     public InboxWriterPipeline(IWriteCallback writeCallback,
                                ISendRequestHandler handler,
                                StreamObserver<SendReply> responseObserver) {
-        super(responseObserver);
+        super(responseObserver, () -> MemInfo.directMemoryUsage() > SLOWDOWN_DIRECT_MEM_USAGE
+            || MemInfo.heapMemoryUsage() > SLOWDOWN_HEAP_MEM_USAGE, SLOWDOWN_TIMEOUT);
         this.writeCallback = writeCallback;
         this.handler = handler;
         this.delivererKey = RPCContext.WCH_HASH_KEY_CTX_KEY.get();
