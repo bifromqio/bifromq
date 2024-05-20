@@ -22,14 +22,13 @@ Steps to reproduce the behavior, Please include necessary information such as(bu
 
 *** PUB Client ***:
 - MQTT Connection:
-   - Clean Session: [true | false]
-   - ClientIdentifier: 
+   - ClientIdentifier:
    - etc...
 - MQTT Pub:
    - Topic: 
    - QoS: [0|1|2]
    - Retain: [true | false]
-*** SUB Client ***
+*** SUB Client ***:
 - MQTT Connection:
    - Clean Session: [true | false]
    - ClientIdentifier: 
@@ -74,6 +73,10 @@ If your problem is performance-related, please provide as much detailed informat
   - PUB QPS per connection: [e.g. 10msg/s]
   - SUB QPS per connection: [e.g. 10msg/s]
   - Payload size: [e.g. 1KB]
+- FanIn & FanOut
+  - FanIn: [e.g. 5 means one sub client recieves messages from average 5 pub clients]
+  - FanOut: [e.g. 5 means one message is subscribed by average 5 sub clients]
+  - Please describe here how do you design your topic pattern and pub/sub messages: [e.g. 10 pub clients send messages to the topic: tp/{deviceName}/event, which each client use its unique deviceName. One sub client subscribe the topicfilter tp/+/event to recieve all the messages.]
 
 **Additional context**
 Add any other context about the problem here.
