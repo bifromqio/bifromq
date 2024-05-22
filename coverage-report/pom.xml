@@ -175,35 +175,4 @@
             <artifactId>bifromq-apiserver</artifactId>
         </dependency>
     </dependencies>
-
-    <profiles>
-        <profile>
-            <id>jacoco</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.jacoco</groupId>
-                        <artifactId>jacoco-maven-plugin</artifactId>
-                        <executions>
-                            <execution>
-                                <phase>test</phase>
-                                <goals>
-                                    <goal>report-aggregate</goal>
-                                </goals>
-                                <configuration>
-                                    <outputDirectory>
-                                        ${session.executionRootDirectory}/target/site/coverage/${project.artifactId}
-                                    </outputDirectory>
-                                    <excludes>
-                                        <exclude>com/baidu/bifromq/type/*.class</exclude>
-                                        <exclude>**/proto/**</exclude>
-                                    </excludes>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
 </project>
