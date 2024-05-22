@@ -932,8 +932,8 @@
                         <configuration>
                             <suiteXmlFiles>
                                 <suiteXmlFile>${session.executionRootDirectory}/testsuites/UnitTests.xml</suiteXmlFile>
-                                <!--                                <suiteXmlFile>${session.executionRootDirectory}/testsuites/IntegrationTests.xml-->
-                                <!--                                </suiteXmlFile>-->
+                                <suiteXmlFile>${session.executionRootDirectory}/testsuites/IntegrationTests.xml
+                                </suiteXmlFile>
                             </suiteXmlFiles>
                         </configuration>
                     </plugin>
