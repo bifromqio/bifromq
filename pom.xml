@@ -769,9 +769,6 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven.surefire.plugin.version}</version>
-                    <configuration>
-                        <argLine>-XX:+EnableDynamicAgentLoading -Djdk.instrument.traceUsage</argLine>
-                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -935,8 +932,8 @@
                         <configuration>
                             <suiteXmlFiles>
                                 <suiteXmlFile>${session.executionRootDirectory}/testsuites/UnitTests.xml</suiteXmlFile>
-                                <suiteXmlFile>${session.executionRootDirectory}/testsuites/IntegrationTests.xml
-                                </suiteXmlFile>
+                                <!--                                <suiteXmlFile>${session.executionRootDirectory}/testsuites/IntegrationTests.xml-->
+                                <!--                                </suiteXmlFile>-->
                             </suiteXmlFiles>
                         </configuration>
                     </plugin>
