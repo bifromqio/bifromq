@@ -6,11 +6,12 @@ ARG TARGETPLATFORM
 
 # Install necessary tools for diagnostics and JDK download
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl net-tools lsof netcat procps less \
-    && if [[ "$TARGETPLATFORM" == _amd_ ]]; then \
+    && if [[ "$TARGETPLATFORM" == *amd* ]]; then \
         export JDK_ARCH=x64; \
     else \
         export JDK_ARCH=aarch64; \
     fi \
+    && echo "JDK_ARCH is set to ${JDK_ARCH}" \
     && curl --retry 5 -S -L -O https://download.java.net/java/GA/jdk17.0.2/dfd4a8d0985749f896bed50d7138ee7f/8/GPL/openjdk-17.0.2_linux-${JDK_ARCH}_bin.tar.gz \
     && tar -zxvf openjdk-17.0.2_linux-${JDK_ARCH}_bin.tar.gz \
     && rm -rf openjdk-17.0.2_linux-${JDK_ARCH}_bin.tar.gz \
