@@ -32,9 +32,12 @@ import java.util.Base64;
 public class EntityUtil {
     private static final ByteString INFIX_MATCH_RECORD_INFIX = copyFromUtf8("1");
     private static final ByteString INFIX_UPPERBOUND_INFIX = copyFromUtf8("2");
-    private static final ByteString FLAG_NORMAL = copyFromUtf8("0");
-    private static final ByteString FLAG_UNORDERD_SHARE = copyFromUtf8("1");
-    private static final ByteString FLAG_ORDERD_SHARE = copyFromUtf8("2");
+    private static final char FLAG_NORMAL_VAL = 1;
+    private static final char FLAG_UNORDERED_VAL = 2;
+    private static final char FLAG_ORDERED_VAL = 3;
+    private static final ByteString FLAG_NORMAL = copyFromUtf8(String.valueOf(FLAG_NORMAL_VAL));
+    private static final ByteString FLAG_UNORDERD_SHARE = copyFromUtf8(String.valueOf(FLAG_UNORDERED_VAL));
+    private static final ByteString FLAG_ORDERD_SHARE = copyFromUtf8(String.valueOf(FLAG_ORDERED_VAL));
 
     public static String toQInboxId(int subBrokerId, String inboxId, String delivererKey) {
         String scoped = subBrokerId + NUL + inboxId + NUL + delivererKey;
@@ -95,22 +98,39 @@ public class EntityUtil {
             default -> Matching.Type.Group;
         };
     }
+
     public static Matching parseMatchRecord(ByteString matchRecordKey, ByteString matchRecordValue) {
         // <tenantId><NUL><1><ESCAPED_TOPIC_FILTER><NUL><FLAG><SCOPED_INBOX|SHARE_GROUP>
         String matchRecordKeyStr = matchRecordKey.toStringUtf8();
         int lastSplit = matchRecordKeyStr.lastIndexOf(NUL);
         char flag = matchRecordKeyStr.charAt(lastSplit + 1);
         try {
-            switch (flag) {
-                case '0':
-                    String scopedInbox = matchRecordKeyStr.substring(lastSplit + 2);
-                    return new NormalMatching(matchRecordKey, scopedInbox);
-                case '1':
-                case '2':
-                default:
-                    GroupMatchRecord matchRecord = GroupMatchRecord.parseFrom(matchRecordValue);
-                    String group = matchRecordKeyStr.substring(lastSplit + 2);
-                    return new GroupMatching(matchRecordKey, group, flag == '2', matchRecord.getQReceiverIdList());
+            if (flag <= 3) {
+                switch (flag) {
+                    case FLAG_NORMAL_VAL:
+                        String scopedInbox = matchRecordKeyStr.substring(lastSplit + 2);
+                        return new NormalMatching(matchRecordKey, scopedInbox);
+                    case FLAG_UNORDERED_VAL:
+                    case FLAG_ORDERED_VAL:
+                    default:
+                        GroupMatchRecord matchRecord = GroupMatchRecord.parseFrom(matchRecordValue);
+                        String group = matchRecordKeyStr.substring(lastSplit + 2);
+                        return new GroupMatching(matchRecordKey, group, flag == FLAG_ORDERED_VAL,
+                            matchRecord.getQReceiverIdList());
+                }
+            } else {
+                // TODO: ONLY FOR BACKWARD COMPATIBLE WITH PREVIOUS ENCODING, WILL BE REMOVED IN FUTURE VERSION
+                switch (flag) {
+                    case '0':
+                        String scopedInbox = matchRecordKeyStr.substring(lastSplit + 2);
+                        return new NormalMatching(matchRecordKey, scopedInbox);
+                    case '1':
+                    case '2':
+                    default:
+                        GroupMatchRecord matchRecord = GroupMatchRecord.parseFrom(matchRecordValue);
+                        String group = matchRecordKeyStr.substring(lastSplit + 2);
+                        return new GroupMatching(matchRecordKey, group, flag == '2', matchRecord.getQReceiverIdList());
+                }
             }
         } catch (Exception e) {
             throw new IllegalStateException("Unable to parse matching record", e);
@@ -183,19 +203,37 @@ public class EntityUtil {
         int lastSplit = matchRecordKeyStr.lastIndexOf(NUL);
         String topicFilter = unescape(matchRecordKeyStr.substring(firstSplit + 2, lastSplit));
         char flag = matchRecordKeyStr.charAt(lastSplit + 1);
-        switch (flag) {
-            case '0' -> {
-                return topicFilter;
+        if (flag <= 3) {
+            switch (flag) {
+                case FLAG_NORMAL_VAL -> {
+                    return topicFilter;
+                }
+                case FLAG_UNORDERED_VAL -> {
+                    String group = matchRecordKeyStr.substring(lastSplit + 2);
+                    return UNORDERED_SHARE + TOPIC_SEPARATOR + group + TOPIC_SEPARATOR + topicFilter;
+                }
+                case FLAG_ORDERED_VAL -> {
+                    String group = matchRecordKeyStr.substring(lastSplit + 2);
+                    return ORDERED_SHARE + TOPIC_SEPARATOR + group + TOPIC_SEPARATOR + topicFilter;
+                }
+                default -> throw new UnsupportedOperationException("Unknown flag: " + flag);
             }
-            case '1' -> {
-                String group = matchRecordKeyStr.substring(lastSplit + 2);
-                return UNORDERED_SHARE + TOPIC_SEPARATOR + group + TOPIC_SEPARATOR + topicFilter;
+        } else {
+            // TODO: ONLY FOR BACKWARD COMPATIBLE WITH PREVIOUS ENCODING, WILL BE REMOVED IN FUTURE VERSION
+            switch (flag) {
+                case '0' -> {
+                    return topicFilter;
+                }
+                case '1' -> {
+                    String group = matchRecordKeyStr.substring(lastSplit + 2);
+                    return UNORDERED_SHARE + TOPIC_SEPARATOR + group + TOPIC_SEPARATOR + topicFilter;
+                }
+                case '2' -> {
+                    String group = matchRecordKeyStr.substring(lastSplit + 2);
+                    return ORDERED_SHARE + TOPIC_SEPARATOR + group + TOPIC_SEPARATOR + topicFilter;
+                }
+                default -> throw new UnsupportedOperationException("Unknown flag: " + flag);
             }
-            case '2' -> {
-                String group = matchRecordKeyStr.substring(lastSplit + 2);
-                return ORDERED_SHARE + TOPIC_SEPARATOR + group + TOPIC_SEPARATOR + topicFilter;
-            }
-            default -> throw new UnsupportedOperationException("Unknown flag: " + flag);
         }
     }
 }

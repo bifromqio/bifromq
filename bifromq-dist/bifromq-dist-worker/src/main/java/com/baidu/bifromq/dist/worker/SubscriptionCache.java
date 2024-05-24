@@ -222,7 +222,13 @@ public class SubscriptionCache {
                             // seek to match next topic filter
                             ByteString nextMatch =
                                 matchRecordPrefixWithEscapedTopicFilter(tenantId, higherFilter.get());
-                            itr.seek(nextMatch);
+                            if (ByteString.unsignedLexicographicalComparator().compare(nextMatch, itr.key()) <= 0) {
+                                // TODO: THIS IS ONLY FOR BYPASSING THE HANG ISSUE CAUSED BY PREVIOUS BUGGY MATCH_RECORD_KEY ENCODING
+                                // AND WILL BE REMOVED IN LATER VERSION
+                                itr.next();
+                            } else {
+                                itr.seek(nextMatch);
+                            }
                         }
                         continue;
                     } else {

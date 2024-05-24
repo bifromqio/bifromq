@@ -476,4 +476,17 @@ public class DistQoS0Test extends DistWorkerTest {
         unmatch(tenantA, "$share/group/#", MqttBroker, "inbox3", "batch3");
         unmatch(tenantA, "$oshare/group/#", MqttBroker, "inbox3", "batch3");
     }
+
+    @Test(groups = "integration")
+    public void testProbeAndSeek() {
+        when(mqttBroker.open("batch1")).thenReturn(writer1);
+        match(tenantA, "test/#", MqttBroker, "inbox", "batch1");
+        for (int i = 0; i < 21; i++) {
+            match(tenantA, "test", MqttBroker, "inbox" + i, "batch1");
+        }
+
+        BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "test/r1", copyFromUtf8("Hello"), "orderKey1");
+        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().getOrDefault("TopicB", 0).intValue(), 0);
+        unmatch(tenantA, "TopicA/#", InboxService, "inbox1", "batch1");
+    }
 }
