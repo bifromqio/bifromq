@@ -34,7 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * This is a MOD version of LegacyExtensionFinder which scans extensions from all jars in plugin's classpath
+ * This is a MOD version of LegacyExtensionFinder which scans extensions from all jars in plugin's classpath.
  */
 public class BifroMQExtensionFinder extends AbstractExtensionFinder {
     private static final Logger log = LoggerFactory.getLogger(BifroMQExtensionFinder.class);
@@ -70,7 +70,6 @@ public class BifroMQExtensionFinder extends AbstractExtensionFinder {
     private Set<String> collectExtensions(ClassLoader classLoader) {
         Set<String> bucket = new HashSet<>();
         try {
-            log.debug("Read '{}'", EXTENSIONS_RESOURCE);
             Enumeration<URL> urls = classLoader.getResources(EXTENSIONS_RESOURCE);
             if (urls.hasMoreElements()) {
                 collectExtensions(urls, bucket);

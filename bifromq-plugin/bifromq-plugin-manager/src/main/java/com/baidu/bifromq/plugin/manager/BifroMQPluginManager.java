@@ -15,11 +15,15 @@ package com.baidu.bifromq.plugin.manager;
 
 import lombok.extern.slf4j.Slf4j;
 import org.pf4j.CompoundPluginLoader;
+import org.pf4j.DefaultExtensionFactory;
+import org.pf4j.DefaultPluginFactory;
 import org.pf4j.DefaultPluginManager;
 import org.pf4j.ExtensionFactory;
 import org.pf4j.ExtensionFinder;
+import org.pf4j.Plugin;
+import org.pf4j.PluginFactory;
 import org.pf4j.PluginLoader;
-import org.pf4j.PluginRuntimeException;
+import org.pf4j.PluginWrapper;
 
 @Slf4j
 public class BifroMQPluginManager extends DefaultPluginManager {
@@ -32,6 +36,22 @@ public class BifroMQPluginManager extends DefaultPluginManager {
     }
 
     @Override
+    protected PluginFactory createPluginFactory() {
+        return new DefaultPluginFactory() {
+            @Override
+            protected Plugin createInstance(Class<?> pluginClass, PluginWrapper pluginWrapper) {
+                ClassLoader originalLoader = Thread.currentThread().getContextClassLoader();
+                try {
+                    Thread.currentThread().setContextClassLoader(pluginWrapper.getPluginClassLoader());
+                    return super.createInstance(pluginClass, pluginWrapper);
+                } finally {
+                    Thread.currentThread().setContextClassLoader(originalLoader);
+                }
+            }
+        };
+    }
+
+    @Override
     protected ExtensionFinder createExtensionFinder() {
         BifroMQExtensionFinder extensionFinder = new BifroMQExtensionFinder(this);
         addPluginStateListener(extensionFinder);
@@ -40,20 +60,15 @@ public class BifroMQPluginManager extends DefaultPluginManager {
 
     @Override
     protected ExtensionFactory createExtensionFactory() {
-        return new ExtensionFactory() {
+        return new DefaultExtensionFactory() {
             @Override
             public <T> T create(Class<T> extensionClass) {
-                log.debug("Create instance for extension '{}'", extensionClass.getName());
                 ClassLoader originalLoader = Thread.currentThread().getContextClassLoader();
                 try {
-                    ClassLoader targetLoader = extensionClass.getClassLoader();
-                    Thread.currentThread().setContextClassLoader(targetLoader);
-                    T instance = extensionClass.getDeclaredConstructor().newInstance();
+                    Thread.currentThread().setContextClassLoader(extensionClass.getClassLoader());
+                    return super.create(extensionClass);
+                } finally {
                     Thread.currentThread().setContextClassLoader(originalLoader);
-                    return instance;
-                } catch (Exception e) {
-                    Thread.currentThread().setContextClassLoader(originalLoader);
-                    throw new PluginRuntimeException(e);
                 }
             }
         };

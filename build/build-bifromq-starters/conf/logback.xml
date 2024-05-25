@@ -34,6 +34,17 @@
         </filter>
     </appender>
 
+    <appender name="pluginLogFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${logDir}/plugin.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${logDir}/plugin.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+            <maxHistory>72</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${logPattern}</pattern>
+        </encoder>
+    </appender>
+
     <appender name="eventLogFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${logDir}/event.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
@@ -183,7 +194,9 @@
     </appender>
 
     <logger name="org.reflections" level="WARN" additivity="false"/>
-    <logger name="org.pf4j" level="WARN" additivity="false"/>
+    <logger name="org.pf4j" level="WARN" additivity="false">
+        <appender-ref ref="pluginLogFile"/>
+    </logger>
 
     <logger name="com.baidu" level="INFO" additivity="false">
         <appender-ref ref="traceLogFile"/>
