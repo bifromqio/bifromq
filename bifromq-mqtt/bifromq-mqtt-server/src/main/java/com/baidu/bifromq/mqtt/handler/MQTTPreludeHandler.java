@@ -65,6 +65,11 @@ public class MQTTPreludeHandler extends ChannelDuplexHandler {
     public void handlerAdded(ChannelHandlerContext ctx) {
         this.ctx = ctx;
         eventCollector = ChannelAttrs.mqttSessionContext(ctx).eventCollector;
+        remoteAddr = ChannelAttrs.socketAddress(ctx.channel());
+        timeoutCloseTask = ctx.executor().schedule(() -> {
+            eventCollector.report(getLocal(ConnectTimeout.class).peerAddress(remoteAddr));
+            ctx.channel().close();
+        }, timeoutInSec, TimeUnit.SECONDS);
     }
 
     @Override
@@ -72,16 +77,6 @@ public class MQTTPreludeHandler extends ChannelDuplexHandler {
         if (timeoutCloseTask != null) {
             timeoutCloseTask.cancel(true);
         }
-    }
-
-    @Override
-    public void channelActive(ChannelHandlerContext ctx) {
-        remoteAddr = ChannelAttrs.socketAddress(ctx.channel());
-        timeoutCloseTask = ctx.executor().schedule(() -> {
-            eventCollector.report(getLocal(ConnectTimeout.class).peerAddress(remoteAddr));
-            ctx.channel().close();
-        }, timeoutInSec, TimeUnit.SECONDS);
-        ctx.fireChannelActive();
     }
 
     @Override

@@ -43,10 +43,10 @@ import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.collect.Sets;
+import com.google.common.util.concurrent.RateLimiter;
 import com.google.protobuf.ByteString;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelPipeline;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
@@ -114,15 +114,17 @@ public class EnhancedAuthTest extends MockableTest {
             protected void initChannel(Channel ch) {
                 ch.attr(ChannelAttrs.MQTT_SESSION_CTX).set(sessionContext);
                 ch.attr(ChannelAttrs.PEER_ADDR).set(new InetSocketAddress(remoteIp, remotePort));
-                ChannelPipeline pipeline = ch.pipeline();
-                pipeline.addLast("connRateLimiter", new ConnectionRateLimitHandler(10));
-                pipeline.addLast("trafficShaper",
-                    new ChannelTrafficShapingHandler(512 * 1024, 512 * 1024));
-                pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder());
-                pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                pipeline.addLast(ConditionalRejectHandler.NAME,
-                    new ConditionalRejectHandler(Sets.newHashSet(HeapMemPressureCondition.INSTANCE), eventCollector));
-                pipeline.addLast(connectHandler);
+                RateLimiter limiter = RateLimiter.create(10);
+                ch.pipeline().addLast("connRateLimiter", new ConnectionRateLimitHandler(limiter, pipeline -> {
+                    pipeline.addLast("trafficShaper",
+                        new ChannelTrafficShapingHandler(512 * 1024, 512 * 1024));
+                    pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder());
+                    pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
+                    pipeline.addLast(ConditionalRejectHandler.NAME,
+                        new ConditionalRejectHandler(Sets.newHashSet(HeapMemPressureCondition.INSTANCE),
+                            eventCollector));
+                    pipeline.addLast(connectHandler);
+                }));
             }
         });
     }

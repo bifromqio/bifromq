@@ -17,6 +17,7 @@ import com.google.common.util.concurrent.RateLimiter;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPipeline;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
@@ -24,16 +25,25 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @ChannelHandler.Sharable
 public class ConnectionRateLimitHandler extends ChannelDuplexHandler {
+    /**
+     * Initialize the pipeline when the connection is accepted.
+     */
+    public interface ChannelPipelineInitializer {
+        void initialize(ChannelPipeline pipeline);
+    }
 
     private final RateLimiter rateLimiter;
+    private final ChannelPipelineInitializer initializer;
 
-    public ConnectionRateLimitHandler(int rate) {
-        rateLimiter = RateLimiter.create(rate);
+    public ConnectionRateLimitHandler(RateLimiter limiter, ChannelPipelineInitializer initializer) {
+        rateLimiter = limiter;
+        this.initializer = initializer;
     }
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) {
         if (rateLimiter.tryAcquire()) {
+            initializer.initialize(ctx.pipeline());
             ctx.fireChannelActive();
         } else {
             log.warn("Connection dropped due to exceed limit");
@@ -43,7 +53,7 @@ public class ConnectionRateLimitHandler extends ChannelDuplexHandler {
                 if (ctx.channel().isActive()) {
                     ctx.close();
                 }
-            }, ThreadLocalRandom.current().nextLong(3000, 5000), TimeUnit.MILLISECONDS);
+            }, ThreadLocalRandom.current().nextLong(1000, 5000), TimeUnit.MILLISECONDS);
         }
     }
 }

@@ -89,7 +89,6 @@ public class ConditionalSlowDownHandler extends ChannelInboundHandlerAdapter {
     public void channelReadComplete(ChannelHandlerContext ctx) {
         if (slowDownConditions.stream().noneMatch(Condition::meet)) {
             ctx.channel().config().setAutoRead(true);
-            ctx.read();
             slowDownAt = Long.MAX_VALUE;
         } else {
             closeIfNeeded();
