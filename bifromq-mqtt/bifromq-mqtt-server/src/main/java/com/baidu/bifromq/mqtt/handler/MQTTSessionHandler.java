@@ -75,10 +75,10 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.PingReq;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.PubActionDisallow;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.SubActionDisallow;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.UnsubActionDisallow;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ClientChannelError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InvalidTopicFilter;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.MalformedTopicFilter;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS0DistError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS1DistError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS1PubAckDropped;
@@ -365,6 +365,10 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         sessionRegister.stop();
         tenantMeter.recordCount(MqttDisconnectCount);
         memUsage.addAndGet(-estMemSize());
+        if (!isGoAway) {
+            isGoAway = true;
+            eventCollector.report(getLocal(ByClient.class).withoutDisconnect(true).clientInfo(clientInfo));
+        }
     }
 
     @Override

@@ -90,8 +90,7 @@ public class MqttTestClient {
 
     public void closeForcibly() {
         try {
-            client.disconnectForcibly();
-            client.close(true);
+            client.disconnectForcibly(1, 1, false);
         } catch (Throwable e) {
             // ignore intentionally;
         }

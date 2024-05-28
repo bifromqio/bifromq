@@ -394,8 +394,9 @@ public abstract class MQTTTest {
         tenantId = System.nanoTime() + "";
         lenient().doAnswer(invocationOnMock -> {
             Event event = invocationOnMock.getArgument(0);
-            event.clone(event.getClass().getConstructor().newInstance());
-            return null;
+            Event cloned = event.getClass().getConstructor().newInstance();
+            cloned.clone(event);
+            return cloned;
         }).when(eventCollector).report(any(Event.class));
         lenient().when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
         doSetup(method);

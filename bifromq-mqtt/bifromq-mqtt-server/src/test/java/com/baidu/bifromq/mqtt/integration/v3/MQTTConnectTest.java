@@ -76,7 +76,6 @@ public class MQTTConnectTest extends MQTTTest {
         assertTrue(mqttClient.isConnected());
         mqttClient.disconnect();
         assertFalse(mqttClient.isConnected());
-        // TODO: verify event report
     }
 
     @Test(groups = "integration")
@@ -95,7 +94,6 @@ public class MQTTConnectTest extends MQTTTest {
         assertTrue(mqttClient.isConnected());
         mqttClient.disconnect();
         assertFalse(mqttClient.isConnected());
-        // TODO: verify event report
     }
 
     @Test(groups = "integration")

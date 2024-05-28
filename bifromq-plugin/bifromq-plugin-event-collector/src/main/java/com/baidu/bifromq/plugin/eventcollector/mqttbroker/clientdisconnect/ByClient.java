@@ -14,12 +14,27 @@
 package com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect;
 
 import com.baidu.bifromq.plugin.eventcollector.EventType;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.ToString;
+import lombok.experimental.Accessors;
 
+@Getter
+@Setter
+@Accessors(fluent = true, chain = true)
 @ToString(callSuper = true)
 public final class ByClient extends ClientDisconnectEvent<ByClient> {
+    // if client send mqtt disconnect packet or close the tcp connection directly
+    private boolean withoutDisconnect;
+
     @Override
     public EventType type() {
         return EventType.BY_CLIENT;
+    }
+
+    @Override
+    public void clone(ByClient orig) {
+        super.clone(orig);
+        this.withoutDisconnect = orig.withoutDisconnect;
     }
 }
