@@ -27,7 +27,6 @@ import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
-import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.EnsureRange;
@@ -192,8 +191,15 @@ public class KVRangeStore implements IKVRangeStore {
 
     private void loadExisting() {
         mgmtTaskRunner.add(() -> {
-            kvRangeEngine.spaces().forEach((id, keyRange) ->
-                putAndOpen(loadKVRangeFSM(KVRangeIdUtil.fromString(id), keyRange)));
+            kvRangeEngine.spaces().forEach((id, keyRange) -> {
+                KVRangeId rangeId = KVRangeIdUtil.fromString(id);
+                if (walStorageEngine.has(rangeId)) {
+                    putAndOpen(loadKVRangeFSM(rangeId, keyRange));
+                } else {
+                    log.debug("Destroy orphan key range: {}", id);
+                    keyRange.destroy();
+                }
+            });
             updateDescriptorList();
         }).toCompletableFuture().join();
     }

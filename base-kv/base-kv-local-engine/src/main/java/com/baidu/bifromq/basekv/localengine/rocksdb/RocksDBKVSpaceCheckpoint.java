@@ -62,6 +62,7 @@ class RocksDBKVSpaceCheckpoint extends RocksDBKVSpaceReader implements IRocksDBK
     ) implements Runnable {
         @Override
         public void run() {
+            log.debug("Clean up checkpoint[{}] of kvspace[{}]", cpId, id);
             roDB.destroyColumnFamilyHandle(defaultCFHandle);
             defaultCFDesc.getOptions().close();
 
@@ -145,6 +146,7 @@ class RocksDBKVSpaceCheckpoint extends RocksDBKVSpaceReader implements IRocksDBK
         } catch (RocksDBException e) {
             throw new KVEngineException("Failed to open checkpoint", e);
         }
+        log.debug("Checkpoint[{}] of kvspace[{}] created", cpId, id);
     }
 
     @Override
