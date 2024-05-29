@@ -11,11 +11,11 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.inbox.store.balance;
+package com.baidu.bifromq.basekv.balance.impl;
 
-import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter.LOAD_TYPE_AVG_LATENCY_NANOS;
-import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter.LOAD_TYPE_IO_DENSITY;
-import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter.LOAD_TYPE_IO_LATENCY_NANOS;
+import static com.baidu.bifromq.basekv.balance.impl.RangeSplitBalancer.LOAD_TYPE_AVG_LATENCY_NANOS;
+import static com.baidu.bifromq.basekv.balance.impl.RangeSplitBalancer.LOAD_TYPE_IO_DENSITY;
+import static com.baidu.bifromq.basekv.balance.impl.RangeSplitBalancer.LOAD_TYPE_IO_LATENCY_NANOS;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
@@ -28,7 +28,6 @@ import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
-import com.baidu.bifromq.basekv.store.range.hinter.MutationKVLoadBasedSplitHinter;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import java.util.Collections;
@@ -37,15 +36,17 @@ import java.util.Set;
 import org.testng.annotations.Test;
 
 public class RangeSplitBalancerTest {
+    private static final String HintType = "kv_io_mutation";
+
     @Test
     public void noLocalDesc() {
-        RangeSplitBalancer balancer = new RangeSplitBalancer("local");
+        RangeSplitBalancer balancer = new RangeSplitBalancer("local", HintType);
         assertFalse(balancer.balance().isPresent());
     }
 
     @Test
     public void cpuUsageExceedLimit() {
-        RangeSplitBalancer balancer = new RangeSplitBalancer("local");
+        RangeSplitBalancer balancer = new RangeSplitBalancer("local", HintType);
         balancer.update(Collections.singleton(KVRangeStoreDescriptor
             .newBuilder()
             .setId("local")
@@ -67,7 +68,7 @@ public class RangeSplitBalancerTest {
                 .setRole(RaftNodeStatus.Leader)
                 .setState(State.StateType.Normal)
                 .addHints(SplitHint.newBuilder()
-                    .setType(MutationKVLoadBasedSplitHinter.TYPE)
+                    .setType(HintType)
                     .putLoad(LOAD_TYPE_IO_DENSITY, 10)
                     .putLoad(LOAD_TYPE_IO_LATENCY_NANOS, 15)
                     .putLoad(LOAD_TYPE_AVG_LATENCY_NANOS, 100)
@@ -76,7 +77,7 @@ public class RangeSplitBalancerTest {
                 .build())
             .build()
         );
-        RangeSplitBalancer balancer = new RangeSplitBalancer("local", 0.8, 5, 20);
+        RangeSplitBalancer balancer = new RangeSplitBalancer("local", HintType, 10, 0.8, 5, 20);
         balancer.update(descriptors);
         Optional<BalanceCommand> command = balancer.balance();
         assertTrue(command.isPresent());
@@ -98,7 +99,7 @@ public class RangeSplitBalancerTest {
                 .setRole(RaftNodeStatus.Leader)
                 .setState(State.StateType.Normal)
                 .addHints(SplitHint.newBuilder()
-                    .setType(MutationKVLoadBasedSplitHinter.TYPE)
+                    .setType(HintType)
                     .putLoad(LOAD_TYPE_IO_DENSITY, 1)
                     .putLoad(LOAD_TYPE_IO_LATENCY_NANOS, 1)
                     .putLoad(LOAD_TYPE_AVG_LATENCY_NANOS, 1)
@@ -106,7 +107,34 @@ public class RangeSplitBalancerTest {
                 .build())
             .build()
         );
-        RangeSplitBalancer balancer = new RangeSplitBalancer("local");
+        RangeSplitBalancer balancer = new RangeSplitBalancer("local", HintType);
+        balancer.update(descriptors);
+        Optional<BalanceCommand> command = balancer.balance();
+        assertFalse(command.isPresent());
+    }
+
+    @Test
+    public void noRoomPauseSplit() {
+        KVRangeId rangeId = KVRangeIdUtil.generate();
+        Set<KVRangeStoreDescriptor> descriptors = Collections.singleton(KVRangeStoreDescriptor
+            .newBuilder()
+            .setId("local")
+            .putStatistics("cpu.usage", 0.65)
+            .addRanges(KVRangeDescriptor.newBuilder()
+                .setId(rangeId)
+                .setRole(RaftNodeStatus.Leader)
+                .setState(State.StateType.Normal)
+                .addHints(SplitHint.newBuilder()
+                    .setType(HintType)
+                    .putLoad(LOAD_TYPE_IO_DENSITY, 10)
+                    .putLoad(LOAD_TYPE_IO_LATENCY_NANOS, 15)
+                    .putLoad(LOAD_TYPE_AVG_LATENCY_NANOS, 100)
+                    .setSplitKey(ByteString.copyFromUtf8("splitMutationLoadKey"))
+                    .build())
+                .build())
+            .build()
+        );
+        RangeSplitBalancer balancer = new RangeSplitBalancer("local", HintType, 1, 0.8, 5, 20);
         balancer.update(descriptors);
         Optional<BalanceCommand> command = balancer.balance();
         assertFalse(command.isPresent());

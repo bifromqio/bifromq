@@ -30,6 +30,10 @@
             <artifactId>base-hlc</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>base-kv-raft-type</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.google.protobuf</groupId>
             <artifactId>protobuf-java</artifactId>
         </dependency>

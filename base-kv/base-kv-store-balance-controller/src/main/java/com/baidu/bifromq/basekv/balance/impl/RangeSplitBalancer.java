@@ -11,10 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.inbox.store.balance;
-
-import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter.LOAD_TYPE_IO_DENSITY;
-import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter.LOAD_TYPE_IO_LATENCY_NANOS;
+package com.baidu.bifromq.basekv.balance.impl;
 
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
@@ -24,9 +21,7 @@ import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
-import com.baidu.bifromq.basekv.store.range.hinter.MutationKVLoadBasedSplitHinter;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.google.common.base.Preconditions;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -34,25 +29,41 @@ import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class RangeSplitBalancer extends StoreBalancer {
+public class RangeSplitBalancer extends StoreBalancer {
+    public static final String LOAD_TYPE_IO_DENSITY = "ioDensity";
+    public static final String LOAD_TYPE_IO_LATENCY_NANOS = "ioLatencyNanos";
+    public static final String LOAD_TYPE_AVG_LATENCY_NANOS = "avgLatencyNanos";
+
+
+    private static final int DEFAULT_MAX_RANGES_PER_STORE = 30;
     private static final double DEFAULT_CPU_USAGE_LIMIT = 0.8;
     private static final int DEFAULT_MAX_IO_DENSITY_PER_RANGE = 30;
     private static final long DEFAULT_IO_NANOS_LIMIT_PER_RANGE = 30_000;
+    private final int maxRanges;
     private final double cpuUsageLimit;
     private final int maxIODensityPerRange;
     private final long ioNanosLimitPerRange;
+    private final String hintType;
     private volatile Set<KVRangeStoreDescriptor> latestStoreDescriptors = Collections.emptySet();
 
-    public RangeSplitBalancer(String localStoreId) {
-        this(localStoreId, DEFAULT_CPU_USAGE_LIMIT, DEFAULT_MAX_IO_DENSITY_PER_RANGE, DEFAULT_IO_NANOS_LIMIT_PER_RANGE);
+    public RangeSplitBalancer(String localStoreId, String hintType) {
+        this(localStoreId,
+            hintType,
+            DEFAULT_MAX_RANGES_PER_STORE,
+            DEFAULT_CPU_USAGE_LIMIT,
+            DEFAULT_MAX_IO_DENSITY_PER_RANGE,
+            DEFAULT_IO_NANOS_LIMIT_PER_RANGE);
     }
 
     public RangeSplitBalancer(String localStoreId,
+                              String hintType,
+                              int maxRanges,
                               double cpuUsageLimit,
                               int maxIoDensityPerRange,
                               long ioNanoLimitPerRange) {
         super(localStoreId);
-        Preconditions.checkArgument(0 < cpuUsageLimit && cpuUsageLimit < 1.0, "Invalid cpu usage limit");
+        this.hintType = hintType;
+        this.maxRanges = maxRanges;
         this.cpuUsageLimit = cpuUsageLimit;
         this.maxIODensityPerRange = maxIoDensityPerRange;
         this.ioNanosLimitPerRange = ioNanoLimitPerRange;
@@ -82,12 +93,16 @@ class RangeSplitBalancer extends StoreBalancer {
                 cpuUsage, localStoreId);
             return Optional.empty();
         }
+        if (localStoreDesc.getRangesList().size() >= maxRanges) {
+            log.warn("Max {} ranges allowed for local store[{}]", maxRanges, localStoreId);
+            return Optional.empty();
+        }
         List<KVRangeDescriptor> localLeaderRangeDescriptors = localStoreDesc.getRangesList()
             .stream()
             .filter(d -> d.getRole() == RaftNodeStatus.Leader)
             .filter(d -> d.getState() == State.StateType.Normal)
             .filter(d -> d.getHintsList().stream()
-                .anyMatch(hint -> hint.getType().equals(MutationKVLoadBasedSplitHinter.TYPE)))
+                .anyMatch(hint -> hint.getType().equals(hintType)))
             // split range with highest io density
             .sorted((o1, o2) -> Double.compare(o2.getHints(0).getLoadOrDefault(LOAD_TYPE_IO_DENSITY, 0),
                 o1.getHints(0).getLoadOrDefault(LOAD_TYPE_IO_DENSITY, 0)))
@@ -100,11 +115,12 @@ class RangeSplitBalancer extends StoreBalancer {
             Optional<SplitHint> splitHintOpt = leaderRangeDescriptor
                 .getHintsList()
                 .stream()
-                .filter(h -> h.getType().equals(MutationKVLoadBasedSplitHinter.TYPE))
+                .filter(h -> h.getType().equals(hintType))
                 .findFirst();
             assert splitHintOpt.isPresent();
             SplitHint splitHint = splitHintOpt.get();
-            if (splitHint.getLoadOrDefault(LOAD_TYPE_IO_LATENCY_NANOS, 0) < ioNanosLimitPerRange &&
+            if (splitHint.getLoadOrDefault(LOAD_TYPE_IO_LATENCY_NANOS, 0) < ioNanosLimitPerRange
+                &&
                 splitHint.getLoadOrDefault(LOAD_TYPE_IO_DENSITY, 0) > maxIODensityPerRange && splitHint.hasSplitKey()) {
                 log.debug("Split range[{}] in store[{}]: key={}",
                     KVRangeIdUtil.toString(leaderRangeDescriptor.getId()),
