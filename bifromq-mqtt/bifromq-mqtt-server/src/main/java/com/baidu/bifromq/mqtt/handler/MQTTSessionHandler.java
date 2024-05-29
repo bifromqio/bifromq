@@ -1219,18 +1219,21 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                 .reqId(reqId)
                                 .topic(topic)
                                 .size(ingressMsgSize)
+                                .reason(v.distResult().name())
                                 .clientInfo(clientInfo));
                             case AT_LEAST_ONCE -> eventCollector.report(getLocal(QoS1DistError.class)
                                 .reqId(reqId)
                                 .topic(topic)
                                 .isDup(isDup)
                                 .size(ingressMsgSize)
+                                .reason(v.distResult().name())
                                 .clientInfo(clientInfo));
                             case EXACTLY_ONCE -> eventCollector.report(getLocal(QoS2DistError.class)
                                 .reqId(reqId)
                                 .topic(topic)
                                 .isDup(isDup)
                                 .size(ingressMsgSize)
+                                .reason(v.distResult().name())
                                 .clientInfo(clientInfo));
                         }
                     }
