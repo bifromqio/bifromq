@@ -115,16 +115,17 @@ public class EnhancedAuthTest extends MockableTest {
                 ch.attr(ChannelAttrs.MQTT_SESSION_CTX).set(sessionContext);
                 ch.attr(ChannelAttrs.PEER_ADDR).set(new InetSocketAddress(remoteIp, remotePort));
                 RateLimiter limiter = RateLimiter.create(10);
-                ch.pipeline().addLast("connRateLimiter", new ConnectionRateLimitHandler(limiter, pipeline -> {
-                    pipeline.addLast("trafficShaper",
-                        new ChannelTrafficShapingHandler(512 * 1024, 512 * 1024));
-                    pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder());
-                    pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                    pipeline.addLast(ConditionalRejectHandler.NAME,
-                        new ConditionalRejectHandler(Sets.newHashSet(HeapMemPressureCondition.INSTANCE),
-                            eventCollector));
-                    pipeline.addLast(connectHandler);
-                }));
+                ch.pipeline()
+                    .addLast("connRateLimiter", new ConnectionRateLimitHandler(limiter, eventCollector, pipeline -> {
+                        pipeline.addLast("trafficShaper",
+                            new ChannelTrafficShapingHandler(512 * 1024, 512 * 1024));
+                        pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder());
+                        pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
+                        pipeline.addLast(ConditionalRejectHandler.NAME,
+                            new ConditionalRejectHandler(Sets.newHashSet(HeapMemPressureCondition.INSTANCE),
+                                eventCollector));
+                        pipeline.addLast(connectHandler);
+                    }));
             }
         });
     }

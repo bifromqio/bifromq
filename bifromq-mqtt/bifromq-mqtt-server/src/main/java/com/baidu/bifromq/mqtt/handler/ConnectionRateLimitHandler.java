@@ -13,6 +13,10 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
+import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+
+import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.ChannelError;
 import com.google.common.util.concurrent.RateLimiter;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandler;
@@ -33,10 +37,14 @@ public class ConnectionRateLimitHandler extends ChannelDuplexHandler {
     }
 
     private final RateLimiter rateLimiter;
+    private final IEventCollector eventCollector;
     private final ChannelPipelineInitializer initializer;
 
-    public ConnectionRateLimitHandler(RateLimiter limiter, ChannelPipelineInitializer initializer) {
+    public ConnectionRateLimitHandler(RateLimiter limiter,
+                                      IEventCollector eventCollector,
+                                      ChannelPipelineInitializer initializer) {
         rateLimiter = limiter;
+        this.eventCollector = eventCollector;
         this.initializer = initializer;
     }
 
@@ -46,14 +54,17 @@ public class ConnectionRateLimitHandler extends ChannelDuplexHandler {
             initializer.initialize(ctx.pipeline());
             ctx.fireChannelActive();
         } else {
-            log.warn("Connection dropped due to exceed limit");
+            log.debug("Connection dropped due to exceed limit");
+            eventCollector.report(getLocal(ChannelError.class)
+                .peerAddress(ChannelAttrs.socketAddress(ctx.channel()))
+                .cause(new RuntimeException("Reject connection due to conn rate limiting")));
             // close the connection randomly
             ctx.channel().config().setAutoRead(false);
             ctx.executor().schedule(() -> {
                 if (ctx.channel().isActive()) {
                     ctx.close();
                 }
-            }, ThreadLocalRandom.current().nextLong(1000, 5000), TimeUnit.MILLISECONDS);
+            }, ThreadLocalRandom.current().nextLong(100, 3000), TimeUnit.MILLISECONDS);
         }
     }
 }

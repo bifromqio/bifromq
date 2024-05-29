@@ -163,7 +163,8 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
         return buildChannel(connBuilder, new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) {
-                ch.pipeline().addLast("connRateLimiter", new ConnectionRateLimitHandler(connRateLimiter, pipeline -> {
+                ch.pipeline().addLast("connRateLimiter", new ConnectionRateLimitHandler(connRateLimiter,
+                    builder.eventCollector, pipeline -> {
                     pipeline.addLast("trafficShaper",
                         new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
                     pipeline.addLast(MqttEncoder.class.getName(), MqttEncoder.INSTANCE);
@@ -184,7 +185,8 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
         return buildChannel(connBuilder, new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) {
-                ch.pipeline().addLast("connRateLimiter", new ConnectionRateLimitHandler(connRateLimiter, pipeline -> {
+                ch.pipeline().addLast("connRateLimiter", new ConnectionRateLimitHandler(connRateLimiter,
+                    builder.eventCollector, pipeline -> {
                     pipeline.addLast("ssl", connBuilder.sslContext.newHandler(ch.alloc()));
                     pipeline.addLast("trafficShaper",
                         new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
@@ -206,7 +208,8 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
         return buildChannel(connBuilder, new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) {
-                ch.pipeline().addLast("connRateLimiter", new ConnectionRateLimitHandler(connRateLimiter, pipeline -> {
+                ch.pipeline().addLast("connRateLimiter", new ConnectionRateLimitHandler(connRateLimiter,
+                    builder.eventCollector, pipeline -> {
                     pipeline.addLast("trafficShaper",
                         new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
                     pipeline.addLast("httpEncoder", new HttpResponseEncoder());
@@ -235,7 +238,8 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
         return buildChannel(connBuilder, new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) {
-                ch.pipeline().addLast("connRateLimiter", new ConnectionRateLimitHandler(connRateLimiter, pipeline -> {
+                ch.pipeline().addLast("connRateLimiter", new ConnectionRateLimitHandler(connRateLimiter,
+                    builder.eventCollector, pipeline -> {
                     pipeline.addLast("ssl", connBuilder.sslContext.newHandler(ch.alloc()));
                     pipeline.addLast("trafficShaper",
                         new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
