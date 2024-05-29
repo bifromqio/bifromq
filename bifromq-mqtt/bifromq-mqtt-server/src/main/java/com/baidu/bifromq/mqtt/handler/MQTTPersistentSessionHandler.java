@@ -624,6 +624,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     }
 
     private void rescheduleTouch() {
+        if (!ctx.channel().isActive()) {
+            return;
+        }
         if (touchTimeout != null) {
             touchTimeout.cancel(true);
         }
