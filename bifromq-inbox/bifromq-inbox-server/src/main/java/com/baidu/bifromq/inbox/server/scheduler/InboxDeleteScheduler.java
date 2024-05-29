@@ -34,7 +34,7 @@ public class InboxDeleteScheduler extends MutationCallScheduler<BatchDeleteReque
     implements IInboxDeleteScheduler {
 
     public InboxDeleteScheduler(IBaseKVStoreClient inboxStoreClient) {
-        super("inbox_server_attach", inboxStoreClient, Duration.ofMillis(CONTROL_PLANE_TOLERABLE_LATENCY_MS.get()),
+        super("inbox_server_delete", inboxStoreClient, Duration.ofMillis(CONTROL_PLANE_TOLERABLE_LATENCY_MS.get()),
             Duration.ofMillis(CONTROL_PLANE_BURST_LATENCY_MS.get()));
     }
 

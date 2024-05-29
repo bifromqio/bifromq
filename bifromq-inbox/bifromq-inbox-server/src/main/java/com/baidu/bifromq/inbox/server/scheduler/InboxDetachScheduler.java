@@ -34,7 +34,7 @@ public class InboxDetachScheduler extends MutationCallScheduler<DetachRequest, D
     implements IInboxDetachScheduler {
 
     public InboxDetachScheduler(IBaseKVStoreClient inboxStoreClient) {
-        super("inbox_server_attach", inboxStoreClient, Duration.ofMillis(CONTROL_PLANE_TOLERABLE_LATENCY_MS.get()),
+        super("inbox_server_detach", inboxStoreClient, Duration.ofMillis(CONTROL_PLANE_TOLERABLE_LATENCY_MS.get()),
             Duration.ofMillis(CONTROL_PLANE_BURST_LATENCY_MS.get()));
     }
 
