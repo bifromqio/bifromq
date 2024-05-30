@@ -198,6 +198,7 @@ final class InboxClient implements IInboxClient {
     public void close() {
         if (hasStopped.compareAndSet(false, true)) {
             log.info("Closing inbox client");
+            fetchPipelineCache.asMap().forEach((k, v) -> v.close());
             fetchPipelineCache.invalidateAll();
             log.debug("Stopping rpc client");
             rpcClient.stop();

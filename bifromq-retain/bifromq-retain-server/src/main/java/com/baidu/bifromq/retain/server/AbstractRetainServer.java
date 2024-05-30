@@ -37,5 +37,7 @@ abstract class AbstractRetainServer implements IRetainServer {
 
     @Override
     public void shutdown() {
+        log.info("Shutting down retain service");
+        retainService.close();
     }
 }

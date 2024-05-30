@@ -38,7 +38,6 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
-import io.reactivex.rxjava3.plugins.RxJavaPlugins;
 import java.io.File;
 import java.security.Provider;
 import java.security.Security;
@@ -48,10 +47,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class BaseStarter<T extends StarterConfig> implements IStarter {
-    static {
-        RxJavaPlugins.setErrorHandler(e -> log.error("Uncaught RxJava exception", e));
-    }
-
     private static File loadFromConfDir(String fileName) {
         return ResourceUtil.getFile(fileName, CONF_DIR_PROP);
     }

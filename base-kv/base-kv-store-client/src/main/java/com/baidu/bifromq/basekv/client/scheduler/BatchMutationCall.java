@@ -103,6 +103,7 @@ public abstract class BatchMutationCall<Req, Resp> implements IBatchCall<Req, Re
 
     @Override
     public void destroy() {
+        storePipelines.asMap().forEach((k, v) -> v.close());
         storePipelines.invalidateAll();
     }
 

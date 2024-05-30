@@ -14,6 +14,7 @@
 package com.baidu.bifromq.starter;
 
 import com.baidu.bifromq.starter.config.StarterConfig;
+import io.reactivex.rxjava3.plugins.RxJavaPlugins;
 import java.io.File;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.cli.CommandLine;
@@ -26,8 +27,11 @@ import org.apache.commons.cli.Options;
 @Slf4j
 public class StarterRunner {
     static {
+        // log unhandled error from rxjava
+        RxJavaPlugins.setErrorHandler(e -> log.error("Uncaught RxJava exception", e));
+        // log uncaught exception
         Thread.setDefaultUncaughtExceptionHandler(
-            (t, e) -> log.error("Caught an exception in thread[{}]", t.getName(), e));
+            (t, e) -> log.error("Caught an uncaught exception in thread[{}]", t.getName(), e));
     }
 
     public static <T extends StarterConfig, S extends BaseStarter<T>> void run(Class<S> starterClazz, String[] args) {

@@ -159,4 +159,13 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                 }
             }), responseObserver);
     }
+
+    public void close() {
+        log.debug("Stop message deliverer");
+        messageDeliverer.close();
+        log.debug("Stop match call scheduler");
+        matchCallScheduler.close();
+        log.debug("Stop retain call scheduler");
+        retainCallScheduler.close();
+    }
 }

@@ -237,6 +237,7 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
     public void close() {
         state.set(State.Closed);
         ackSendingBuffers.clear();
+        signal.onComplete();
         disposables.dispose();
         msgSubject.onComplete();
         ClientCallStreamObserver<AckT> r = requester.getAndSet(null);

@@ -103,6 +103,7 @@ public abstract class BatchQueryCall<Req, Resp> implements IBatchCall<Req, Resp,
 
     @Override
     public void destroy() {
+        storePipelines.asMap().forEach((k, v) -> v.close());
         storePipelines.invalidateAll();
     }
 

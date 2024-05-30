@@ -130,6 +130,7 @@ public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
 
     @Override
     public void close() {
+        batchers.asMap().forEach((k, v) -> v.close());
         batchers.invalidateAll();
         Metrics.globalRegistry.remove(runningCallsGauge);
         Metrics.globalRegistry.remove(batcherNumGauge);

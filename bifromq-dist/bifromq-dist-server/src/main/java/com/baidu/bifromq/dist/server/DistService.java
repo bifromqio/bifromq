@@ -52,8 +52,8 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
     private final IEventCollector eventCollector;
     private final ICallScheduler<DistWorkerCall> distCallRateScheduler;
     private final IDistCallScheduler distCallScheduler;
-    private final IMatchCallScheduler subCallScheduler;
-    private final IUnmatchCallScheduler unsubCallScheduler;
+    private final IMatchCallScheduler matchCallScheduler;
+    private final IUnmatchCallScheduler unmatchCallScheduler;
     private final LoadingCache<String, RunningAverage> tenantFanouts;
 
     DistService(IBaseKVStoreClient distWorkerClient,
@@ -63,8 +63,8 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                 IGlobalDistCallRateSchedulerFactory distCallRateScheduler) {
         this.eventCollector = eventCollector;
         this.distCallRateScheduler = distCallRateScheduler.createScheduler(settingProvider, crdtService);
-        this.subCallScheduler = new MatchCallScheduler(distWorkerClient, settingProvider);
-        this.unsubCallScheduler = new UnmatchCallScheduler(distWorkerClient);
+        this.matchCallScheduler = new MatchCallScheduler(distWorkerClient, settingProvider);
+        this.unmatchCallScheduler = new UnmatchCallScheduler(distWorkerClient);
         tenantFanouts = Caffeine.newBuilder()
             .expireAfterAccess(120, TimeUnit.SECONDS)
             .build(k -> new RunningAverage(5));
@@ -74,7 +74,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
 
     @Override
     public void match(MatchRequest request, StreamObserver<MatchReply> responseObserver) {
-        response(tenantId -> subCallScheduler.schedule(request)
+        response(tenantId -> matchCallScheduler.schedule(request)
             .handle((v, e) -> {
                 if (e != null) {
                     log.debug("Failed to exec SubRequest, tenantId={}, req={}", tenantId, request, e);
@@ -108,7 +108,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
     }
 
     public void unmatch(UnmatchRequest request, StreamObserver<UnmatchReply> responseObserver) {
-        response(tenantId -> unsubCallScheduler.schedule(request)
+        response(tenantId -> unmatchCallScheduler.schedule(request)
             .handle((v, e) -> {
                 if (e != null) {
                     log.debug("Failed to exec UnsubRequest, tenantId={}, req={}", tenantId, request, e);
@@ -149,7 +149,12 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
     public void stop() {
         log.debug("stop dist call scheduler");
         distCallScheduler.close();
-        log.debug("stop dist call rate limiter");
+        log.debug("stop dist call pre-scheduler");
         distCallRateScheduler.close();
+        log.debug("Stop match call scheduler");
+        matchCallScheduler.close();
+        log.debug("Stop match call scheduler");
+        unmatchCallScheduler.close();
+        log.debug("Stop unmatch call scheduler");
     }
 }

@@ -170,6 +170,7 @@ final class SessionDictClient implements ISessionDictClient {
     public void stop() {
         if (closed.compareAndSet(false, true)) {
             log.info("Stopping session dict client");
+            regPipeline.asMap().forEach((k, v) -> v.close());
             regPipeline.invalidateAll();
             log.debug("Stopping rpc client");
             rpcClient.stop();
