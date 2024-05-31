@@ -38,6 +38,11 @@ public class KeyUtilTest {
         assertTrue(isInboxKey(inboxKeyPrefix));
         assertTrue(isInboxKey(qos0MsgKey));
         assertTrue(isInboxKey(bufferMsgKey));
+        assertFalse(KeyUtil.hasInboxKeyPrefix(tenantPrefix));
+        assertFalse(KeyUtil.hasInboxKeyPrefix(inboxPrefix));
+        assertTrue(KeyUtil.hasInboxKeyPrefix(inboxKeyPrefix));
+        assertTrue(KeyUtil.hasInboxKeyPrefix(qos0MsgKey));
+        assertTrue(KeyUtil.hasInboxKeyPrefix(bufferMsgKey));
 
         assertTrue(inboxPrefix.startsWith(tenantPrefix));
         assertTrue(inboxKeyPrefix.startsWith(inboxPrefix));

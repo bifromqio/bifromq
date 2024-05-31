@@ -14,11 +14,13 @@
 package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.inbox.util.KeyUtil.bufferMsgKey;
+import static com.baidu.bifromq.inbox.util.KeyUtil.hasInboxKeyPrefix;
 import static com.baidu.bifromq.inbox.util.KeyUtil.inboxKeyPrefix;
 import static com.baidu.bifromq.inbox.util.KeyUtil.inboxKeyUpperBound;
 import static com.baidu.bifromq.inbox.util.KeyUtil.isBufferMessageKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.isMetadataKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.isQoS0MessageKey;
+import static com.baidu.bifromq.inbox.util.KeyUtil.parseInboxKeyPrefix;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseSeq;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseTenantId;
 import static com.baidu.bifromq.inbox.util.KeyUtil.qos0InboxMsgKey;
@@ -109,6 +111,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     // make it configurable?
     private static final int MAX_GC_BATCH_SIZE = 10000;
     private static long initTime;
+    private final KVRangeId id;
     private final ISettingProvider settingProvider;
     private final IEventCollector eventCollector;
     private final TenantsState tenantStates;
@@ -120,12 +123,14 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                      ISettingProvider settingProvider,
                      IEventCollector eventCollector,
                      Supplier<IKVReader> rangeReaderProvider) {
+        this.id = id;
         initTime = HLC.INST.getPhysical();
         this.settingProvider = settingProvider;
         this.eventCollector = eventCollector;
         this.rangeReaderProvider = rangeReaderProvider;
         this.tenantStates = new TenantsState(rangeReaderProvider.get(),
             "clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id));
+        log.debug("Loading tenant states: rangeId={}", KVRangeIdUtil.toString(id));
         load();
     }
 
@@ -212,6 +217,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     @Override
     public void reset(Boundary boundary) {
         tenantStates.reset();
+        log.debug("Reloading tenant states: rangeId={}", KVRangeIdUtil.toString(id));
         load();
     }
 
@@ -987,17 +993,33 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     private void load() {
         IKVReader reader = rangeReaderProvider.get();
         IKVIterator itr = reader.iterator();
+        int probe = 0;
         for (itr.seekToFirst(); itr.isValid(); ) {
             if (isMetadataKey(itr.key())) {
+                probe = 0;
                 try {
                     tenantStates.upsert(parseTenantId(itr.key()), InboxMetadata.parseFrom(itr.value()));
                 } catch (InvalidProtocolBufferException e) {
                     log.error("Unexpected error", e);
                 } finally {
-                    itr.seek(inboxKeyUpperBound(itr.key()));
+                    itr.next();
+                    probe++;
+                }
+            } else {
+                if (probe < 20) {
+                    itr.next();
+                    probe++;
+                } else {
+                    if (hasInboxKeyPrefix(itr.key())) {
+                        itr.seek(inboxKeyUpperBound(parseInboxKeyPrefix(itr.key())));
+                    } else {
+                        itr.next();
+                        probe++;
+                    }
                 }
             }
         }
+        log.debug("Tenant states loaded: rangeId={}", KVRangeIdUtil.toString(id));
     }
 
     private boolean hasExpired(InboxMetadata metadata, long nowTS) {

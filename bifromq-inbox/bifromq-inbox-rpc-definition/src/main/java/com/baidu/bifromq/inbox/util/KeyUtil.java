@@ -88,6 +88,19 @@ public class KeyUtil {
         return key.size() == inboxKeyPrefixLength(key);
     }
 
+    public static boolean hasInboxKeyPrefix(ByteString key) {
+        if (key.size() > SCHEMA_VER.size() + Integer.BYTES) {
+            int tenantPrefixLength = tenantPrefixLength(key);
+            if (key.size() > tenantPrefixLength + Integer.BYTES) {
+                int inboxPrefixLength = inboxPrefixLength(key);
+                if (key.size() >= inboxPrefixLength + Long.BYTES) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public static boolean isQoS0MessageKey(ByteString key) {
         // QOS0 MessageKey: <INBOX_KEY_PREFIX><QOS0INBOX_SIGN><SEQ>
         int inboxKeyPrefixLen = inboxKeyPrefixLength(key);
