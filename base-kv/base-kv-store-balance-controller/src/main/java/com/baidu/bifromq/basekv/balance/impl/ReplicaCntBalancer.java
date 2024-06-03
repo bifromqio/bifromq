@@ -57,7 +57,7 @@ public class ReplicaCntBalancer extends StoreBalancer {
             }
         }
         if (localStoreDesc == null) {
-            log.warn("There is no storeDescriptor for local store: {}", localStoreId);
+            log.debug("There is no storeDescriptor for local store: {}", localStoreId);
             return Optional.empty();
         }
         List<KVRangeDescriptor> localLeaderRangeDescriptors = localStoreDesc.getRangesList()

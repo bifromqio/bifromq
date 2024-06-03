@@ -16,7 +16,7 @@ package com.baidu.bifromq.retain.store.balance;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.RETAIN_STORE_RANGE_SPLIT_IO_NANOS_LIMIT;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.RETAIN_STORE_RANGE_SPLIT_MAX_CPU_USAGE;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.RETAIN_STORE_RANGE_SPLIT_MAX_IO_DENSITY;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.RETAIN_STORE_RANGE_SPLIT_UNDER_RANGES_PER_STORE;
+import static com.baidu.bifromq.sysprops.BifroMQSysProp.RETAIN_STORE_RANGE_SPLIT_LIMIT;
 
 import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
@@ -26,7 +26,7 @@ public class RangeSplitBalancerFactory implements IStoreBalancerFactory {
     public StoreBalancer newBalancer(String localStoreId) {
         return new com.baidu.bifromq.basekv.balance.impl.RangeSplitBalancer(localStoreId,
             "kv_io_mutation",
-            RETAIN_STORE_RANGE_SPLIT_UNDER_RANGES_PER_STORE.get(),
+            RETAIN_STORE_RANGE_SPLIT_LIMIT.get(),
             RETAIN_STORE_RANGE_SPLIT_MAX_CPU_USAGE.get(),
             RETAIN_STORE_RANGE_SPLIT_MAX_IO_DENSITY.get(),
             RETAIN_STORE_RANGE_SPLIT_IO_NANOS_LIMIT.get());

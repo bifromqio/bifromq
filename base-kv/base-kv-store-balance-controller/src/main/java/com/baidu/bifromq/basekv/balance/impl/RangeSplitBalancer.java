@@ -84,17 +84,17 @@ public class RangeSplitBalancer extends StoreBalancer {
             }
         }
         if (localStoreDesc == null) {
-            log.warn("There is no storeDescriptor for local store[{}]", localStoreId);
+            log.debug("There is no storeDescriptor for local store[{}]", localStoreId);
             return Optional.empty();
         }
         double cpuUsage = localStoreDesc.getStatisticsMap().get("cpu.usage");
         if (cpuUsage > cpuUsageLimit) {
-            log.warn("High CPU usage[{}], temporarily disable RangeSplitBalancer for local store[{}]",
+            log.debug("High CPU usage[{}], temporarily disable RangeSplitBalancer for local store[{}]",
                 cpuUsage, localStoreId);
             return Optional.empty();
         }
         if (localStoreDesc.getRangesList().size() >= maxRanges) {
-            log.warn("Max {} ranges allowed for local store[{}]", maxRanges, localStoreId);
+            log.debug("Max {} ranges allowed for local store[{}]", maxRanges, localStoreId);
             return Optional.empty();
         }
         List<KVRangeDescriptor> localLeaderRangeDescriptors = localStoreDesc.getRangesList()
