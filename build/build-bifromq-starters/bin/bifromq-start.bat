@@ -163,9 +163,10 @@ if "" == "%JVM_DEBUG%" (
         set JAVA_DEBUG_PORT=!DEFAULT_JAVA_DEBUG_PORT!
     )
     rem Use the defaults if JAVA_DEBUG_OPTS was not set
-    set DEFAULT_JAVA_DEBUG_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=%DEBUG_SUSPEND_FLAG:-n%,address=*:!JAVA_DEBUG_PORT!"
+    if not defined DEBUG_SUSPEND_FLAG set DEBUG_SUSPEND_FLAG=n
+    set DEFAULT_JAVA_DEBUG_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=!DEBUG_SUSPEND_FLAG!,address=*:!JAVA_DEBUG_PORT!"
     if "" == "!JAVA_DEBUG_OPTS!" (
-        set JAVA_DEBUG_OPTS=!DEFAULT_JAVA_DEBUG_OPTS:"!
+        set JAVA_DEBUG_OPTS=!DEFAULT_JAVA_DEBUG_OPTS:"=!
     )
     echo "Enabling Java debug options: !JAVA_DEBUG_OPTS!"
     set EXTRA_JVM_OPTS=!JAVA_DEBUG_OPTS! !EXTRA_JVM_OPTS:"=!
