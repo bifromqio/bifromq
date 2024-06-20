@@ -35,7 +35,7 @@ public class CCounterTest extends CRDTTest {
         .setId(ByteString.copyFromUtf8("left-address"))
         .build();
     private final Replica rightReplica = Replica.newBuilder()
-        .setUri(toURI(aworset, "ccounter"))
+        .setUri(toURI(cctr, "ccounter"))
         .setId(ByteString.copyFromUtf8("right-address"))
         .build();
 

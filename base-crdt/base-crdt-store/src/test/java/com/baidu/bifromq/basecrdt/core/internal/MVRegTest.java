@@ -17,6 +17,7 @@ import static com.baidu.bifromq.basecrdt.core.api.CRDTURI.toURI;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.mvreg;
 import static java.util.Collections.emptyIterator;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 
 import com.baidu.bifromq.basecrdt.core.api.IMVReg;
 import com.baidu.bifromq.basecrdt.core.api.MVRegOperation;
@@ -80,6 +81,11 @@ public class MVRegTest extends CRDTTest {
         sync(leftInflater, rightInflater);
         TestUtil.assertSame(Lists.newArrayList(val3, val3).iterator(), left.read());
         TestUtil.assertSame(left.read(), right.read());
+
+        left.execute(MVRegOperation.reset()).join();
+        sync(leftInflater, rightInflater);
+        assertFalse(left.read().hasNext());
+        TestUtil.assertSame(left.read(), right.read());
     }
 
     @Test
@@ -99,7 +105,7 @@ public class MVRegTest extends CRDTTest {
         TestUtil.assertSame(left.read(), right.read());
 
         left.execute(MVRegOperation.reset()).join();
-        Thread.sleep(3000);
+        Thread.sleep(3000); // waiting for compaction happens
         sync(leftInflater, rightInflater);
 
         TestUtil.assertSame(Lists.<ByteString>newArrayList(val1).iterator(), left.read());
