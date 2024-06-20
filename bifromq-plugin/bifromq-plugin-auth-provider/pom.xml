@@ -24,9 +24,6 @@
     </parent>
 
     <artifactId>bifromq-plugin-auth-provider</artifactId>
-    <properties>
-        <maven.test.skip>true</maven.test.skip>
-    </properties>
 
     <dependencies>
         <dependency>
