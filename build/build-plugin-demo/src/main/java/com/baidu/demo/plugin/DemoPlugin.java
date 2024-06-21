@@ -13,6 +13,8 @@
 
 package com.baidu.demo.plugin;
 
+import com.baidu.bifromq.plugin.BifroMQPlugin;
+import com.baidu.bifromq.plugin.BifroMQPluginContext;
 import com.sun.net.httpserver.HttpServer;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Metrics;
@@ -20,16 +22,15 @@ import io.micrometer.core.instrument.config.MeterFilter;
 import io.micrometer.core.instrument.distribution.DistributionStatisticConfig;
 import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
+import lombok.extern.slf4j.Slf4j;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.time.Duration;
-import lombok.extern.slf4j.Slf4j;
-import org.pf4j.Plugin;
-import org.pf4j.PluginWrapper;
 
 @Slf4j
-public class DemoPlugin extends Plugin {
+public class DemoPlugin extends BifroMQPlugin<BifroMQPluginContext> {
     private static final String PLUGIN_PROMETHEUS_PORT = "plugin.prometheus.port";
     private static final String PLUGIN_PROMETHEUS_CONTEXT = "plugin.prometheus.context";
     private final PrometheusMeterRegistry registry;
@@ -40,10 +41,10 @@ public class DemoPlugin extends Plugin {
      * Constructor to be used by plugin manager for plugin instantiation. Your plugins have to provide constructor with
      * this exact signature to be successfully loaded by manager.
      *
-     * @param wrapper
+     * @param context the context object
      */
-    public DemoPlugin(PluginWrapper wrapper) {
-        super(wrapper);
+    public DemoPlugin(BifroMQPluginContext context) {
+        super(context);
         registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
         registry.config().meterFilter(new MeterFilter() {
             @Override
@@ -62,14 +63,14 @@ public class DemoPlugin extends Plugin {
 //                        }
                 }
                 return DistributionStatisticConfig.builder()
-                    .expiry(Duration.ofSeconds(5))
-                    .build().merge(config);
+                        .expiry(Duration.ofSeconds(5))
+                        .build().merge(config);
             }
         });
         Metrics.addRegistry(registry);
         try {
             prometheusExportServer = HttpServer.create(new InetSocketAddress(port()), 0);
-            prometheusExportServer.createContext(context(), httpExchange -> {
+            prometheusExportServer.createContext(contextPath(), httpExchange -> {
                 String response = registry.scrape();
                 httpExchange.sendResponseHeaders(200, response.getBytes().length);
                 try (OutputStream os = httpExchange.getResponseBody()) {
@@ -80,6 +81,11 @@ public class DemoPlugin extends Plugin {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Override
+    protected BifroMQPluginContext initContext(BifroMQPluginContext context) {
+        return context;
     }
 
     @Override
@@ -104,7 +110,7 @@ public class DemoPlugin extends Plugin {
         }
     }
 
-    private String context() {
+    private String contextPath() {
         String ctx = System.getProperty(PLUGIN_PROMETHEUS_CONTEXT, "/metrics");
         if (ctx.startsWith("/")) {
             return ctx;

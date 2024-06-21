@@ -13,30 +13,28 @@
 
 package com.baidu.bifromq.plugin.manager;
 
-import org.pf4j.ClassLoadingStrategy;
 import org.pf4j.PluginClassLoader;
 import org.pf4j.PluginDescriptor;
 import org.pf4j.PluginManager;
 
 class BifroMQPluginClassLoader extends PluginClassLoader {
+    private final PluginManager pluginManager;
+    private final PluginDescriptor pluginDescriptor;
+
     public BifroMQPluginClassLoader(PluginManager pluginManager,
                                     PluginDescriptor pluginDescriptor,
                                     ClassLoader parent) {
         super(pluginManager, pluginDescriptor, parent);
-    }
-
-    public BifroMQPluginClassLoader(PluginManager pluginManager,
-                                    PluginDescriptor pluginDescriptor,
-                                    ClassLoader parent,
-                                    ClassLoadingStrategy classLoadingStrategy) {
-        super(pluginManager, pluginDescriptor, parent, classLoadingStrategy);
+        this.pluginManager = pluginManager;
+        this.pluginDescriptor = pluginDescriptor;
     }
 
     @Override
     public Class<?> loadClass(String className) throws ClassNotFoundException {
         synchronized (getClassLoadingLock(className)) {
             // if the class is provided by bifromq
-            if (ProvidedPackages.isProvided(className)) {
+            if (!pluginDescriptor.getPluginClass().equals(className) &&
+                    ProvidedPackages.isProvided(className)) {
                 return getParent().loadClass(className);
             }
         }

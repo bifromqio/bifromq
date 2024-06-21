@@ -20,10 +20,10 @@ public class ProvidedPackages {
     private static final Set<String> PACKAGES = new HashSet<>();
 
     static {
-        PACKAGES.add("com.baidu.bifromq.");
-        PACKAGES.add("io.micrometer.core");
-        PACKAGES.add("com.google.protobuf");
-        PACKAGES.add("org.slf4j.");
+        PACKAGES.add("com.baidu.bifromq.type.");
+        PACKAGES.add("com.baidu.bifromq.plugin.");
+        PACKAGES.add("io.micrometer.core.");
+        PACKAGES.add("com.google.protobuf.");
     }
 
     public static boolean isProvided(String className) {

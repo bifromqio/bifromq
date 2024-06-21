@@ -317,6 +317,11 @@
                 <artifactId>bifromq-plugin-manager</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
+                <artifactId>bifromq-plugin-main</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <!-- deliverer -->
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
