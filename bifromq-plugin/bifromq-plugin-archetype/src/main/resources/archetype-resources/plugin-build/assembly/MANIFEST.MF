@@ -1,0 +1,3 @@
+Plugin-Class: ${plugin.class}
+Plugin-Id: ${plugin.id}
+Plugin-Version: ${project.parent.version}

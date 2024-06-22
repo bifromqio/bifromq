@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="5 seconds">
+    #[[
+    <property name="logDir" value="${LOG_DIR:-${user.dir}}"/>
+    <property name="logPattern"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${PID:- } [%t] --- %-40.40logger{39}[%F:%L] %m%n"/>
+    ]]#
+    <appender name="stdoutFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>#[[${logDir}]]#/plugin/${pluginName}/stdout.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>#[[${logDir}]]#/plugin/${pluginName}/stdout.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>#[[${logPattern}]]#</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>INFO</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <appender name="traceLogFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>#[[${logDir}]]#/plugin/${pluginName}/trace.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>#[[${logDir}]]#/plugin/${pluginName}/trace.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>#[[${logPattern}]]#</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>TRACE</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <appender name="debugLogFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>#[[${logDir}]]#/plugin/${pluginName}/debug.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>#[[${logDir}]]#/plugin/${pluginName}/debug.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>#[[${logPattern}]]#</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>DEBUG</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <appender name="infoLogFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>#[[${logDir}]]#/plugin/${pluginName}/info.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>#[[${logDir}]]#/plugin/${pluginName}/info.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>#[[${logPattern}]]#</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>INFO</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <appender name="warnLogFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>#[[${logDir}]]#/plugin/${pluginName}/warn.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>#[[${logDir}]]#/plugin/${pluginName}/trace.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>#[[${logPattern}]]#</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>WARN</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <appender name="errorLogFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>#[[${logDir}]]#/plugin/${pluginName}/error.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>#[[${logDir}]]#/plugin/${pluginName}/error.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>#[[${logPattern}]]#</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>ERROR</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <logger name="${groupId}" level="INFO" additivity="false">
+        <appender-ref ref="traceLogFile"/>
+        <appender-ref ref="debugLogFile"/>
+        <appender-ref ref="infoLogFile"/>
+        <appender-ref ref="warnLogFile"/>
+        <appender-ref ref="errorLogFile"/>
+    </logger>
+
+    <root level="INFO">
+        <appender-ref ref="stdoutFile"/>
+    </root>
+</configuration>

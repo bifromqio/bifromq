@@ -38,5 +38,6 @@
         <module>bifromq-plugin-sub-broker-helper</module>
         <module>bifromq-plugin-manager</module>
         <module>bifromq-plugin-main</module>
+        <module>bifromq-plugin-archetype</module>
     </modules>
 </project>

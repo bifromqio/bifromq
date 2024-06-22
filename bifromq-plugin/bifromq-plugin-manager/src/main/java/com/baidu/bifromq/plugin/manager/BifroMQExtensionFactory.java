@@ -40,7 +40,7 @@ public class BifroMQExtensionFactory extends DefaultExtensionFactory {
             log.debug("No constructor with plugin context found for extension[{}], fallback to no-arg constructor",
                     extensionClass.getName());
             return super.create(extensionClass);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             throw new PluginRuntimeException(e);
         }
     }

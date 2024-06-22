@@ -198,6 +198,10 @@
         <appender-ref ref="pluginLogFile"/>
     </logger>
 
+    <logger name="com.baidu.bifromq.plugin" level="WARN" additivity="false">
+        <appender-ref ref="pluginLogFile"/>
+    </logger>
+
     <logger name="com.baidu" level="INFO" additivity="false">
         <appender-ref ref="traceLogFile"/>
         <appender-ref ref="debugLogFile"/>

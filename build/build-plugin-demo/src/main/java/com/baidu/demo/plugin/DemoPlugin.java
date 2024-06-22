@@ -14,7 +14,7 @@
 package com.baidu.demo.plugin;
 
 import com.baidu.bifromq.plugin.BifroMQPlugin;
-import com.baidu.bifromq.plugin.BifroMQPluginContext;
+import com.baidu.bifromq.plugin.BifroMQPluginDescriptor;
 import com.sun.net.httpserver.HttpServer;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Metrics;
@@ -30,7 +30,7 @@ import java.net.InetSocketAddress;
 import java.time.Duration;
 
 @Slf4j
-public class DemoPlugin extends BifroMQPlugin<BifroMQPluginContext> {
+public class DemoPlugin extends BifroMQPlugin<DemoPluginContext> {
     private static final String PLUGIN_PROMETHEUS_PORT = "plugin.prometheus.port";
     private static final String PLUGIN_PROMETHEUS_CONTEXT = "plugin.prometheus.context";
     private final PrometheusMeterRegistry registry;
@@ -43,7 +43,7 @@ public class DemoPlugin extends BifroMQPlugin<BifroMQPluginContext> {
      *
      * @param context the context object
      */
-    public DemoPlugin(BifroMQPluginContext context) {
+    public DemoPlugin(BifroMQPluginDescriptor context) {
         super(context);
         registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
         registry.config().meterFilter(new MeterFilter() {
@@ -81,11 +81,6 @@ public class DemoPlugin extends BifroMQPlugin<BifroMQPluginContext> {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-    }
-
-    @Override
-    protected BifroMQPluginContext initContext(BifroMQPluginContext context) {
-        return context;
     }
 
     @Override
