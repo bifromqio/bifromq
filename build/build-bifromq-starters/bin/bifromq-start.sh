@@ -168,7 +168,7 @@ if [ -z "$EXTRA_JVM_OPTS" ]; then
 fi
 
 # Set Debug options if enabled
-if [ "x$JVM_DEBUG" != "x" ]; then
+if [ "x$JVM_DEBUG" = "xtrue" ]; then
 
   # Use default ports
   DEFAULT_JAVA_DEBUG_PORT="8008"
