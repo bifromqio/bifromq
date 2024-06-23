@@ -40,5 +40,5 @@ jobs:
         run: mvn clean package -DskipTests
       - uses: AButler/upload-release-assets@v3.0
         with:
-          files: 'build/build-bifromq-starters/target/bifromq-*'
+          files: 'build/build-bifromq-starters/target/bifromq-*-standalone.tar.gz;build/build-bifromq-starters/target/bifromq-*-standalone.zip'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
