@@ -25,6 +25,10 @@
     <artifactId>bifromq-plugin-setting-provider</artifactId>
     <dependencies>
         <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-plugin-context</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.pf4j</groupId>
             <artifactId>pf4j</artifactId>
         </dependency>

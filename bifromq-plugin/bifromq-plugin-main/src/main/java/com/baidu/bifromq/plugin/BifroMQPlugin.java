@@ -1,17 +1,33 @@
-package com.baidu.bifromq.plugin;
+/*
+ * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
 
-import lombok.SneakyThrows;
-import lombok.extern.slf4j.Slf4j;
-import org.pf4j.Plugin;
-import org.pf4j.PluginWrapper;
+package com.baidu.bifromq.plugin;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
+import org.pf4j.Plugin;
+import org.pf4j.PluginWrapper;
 
 /**
- * The base plugin class facilitating the development of custom BifroMQ plugin.
+ * Base class for custom BifroMQ plugins. This abstract class provides the necessary infrastructure to manage the
+ * lifecycle of a plugin, including initialization and shutdown. It utilizes generics to ensure that each plugin works
+ * with its specific type of BifroMQPluginContext.
+ *
+ * @param <C> the type of the plugin context that this plugin uses. Must extend BifroMQPluginContext.
  */
 @Slf4j
 public abstract class BifroMQPlugin<C extends BifroMQPluginContext> extends Plugin {
@@ -20,9 +36,10 @@ public abstract class BifroMQPlugin<C extends BifroMQPluginContext> extends Plug
     private final C context;
 
     /**
-     * Subclass should override this constructor.
+     * Constructs a new BifroMQPlugin with the specified descriptor. This constructor initializes the plugin context
+     * specific to the derived plugin class.
      *
-     * @param descriptor the descriptor passed by plugin manager
+     * @param descriptor the descriptor passed by the plugin manager, containing metadata and configuration.
      */
     @SneakyThrows
     protected BifroMQPlugin(BifroMQPluginDescriptor descriptor) {
@@ -55,7 +72,7 @@ public abstract class BifroMQPlugin<C extends BifroMQPluginContext> extends Plug
                 }
                 if (!Modifier.isPublic(modifiers)) {
                     log.warn("PluginContext's constructor should be public, visibility is {}: {}",
-                            Modifier.isProtected(modifiers) ? "protected" : "package-private", constructor.getName());
+                        Modifier.isProtected(modifiers) ? "protected" : "package-private", constructor.getName());
                 }
                 constructor.setAccessible(true); // Allow protected and package-private access
                 return constructor.newInstance(descriptor);
@@ -64,16 +81,27 @@ public abstract class BifroMQPlugin<C extends BifroMQPluginContext> extends Plug
         throw new IllegalStateException("Unable to determine the context class type.");
     }
 
+    /**
+     * Provides access to the plugin's context.
+     *
+     * @return the context associated with this plugin.
+     */
     public C context() {
         return context;
     }
 
+    /**
+     * Starts the plugin. This method is called when the plugin is loaded. It initializes the plugin context.
+     */
     @Override
     public void start() {
         super.start();
         context.init();
     }
 
+    /**
+     * Stops the plugin. This method is called when the plugin is unloaded. It cleans up the plugin context.
+     */
     @Override
     public void stop() {
         super.stop();

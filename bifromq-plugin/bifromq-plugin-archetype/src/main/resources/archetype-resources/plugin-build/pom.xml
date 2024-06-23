@@ -36,6 +36,10 @@
         <!-- provided by bifromq-->
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-plugin-context</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-plugin-main</artifactId>
         </dependency>
         <dependency>

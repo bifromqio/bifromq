@@ -320,6 +320,11 @@
             </dependency>
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
+                <artifactId>bifromq-plugin-context</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
                 <artifactId>bifromq-plugin-main</artifactId>
                 <version>${project.version}</version>
             </dependency>

@@ -9,24 +9,12 @@
         <version>3.1.1</version>
     </parent>
 
-    <artifactId>bifromq-plugin-main</artifactId>
+    <artifactId>bifromq-plugin-context</artifactId>
     <dependencies>
-        <dependency>
-            <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-plugin-context</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-        </dependency>
         <dependency>
             <groupId>org.pf4j</groupId>
             <artifactId>pf4j</artifactId>
             <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testng</groupId>
-            <artifactId>testng</artifactId>
         </dependency>
     </dependencies>
 </project>

@@ -68,6 +68,12 @@
             <!-- bifromq provided dependencies -->
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
+                <artifactId>bifromq-plugin-context</artifactId>
+                <version>${bifromq.version}</version>
+                <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
                 <artifactId>bifromq-plugin-main</artifactId>
                 <version>${bifromq.version}</version>
                 <scope>provided</scope>

@@ -39,5 +39,6 @@
         <module>bifromq-plugin-manager</module>
         <module>bifromq-plugin-main</module>
         <module>bifromq-plugin-archetype</module>
+        <module>bifromq-plugin-context</module>
     </modules>
 </project>
