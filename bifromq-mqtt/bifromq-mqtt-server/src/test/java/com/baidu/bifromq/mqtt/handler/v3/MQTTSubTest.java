@@ -17,6 +17,7 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC_FILTER;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_TOPIC_FILTER;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATION;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_START;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_ACTION_DISALLOW;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.TOO_LARGE_SUBSCRIPTION;
@@ -72,7 +73,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(CLIENT_CONNECTED, SUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, SUB_ACKED);
         shouldCleanSubs = true;
     }
 
@@ -88,7 +89,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(CLIENT_CONNECTED, SUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, SUB_ACKED);
         shouldCleanSubs = true;
     }
 
@@ -104,7 +105,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(CLIENT_CONNECTED, SUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, SUB_ACKED);
         shouldCleanSubs = true;
     }
 
@@ -122,7 +123,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(CLIENT_CONNECTED, SUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, SUB_ACKED);
         shouldCleanSubs = true;
     }
 
@@ -140,7 +141,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, new int[] {0, 1, 128});
-        verifyEvent(CLIENT_CONNECTED, SUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, SUB_ACKED);
         shouldCleanSubs = true;
     }
 
@@ -214,7 +215,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(CLIENT_CONNECTED, PROTOCOL_VIOLATION);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, PROTOCOL_VIOLATION);
     }
 
     @Test
@@ -227,7 +228,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(CLIENT_CONNECTED, TOO_LARGE_SUBSCRIPTION);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, TOO_LARGE_SUBSCRIPTION);
     }
 
     @Test
@@ -238,7 +239,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(CLIENT_CONNECTED, MALFORMED_TOPIC_FILTER, SUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, MALFORMED_TOPIC_FILTER, SUB_ACKED);
     }
 
     @Test
@@ -249,7 +250,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(CLIENT_CONNECTED, INVALID_TOPIC_FILTER, SUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, INVALID_TOPIC_FILTER, SUB_ACKED);
     }
 
     @Test
@@ -262,7 +263,8 @@ public class MQTTSubTest extends BaseMQTTTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, new int[] {128, 128, 128});
-        verifyEvent(CLIENT_CONNECTED, SUB_ACTION_DISALLOW, SUB_ACTION_DISALLOW, SUB_ACTION_DISALLOW, SUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, SUB_ACTION_DISALLOW, SUB_ACTION_DISALLOW, SUB_ACTION_DISALLOW,
+                SUB_ACKED);
     }
 
     private void verifySubAck(MqttSubAckMessage subAckMessage, int[] expectedQos) {

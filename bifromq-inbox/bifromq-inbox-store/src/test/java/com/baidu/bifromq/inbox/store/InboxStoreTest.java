@@ -21,6 +21,7 @@ import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCountGauge
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
@@ -246,6 +247,7 @@ abstract class InboxStoreTest {
     @BeforeMethod(alwaysRun = true)
     public void beforeCastStart(Method method) {
         log.info("Test case[{}.{}] start", method.getDeclaringClass().getName(), method.getName());
+        reset(eventCollector);
     }
 
     @AfterMethod(alwaysRun = true)

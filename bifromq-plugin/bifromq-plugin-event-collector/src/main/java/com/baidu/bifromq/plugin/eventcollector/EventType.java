@@ -106,5 +106,9 @@ public enum EventType {
     OVERFLOWED,
 
     // retain service
-    OUT_OF_TENANT_RESOURCE
+    OUT_OF_TENANT_RESOURCE,
+
+    // session lifecycle event
+    MQTT_SESSION_START, // the start event for both transient and persistent session
+    MQTT_SESSION_STOP // the stop event for both transient and persistent session
 }

@@ -20,6 +20,7 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC_FILTER;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_TOPIC_FILTER;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATION;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_START;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.TOO_LARGE_UNSUBSCRIPTION;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACTION_DISALLOW;
@@ -47,7 +48,7 @@ public class MQTTUnSubTest extends BaseMQTTTest {
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNotNull(unsubAckMessage);
-        verifyEvent(CLIENT_CONNECTED, UNSUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, UNSUB_ACKED);
     }
 
     @Test
@@ -58,7 +59,7 @@ public class MQTTUnSubTest extends BaseMQTTTest {
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNotNull(unsubAckMessage);
-        verifyEvent(CLIENT_CONNECTED, UNSUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, UNSUB_ACKED);
     }
 
     @Test
@@ -95,7 +96,7 @@ public class MQTTUnSubTest extends BaseMQTTTest {
         channel.writeInbound(unSubMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(CLIENT_CONNECTED, PROTOCOL_VIOLATION);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, PROTOCOL_VIOLATION);
     }
 
     @Test
@@ -105,7 +106,7 @@ public class MQTTUnSubTest extends BaseMQTTTest {
         channel.writeInbound(unSubMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(CLIENT_CONNECTED, TOO_LARGE_UNSUBSCRIPTION);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, TOO_LARGE_UNSUBSCRIPTION);
     }
 
     @Test
@@ -115,7 +116,7 @@ public class MQTTUnSubTest extends BaseMQTTTest {
         channel.writeInbound(unSubMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(CLIENT_CONNECTED, MALFORMED_TOPIC_FILTER);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, MALFORMED_TOPIC_FILTER);
     }
 
     @Test
@@ -125,7 +126,7 @@ public class MQTTUnSubTest extends BaseMQTTTest {
         channel.writeInbound(unSubMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(CLIENT_CONNECTED, INVALID_TOPIC_FILTER, UNSUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, INVALID_TOPIC_FILTER, UNSUB_ACKED);
     }
 
     @Test
@@ -135,7 +136,8 @@ public class MQTTUnSubTest extends BaseMQTTTest {
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNotNull(unsubAckMessage);
-        verifyEvent(CLIENT_CONNECTED, UNSUB_ACTION_DISALLOW, UNSUB_ACTION_DISALLOW, UNSUB_ACTION_DISALLOW,
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, UNSUB_ACTION_DISALLOW, UNSUB_ACTION_DISALLOW,
+                UNSUB_ACTION_DISALLOW,
             UNSUB_ACKED);
     }
 }

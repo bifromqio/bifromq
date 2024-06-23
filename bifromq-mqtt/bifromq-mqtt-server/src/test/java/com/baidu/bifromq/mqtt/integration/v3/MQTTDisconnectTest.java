@@ -53,8 +53,10 @@ public class MQTTDisconnectTest extends MQTTTest {
         await().until(() -> !mqttClient.isConnected());
         ArgumentCaptor<Event<?>> argCaptor = ArgumentCaptor.forClass(Event.class);
         verify(eventCollector, atLeast(2)).report(argCaptor.capture());
-        Event<?> event = argCaptor.getAllValues().get(argCaptor.getAllValues().size() - 1);
+        Event<?> event = argCaptor.getAllValues().get(argCaptor.getAllValues().size() - 2);
         assertTrue(event.type() == EventType.BY_CLIENT && ((ByClient) event).withoutDisconnect());
+        event = argCaptor.getAllValues().get(argCaptor.getAllValues().size() - 1);
+        assertTrue(event.type() == EventType.MQTT_SESSION_STOP);
     }
 
     @Test(groups = "integration")
@@ -76,8 +78,10 @@ public class MQTTDisconnectTest extends MQTTTest {
         await().until(() -> !mqttClient.isConnected());
         ArgumentCaptor<Event<?>> argCaptor = ArgumentCaptor.forClass(Event.class);
         verify(eventCollector, atLeast(2)).report(argCaptor.capture());
-        Event<?> event = argCaptor.getAllValues().get(argCaptor.getAllValues().size() - 1);
+        Event<?> event = argCaptor.getAllValues().get(argCaptor.getAllValues().size() - 2);
         assertTrue(event.type() == EventType.BY_CLIENT && !((ByClient) event).withoutDisconnect());
+        event = argCaptor.getAllValues().get(argCaptor.getAllValues().size() - 1);
+        assertTrue(event.type() == EventType.MQTT_SESSION_STOP);
     }
 
 }

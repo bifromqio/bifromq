@@ -14,61 +14,6 @@
 package com.baidu.bifromq.mqtt.handler.v3;
 
 
-import static com.baidu.bifromq.mqtt.handler.MQTTSessionIdUtil.userSessionId;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.DISCARD;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC_FILTER;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_TOPIC;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_TOPIC_FILTER;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.MSG_RETAINED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.MSG_RETAINED_ERROR;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATION;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_ACKED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_RECED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_REC_DROPPED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_DIST_ERROR;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_DROPPED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_PUSHED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_CONFIRMED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_DIST_ERROR;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_DROPPED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_PUSHED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_CONFIRMED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DIST_ERROR;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_PUSHED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_RECEIVED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.RETAIN_MSG_CLEARED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.SERVER_BUSY;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_ACKED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.TOO_LARGE_UNSUBSCRIPTION;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACKED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACTION_DISALLOW;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.ReceivingMaximum;
-import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.CLEARED;
-import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.ERROR;
-import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.RETAINED;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
-import static io.netty.handler.codec.mqtt.MqttMessageType.PUBREL;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertNull;
-import static org.testng.Assert.assertTrue;
-
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.mqtt.handler.BaseSessionHandlerTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
@@ -101,18 +46,78 @@ import io.netty.handler.codec.mqtt.MqttSubscribeMessage;
 import io.netty.handler.codec.mqtt.MqttUnsubAckMessage;
 import io.netty.handler.codec.mqtt.MqttUnsubscribeMessage;
 import io.netty.handler.traffic.ChannelTrafficShapingHandler;
-import java.lang.reflect.Method;
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
+
+import java.lang.reflect.Method;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+
+import static com.baidu.bifromq.mqtt.handler.MQTTSessionIdUtil.userSessionId;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.DISCARD;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC_FILTER;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_TOPIC;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_TOPIC_FILTER;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MSG_RETAINED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MSG_RETAINED_ERROR;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATION;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_ACKED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_RECED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_REC_DROPPED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_DIST_ERROR;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_DROPPED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_PUSHED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_CONFIRMED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_DIST_ERROR;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_DROPPED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_PUSHED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_CONFIRMED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DIST_ERROR;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_PUSHED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_RECEIVED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.RETAIN_MSG_CLEARED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.SERVER_BUSY;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_START;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_STOP;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_ACKED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.TOO_LARGE_UNSUBSCRIPTION;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACKED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACTION_DISALLOW;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.ReceivingMaximum;
+import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.CLEARED;
+import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.ERROR;
+import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.RETAINED;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
+import static io.netty.handler.codec.mqtt.MqttMessageType.PUBREL;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNull;
+import static org.testng.Assert.assertTrue;
 
 @Slf4j
 public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
@@ -125,19 +130,19 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         super.setup(method);
         int keepAlive = 2;
         sessionContext = MQTTSessionContext.builder()
-            .serverId(serverId)
-            .ticker(testTicker)
-            .defaultKeepAliveTimeSeconds(keepAlive)
-            .distClient(distClient)
-            .retainClient(retainClient)
-            .authProvider(authProvider)
-            .localDistService(localDistService)
-            .localSessionRegistry(localSessionRegistry)
-            .sessionDictClient(sessionDictClient)
-            .eventCollector(eventCollector)
-            .resourceThrottler(resourceThrottler)
-            .settingProvider(settingProvider)
-            .build();
+                .serverId(serverId)
+                .ticker(testTicker)
+                .defaultKeepAliveTimeSeconds(keepAlive)
+                .distClient(distClient)
+                .retainClient(retainClient)
+                .authProvider(authProvider)
+                .localDistService(localDistService)
+                .localSessionRegistry(localSessionRegistry)
+                .sessionDictClient(sessionDictClient)
+                .eventCollector(eventCollector)
+                .resourceThrottler(resourceThrottler)
+                .settingProvider(settingProvider)
+                .build();
         // common mocks
         mockSettings();
         ChannelDuplexHandler sessionHandlerAdder = new ChannelDuplexHandler() {
@@ -145,13 +150,13 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
             public void channelActive(ChannelHandlerContext ctx) throws Exception {
                 super.channelActive(ctx);
                 ctx.pipeline().addLast(MQTT3TransientSessionHandler.builder()
-                    .settings(new TenantSettings(tenantId, settingProvider))
-                    .userSessionId(userSessionId(clientInfo))
-                    .keepAliveTimeSeconds(120)
-                    .clientInfo(clientInfo)
-                    .willMessage(null)
-                    .ctx(ctx)
-                    .build());
+                        .settings(new TenantSettings(tenantId, settingProvider))
+                        .userSessionId(userSessionId(clientInfo))
+                        .keepAliveTimeSeconds(120)
+                        .clientInfo(clientInfo)
+                        .willMessage(null)
+                        .ctx(ctx)
+                        .build());
                 ctx.pipeline().remove(this);
             }
         };
@@ -176,10 +181,10 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
     public void tearDown(Method method) {
         if (shouldCleanSubs) {
             when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
-                .thenReturn(CompletableFuture.completedFuture(null));
+                    .thenReturn(CompletableFuture.completedFuture(null));
             channel.close();
             verify(localDistService, atLeast(1))
-                .unmatch(anyLong(), anyString(), any());
+                    .unmatch(anyLong(), anyString(), any());
         } else {
             channel.close();
         }
@@ -196,7 +201,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runPendingTasks();
         assertFalse(channel.isOpen());
-        verifyEvent(PROTOCOL_VIOLATION);
+        verifyEvent(MQTT_SESSION_START, PROTOCOL_VIOLATION, MQTT_SESSION_STOP);
     }
 
 //  =============================================== sub & unSub ======================================================
@@ -211,7 +216,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(SUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, SUB_ACKED);
         shouldCleanSubs = true;
     }
 
@@ -225,7 +230,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(SUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, SUB_ACKED);
         shouldCleanSubs = true;
     }
 
@@ -239,7 +244,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(SUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, SUB_ACKED);
         shouldCleanSubs = true;
     }
 
@@ -253,7 +258,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, qos);
-        verifyEvent(SUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, SUB_ACKED);
         shouldCleanSubs = true;
     }
 
@@ -269,7 +274,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(subMessage);
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, new int[] {0, 1, 128});
-        verifyEvent(SUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, SUB_ACKED);
         shouldCleanSubs = true;
     }
 
@@ -281,7 +286,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNotNull(unsubAckMessage);
-        verifyEvent(UNSUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, UNSUB_ACKED);
     }
 
     @Test
@@ -291,7 +296,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNotNull(unsubAckMessage);
-        verifyEvent(UNSUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, UNSUB_ACKED);
     }
 
     @Test
@@ -300,7 +305,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(unSubMessage);
         channel.advanceTimeBy(6000, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(PROTOCOL_VIOLATION);
+        verifyEvent(MQTT_SESSION_START, PROTOCOL_VIOLATION);
     }
 
     @Test
@@ -309,7 +314,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(unSubMessage);
         channel.advanceTimeBy(6000, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(TOO_LARGE_UNSUBSCRIPTION);
+        verifyEvent(MQTT_SESSION_START, TOO_LARGE_UNSUBSCRIPTION);
     }
 
     @Test
@@ -318,7 +323,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(unSubMessage);
         channel.advanceTimeBy(6000, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(MALFORMED_TOPIC_FILTER);
+        verifyEvent(MQTT_SESSION_START, MALFORMED_TOPIC_FILTER);
     }
 
     @Test
@@ -327,7 +332,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(unSubMessage);
         channel.advanceTimeBy(6000, TimeUnit.MILLISECONDS);
         channel.writeInbound();
-        verifyEvent(INVALID_TOPIC_FILTER, UNSUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, INVALID_TOPIC_FILTER, UNSUB_ACKED);
     }
 
     @Test
@@ -336,8 +341,8 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(MQTTMessageUtils.qoSMqttUnSubMessages(3));
         MqttUnsubAckMessage unsubAckMessage = channel.readOutbound();
         Assert.assertNotNull(unsubAckMessage);
-        verifyEvent(UNSUB_ACTION_DISALLOW, UNSUB_ACTION_DISALLOW, UNSUB_ACTION_DISALLOW,
-            UNSUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, UNSUB_ACTION_DISALLOW, UNSUB_ACTION_DISALLOW, UNSUB_ACTION_DISALLOW,
+                UNSUB_ACKED);
     }
 
 
@@ -348,7 +353,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         mockCheckPermission(true);
         mockDistDist(true);
         when(distClient.pub(anyLong(), anyString(), any(Message.class), any(ClientInfo.class))).thenReturn(
-            CompletableFuture.completedFuture(DistResult.OK));
+                CompletableFuture.completedFuture(DistResult.OK));
         assertTrue(channel.isOpen());
         MqttPublishMessage message = MQTTMessageUtils.publishQoS0Message(topic, 123);
         channel.writeInbound(message);
@@ -364,7 +369,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         MqttPublishMessage message = MQTTMessageUtils.publishQoS0Message(topic, 123);
         channel.writeInbound(message);
         verify(distClient, times(1)).pub(anyLong(), eq(topic), any(Message.class), eq(clientInfo));
-        verifyEvent(QOS0_DIST_ERROR);
+        verifyEvent(MQTT_SESSION_START, QOS0_DIST_ERROR);
     }
 
     @Test
@@ -377,7 +382,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(message);
         MqttMessage ackMessage = channel.readOutbound();
         assertEquals(((MqttMessageIdVariableHeader) ackMessage.variableHeader()).messageId(), 123);
-        verifyEvent(PUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, PUB_ACKED);
     }
 
     @Test
@@ -391,7 +396,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         MqttMessage ackMessage = channel.readOutbound();
         // dist error still pub ack, record error log
         assertEquals(((MqttMessageIdVariableHeader) ackMessage.variableHeader()).messageId(), 123);
-        verifyEvent(QOS1_DIST_ERROR, PUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, QOS1_DIST_ERROR, PUB_ACKED);
     }
 
     @Test
@@ -405,7 +410,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         assertFalse(channel.isOpen());
-        verifyEvent(QOS1_DIST_ERROR, SERVER_BUSY);
+        verifyEvent(MQTT_SESSION_START, QOS1_DIST_ERROR, SERVER_BUSY, MQTT_SESSION_STOP);
     }
 
     @Test
@@ -425,7 +430,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         mqttMessage = channel.readOutbound();
         assertEquals(mqttMessage.fixedHeader().messageType(), MqttMessageType.PUBCOMP);
         assertEquals(((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId(), 123);
-        verifyEvent(PUB_RECED);
+        verifyEvent(MQTT_SESSION_START, PUB_RECED);
     }
 
     @Test
@@ -446,7 +451,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         mqttMessage = channel.readOutbound();
         assertEquals(mqttMessage.fixedHeader().messageType(), MqttMessageType.PUBCOMP);
         assertEquals(((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId(), 123);
-        verifyEvent(QOS2_DIST_ERROR, PUB_RECED);
+        verifyEvent(MQTT_SESSION_START, QOS2_DIST_ERROR, PUB_RECED);
     }
 
     @Test
@@ -460,15 +465,15 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         assertFalse(channel.isOpen());
-        verifyEvent(QOS2_DIST_ERROR, SERVER_BUSY);
+        verifyEvent(MQTT_SESSION_START, QOS2_DIST_ERROR, SERVER_BUSY, MQTT_SESSION_STOP);
     }
 
     @Test
     public void qoS2PubWithUnWritable() {
         CompletableFuture<DistResult> distResult = new CompletableFuture<>();
         when(authProvider.checkPermission(any(ClientInfo.class), any(MQTTAction.class))).thenReturn(
-            CompletableFuture.completedFuture(
-                CheckResult.newBuilder().setGranted(Granted.newBuilder().build()).build()));
+                CompletableFuture.completedFuture(
+                        CheckResult.newBuilder().setGranted(Granted.newBuilder().build()).build()));
         when(distClient.pub(anyLong(), anyString(), any(), any(ClientInfo.class))).thenReturn(distResult);
         assertTrue(channel.isOpen());
         channel.writeInbound(MQTTMessageUtils.publishQoS2Message("testTopic", 123));
@@ -479,7 +484,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         assertFalse(channel.isWritable());
         distResult.complete(DistResult.OK);
         channel.runPendingTasks();
-        verifyEvent(PUB_REC_DROPPED);
+        verifyEvent(MQTT_SESSION_START, PUB_REC_DROPPED);
 
         // flush channel
         channel.flush();
@@ -499,7 +504,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         mqttMessage = channel.readOutbound();
         assertEquals(mqttMessage.fixedHeader().messageType(), MqttMessageType.PUBCOMP);
         assertEquals(((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId(), 123);
-        verifyEvent(PUB_REC_DROPPED, PUB_RECED);
+        verifyEvent(MQTT_SESSION_START, PUB_REC_DROPPED, PUB_RECED);
     }
 
     @Test
@@ -511,7 +516,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runPendingTasks();
         assertFalse(channel.isActive());
-        verifyEvent(MALFORMED_TOPIC);
+        verifyEvent(MQTT_SESSION_START, MALFORMED_TOPIC, MQTT_SESSION_STOP);
     }
 
     @Test
@@ -522,7 +527,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runPendingTasks();
         assertFalse(channel.isActive());
-        verifyEvent(INVALID_TOPIC);
+        verifyEvent(MQTT_SESSION_START, INVALID_TOPIC, MQTT_SESSION_STOP);
     }
 
     @Test
@@ -538,17 +543,17 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
             public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
                 super.channelActive(ctx);
                 ctx.pipeline().addLast(MQTT3TransientSessionHandler.builder()
-                    .settings(new TenantSettings(tenantId, settingProvider))
-                    .userSessionId(userSessionId(clientInfo))
-                    .keepAliveTimeSeconds(120)
-                    .clientInfo(clientInfo)
-                    .willMessage(null)
-                    .ctx(ctx)
-                    .build());
+                        .settings(new TenantSettings(tenantId, settingProvider))
+                        .userSessionId(userSessionId(clientInfo))
+                        .keepAliveTimeSeconds(120)
+                        .clientInfo(clientInfo)
+                        .willMessage(null)
+                        .ctx(ctx)
+                        .build());
                 ctx.pipeline().remove(this);
             }
         });
-
+        reset(eventCollector);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 1);
         MqttPublishMessage publishMessage2 = MQTTMessageUtils.publishQoS1Message("testTopic", 2);
         channel.writeInbound(publishMessage);
@@ -577,13 +582,13 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
             public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
                 super.channelActive(ctx);
                 ctx.pipeline().addLast(MQTT3TransientSessionHandler.builder()
-                    .settings(new TenantSettings(tenantId, settingProvider))
-                    .userSessionId(userSessionId(clientInfo))
-                    .keepAliveTimeSeconds(120)
-                    .clientInfo(clientInfo)
-                    .willMessage(null)
-                    .ctx(ctx)
-                    .build());
+                        .settings(new TenantSettings(tenantId, settingProvider))
+                        .userSessionId(userSessionId(clientInfo))
+                        .keepAliveTimeSeconds(120)
+                        .clientInfo(clientInfo)
+                        .willMessage(null)
+                        .ctx(ctx)
+                        .build());
                 ctx.pipeline().remove(this);
             }
         });
@@ -597,7 +602,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.runScheduledPendingTasks();
         channel.runPendingTasks();
 
-        verifyEvent(DISCARD);
+        verifyEvent(MQTT_SESSION_START, MQTT_SESSION_START, DISCARD);
         // leave channel open in MQTT3
         assertTrue(channel.isOpen());
     }
@@ -611,7 +616,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         mockRetainPipeline(RETAINED);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS1Message(topic, 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(MSG_RETAINED, PUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, MSG_RETAINED, PUB_ACKED);
     }
 
     @Test
@@ -621,7 +626,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         mockRetainPipeline(CLEARED);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS1Message(topic, 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(RETAIN_MSG_CLEARED, PUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, RETAIN_MSG_CLEARED, PUB_ACKED);
     }
 
     @Test
@@ -631,7 +636,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         mockRetainPipeline(ERROR);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS1Message(topic, 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(MSG_RETAINED_ERROR, PUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, MSG_RETAINED_ERROR, PUB_ACKED);
     }
 
     @Test
@@ -641,7 +646,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         mockRetainPipeline(ERROR);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS2Message(topic, 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(MSG_RETAINED_ERROR, PUB_RECED);
+        verifyEvent(MQTT_SESSION_START, MSG_RETAINED_ERROR, PUB_RECED);
     }
 
 
@@ -661,7 +666,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
             assertEquals(message.fixedHeader().qosLevel().value(), QoS.AT_MOST_ONCE_VALUE);
             assertEquals(message.variableHeader().topicName(), topic);
         }
-        verifyEvent(QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED);
+        verifyEvent(MQTT_SESSION_START, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED);
     }
 
     @Test
@@ -677,7 +682,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.runPendingTasks();
         MqttPublishMessage message = channel.readOutbound();
         assertNull(message);
-        verifyEvent(QOS0_DROPPED);
+        verifyEvent(MQTT_SESSION_START, QOS0_DROPPED);
     }
 
     @Test
@@ -697,7 +702,8 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
             assertEquals(message.variableHeader().topicName(), topic);
             channel.writeInbound(MQTTMessageUtils.pubAckMessage(message.variableHeader().packetId()));
         }
-        verifyEvent(QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED, QOS1_CONFIRMED, QOS1_CONFIRMED);
+        verifyEvent(MQTT_SESSION_START, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED, QOS1_CONFIRMED,
+                QOS1_CONFIRMED);
     }
 
     @Test
@@ -713,7 +719,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.runPendingTasks();
         MqttPublishMessage message = channel.readOutbound();
         assertNull(message);
-        verifyEvent();
+        verifyEvent(MQTT_SESSION_START);
     }
 
     @Test
@@ -768,8 +774,8 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
             assertEquals(message.variableHeader().packetId(), (int) packetIds.get(i));
         }
 
-        verifyEvent(QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED,
-            QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED);
+        verifyEvent(MQTT_SESSION_START, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED,
+                QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED);
     }
 
     @Test
@@ -798,14 +804,15 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
             }
         }
 
-        EventType[] eventTypes = new EventType[messageCount + overFlowCount];
+        List<EventType> eventTypes = new ArrayList<>();
+        eventTypes.add(MQTT_SESSION_START);
         for (int i = 0; i < messageCount; i++) {
-            eventTypes[i] = QOS1_PUSHED;
+            eventTypes.add(QOS1_PUSHED);
         }
         for (int i = messageCount; i < messageCount + overFlowCount; i++) {
-            eventTypes[i] = QOS1_DROPPED;
+            eventTypes.add(QOS1_DROPPED);
         }
-        verifyEvent(eventTypes);
+        verifyEvent(eventTypes.toArray(new EventType[0]));
     }
 
     @Test
@@ -826,8 +833,8 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         MqttMessage pubRel = channel.readOutbound();
         assertEquals(pubRel.fixedHeader().messageType(), PUBREL);
         channel.writeInbound(MQTTMessageUtils.publishCompMessage(
-            ((MqttMessageIdVariableHeader) pubRel.variableHeader()).messageId()));
-        verifyEvent(QOS2_PUSHED, QOS2_RECEIVED, QOS2_CONFIRMED);
+                ((MqttMessageIdVariableHeader) pubRel.variableHeader()).messageId()));
+        verifyEvent(MQTT_SESSION_START, QOS2_PUSHED, QOS2_RECEIVED, QOS2_CONFIRMED);
     }
 
     @Test
@@ -843,7 +850,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.runPendingTasks();
         MqttPublishMessage message = channel.readOutbound();
         assertNull(message);
-        verifyEvent();
+        verifyEvent(MQTT_SESSION_START);
     }
 
     @Test
@@ -897,7 +904,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
             assertEquals(message.variableHeader().topicName(), topic);
             assertEquals(message.variableHeader().packetId(), (int) packetIds.get(i));
         }
-        verifyEvent(QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED);
+        verifyEvent(MQTT_SESSION_START, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED);
     }
 
     @Test
@@ -914,52 +921,52 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         for (ByteBuffer payload : payloads) {
             // messages with duplicated messageId
             messagesFromClient1.add(TopicMessagePack.PublisherPack.newBuilder()
-                .setPublisher(ClientInfo.newBuilder()
-                    .setTenantId(tenantId)
-                    .setType(MQTT_TYPE_VALUE)
-                    .putMetadata(MQTT_PROTOCOL_VER_KEY, "3.1.1")
-                    .putMetadata(MQTT_USER_ID_KEY, "testUser")
-                    .putMetadata(MQTT_CHANNEL_ID_KEY, "client1")
-                    .putMetadata(MQTT_CLIENT_ID_KEY, "channel1")
-                    .putMetadata(MQTT_CLIENT_ADDRESS_KEY, "127.0.0.1:11111")
-                    .build()
-                )
-                .addMessage(Message.newBuilder()
-                    .setMessageId(1)
-                    .setPayload(ByteString.copyFrom(payload.duplicate()))
-                    .setTimestamp(System.currentTimeMillis())
-                    .setPubQoS(QoS.EXACTLY_ONCE)
-                    .build())
-                .build());
+                    .setPublisher(ClientInfo.newBuilder()
+                            .setTenantId(tenantId)
+                            .setType(MQTT_TYPE_VALUE)
+                            .putMetadata(MQTT_PROTOCOL_VER_KEY, "3.1.1")
+                            .putMetadata(MQTT_USER_ID_KEY, "testUser")
+                            .putMetadata(MQTT_CHANNEL_ID_KEY, "client1")
+                            .putMetadata(MQTT_CLIENT_ID_KEY, "channel1")
+                            .putMetadata(MQTT_CLIENT_ADDRESS_KEY, "127.0.0.1:11111")
+                            .build()
+                    )
+                    .addMessage(Message.newBuilder()
+                            .setMessageId(1)
+                            .setPayload(ByteString.copyFrom(payload.duplicate()))
+                            .setTimestamp(System.currentTimeMillis())
+                            .setPubQoS(QoS.EXACTLY_ONCE)
+                            .build())
+                    .build());
             messagesFromClient2.add(TopicMessagePack.PublisherPack.newBuilder()
-                .setPublisher(ClientInfo.newBuilder()
-                    .setTenantId(tenantId)
-                    .setType(MQTT_TYPE_VALUE)
-                    .putMetadata(MQTT_PROTOCOL_VER_KEY, "3.1.1")
-                    .putMetadata(MQTT_USER_ID_KEY, "testUser")
-                    .putMetadata(MQTT_CHANNEL_ID_KEY, "client2")
-                    .putMetadata(MQTT_CLIENT_ID_KEY, "channel2")
-                    .putMetadata(MQTT_CLIENT_ADDRESS_KEY, "127.0.0.1:22222")
+                    .setPublisher(ClientInfo.newBuilder()
+                            .setTenantId(tenantId)
+                            .setType(MQTT_TYPE_VALUE)
+                            .putMetadata(MQTT_PROTOCOL_VER_KEY, "3.1.1")
+                            .putMetadata(MQTT_USER_ID_KEY, "testUser")
+                            .putMetadata(MQTT_CHANNEL_ID_KEY, "client2")
+                            .putMetadata(MQTT_CLIENT_ID_KEY, "channel2")
+                            .putMetadata(MQTT_CLIENT_ADDRESS_KEY, "127.0.0.1:22222")
+                            .build()
+                    )
+                    .addMessage(Message.newBuilder()
+                            .setMessageId(1)
+                            .setPayload(ByteString.copyFrom(payload.duplicate()))
+                            .setTimestamp(System.currentTimeMillis())
+                            .setPubQoS(QoS.EXACTLY_ONCE)
+                            .build())
                     .build()
-                )
-                .addMessage(Message.newBuilder()
-                    .setMessageId(1)
-                    .setPayload(ByteString.copyFrom(payload.duplicate()))
-                    .setTimestamp(System.currentTimeMillis())
-                    .setPubQoS(QoS.EXACTLY_ONCE)
-                    .build())
-                .build()
             );
         }
         transientSessionHandler.publish(matchInfo("#"), Lists.newArrayList(
-            TopicMessagePack.newBuilder()
-                .setTopic(topic)
-                .addAllMessage(messagesFromClient1)
-                .build(),
-            TopicMessagePack.newBuilder()
-                .setTopic(topic + "2")
-                .addAllMessage(messagesFromClient2)
-                .build()
+                TopicMessagePack.newBuilder()
+                        .setTopic(topic)
+                        .addAllMessage(messagesFromClient1)
+                        .build(),
+                TopicMessagePack.newBuilder()
+                        .setTopic(topic + "2")
+                        .addAllMessage(messagesFromClient2)
+                        .build()
         ));
         channel.runPendingTasks();
         // should two messages from client1 and client2
@@ -977,7 +984,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         assertEquals(message2_2.fixedHeader().qosLevel().value(), QoS.EXACTLY_ONCE_VALUE);
         assertEquals(message2_2.variableHeader().topicName(), topic + "2");
 
-        verifyEvent(QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED);
+        verifyEvent(MQTT_SESSION_START, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED, QOS2_PUSHED);
     }
 
 }

@@ -14,20 +14,21 @@
 package com.baidu.bifromq.mqtt.handler.v3;
 
 
+import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
+import io.netty.handler.codec.mqtt.MqttPublishMessage;
+import lombok.extern.slf4j.Slf4j;
+import org.testng.annotations.Test;
+
 import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MSG_RETAINED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MSG_RETAINED_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_RECED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.RETAIN_MSG_CLEARED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_START;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.CLEARED;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.ERROR;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.RETAINED;
-
-import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
-import io.netty.handler.codec.mqtt.MqttPublishMessage;
-import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.Test;
 
 @Slf4j
 public class MQTTRetainPubTest extends BaseMQTTTest {
@@ -41,7 +42,7 @@ public class MQTTRetainPubTest extends BaseMQTTTest {
         mockRetainPipeline(RETAINED);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(CLIENT_CONNECTED, MSG_RETAINED, PUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, MSG_RETAINED, PUB_ACKED);
     }
 
     @Test
@@ -53,7 +54,7 @@ public class MQTTRetainPubTest extends BaseMQTTTest {
         mockRetainPipeline(CLEARED);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(CLIENT_CONNECTED, RETAIN_MSG_CLEARED, PUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, RETAIN_MSG_CLEARED, PUB_ACKED);
     }
 
     @Test
@@ -65,7 +66,7 @@ public class MQTTRetainPubTest extends BaseMQTTTest {
         mockRetainPipeline(ERROR);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(CLIENT_CONNECTED, MSG_RETAINED_ERROR, PUB_ACKED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, MSG_RETAINED_ERROR, PUB_ACKED);
     }
 
     @Test
@@ -77,6 +78,6 @@ public class MQTTRetainPubTest extends BaseMQTTTest {
         mockRetainPipeline(ERROR);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS2Message("testTopic", 123);
         channel.writeInbound(publishMessage);
-        verifyEvent(CLIENT_CONNECTED, MSG_RETAINED_ERROR, PUB_RECED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, MSG_RETAINED_ERROR, PUB_RECED);
     }
 }

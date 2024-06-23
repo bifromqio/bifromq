@@ -13,32 +13,45 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionNumGauge;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionSpaceGauge;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCountGauge;
-
 import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
 import com.baidu.bifromq.metrics.ITenantMeter;
+import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStart;
+import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStop;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionNumGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionSpaceGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCountGauge;
+import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
 /**
  * TenantInboxSet is used to hold all persistent session metadata in memory belonging to a tenant.
  */
 class TenantInboxSet {
+    private final IEventCollector eventCollector;
     private final LongAdder totalSubCount = new LongAdder();
     // inboxId -> incarnation -> inboxMetadata
-    private final Map<String, Map<Long, InboxMetadata>> inboxMetadataMap = new ConcurrentHashMap<>();
+    private final Map<String, SortedMap<Long, InboxMetadata>> inboxMetadataMap = new ConcurrentHashMap<>();
     private final String tenantId;
     private final String[] tags;
 
-    TenantInboxSet(String tenantId, Supplier<Number> usedSpaceGetter, String... tagValuePair) {
+    TenantInboxSet(IEventCollector eventCollector,
+                   String tenantId,
+                   Supplier<Number> usedSpaceGetter,
+                   String... tagValuePair) {
+        this.eventCollector = eventCollector;
         this.tenantId = tenantId;
         this.tags = tagValuePair;
         ITenantMeter.gauging(tenantId, MqttPersistentSubCountGauge, totalSubCount::sum, tags);
@@ -49,7 +62,12 @@ class TenantInboxSet {
     void upsert(InboxMetadata metadata) {
         inboxMetadataMap.compute(metadata.getInboxId(), (k, v) -> {
             if (v == null) {
-                v = new ConcurrentHashMap<>();
+                // persistent session's lifetime is bounded by its corresponding inbox replicas
+                // so for 3 replicas inbox setting, a logical persistent session will have triple session lifetime
+                eventCollector.report(getLocal(MQTTSessionStart.class)
+                        .sessionId(metadata.getInboxId())
+                        .clientInfo(metadata.getClient()));
+                v = new TreeMap<>();
             }
             v.compute(metadata.getIncarnation(), (k1, v1) -> {
                 if (v1 == null) {
@@ -66,13 +84,32 @@ class TenantInboxSet {
 
     void remove(String inboxId, long incarnation) {
         inboxMetadataMap.computeIfPresent(inboxId, (v, k) -> {
+            AtomicReference<InboxMetadata> removed = new AtomicReference<>();
             k.computeIfPresent(incarnation, (k1, v1) -> {
                 // update the total sub count and used space with delta
                 totalSubCount.add(-v1.getTopicFiltersCount());
+                removed.set(v1);
                 return null;
             });
-            return k.isEmpty() ? null : k;
+            if (k.isEmpty()) {
+                eventCollector.report(getLocal(MQTTSessionStop.class)
+                        .sessionId(inboxId)
+                        .clientInfo(removed.get().getClient()));
+                return null;
+            }
+            return k;
         });
+    }
+
+    void removeAll() {
+        for (Map.Entry<String, SortedMap<Long, InboxMetadata>> entry : inboxMetadataMap.entrySet()) {
+            String inboxId = entry.getKey();
+            SortedMap<Long, InboxMetadata> map = entry.getValue();
+            assert !map.isEmpty();
+            for (Long incarnation : map.keySet()) {
+                remove(inboxId, incarnation);
+            }
+        }
     }
 
     boolean isEmpty() {
@@ -80,7 +117,8 @@ class TenantInboxSet {
     }
 
     Optional<InboxMetadata> get(String inboxId, long incarnation) {
-        return Optional.ofNullable(inboxMetadataMap.getOrDefault(inboxId, Collections.emptyMap()).get(incarnation));
+        return Optional.ofNullable(
+                inboxMetadataMap.getOrDefault(inboxId, Collections.emptySortedMap()).get(incarnation));
     }
 
     Collection<InboxMetadata> getAll() {
@@ -88,7 +126,7 @@ class TenantInboxSet {
     }
 
     Collection<InboxMetadata> getAll(String inboxId) {
-        return inboxMetadataMap.getOrDefault(inboxId, Collections.emptyMap()).values();
+        return inboxMetadataMap.getOrDefault(inboxId, Collections.emptySortedMap()).values();
     }
 
     void destroy() {

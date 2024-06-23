@@ -13,23 +13,56 @@
 
 package com.baidu.bifromq.inbox.store;
 
+import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
+import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
+import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStart;
+import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStop;
+import com.baidu.bifromq.type.ClientInfo;
+import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+
+import java.util.function.Supplier;
+
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionNumGauge;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionSpaceGauge;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCountGauge;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
-import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
-import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
-import org.mockito.Mockito;
-import org.testng.annotations.Test;
-
 @Slf4j
 public class TenantInboxSetTest extends MeterTest {
+    @Mock
+    private IEventCollector eventCollector;
+    private AutoCloseable closeable;
+
+    @BeforeMethod
+    public void setup() {
+        super.setup();
+        closeable = MockitoAnnotations.openMocks(this);
+    }
+
+    @SneakyThrows
+    @AfterMethod
+    public void tearDown() {
+        closeable.close();
+        super.tearDown();
+    }
+
     @Test
     public void testSetupMeterAfterCreate() {
         String tenantId = "tenantId-" + System.nanoTime();
@@ -38,7 +71,7 @@ public class TenantInboxSetTest extends MeterTest {
         assertNoGauge(tenantId, MqttPersistentSessionSpaceGauge);
         // mock Supplier<Number> using Mockito
         Supplier<Number> usedSpaceGetter = () -> 1;
-        TenantInboxSet inboxSet = new TenantInboxSet(tenantId, usedSpaceGetter);
+        TenantInboxSet inboxSet = new TenantInboxSet(eventCollector, tenantId, usedSpaceGetter);
 
         assertGaugeValue(tenantId, MqttPersistentSubCountGauge, 0);
         assertGaugeValue(tenantId, MqttPersistentSessionNumGauge, 0);
@@ -50,7 +83,7 @@ public class TenantInboxSetTest extends MeterTest {
     public void testMeterClearedAfterDestroy() {
         String tenantId = "tenantId-" + System.nanoTime();
         Supplier<Number> usedSpaceGetter = () -> 1;
-        TenantInboxSet inboxSet = new TenantInboxSet(tenantId, usedSpaceGetter, "tag1", "value1");
+        TenantInboxSet inboxSet = new TenantInboxSet(eventCollector, tenantId, usedSpaceGetter, "tag1", "value1");
         inboxSet.destroy();
         assertNoGauge(tenantId, MqttPersistentSubCountGauge);
         assertNoGauge(tenantId, MqttPersistentSessionNumGauge);
@@ -62,38 +95,50 @@ public class TenantInboxSetTest extends MeterTest {
         String tenantId = "tenantId-" + System.nanoTime();
         Supplier<Number> usedSpaceGetter = Mockito.mock(Supplier.class);
         when(usedSpaceGetter.get()).thenReturn(1);
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId("tenant1").build();
         InboxMetadata inboxMetadata = InboxMetadata.newBuilder()
-            .setInboxId("testInboxId")
-            .setIncarnation(1)
-            .build();
-        TenantInboxSet inboxSet = new TenantInboxSet(tenantId, usedSpaceGetter);
+                .setInboxId("testInboxId")
+                .setIncarnation(1)
+                .setClient(clientInfo)
+                .build();
+        TenantInboxSet inboxSet = new TenantInboxSet(eventCollector, tenantId, usedSpaceGetter);
         inboxSet.upsert(inboxMetadata);
         assertGaugeValue(tenantId, MqttPersistentSubCountGauge, 0);
         assertGaugeValue(tenantId, MqttPersistentSessionNumGauge, 1);
         assertGaugeValue(tenantId, MqttPersistentSessionSpaceGauge, 1);
 
-        inboxMetadata = InboxMetadata.newBuilder()
-            .setInboxId("testInboxId")
-            .setIncarnation(1)
-            .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
-            .build();
+        verify(eventCollector).report(argThat(e -> (e instanceof MQTTSessionStart) &&
+                ((MQTTSessionStart) e).sessionId().equals("testInboxId") &&
+                ((MQTTSessionStart) e).clientInfo().equals(clientInfo)));
 
+        inboxMetadata = InboxMetadata.newBuilder()
+                .setInboxId("testInboxId")
+                .setIncarnation(1)
+                .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
+                .build();
+
+        reset(eventCollector);
         inboxSet.upsert(inboxMetadata);
+        verify(eventCollector, never()).report(any());
         assertGaugeValue(tenantId, MqttPersistentSubCountGauge, 1);
         assertGaugeValue(tenantId, MqttPersistentSessionNumGauge, 1);
         assertGaugeValue(tenantId, MqttPersistentSessionSpaceGauge, 1);
 
         when(usedSpaceGetter.get()).thenReturn(2);
         inboxMetadata = InboxMetadata.newBuilder()
-            .setInboxId("testInboxId1")
-            .setIncarnation(1)
-            .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
-            .build();
+                .setInboxId("testInboxId1")
+                .setIncarnation(1)
+                .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
+                .build();
 
+        reset(eventCollector);
         inboxSet.upsert(inboxMetadata);
+        verify(eventCollector).report(argThat(e -> (e instanceof MQTTSessionStart) &&
+                ((MQTTSessionStart) e).sessionId().equals("testInboxId1")));
         assertGaugeValue(tenantId, MqttPersistentSubCountGauge, 2);
         assertGaugeValue(tenantId, MqttPersistentSessionNumGauge, 2);
         assertGaugeValue(tenantId, MqttPersistentSessionSpaceGauge, 2);
+
     }
 
     @Test
@@ -101,28 +146,41 @@ public class TenantInboxSetTest extends MeterTest {
         String tenantId = "tenantId-" + System.nanoTime();
         Supplier<Number> usedSpaceGetter = Mockito.mock(Supplier.class);
         when(usedSpaceGetter.get()).thenReturn(1);
-        InboxMetadata inboxMetadata = InboxMetadata.newBuilder()
-            .setInboxId("testInboxId")
-            .setIncarnation(1)
-            .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
-            .build();
-        InboxMetadata inboxMetadata1 = InboxMetadata.newBuilder()
-            .setInboxId("testInboxId1")
-            .setIncarnation(1)
-            .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
-            .build();
-        TenantInboxSet inboxSet = new TenantInboxSet(tenantId, usedSpaceGetter);
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId("tenant1").build();
+        final InboxMetadata inboxMetadata = InboxMetadata.newBuilder()
+                .setInboxId("testInboxId")
+                .setIncarnation(1)
+                .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
+                .setClient(clientInfo)
+                .build();
+        final InboxMetadata inboxMetadata1 = InboxMetadata.newBuilder()
+                .setInboxId("testInboxId1")
+                .setIncarnation(1)
+                .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
+                .setClient(clientInfo)
+                .build();
+        TenantInboxSet inboxSet = new TenantInboxSet(eventCollector, tenantId, usedSpaceGetter);
         inboxSet.upsert(inboxMetadata);
         inboxSet.upsert(inboxMetadata1);
         assertGaugeValue(tenantId, MqttPersistentSubCountGauge, 2);
         assertGaugeValue(tenantId, MqttPersistentSessionNumGauge, 2);
 
+        reset(eventCollector);
         inboxSet.remove(inboxMetadata.getInboxId(), inboxMetadata.getIncarnation());
+        verify(eventCollector).report(argThat(e -> (e instanceof MQTTSessionStop) &&
+                ((MQTTSessionStop) e).sessionId().equals(inboxMetadata.getInboxId()) &&
+                ((MQTTSessionStop) e).clientInfo().equals(clientInfo)));
         assertGaugeValue(tenantId, MqttPersistentSubCountGauge, 1);
         assertGaugeValue(tenantId, MqttPersistentSessionNumGauge, 1);
 
         assertFalse(inboxSet.isEmpty());
+        reset(eventCollector);
         inboxSet.remove(inboxMetadata1.getInboxId(), inboxMetadata1.getIncarnation());
+
+        verify(eventCollector).report(argThat(e -> (e instanceof MQTTSessionStop) &&
+                ((MQTTSessionStop) e).sessionId().equals(inboxMetadata1.getInboxId()) &&
+                ((MQTTSessionStop) e).clientInfo().equals(clientInfo)));
+
         assertGaugeValue(tenantId, MqttPersistentSubCountGauge, 0);
         assertGaugeValue(tenantId, MqttPersistentSessionNumGauge, 0);
         assertTrue(inboxSet.isEmpty());
@@ -134,11 +192,11 @@ public class TenantInboxSetTest extends MeterTest {
         Supplier<Number> usedSpaceGetter = Mockito.mock(Supplier.class);
         when(usedSpaceGetter.get()).thenReturn(1);
         InboxMetadata inboxMetadata = InboxMetadata.newBuilder()
-            .setInboxId("testInboxId")
-            .setIncarnation(1)
-            .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
-            .build();
-        TenantInboxSet inboxSet = new TenantInboxSet(tenantId, usedSpaceGetter);
+                .setInboxId("testInboxId")
+                .setIncarnation(1)
+                .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
+                .build();
+        TenantInboxSet inboxSet = new TenantInboxSet(eventCollector, tenantId, usedSpaceGetter);
         inboxSet.upsert(inboxMetadata);
         assertTrue(inboxSet.get(inboxMetadata.getInboxId(), inboxMetadata.getIncarnation()).isPresent());
         assertEquals(inboxSet.get(inboxMetadata.getInboxId(), inboxMetadata.getIncarnation()).get(), inboxMetadata);
@@ -152,22 +210,22 @@ public class TenantInboxSetTest extends MeterTest {
         Supplier<Number> usedSpaceGetter = Mockito.mock(Supplier.class);
         when(usedSpaceGetter.get()).thenReturn(1);
         InboxMetadata inboxMetadata = InboxMetadata.newBuilder()
-            .setInboxId("testInboxId")
-            .setIncarnation(1)
-            .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
-            .build();
+                .setInboxId("testInboxId")
+                .setIncarnation(1)
+                .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
+                .build();
 
         InboxMetadata inboxMetadata1 = InboxMetadata.newBuilder()
-            .setInboxId("testInboxId")
-            .setIncarnation(2)
-            .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
-            .build();
+                .setInboxId("testInboxId")
+                .setIncarnation(2)
+                .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
+                .build();
         InboxMetadata inboxMetadata2 = InboxMetadata.newBuilder()
-            .setInboxId("testInboxId1")
-            .setIncarnation(1)
-            .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
-            .build();
-        TenantInboxSet inboxSet = new TenantInboxSet(tenantId, usedSpaceGetter);
+                .setInboxId("testInboxId1")
+                .setIncarnation(1)
+                .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
+                .build();
+        TenantInboxSet inboxSet = new TenantInboxSet(eventCollector, tenantId, usedSpaceGetter);
         inboxSet.upsert(inboxMetadata);
         inboxSet.upsert(inboxMetadata1);
         inboxSet.upsert(inboxMetadata2);
@@ -175,5 +233,35 @@ public class TenantInboxSetTest extends MeterTest {
         assertEquals(inboxSet.getAll(inboxMetadata.getInboxId()).size(), 2);
         assertEquals(inboxSet.getAll(inboxMetadata2.getInboxId()).size(), 1);
         inboxSet.destroy();
+    }
+
+    @Test
+    public void testRemoveAll() {
+        String tenantId = "tenantId-" + System.nanoTime();
+        Supplier<Number> usedSpaceGetter = Mockito.mock(Supplier.class);
+        when(usedSpaceGetter.get()).thenReturn(1);
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId("tenant1").build();
+        final InboxMetadata inboxMetadata = InboxMetadata.newBuilder()
+                .setInboxId("testInboxId")
+                .setIncarnation(1)
+                .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
+                .setClient(clientInfo)
+                .build();
+        final InboxMetadata inboxMetadata1 = InboxMetadata.newBuilder()
+                .setInboxId("testInboxId1")
+                .setIncarnation(1)
+                .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
+                .setClient(clientInfo)
+                .build();
+        TenantInboxSet inboxSet = new TenantInboxSet(eventCollector, tenantId, usedSpaceGetter);
+        inboxSet.upsert(inboxMetadata);
+        inboxSet.upsert(inboxMetadata1);
+
+        reset(eventCollector);
+        inboxSet.removeAll();
+        verify(eventCollector, times(2)).report(any(MQTTSessionStop.class));
+        assertGaugeValue(tenantId, MqttPersistentSubCountGauge, 0);
+        assertGaugeValue(tenantId, MqttPersistentSessionNumGauge, 0);
+        assertTrue(inboxSet.isEmpty());
     }
 }

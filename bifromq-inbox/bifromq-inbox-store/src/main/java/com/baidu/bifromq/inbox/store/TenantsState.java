@@ -13,29 +13,33 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
-import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
-
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
+import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.google.protobuf.ByteString;
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
+
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
+import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
 
 @Slf4j
 class TenantsState {
     private final Map<String, TenantInboxSet> tenantStates = new ConcurrentHashMap<>();
+    private final IEventCollector eventCollector;
     private final IKVReader reader;
     private final String[] tags;
 
-    TenantsState(IKVReader reader, String... tags) {
+    TenantsState(IEventCollector eventCollector, IKVReader reader, String... tags) {
+        this.eventCollector = eventCollector;
         this.reader = reader;
         this.tags = tags;
     }
@@ -70,7 +74,7 @@ class TenantsState {
 
     void upsert(String tenantId, InboxMetadata metadata) {
         tenantStates.computeIfAbsent(tenantId, k ->
-            new TenantInboxSet(tenantId, getTenantUsedSpace(tenantId), tags)).upsert(metadata);
+                new TenantInboxSet(eventCollector, tenantId, getTenantUsedSpace(tenantId), tags)).upsert(metadata);
     }
 
     void remove(String tenantId, String inboxId, long incarnation) {
@@ -85,6 +89,7 @@ class TenantsState {
     }
 
     void reset() {
+        tenantStates.values().forEach(TenantInboxSet::removeAll);
         tenantStates.values().forEach(TenantInboxSet::destroy);
         tenantStates.clear();
     }
@@ -95,9 +100,9 @@ class TenantsState {
                 ByteString startKey = tenantPrefix(tenantId);
                 ByteString endKey = upperBound(tenantPrefix(tenantId));
                 return reader.size(intersect(reader.boundary(), Boundary.newBuilder()
-                    .setStartKey(startKey)
-                    .setEndKey(endKey)
-                    .build()));
+                        .setStartKey(startKey)
+                        .setEndKey(endKey)
+                        .build()));
             } catch (Exception e) {
                 log.error("Failed to get used space for tenant:{}", tenantId, e);
                 return 0;

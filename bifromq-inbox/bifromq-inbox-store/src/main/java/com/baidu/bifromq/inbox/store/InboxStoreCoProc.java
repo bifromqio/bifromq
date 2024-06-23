@@ -128,7 +128,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         this.settingProvider = settingProvider;
         this.eventCollector = eventCollector;
         this.rangeReaderProvider = rangeReaderProvider;
-        this.tenantStates = new TenantsState(rangeReaderProvider.get(),
+        this.tenantStates = new TenantsState(eventCollector, rangeReaderProvider.get(),
             "clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id));
         log.debug("Loading tenant states: rangeId={}", KVRangeIdUtil.toString(id));
         load();

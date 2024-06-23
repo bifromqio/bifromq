@@ -13,10 +13,6 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
-import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.KICKED;
-import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
-
 import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.type.ClientInfo;
@@ -24,6 +20,12 @@ import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import org.testng.Assert;
 import org.testng.annotations.Test;
+
+import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.KICKED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_START;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_STOP;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
 
 public class MQTTKickTest extends BaseMQTTTest {
 
@@ -43,6 +45,6 @@ public class MQTTKickTest extends BaseMQTTTest {
 
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(CLIENT_CONNECTED, KICKED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, KICKED, MQTT_SESSION_STOP);
     }
 }

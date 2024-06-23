@@ -13,6 +13,16 @@
 
 package com.baidu.bifromq.inbox.store;
 
+import com.baidu.bifromq.basekv.store.api.IKVReader;
+import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
+import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import lombok.SneakyThrows;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionNumGauge;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionSpaceGauge;
@@ -22,16 +32,9 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.basekv.store.api.IKVReader;
-import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
-import lombok.SneakyThrows;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
-
 public class TenantsStateTest extends MeterTest {
+    @Mock
+    private IEventCollector eventCollector;
     @Mock
     private IKVReader reader;
     private AutoCloseable closeable;
@@ -52,7 +55,7 @@ public class TenantsStateTest extends MeterTest {
 
     @Test
     public void testGetEmpty() {
-        TenantsState tenantsState = new TenantsState(reader);
+        TenantsState tenantsState = new TenantsState(eventCollector, reader);
         assertTrue(tenantsState.getAllTenantIds().isEmpty());
         assertTrue(tenantsState.getAll("tenantId").isEmpty());
         assertTrue(tenantsState.getAll("tenantId", "inboxId").isEmpty());
@@ -64,10 +67,10 @@ public class TenantsStateTest extends MeterTest {
         when(reader.size(any())).thenReturn(1L);
         String tenantId = "tenantId" + System.nanoTime();
         InboxMetadata inboxMetadata = InboxMetadata.newBuilder()
-            .setInboxId("testInboxId")
-            .setIncarnation(1)
-            .build();
-        TenantsState tenantsState = new TenantsState(reader);
+                .setInboxId("testInboxId")
+                .setIncarnation(1)
+                .build();
+        TenantsState tenantsState = new TenantsState(eventCollector, reader);
         tenantsState.upsert(tenantId, inboxMetadata);
         assertGaugeValue(tenantId, MqttPersistentSubCountGauge, 0);
         assertGaugeValue(tenantId, MqttPersistentSessionNumGauge, 1);
@@ -84,14 +87,14 @@ public class TenantsStateTest extends MeterTest {
         when(reader.size(any())).thenReturn(1L);
         String tenantId = "tenantId" + System.nanoTime();
         InboxMetadata inboxMetadata = InboxMetadata.newBuilder()
-            .setInboxId("testInboxId")
-            .setIncarnation(1)
-            .build();
+                .setInboxId("testInboxId")
+                .setIncarnation(1)
+                .build();
         InboxMetadata inboxMetadata1 = InboxMetadata.newBuilder()
-            .setInboxId("testInboxId1")
-            .setIncarnation(1)
-            .build();
-        TenantsState tenantsState = new TenantsState(reader);
+                .setInboxId("testInboxId1")
+                .setIncarnation(1)
+                .build();
+        TenantsState tenantsState = new TenantsState(eventCollector, reader);
         tenantsState.upsert(tenantId, inboxMetadata);
         tenantsState.upsert(tenantId, inboxMetadata1);
         tenantsState.remove(tenantId, inboxMetadata.getInboxId(), inboxMetadata.getIncarnation());
@@ -110,14 +113,14 @@ public class TenantsStateTest extends MeterTest {
         when(reader.size(any())).thenReturn(1L);
         String tenantId = "tenantId" + System.nanoTime();
         InboxMetadata inboxMetadata = InboxMetadata.newBuilder()
-            .setInboxId("testInboxId")
-            .setIncarnation(1)
-            .build();
+                .setInboxId("testInboxId")
+                .setIncarnation(1)
+                .build();
         InboxMetadata inboxMetadata1 = InboxMetadata.newBuilder()
-            .setInboxId("testInboxId1")
-            .setIncarnation(1)
-            .build();
-        TenantsState tenantsState = new TenantsState(reader);
+                .setInboxId("testInboxId1")
+                .setIncarnation(1)
+                .build();
+        TenantsState tenantsState = new TenantsState(eventCollector, reader);
         tenantsState.upsert(tenantId, inboxMetadata);
         tenantsState.upsert(tenantId, inboxMetadata1);
 

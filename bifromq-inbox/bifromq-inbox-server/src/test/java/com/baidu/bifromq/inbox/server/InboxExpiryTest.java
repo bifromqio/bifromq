@@ -126,9 +126,11 @@ public class InboxExpiryTest extends InboxServiceTest {
             .build()).join();
         verify(retainClient, timeout(5000).times(1)).retain(anyLong(), anyString(), any(), any(), anyInt(), any());
         ArgumentCaptor<Event<?>> eventCaptor = ArgumentCaptor.forClass(Event.class);
-        verify(eventCollector, timeout(5000).times(2)).report(eventCaptor.capture());
-        assertEquals(eventCaptor.getAllValues().get(0).type(), EventType.MSG_RETAINED);
-        assertEquals(eventCaptor.getAllValues().get(1).type(), EventType.WILL_DISTED);
+        verify(eventCollector, timeout(5000).times(4)).report(eventCaptor.capture());
+        assertEquals(eventCaptor.getAllValues().get(0).type(), EventType.MQTT_SESSION_START);
+        assertEquals(eventCaptor.getAllValues().get(1).type(), EventType.MSG_RETAINED);
+        assertEquals(eventCaptor.getAllValues().get(2).type(), EventType.WILL_DISTED);
+        assertEquals(eventCaptor.getAllValues().get(3).type(), EventType.MQTT_SESSION_STOP);
         await().until(() -> {
             GetReply getReply = inboxClient.get(GetRequest.newBuilder()
                 .setReqId(reqId)

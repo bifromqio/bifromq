@@ -14,15 +14,6 @@
 package com.baidu.bifromq.mqtt.handler.v3;
 
 
-import static com.baidu.bifromq.plugin.eventcollector.EventType.BAD_PACKET;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.BY_CLIENT;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.BY_SERVER;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.IDLE;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATION;
-import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
-import static org.testng.Assert.assertEquals;
-
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
@@ -31,10 +22,22 @@ import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
-import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.Assert;
 import org.testng.annotations.Test;
+
+import java.util.concurrent.TimeUnit;
+
+import static com.baidu.bifromq.plugin.eventcollector.EventType.BAD_PACKET;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.BY_CLIENT;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.BY_SERVER;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.IDLE;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATION;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_START;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_STOP;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
+import static org.testng.Assert.assertEquals;
 
 @Slf4j
 public class MQTTDisconnectTest extends BaseMQTTTest {
@@ -53,7 +56,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
         channel.writeInbound(MQTTMessageUtils.disconnectMessage());
 
         Assert.assertFalse(channel.isActive());
-        verifyEvent(CLIENT_CONNECTED, BY_CLIENT);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, BY_CLIENT, MQTT_SESSION_STOP);
     }
 
     @Test
@@ -88,7 +91,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
         testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(CLIENT_CONNECTED, IDLE);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, IDLE, MQTT_SESSION_STOP);
     }
 
     @Test
@@ -105,7 +108,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
         testTicker.advanceTimeBy(sessionContext.defaultKeepAliveTimeSeconds * 2L, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(CLIENT_CONNECTED, IDLE);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, IDLE, MQTT_SESSION_STOP);
     }
 
     @Test
@@ -122,7 +125,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
         testTicker.advanceTimeBy(10, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(CLIENT_CONNECTED, IDLE);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, IDLE, MQTT_SESSION_STOP);
     }
 
     @Test
@@ -139,7 +142,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
         testTicker.advanceTimeBy((int) (7200 * 1.5) + 1, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(CLIENT_CONNECTED, IDLE);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, IDLE, MQTT_SESSION_STOP);
     }
 
     @Test
@@ -156,7 +159,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
         channel.advanceTimeBy(5, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(CLIENT_CONNECTED, PROTOCOL_VIOLATION);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, PROTOCOL_VIOLATION, MQTT_SESSION_STOP);
     }
 
     @Test
@@ -171,7 +174,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
         sessionRegistry.disconnectAll(1000);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(CLIENT_CONNECTED, BY_SERVER);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, BY_SERVER, MQTT_SESSION_STOP);
     }
 
     @Test
@@ -188,6 +191,6 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
         channel.advanceTimeBy(5, TimeUnit.SECONDS);
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
-        verifyEvent(CLIENT_CONNECTED, BAD_PACKET);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, BAD_PACKET, MQTT_SESSION_STOP);
     }
 }

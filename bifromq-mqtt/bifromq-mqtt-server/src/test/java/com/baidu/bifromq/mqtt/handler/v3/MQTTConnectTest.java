@@ -14,8 +14,10 @@
 package com.baidu.bifromq.mqtt.handler.v3;
 
 
+import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INBOX_TRANSIENT_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PING_REQ;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_START;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD;
@@ -62,7 +64,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_ACCEPTED);
-        verifyEvent(EventType.CLIENT_CONNECTED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED);
     }
 
     @Test
@@ -75,7 +77,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_ACCEPTED);
-        verifyEvent(EventType.CLIENT_CONNECTED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED);
     }
 
     @Test
@@ -107,7 +109,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         MqttConnAckMessage ackMessage = channel.readOutbound();
         assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_ACCEPTED);
         assertTrue(ackMessage.variableHeader().isSessionPresent());
-        verifyEvent(EventType.CLIENT_CONNECTED);
+        verifyEvent(CLIENT_CONNECTED);
     }
 
     @Test
@@ -136,7 +138,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_ACCEPTED);
-        verifyEvent(EventType.CLIENT_CONNECTED);
+        verifyEvent(CLIENT_CONNECTED);
     }
 
     @Test
@@ -265,7 +267,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         MqttConnAckMessage ackMessage = channel.readOutbound();
         // verifications
         Assert.assertEquals(CONNECTION_ACCEPTED, ackMessage.variableHeader().connectReturnCode());
-        verifyEvent(EventType.CLIENT_CONNECTED);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED);
     }
 
     @Test
@@ -282,6 +284,6 @@ public class MQTTConnectTest extends BaseMQTTTest {
         channel.writeInbound(MqttMessage.PINGREQ);
         MqttMessage pingResp = channel.readOutbound();
         Assert.assertEquals(MqttMessage.PINGRESP, pingResp);
-        verifyEvent(EventType.CLIENT_CONNECTED, PING_REQ);
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, PING_REQ);
     }
 }
