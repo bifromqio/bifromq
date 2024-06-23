@@ -112,6 +112,31 @@ To start or stop the server, execute the respective command in the `bin` directo
 The configuration file, `standalone.yml`, can be found in the `conf` directory. The settings within this file are named
 in a self-explanatory manner. By default, the standalone server stores persistent data in the `data` directory.
 
+### Plugin Development
+
+To jump start your BifroMQ plugin development, execute the following Maven command:
+
+```
+mvn archetype:generate \
+    -DarchetypeGroupId=com.baidu.bifromq \
+    -DarchetypeArtifactId=bifromq-plugin-archetype \
+    -DarchetypeVersion=<BIFROMQ_VERSION> \
+    -DgroupId=<YOUR_GROUP_ID> \
+    -DartifactId=<YOUR_ARTIFACT_ID> \
+    -Dversion=<YOUR_PROJECT_VERSION> \
+    -DpluginName=<YOUR_PLUGIN_CLASS_NAME> \
+    -DpluginContextName=<YOUR_PLUGIN_CONTEXT_CLASS_NAME> \
+    -DbifromqVersion=<BIFROMQ_VERSION> \
+    -DinteractiveMode=false
+```
+
+Replace `<YOUR_GROUP_ID>`, `<YOUR_ARTIFACT_ID>`, `<YOUR_PROJECT_VERSION>`, `<YOUR_PLUGIN_CLASS_NAME>`,
+and `< YOUR_PLUGIN_CONTEXT_CLASS_NAME>` with your specific details. This command generates a ready-to-build multi-module
+project structured for BifroMQ plugin development.
+
+Important Note: The archetype version should be 3.2.0 or higher as the archetype is compatible starting from version
+3.2.0. Ensure that <BIFROMQ_VERSION> is set accordingly.
+
 ### Cluster Deployment
 
 BifroMQ has two cluster deployment modes: `Standard Cluster`, `Independent-Workload Cluster`

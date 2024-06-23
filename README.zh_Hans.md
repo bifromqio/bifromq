@@ -102,6 +102,30 @@ mvn test
 配置文件 `standalone.yml` 位于 `conf`
 目录下。大多数配置项的名称都是自解释的，容易理解其功能。默认情况下，单机服务器会将持久化数据保存在 `data` 目录中。
 
+### 插件开发
+
+执行以下 Maven 命令，快速启动 BifroMQ 插件开发：
+
+```bash
+mvn archetype:generate \
+    -DarchetypeGroupId=com.baidu.bifromq \
+    -DarchetypeArtifactId=bifromq-plugin-archetype \
+    -DarchetypeVersion=<BIFROMQ_VERSION> \
+    -DgroupId=<YOUR_GROUP_ID> \
+    -DartifactId=<YOUR_ARTIFACT_ID> \
+    -Dversion=<YOUR_PROJECT_VERSION> \
+    -DpluginName=<YOUR_PLUGIN_CLASS_NAME> \
+    -DpluginContextName=<YOUR_PLUGIN_CONTEXT_CLASS_NAME> \
+    -DbifromqVersion=<BIFROMQ_VERSION> \
+    -DinteractiveMode=false
+```
+
+请将 `<YOUR_GROUP_ID>`、`<YOUR_ARTIFACT_ID>`、`<YOUR_PROJECT_VERSION>`、`<YOUR_PLUGIN_CLASS_NAME>`
+和 `<YOUR_PLUGIN_CONTEXT_CLASS_NAME>` 替换为您的具体信息。该命令生成一个准备就绪的、结构清晰的多模块项目，专为 BifroMQ
+插件开发而设计。
+
+**重要提示：**原型的版本应为 3.2.0 或更高版本，因为该原型从 3.2.0 版本开始兼容。确保 `<BIFROMQ_VERSION>` 设置正确。
+
 ### 集群部署
 
 BifroMQ支持两种集群部署模式：`标准集群(Standard Cluster)`，`独立工作负载集群(Independent-Workload Cluster)`
