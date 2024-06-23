@@ -16,7 +16,7 @@ package com.baidu.bifromq.plugin.eventcollector;
 import com.baidu.bifromq.type.ClientInfo;
 import lombok.ToString;
 
-@ToString
+@ToString(callSuper = true)
 public abstract class ClientEvent<T extends ClientEvent<T>> extends Event<T> {
     private ClientInfo clientInfo;
 
