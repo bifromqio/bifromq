@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.plugin.settingprovider;
 
-import com.google.common.base.Preconditions;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -35,9 +34,10 @@ public class SettingProviderManager implements ISettingProvider {
             if (settingProviderFQN == null) {
                 log.warn("Setting provider plugin type are not specified, use DEV ONLY one instead");
                 provider = new MonitoredSettingProvider(new DevOnlySettingProvider());
+            } else if (!availSettingProviders.containsKey(settingProviderFQN)) {
+                log.warn("Setting provider plugin type '{}' not found, use DEV ONLY one instead", settingProviderFQN);
+                provider = new MonitoredSettingProvider(new DevOnlySettingProvider());
             } else {
-                Preconditions.checkArgument(availSettingProviders.containsKey(settingProviderFQN),
-                    String.format("Setting provider Plugin '%s' not found", settingProviderFQN));
                 log.info("Setting provider plugin type: {}", settingProviderFQN);
                 provider = new CacheableSettingProvider(
                     new MonitoredSettingProvider(availSettingProviders.get(settingProviderFQN)), CacheOptions.DEFAULT);

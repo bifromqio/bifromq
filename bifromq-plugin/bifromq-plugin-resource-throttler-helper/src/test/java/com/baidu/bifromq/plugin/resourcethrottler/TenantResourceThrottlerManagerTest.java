@@ -14,8 +14,8 @@
 package com.baidu.bifromq.plugin.resourcethrottler;
 
 import static org.awaitility.Awaitility.await;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
 
 import com.bifromq.plugin.resourcethrottler.TenantResourceType;
 import org.pf4j.DefaultPluginManager;
@@ -52,7 +52,7 @@ public class TenantResourceThrottlerManagerTest {
     }
 
     @Test
-    public void authPluginSpecified() {
+    public void pluginSpecified() {
         manager = new ResourceThrottlerManager(ResourceThrottlerTestStub.class.getName(), pluginManager);
         ResourceThrottlerTestStub stub = (ResourceThrottlerTestStub) manager.getDelegate();
         stub.setResource(tenantId, TenantResourceType.TotalConnections, false);
@@ -61,13 +61,13 @@ public class TenantResourceThrottlerManagerTest {
     }
 
     @Test
-    public void authPluginNotFound() {
-        try {
-            manager = new ResourceThrottlerManager("Fake", pluginManager);
-            fail();
-        } catch (Throwable e) {
-            assertTrue(e instanceof IllegalArgumentException);
+    public void pluginNotFound() {
+        ResourceThrottlerManager devOnlyManager = new ResourceThrottlerManager(null, pluginManager);
+        manager = new ResourceThrottlerManager("Fake", pluginManager);
+        for (TenantResourceType type : TenantResourceType.values()) {
+            assertEquals(devOnlyManager.hasResource(tenantId, type), manager.hasResource(tenantId, type));
         }
+        devOnlyManager.close();
     }
 
     @Test

@@ -32,7 +32,6 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.accessctrl.AccessControlError;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.ClientInfo;
-import com.google.common.base.Preconditions;
 import io.micrometer.core.instrument.Timer;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -64,9 +63,10 @@ public class AuthProviderManager implements IAuthProvider {
             if (authProviderFQN == null) {
                 log.warn("Auth provider plugin type are not specified, use DEV ONLY one instead");
                 delegate = new DevOnlyAuthProvider();
+            } else if (!availAuthProviders.containsKey(authProviderFQN)) {
+                log.warn("Auth provider plugin type '{}' not found, use DEV ONLY one instead", authProviderFQN);
+                delegate = new DevOnlyAuthProvider();
             } else {
-                Preconditions.checkArgument(availAuthProviders.containsKey(authProviderFQN),
-                    String.format("Auth Provider Plugin '%s' not found", authProviderFQN));
                 log.info("Auth provider plugin type: {}", authProviderFQN);
                 delegate = availAuthProviders.get(authProviderFQN);
             }

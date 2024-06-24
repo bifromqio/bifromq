@@ -14,8 +14,7 @@
 package com.baidu.bifromq.plugin.settingprovider;
 
 import static org.awaitility.Awaitility.await;
-import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
+import static org.testng.Assert.assertEquals;
 
 import org.pf4j.DefaultPluginManager;
 import org.pf4j.PluginManager;
@@ -51,20 +50,21 @@ public class SettingProviderManagerTest {
     }
 
     @Test
-    public void authPluginSpecified() {
+    public void pluginSpecified() {
         manager = new SettingProviderManager(SettingProviderTestStub.class.getName(), pluginManager);
         await().until(() -> (int) manager.provide(Setting.MaxTopicLevels, tenantId) == 64);
         manager.close();
     }
 
     @Test
-    public void authPluginNotFound() {
-        try {
-            manager = new SettingProviderManager("Fake", pluginManager);
-            fail();
-        } catch (Throwable e) {
-            assertTrue(e instanceof IllegalArgumentException);
+    public void pluginNotFound() {
+        SettingProviderManager devOnlyManager = new SettingProviderManager(null, pluginManager);
+        manager = new SettingProviderManager("Fake", pluginManager);
+        for (Setting setting : Setting.values()) {
+            assertEquals(devOnlyManager.provide(setting, tenantId),
+                (Object) manager.provide(setting, tenantId));
         }
+        devOnlyManager.close();
     }
 
     @Test

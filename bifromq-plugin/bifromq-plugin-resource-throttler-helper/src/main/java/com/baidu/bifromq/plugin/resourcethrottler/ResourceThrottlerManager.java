@@ -15,7 +15,6 @@ package com.baidu.bifromq.plugin.resourcethrottler;
 
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.bifromq.plugin.resourcethrottler.TenantResourceType;
-import com.google.common.base.Preconditions;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Timer;
@@ -43,9 +42,10 @@ public class ResourceThrottlerManager implements IResourceThrottler {
             if (resourceThrottlerFQN == null) {
                 log.warn("Resource throttler type class are not specified, use DEV ONLY one instead");
                 delegate = new DevOnlyResourceThrottler();
+            } else if (!availResourceThrottlers.containsKey(resourceThrottlerFQN)) {
+                log.warn("Resource throttler type '{}' not found, use DEV ONLY one instead", resourceThrottlerFQN);
+                delegate = new DevOnlyResourceThrottler();
             } else {
-                Preconditions.checkArgument(availResourceThrottlers.containsKey(resourceThrottlerFQN),
-                    String.format("Resource throttler class '%s' not found", resourceThrottlerFQN));
                 log.info("Resource throttler loaded: {}", resourceThrottlerFQN);
                 delegate = availResourceThrottlers.get(resourceThrottlerFQN);
             }

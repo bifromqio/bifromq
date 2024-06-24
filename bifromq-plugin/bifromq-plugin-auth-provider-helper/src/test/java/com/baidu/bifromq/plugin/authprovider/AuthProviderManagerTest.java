@@ -23,7 +23,6 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.authprovider.type.Failed;
@@ -113,7 +112,7 @@ public class AuthProviderManagerTest {
     }
 
     @Test
-    public void authPluginSpecified() {
+    public void pluginSpecified() {
         manager =
             new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
         when(mockProvider.auth(mockAuth3Data)).thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
@@ -127,13 +126,19 @@ public class AuthProviderManagerTest {
     }
 
     @Test
-    public void authPluginNotFound() {
-        try {
-            manager = new AuthProviderManager("Fake", pluginManager, settingProvider, eventCollector);
-            fail();
-        } catch (Throwable e) {
-            assertTrue(e instanceof IllegalArgumentException);
-        }
+    public void pluginNotFound() {
+        manager = new AuthProviderManager("Fake", pluginManager, settingProvider, eventCollector);
+        MQTT3AuthResult result = manager.auth(mockAuth3Data).join();
+        assertEquals(result.getTypeCase(), MQTT3AuthResult.TypeCase.OK);
+        assertEquals(result.getOk().getTenantId(), "DevOnly");
+
+        boolean allow = manager.check(ClientInfo.getDefaultInstance(), MQTTAction.newBuilder()
+            .setSub(SubAction.getDefaultInstance()).build()).join();
+        assertTrue(allow);
+        allow = manager.check(ClientInfo.getDefaultInstance(), MQTTAction.newBuilder()
+            .setSub(SubAction.getDefaultInstance()).build()).join();
+        assertTrue(allow);
+        manager.close();
     }
 
     @Test
