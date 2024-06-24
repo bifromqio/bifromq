@@ -43,7 +43,7 @@
             <maxHistory>72</maxHistory>
         </rollingPolicy>
         <encoder>
-            <pattern>${logPattern}</pattern>
+            <pattern>${pluginLogPattern}</pattern>
         </encoder>
     </appender>
 
