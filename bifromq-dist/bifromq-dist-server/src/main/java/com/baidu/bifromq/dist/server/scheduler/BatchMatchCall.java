@@ -13,9 +13,6 @@
 
 package com.baidu.bifromq.dist.server.scheduler;
 
-import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
-import static com.baidu.bifromq.dist.entity.EntityUtil.toScopedTopicFilter;
-
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
@@ -31,11 +28,15 @@ import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.TenantOption;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Queue;
+
+import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
+import static com.baidu.bifromq.dist.entity.EntityUtil.toScopedTopicFilter;
 
 public class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> {
     private final ISettingProvider settingProvider;
@@ -88,9 +89,18 @@ public class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> 
             String qInboxId = toQInboxId(subCall.getBrokerId(), subCall.getReceiverId(), subCall.getDelivererKey());
             String scopedTopicFilter = toScopedTopicFilter(subCall.getTenantId(), qInboxId, subCall.getTopicFilter());
             BatchMatchReply.Result result = reply.getResultsOrDefault(scopedTopicFilter, BatchMatchReply.Result.ERROR);
+            MatchReply.Result matchResult = switch (result) {
+                case OK:
+                    yield MatchReply.Result.OK;
+                case EXCEED_LIMIT:
+                    yield MatchReply.Result.EXCEED_LIMIT;
+                case ERROR:
+                default:
+                    yield MatchReply.Result.ERROR;
+            };
             callTask.callResult.complete(MatchReply.newBuilder()
                 .setReqId(callTask.call.getReqId())
-                .setResult(MatchReply.Result.forNumber(result.getNumber()))
+                .setResult(matchResult)
                 .build());
         }
     }
