@@ -15,23 +15,80 @@ package com.baidu.bifromq.dist.server;
 
 import static org.testng.Assert.assertEquals;
 
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class RunningAverageTest {
+    private RunningAverage avg;
+
+    @BeforeMethod
+    public void setUp() {
+        avg = new RunningAverage(5); // Example window size of 5 for testing
+    }
+
     @Test
-    public void test() {
-        RunningAverage runningAverage = new RunningAverage(1);
-        assertEquals(runningAverage.estimate(), 0);
+    public void testInitialEstimate() {
+        assertEquals(0, avg.estimate());
+    }
 
-        runningAverage.log(1);
-        assertEquals(runningAverage.estimate(), 1);
+    @Test
+    public void testSingleValue() {
+        avg.log(10);
+        assertEquals(10, avg.estimate());
+    }
 
-        runningAverage.log(2);
-        assertEquals(runningAverage.estimate(), 2);
+    @Test
+    public void testWindowSizeReached() {
+        int[] values = {1, 2, 3, 4, 5};
+        for (int value : values) {
+            avg.log(value);
+        }
+        assertEquals(3, avg.estimate());
+    }
 
-        runningAverage = new RunningAverage(2);
-        runningAverage.log(1);
-        runningAverage.log(3);
-        assertEquals(runningAverage.estimate(), 2);
+    @Test
+    public void testWindowSizeExceeded() {
+        int[] values = {1, 2, 3, 4, 5, 6};
+        for (int value : values) {
+            avg.log(value);
+        }
+        assertEquals(4, avg.estimate());
+    }
+
+    @Test
+    public void testHighValueInput() {
+        avg.log(Integer.MAX_VALUE);
+        avg.log(Integer.MAX_VALUE);
+        avg.log(Integer.MAX_VALUE);
+        avg.log(Integer.MAX_VALUE);
+        avg.log(Integer.MAX_VALUE);
+        long expected = Integer.MAX_VALUE;
+        assertEquals(expected, avg.estimate());
+    }
+
+    @Test
+    public void testVaryingValues() {
+        avg.log(10);
+        avg.log(20);
+        avg.log(30);
+        avg.log(40);
+        avg.log(50);
+        avg.log(60);  // Should drop the first (10)
+        assertEquals(40, avg.estimate());
+    }
+
+    @Test(expectedExceptions = AssertionError.class)
+    public void testZeroWindowSize() {
+        new RunningAverage(0);
+    }
+
+    @Test
+    public void testNegativeValues() {
+        avg.log(-5);
+        avg.log(-10);
+        avg.log(-15);
+        avg.log(-20);
+        avg.log(-25);
+        assertEquals(-15, avg.estimate());
     }
 }

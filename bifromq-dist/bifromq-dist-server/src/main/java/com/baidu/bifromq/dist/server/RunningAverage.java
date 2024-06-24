@@ -13,27 +13,51 @@
 
 package com.baidu.bifromq.dist.server;
 
+/**
+ * A class to compute the running average of a set number of most recent values logged. It uses a circular buffer to
+ * maintain a window of the most recent values and computes the average efficiently as new values are added.
+ */
 public class RunningAverage {
     private final int[] window;
-    private int total;
+    private long total;  // Changed from int to long to handle larger sums
     private int count;
     private int estimate;
 
+    /**
+     * Constructs a RunningAverage with a specified window size.
+     *
+     * @param windowSize The size of the window for which the average is to be maintained. Must be greater than zero.
+     * @throws AssertionError if windowSize is less than or equal to zero.
+     */
     public RunningAverage(int windowSize) {
-        assert windowSize > 0;
+        assert windowSize > 0 : "Window size must be greater than 0";
         window = new int[windowSize];
+        total = 0;
+        count = 0;
     }
 
+    /**
+     * Logs a new value to the running average calculation. This method updates the circular buffer with the new value,
+     * adjusts the total sum, and recomputes the average.
+     *
+     * @param value The new value to log.
+     */
     public synchronized void log(int value) {
-        int idx = count++ % window.length;
-        int dropped = window[idx];
+        int idx = count % window.length;
+        total += value - window[idx];
         window[idx] = value;
-        total += value - dropped;
-        estimate = total / Math.min(count, window.length);
+        if (++count > window.length) {  // Increment count and check if it exceeds window length
+            count = window.length;      // Keep count at window size to avoid it growing unbounded
+        }
+        estimate = (int) (total / count);
     }
 
+    /**
+     * Returns the current estimate of the average of the values in the window.
+     *
+     * @return The current average of the values.
+     */
     public int estimate() {
         return estimate;
     }
-
 }
