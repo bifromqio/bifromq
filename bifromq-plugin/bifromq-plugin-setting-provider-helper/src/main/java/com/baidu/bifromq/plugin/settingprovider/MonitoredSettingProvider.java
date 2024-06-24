@@ -17,9 +17,12 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Slf4j
 public class MonitoredSettingProvider implements ISettingProvider {
+    private static final Logger pluginLog = LoggerFactory.getLogger("plugin.manager");
     private final Timer provideCallTimer;
     private final Counter provideCallErrorCounter;
     private final ISettingProvider delegate;
@@ -45,12 +48,12 @@ public class MonitoredSettingProvider implements ISettingProvider {
             if (setting.isValid(newVal)) {
                 return newVal;
             } else {
-                log.warn("Invalid setting value: setting={}, value={}", setting.name(), newVal);
+                pluginLog.warn("Invalid setting value: setting={}, value={}", setting.name(), newVal);
                 provideCallErrorCounter.increment();
                 return null;
             }
         } catch (Throwable e) {
-            log.error("Setting provider throws exception: setting={}", setting.name(), e);
+            pluginLog.error("Setting provider throws exception: setting={}", setting.name(), e);
             provideCallErrorCounter.increment();
             return null;
         }
@@ -58,7 +61,11 @@ public class MonitoredSettingProvider implements ISettingProvider {
 
     @Override
     public void close() {
-        delegate.close();
+        try {
+            delegate.close();
+        } catch (Throwable e) {
+            pluginLog.error("Setting provider close throws exception", e);
+        }
         Metrics.globalRegistry.remove(provideCallTimer);
         Metrics.globalRegistry.remove(provideCallErrorCounter);
     }

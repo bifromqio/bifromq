@@ -23,9 +23,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.pf4j.PluginManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Slf4j
 public class ResourceThrottlerManager implements IResourceThrottler {
+    private static final Logger pluginLog = LoggerFactory.getLogger("plugin.manager");
     private final AtomicBoolean stopped = new AtomicBoolean();
     private final IResourceThrottler delegate;
     private final Timer callTimer;
@@ -36,17 +39,18 @@ public class ResourceThrottlerManager implements IResourceThrottler {
             pluginMgr.getExtensions(IResourceThrottler.class).stream()
                 .collect(Collectors.toMap(e -> e.getClass().getName(), e -> e));
         if (availResourceThrottlers.isEmpty()) {
-            log.warn("No resource throttler plugin available, use DEV ONLY one instead");
+            pluginLog.warn("No resource throttler plugin available, use DEV ONLY one instead");
             delegate = new DevOnlyResourceThrottler();
         } else {
             if (resourceThrottlerFQN == null) {
-                log.warn("Resource throttler type class are not specified, use DEV ONLY one instead");
+                pluginLog.warn("Resource throttler type class are not specified, use DEV ONLY one instead");
                 delegate = new DevOnlyResourceThrottler();
             } else if (!availResourceThrottlers.containsKey(resourceThrottlerFQN)) {
-                log.warn("Resource throttler type '{}' not found, use DEV ONLY one instead", resourceThrottlerFQN);
+                pluginLog.warn("Resource throttler type '{}' not found, use DEV ONLY one instead",
+                    resourceThrottlerFQN);
                 delegate = new DevOnlyResourceThrottler();
             } else {
-                log.info("Resource throttler loaded: {}", resourceThrottlerFQN);
+                pluginLog.info("Resource throttler loaded: {}", resourceThrottlerFQN);
                 delegate = availResourceThrottlers.get(resourceThrottlerFQN);
             }
         }
@@ -69,7 +73,7 @@ public class ResourceThrottlerManager implements IResourceThrottler {
             sample.stop(callTimer);
             return isEnough;
         } catch (Throwable e) {
-            log.error("Resource throttler throws exception: type={}", type, e);
+            pluginLog.error("Resource throttler throws exception: type={}", type, e);
             callErrorCounter.increment();
             return true;
         }
@@ -82,11 +86,15 @@ public class ResourceThrottlerManager implements IResourceThrottler {
     @Override
     public void close() {
         if (stopped.compareAndSet(false, true)) {
-            log.info("Closing resource throttler manager");
-            delegate.close();
+            log.debug("Closing resource throttler manager");
+            try {
+                delegate.close();
+            } catch (Throwable e) {
+                pluginLog.error("Failed to close delegate resource throttler", e);
+            }
             Metrics.globalRegistry.remove(callTimer);
             Metrics.globalRegistry.remove(callErrorCounter);
-            log.info("Setting resource throttler closed");
+            log.debug("Resource throttler manager closed");
         }
     }
 }

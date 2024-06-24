@@ -39,9 +39,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.pf4j.PluginManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Slf4j
 public class AuthProviderManager implements IAuthProvider {
+    private static final Logger pluginLog = LoggerFactory.getLogger("plugin.manager");
     private final AtomicBoolean stopped = new AtomicBoolean();
     private final IAuthProvider delegate;
     private final ISettingProvider settingProvider;
@@ -57,17 +60,17 @@ public class AuthProviderManager implements IAuthProvider {
         Map<String, IAuthProvider> availAuthProviders = pluginMgr.getExtensions(IAuthProvider.class)
             .stream().collect(Collectors.toMap(e -> e.getClass().getName(), e -> e));
         if (availAuthProviders.isEmpty()) {
-            log.warn("No auth provider plugin available, use DEV ONLY one instead");
+            pluginLog.warn("No auth provider plugin available, use DEV ONLY one instead");
             delegate = new DevOnlyAuthProvider();
         } else {
             if (authProviderFQN == null) {
-                log.warn("Auth provider plugin type are not specified, use DEV ONLY one instead");
+                pluginLog.warn("Auth provider plugin type are not specified, use DEV ONLY one instead");
                 delegate = new DevOnlyAuthProvider();
             } else if (!availAuthProviders.containsKey(authProviderFQN)) {
-                log.warn("Auth provider plugin type '{}' not found, use DEV ONLY one instead", authProviderFQN);
+                pluginLog.warn("Auth provider plugin type '{}' not found, use DEV ONLY one instead", authProviderFQN);
                 delegate = new DevOnlyAuthProvider();
             } else {
-                log.info("Auth provider plugin type: {}", authProviderFQN);
+                pluginLog.info("Auth provider plugin type: {}", authProviderFQN);
                 delegate = availAuthProviders.get(authProviderFQN);
             }
         }
@@ -100,7 +103,7 @@ public class AuthProviderManager implements IAuthProvider {
                 });
         } catch (Throwable e) {
             metricMgr.authCallErrorCounter.increment();
-            log.warn("Unexpected error", e);
+            pluginLog.error("AuthProvider auth3 throws exception", e);
             Reject.Builder rb = Reject.newBuilder().setCode(Reject.Code.Error);
             if (e.getMessage() != null) {
                 rb.setReason(e.getMessage());
@@ -136,7 +139,7 @@ public class AuthProviderManager implements IAuthProvider {
                 });
         } catch (Throwable e) {
             metricMgr.authCallErrorCounter.increment();
-            log.warn("Unexpected error", e);
+            pluginLog.error("AuthProvider auth5 throws exception", e);
             Failed.Builder rb = Failed.newBuilder().setCode(Failed.Code.Error);
             if (e.getMessage() != null) {
                 rb.setReason(e.getMessage());
@@ -172,7 +175,7 @@ public class AuthProviderManager implements IAuthProvider {
                 });
         } catch (Throwable e) {
             metricMgr.extAuthCallErrorCounter.increment();
-            log.warn("Unexpected error", e);
+            pluginLog.error("AuthProvider extendedAuth throws exception", e);
             Failed.Builder rb = Failed.newBuilder().setCode(Failed.Code.Error);
             if (e.getMessage() != null) {
                 rb.setReason(e.getMessage());
@@ -188,7 +191,7 @@ public class AuthProviderManager implements IAuthProvider {
 
     @Override
     public CompletableFuture<Boolean> check(ClientInfo client, MQTTAction action) {
-        log.warn(
+        pluginLog.warn(
             "IAuthProvider/check method has been deprecated and will be removed in later release, please implement checkPermission instead");
         return delegate.check(client, action);
     }
@@ -212,7 +215,7 @@ public class AuthProviderManager implements IAuthProvider {
                             .setGranted(Granted.getDefaultInstance())
                             .build();
                     } else {
-                        log.error("Permission check error", e);
+                        pluginLog.error("AuthProvider permission check error", e);
                         return CheckResult.newBuilder()
                             .setError(Error.newBuilder()
                                 .setReason("Permission check error")
@@ -229,7 +232,7 @@ public class AuthProviderManager implements IAuthProvider {
                     .setGranted(Granted.getDefaultInstance())
                     .build());
             } else {
-                log.error("Permission check error", e);
+                pluginLog.error("AuthProvider permission check error", e);
                 return CompletableFuture.completedFuture(CheckResult.newBuilder()
                     .setError(Error.newBuilder().setReason("Permission check error").build())
                     .build());
@@ -239,10 +242,14 @@ public class AuthProviderManager implements IAuthProvider {
 
     public void close() {
         if (stopped.compareAndSet(false, true)) {
-            log.info("Closing auth provider manager");
-            delegate.close();
+            log.debug("Closing auth provider manager");
+            try {
+                delegate.close();
+            } catch (Throwable e) {
+                pluginLog.error("AuthProvider close throws exception", e);
+            }
             metricMgr.close();
-            log.info("Auth provider manager stopped");
+            log.debug("Auth provider manager stopped");
         }
     }
 }

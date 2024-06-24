@@ -24,9 +24,12 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.pf4j.PluginManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Slf4j
 public class EventCollectorManager implements IEventCollector {
+    private static final Logger pluginLog = LoggerFactory.getLogger("plugin.manager");
     private static final EventPool ZERO_OUT_HOLDERS = new EventPool();
     private final AtomicBoolean stopped = new AtomicBoolean();
     private final Map<String, IEventCollector> eventCollectors = new HashMap<>();
@@ -36,7 +39,7 @@ public class EventCollectorManager implements IEventCollector {
     public EventCollectorManager(PluginManager pluginMgr) {
 
         for (IEventCollector eventCollector : pluginMgr.getExtensions(IEventCollector.class)) {
-            log.info("Event collector loaded: {}", eventCollector.getClass().getName());
+            pluginLog.info("Event collector loaded: {}", eventCollector.getClass().getName());
             eventCollectors.put(eventCollector.getClass().getName(), eventCollector);
             eventCollectorTimers.put(eventCollector.getClass().getName(), Timer.builder("call.exec.timer")
                 .tag("method", "EventCollector/report")
@@ -56,7 +59,7 @@ public class EventCollectorManager implements IEventCollector {
             try {
                 entry.getValue().report(event);
             } catch (Throwable e) {
-                log.warn("Failed to report event to collector: {}", entry.getKey());
+                pluginLog.error("Failed to report event to collector: {}", entry.getKey());
             } finally {
                 sample.stop(eventCollectorTimers.get(entry.getKey()));
             }
@@ -70,7 +73,13 @@ public class EventCollectorManager implements IEventCollector {
     public void close() {
         if (stopped.compareAndSet(false, true)) {
             log.debug("Closing event collector manager");
-            eventCollectors.values().forEach(IEventCollector::close);
+            eventCollectors.values().forEach(eventCollector -> {
+                try {
+                    eventCollector.close();
+                } catch (Throwable e) {
+                    pluginLog.error("Failed to close event collector: {}", eventCollector.getClass().getName(), e);
+                }
+            });
             eventCollectorTimers.values().forEach(Metrics.globalRegistry::remove);
             Metrics.globalRegistry.remove(callInvokeCounter);
             log.debug("Event collector manager closed");

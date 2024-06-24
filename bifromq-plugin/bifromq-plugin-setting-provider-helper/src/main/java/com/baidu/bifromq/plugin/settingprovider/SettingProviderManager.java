@@ -18,9 +18,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.pf4j.PluginManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Slf4j
 public class SettingProviderManager implements ISettingProvider {
+    private static final Logger pluginLog = LoggerFactory.getLogger("plugin.manager");
     private final AtomicBoolean stopped = new AtomicBoolean();
     private final ISettingProvider provider;
 
@@ -28,17 +31,18 @@ public class SettingProviderManager implements ISettingProvider {
         Map<String, ISettingProvider> availSettingProviders = pluginMgr.getExtensions(ISettingProvider.class).stream()
             .collect(Collectors.toMap(e -> e.getClass().getName(), e -> e));
         if (availSettingProviders.isEmpty()) {
-            log.warn("No setting provider plugin available, use DEV ONLY one instead");
+            pluginLog.warn("No setting provider plugin available, use DEV ONLY one instead");
             provider = new MonitoredSettingProvider(new DevOnlySettingProvider());
         } else {
             if (settingProviderFQN == null) {
-                log.warn("Setting provider plugin type are not specified, use DEV ONLY one instead");
+                pluginLog.warn("Setting provider plugin type are not specified, use DEV ONLY one instead");
                 provider = new MonitoredSettingProvider(new DevOnlySettingProvider());
             } else if (!availSettingProviders.containsKey(settingProviderFQN)) {
-                log.warn("Setting provider plugin type '{}' not found, use DEV ONLY one instead", settingProviderFQN);
+                pluginLog.warn("Setting provider plugin type '{}' not found, use DEV ONLY one instead",
+                    settingProviderFQN);
                 provider = new MonitoredSettingProvider(new DevOnlySettingProvider());
             } else {
-                log.info("Setting provider plugin type: {}", settingProviderFQN);
+                pluginLog.info("Setting provider plugin type: {}", settingProviderFQN);
                 provider = new CacheableSettingProvider(
                     new MonitoredSettingProvider(availSettingProviders.get(settingProviderFQN)), CacheOptions.DEFAULT);
             }
