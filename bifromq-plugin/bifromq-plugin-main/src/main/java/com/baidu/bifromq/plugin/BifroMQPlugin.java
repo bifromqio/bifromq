@@ -94,17 +94,50 @@ public abstract class BifroMQPlugin<C extends BifroMQPluginContext> extends Plug
      * Starts the plugin. This method is called when the plugin is loaded. It initializes the plugin context.
      */
     @Override
-    public void start() {
-        super.start();
-        context.init();
+    public final void start() {
+        ClassLoader origClassLoader = Thread.currentThread().getContextClassLoader();
+        try {
+            Thread.currentThread().setContextClassLoader(descriptor.getPluginClassLoader());
+            super.start();
+            context.init();
+            doStart();
+        } finally {
+            Thread.currentThread().setContextClassLoader(origClassLoader);
+        }
+    }
+
+    /**
+     * Subclasses can override this method to perform additional initialization when the plugin is started.
+     */
+    protected void doStart() {
+
     }
 
     /**
      * Stops the plugin. This method is called when the plugin is unloaded. It cleans up the plugin context.
      */
     @Override
-    public void stop() {
-        super.stop();
-        context.close();
+    public final void stop() {
+        ClassLoader origClassLoader = Thread.currentThread().getContextClassLoader();
+        try {
+            Thread.currentThread().setContextClassLoader(descriptor.getPluginClassLoader());
+            doStop();
+            context.close();
+            super.stop();
+        } finally {
+            Thread.currentThread().setContextClassLoader(origClassLoader);
+        }
+    }
+
+    /**
+     * Subclasses can override this method to perform additional cleanup when the plugin is stopped.
+     */
+    protected void doStop() {
+
+    }
+
+    @Override
+    public final void delete() {
+        super.delete();
     }
 }

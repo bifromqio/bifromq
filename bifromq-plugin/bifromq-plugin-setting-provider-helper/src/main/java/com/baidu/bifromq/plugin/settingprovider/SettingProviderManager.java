@@ -60,9 +60,9 @@ public class SettingProviderManager implements ISettingProvider {
     @Override
     public void close() {
         if (stopped.compareAndSet(false, true)) {
-            log.info("Closing setting provider manager");
+            log.debug("Closing setting provider manager");
             provider.close();
-            log.info("Setting provider manager closed");
+            log.debug("Setting provider manager closed");
         }
     }
 }

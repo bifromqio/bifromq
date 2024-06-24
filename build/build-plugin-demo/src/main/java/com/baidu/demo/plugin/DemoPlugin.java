@@ -22,12 +22,11 @@ import io.micrometer.core.instrument.config.MeterFilter;
 import io.micrometer.core.instrument.distribution.DistributionStatisticConfig;
 import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
-import lombok.extern.slf4j.Slf4j;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.time.Duration;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class DemoPlugin extends BifroMQPlugin<DemoPluginContext> {
@@ -63,8 +62,8 @@ public class DemoPlugin extends BifroMQPlugin<DemoPluginContext> {
 //                        }
                 }
                 return DistributionStatisticConfig.builder()
-                        .expiry(Duration.ofSeconds(5))
-                        .build().merge(config);
+                    .expiry(Duration.ofSeconds(5))
+                    .build().merge(config);
             }
         });
         Metrics.addRegistry(registry);
@@ -84,13 +83,13 @@ public class DemoPlugin extends BifroMQPlugin<DemoPluginContext> {
     }
 
     @Override
-    public void start() {
+    protected void doStart() {
         serverThread.start();
         log.debug("Prometheus exporter started");
     }
 
     @Override
-    public void stop() {
+    protected void doStop() {
         prometheusExportServer.stop(0);
         Metrics.removeRegistry(registry);
         log.debug("Prometheus exporter stopped");

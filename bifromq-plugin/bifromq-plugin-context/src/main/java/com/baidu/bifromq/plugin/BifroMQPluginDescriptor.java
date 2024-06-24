@@ -26,6 +26,7 @@ import org.pf4j.PluginDescriptor;
 public class BifroMQPluginDescriptor {
     private final PluginDescriptor descriptor;
     private final Path pluginRoot;
+    private final ClassLoader pluginClassLoader;
     private final boolean isDevelopment;
 
     /**
@@ -33,11 +34,16 @@ public class BifroMQPluginDescriptor {
      *
      * @param descriptor    the descriptor of the plugin
      * @param pluginRoot    the root path of the plugin
+     * @param classLoader   the plugin specific classloader
      * @param isDevelopment the runtime mode
      */
-    public BifroMQPluginDescriptor(PluginDescriptor descriptor, Path pluginRoot, boolean isDevelopment) {
+    public BifroMQPluginDescriptor(PluginDescriptor descriptor,
+                                   Path pluginRoot,
+                                   ClassLoader classLoader,
+                                   boolean isDevelopment) {
         this.descriptor = descriptor;
         this.pluginRoot = pluginRoot;
+        this.pluginClassLoader = classLoader;
         this.isDevelopment = isDevelopment;
     }
 }
