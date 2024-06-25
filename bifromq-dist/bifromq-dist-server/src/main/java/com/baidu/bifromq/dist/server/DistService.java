@@ -14,12 +14,10 @@
 package com.baidu.bifromq.dist.server;
 
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
-import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basescheduler.ICallScheduler;
-import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceGrpc;
@@ -27,6 +25,8 @@ import com.baidu.bifromq.dist.rpc.proto.MatchReply;
 import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
+import com.baidu.bifromq.dist.server.handler.MatchReqHandler;
+import com.baidu.bifromq.dist.server.handler.UnmatchReqHandler;
 import com.baidu.bifromq.dist.server.scheduler.DistCallScheduler;
 import com.baidu.bifromq.dist.server.scheduler.DistWorkerCall;
 import com.baidu.bifromq.dist.server.scheduler.IDistCallScheduler;
@@ -36,10 +36,6 @@ import com.baidu.bifromq.dist.server.scheduler.IUnmatchCallScheduler;
 import com.baidu.bifromq.dist.server.scheduler.MatchCallScheduler;
 import com.baidu.bifromq.dist.server.scheduler.UnmatchCallScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.eventcollector.distservice.MatchError;
-import com.baidu.bifromq.plugin.eventcollector.distservice.Matched;
-import com.baidu.bifromq.plugin.eventcollector.distservice.UnmatchError;
-import com.baidu.bifromq.plugin.eventcollector.distservice.Unmatched;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
@@ -52,8 +48,8 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
     private final IEventCollector eventCollector;
     private final ICallScheduler<DistWorkerCall> distCallRateScheduler;
     private final IDistCallScheduler distCallScheduler;
-    private final IMatchCallScheduler matchCallScheduler;
-    private final IUnmatchCallScheduler unmatchCallScheduler;
+    private final MatchReqHandler matchReqHandler;
+    private final UnmatchReqHandler unmatchReqHandler;
     private final LoadingCache<String, RunningAverage> tenantFanouts;
 
     DistService(IBaseKVStoreClient distWorkerClient,
@@ -63,8 +59,13 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
                 IGlobalDistCallRateSchedulerFactory distCallRateScheduler) {
         this.eventCollector = eventCollector;
         this.distCallRateScheduler = distCallRateScheduler.createScheduler(settingProvider, crdtService);
-        this.matchCallScheduler = new MatchCallScheduler(distWorkerClient, settingProvider);
-        this.unmatchCallScheduler = new UnmatchCallScheduler(distWorkerClient);
+
+        IMatchCallScheduler matchCallScheduler = new MatchCallScheduler(distWorkerClient, settingProvider);
+        matchReqHandler = new MatchReqHandler(eventCollector, matchCallScheduler);
+
+        IUnmatchCallScheduler unmatchCallScheduler = new UnmatchCallScheduler(distWorkerClient);
+        unmatchReqHandler = new UnmatchReqHandler(eventCollector, unmatchCallScheduler);
+
         tenantFanouts = Caffeine.newBuilder()
             .expireAfterAccess(120, TimeUnit.SECONDS)
             .build(k -> new RunningAverage(5));
@@ -74,71 +75,11 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
 
     @Override
     public void match(MatchRequest request, StreamObserver<MatchReply> responseObserver) {
-        response(tenantId -> matchCallScheduler.schedule(request)
-            .handle((v, e) -> {
-                if (e != null) {
-                    log.debug("Failed to exec SubRequest, tenantId={}, req={}", tenantId, request, e);
-                    eventCollector.report(getLocal(MatchError.class)
-                        .reqId(request.getReqId())
-                        .topicFilter(request.getTopicFilter())
-                        .tenantId(request.getTenantId())
-                        .receiverId(request.getReceiverId())
-                        .subBrokerId(request.getBrokerId())
-                        .delivererKey(request.getDelivererKey()));
-                    if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
-                        return MatchReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setResult(MatchReply.Result.BACK_PRESSURE_REJECTED)
-                            .build();
-                    }
-                    return MatchReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setResult(MatchReply.Result.ERROR)
-                        .build();
-                }
-                eventCollector.report(getLocal(Matched.class)
-                    .reqId(request.getReqId())
-                    .topicFilter(request.getTopicFilter())
-                    .tenantId(request.getTenantId())
-                    .receiverId(request.getReceiverId())
-                    .subBrokerId(request.getBrokerId())
-                    .delivererKey(request.getDelivererKey()));
-                return v;
-            }), responseObserver);
+        response(tenantId -> matchReqHandler.handle(request), responseObserver);
     }
 
     public void unmatch(UnmatchRequest request, StreamObserver<UnmatchReply> responseObserver) {
-        response(tenantId -> unmatchCallScheduler.schedule(request)
-            .handle((v, e) -> {
-                if (e != null) {
-                    log.debug("Failed to exec UnsubRequest, tenantId={}, req={}", tenantId, request, e);
-                    eventCollector.report(getLocal(UnmatchError.class)
-                        .reqId(request.getReqId())
-                        .topicFilter(request.getTopicFilter())
-                        .tenantId(request.getTenantId())
-                        .receiverId(request.getReceiverId())
-                        .subBrokerId(request.getBrokerId())
-                        .delivererKey(request.getDelivererKey()));
-                    if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
-                        return UnmatchReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setResult(UnmatchReply.Result.BACK_PRESSURE_REJECTED)
-                            .build();
-                    }
-                    return UnmatchReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setResult(UnmatchReply.Result.ERROR)
-                        .build();
-                }
-                eventCollector.report(getLocal(Unmatched.class)
-                    .reqId(request.getReqId())
-                    .topicFilter(request.getTopicFilter())
-                    .tenantId(request.getTenantId())
-                    .receiverId(request.getReceiverId())
-                    .subBrokerId(request.getBrokerId())
-                    .delivererKey(request.getDelivererKey()));
-                return v;
-            }), responseObserver);
+        response(tenantId -> unmatchReqHandler.handle(request), responseObserver);
     }
 
     @Override
@@ -151,10 +92,9 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
         distCallScheduler.close();
         log.debug("stop dist call pre-scheduler");
         distCallRateScheduler.close();
-        log.debug("Stop match call scheduler");
-        matchCallScheduler.close();
-        log.debug("Stop match call scheduler");
-        unmatchCallScheduler.close();
-        log.debug("Stop unmatch call scheduler");
+        log.debug("Stop match req handler");
+        matchReqHandler.close();
+        log.debug("Stop unmatch req handler");
+        unmatchReqHandler.close();
     }
 }

@@ -31,6 +31,7 @@ public final class MatchError extends Event<MatchError> {
     private String receiverId;
     private int subBrokerId;
     private String delivererKey;
+    private String reason;
 
     @Override
     public EventType type() {
@@ -46,5 +47,6 @@ public final class MatchError extends Event<MatchError> {
         this.receiverId = orig.receiverId;
         this.subBrokerId = orig.subBrokerId;
         this.delivererKey = orig.delivererKey;
+        this.reason = orig.reason;
     }
 }

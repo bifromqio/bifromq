@@ -24,6 +24,7 @@ import lombok.experimental.Accessors;
 @Setter
 @Accessors(fluent = true, chain = true)
 @ToString(callSuper = true)
+@Deprecated(since = "3.1.1", forRemoval = true)
 public final class UnsubscribeError extends Event<UnsubscribeError> {
     private long reqId;
     private String topicFilter;
