@@ -15,7 +15,6 @@ package com.baidu.bifromq.mqtt;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
-import com.baidu.bifromq.mqtt.handler.ByteBufToWebSocketFrameEncoder;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.ClientAddrHandler;
 import com.baidu.bifromq.mqtt.handler.ConditionalRejectHandler;
@@ -24,7 +23,8 @@ import com.baidu.bifromq.mqtt.handler.MQTTMessageDebounceHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTPreludeHandler;
 import com.baidu.bifromq.mqtt.handler.condition.DirectMemPressureCondition;
 import com.baidu.bifromq.mqtt.handler.condition.HeapMemPressureCondition;
-import com.baidu.bifromq.mqtt.handler.ws.WebSocketFrameToByteBufDecoder;
+import com.baidu.bifromq.mqtt.handler.ws.MqttOverWSHandler;
+import com.baidu.bifromq.mqtt.handler.ws.WebSocketOnlyHandler;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.RateLimiter;
@@ -216,19 +216,11 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                     pipeline.addLast("httpDecoder", new HttpRequestDecoder());
                     pipeline.addLast("remoteAddr", remoteAddrHandler);
                     pipeline.addLast("aggregator", new HttpObjectAggregator(65536));
+                    pipeline.addLast("webSocketOnly", new WebSocketOnlyHandler(connBuilder.path()));
                     pipeline.addLast("webSocketHandler", new WebSocketServerProtocolHandler(connBuilder.path(),
                         MQTT_SUBPROTOCOL_CSV_LIST));
-                    pipeline.addLast("ws2bytebufDecoder", new WebSocketFrameToByteBufDecoder());
-                    pipeline.addLast("bytebuf2wsEncoder", new ByteBufToWebSocketFrameEncoder());
-                    pipeline.addLast(MqttEncoder.class.getName(), MqttEncoder.INSTANCE);
-                    // insert PacketFilter here
-                    pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
-                    pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                    pipeline.addLast(ConditionalRejectHandler.NAME,
-                        new ConditionalRejectHandler(
-                            Sets.newHashSet(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE),
-                            sessionContext.eventCollector));
-                    pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
+                    pipeline.addLast("webSocketHandshakeListener", new MqttOverWSHandler(
+                        builder.maxBytesInMessage, builder.connectTimeoutSeconds, sessionContext.eventCollector));
                 }));
             }
         });
@@ -247,19 +239,11 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                     pipeline.addLast("httpDecoder", new HttpRequestDecoder());
                     pipeline.addLast("remoteAddr", remoteAddrHandler);
                     pipeline.addLast("aggregator", new HttpObjectAggregator(65536));
+                    pipeline.addLast("webSocketOnly", new WebSocketOnlyHandler(connBuilder.path()));
                     pipeline.addLast("webSocketHandler", new WebSocketServerProtocolHandler(connBuilder.path(),
                         MQTT_SUBPROTOCOL_CSV_LIST));
-                    pipeline.addLast("ws2bytebufDecoder", new WebSocketFrameToByteBufDecoder());
-                    pipeline.addLast("bytebuf2wsEncoder", new ByteBufToWebSocketFrameEncoder());
-                    pipeline.addLast(MqttEncoder.class.getName(), MqttEncoder.INSTANCE);
-                    // insert PacketFilter between Encoder
-                    pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
-                    pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                    pipeline.addLast(ConditionalRejectHandler.NAME,
-                        new ConditionalRejectHandler(
-                            Sets.newHashSet(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE),
-                            sessionContext.eventCollector));
-                    pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
+                    pipeline.addLast("webSocketHandshakeListener", new MqttOverWSHandler(
+                        builder.maxBytesInMessage, builder.connectTimeoutSeconds, sessionContext.eventCollector));
                 }));
             }
         });
