@@ -78,7 +78,7 @@ public class MonitoredSettingProviderTest {
         assertNull(monitoredSettingProvider.provide(Setting.MaxTopicLevels, tenantId));
         verify(provider).provide(Setting.MaxTopicLevels, tenantId);
         assertEquals(registry.get("call.exec.timer").timer().count(), 1);
-        assertEquals(registry.get("call.exec.fail.count").counter().count(), 1);
+        assertEquals(registry.get("call.exec.fail.count").counter().count(), 0);
     }
 
     @Test

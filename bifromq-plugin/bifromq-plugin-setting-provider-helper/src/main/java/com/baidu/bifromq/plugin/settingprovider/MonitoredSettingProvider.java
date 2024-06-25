@@ -45,7 +45,7 @@ public class MonitoredSettingProvider implements ISettingProvider {
             Timer.Sample sample = Timer.start();
             R newVal = delegate.provide(setting, tenantId);
             sample.stop(provideCallTimer);
-            if (setting.isValid(newVal)) {
+            if (newVal == null || setting.isValid(newVal)) {
                 return newVal;
             } else {
                 pluginLog.warn("Invalid setting value: setting={}, value={}", setting.name(), newVal);
