@@ -19,7 +19,7 @@ import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
-import com.baidu.bifromq.basescheduler.CallTask;
+import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.retain.rpc.proto.BatchRetainRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainMessage;
 import com.baidu.bifromq.retain.rpc.proto.RetainParam;
@@ -62,31 +62,32 @@ public class BatchRetainCall extends BatchMutationCall<RetainRequest, RetainRepl
     }
 
     @Override
-    protected void handleOutput(Queue<CallTask<RetainRequest, RetainReply, MutationCallBatcherKey>> batchedTasks,
+    protected void handleOutput(Queue<ICallTask<RetainRequest, RetainReply, MutationCallBatcherKey>> batchedTasks,
                                 RWCoProcOutput output) {
-        CallTask<RetainRequest, RetainReply, MutationCallBatcherKey> task;
+        ICallTask<RetainRequest, RetainReply, MutationCallBatcherKey> task;
         while ((task = batchedTasks.poll()) != null) {
             RetainReply.Builder replyBuilder = RetainReply.newBuilder()
-                .setReqId(task.call.getReqId());
+                .setReqId(task.call().getReqId());
             RetainResult.Code result = output.getRetainService()
                 .getBatchRetain()
                 .getResultsMap()
-                .getOrDefault(task.call.getPublisher().getTenantId(),
+                .getOrDefault(task.call().getPublisher().getTenantId(),
                     RetainResult.getDefaultInstance())
-                .getResultsOrDefault(task.call.getTopic(), RetainResult.Code.ERROR);
+                .getResultsOrDefault(task.call().getTopic(), RetainResult.Code.ERROR);
             switch (result) {
                 case RETAINED -> replyBuilder.setResult(RetainReply.Result.RETAINED);
                 case CLEARED -> replyBuilder.setResult(RetainReply.Result.CLEARED);
                 case ERROR -> replyBuilder.setResult(RetainReply.Result.ERROR);
             }
-            task.callResult.complete(replyBuilder.build());
+            task.resultPromise().complete(replyBuilder.build());
         }
     }
 
     @Override
-    protected void handleException(CallTask<RetainRequest, RetainReply, MutationCallBatcherKey> callTask, Throwable e) {
-        callTask.callResult.complete(RetainReply.newBuilder()
-            .setReqId(callTask.call.getReqId())
+    protected void handleException(ICallTask<RetainRequest, RetainReply, MutationCallBatcherKey> callTask,
+                                   Throwable e) {
+        callTask.resultPromise().complete(RetainReply.newBuilder()
+            .setReqId(callTask.call().getReqId())
             .setResult(RetainReply.Result.ERROR)
             .build());
     }

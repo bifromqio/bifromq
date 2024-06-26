@@ -20,8 +20,8 @@ import static java.util.Collections.emptyMap;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
+import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
@@ -67,7 +67,7 @@ public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, 
         private final IRPCClient.IRequestPipeline<DistRequest, DistReply> ppln;
 
         private class DistServerBatchCall implements IBatchCall<DistServerCall, DistResult, BatcherKey> {
-            private final Queue<CallTask<DistServerCall, DistResult, BatcherKey>> tasks = new ArrayDeque<>(64);
+            private final Queue<ICallTask<DistServerCall, DistResult, BatcherKey>> tasks = new ArrayDeque<>(64);
             private Map<ClientInfo, Map<String, PublisherMessagePack.TopicPack.Builder>> clientMsgPack =
                 new HashMap<>(128);
 
@@ -77,11 +77,12 @@ public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, 
             }
 
             @Override
-            public void add(CallTask<DistServerCall, DistResult, BatcherKey> callTask) {
+            public void add(ICallTask<DistServerCall, DistResult, BatcherKey> callTask) {
                 tasks.add(callTask);
-                clientMsgPack.computeIfAbsent(callTask.call.publisher, k -> new HashMap<>())
-                    .computeIfAbsent(callTask.call.topic, k -> PublisherMessagePack.TopicPack.newBuilder().setTopic(k))
-                    .addMessage(callTask.call.message);
+                clientMsgPack.computeIfAbsent(callTask.call().publisher, k -> new HashMap<>())
+                    .computeIfAbsent(callTask.call().topic,
+                        k -> PublisherMessagePack.TopicPack.newBuilder().setTopic(k))
+                    .addMessage(callTask.call().message);
             }
 
             @Override
@@ -98,9 +99,9 @@ public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, 
                 DistRequest request = requestBuilder.build();
                 return ppln.invoke(request).handle((v, e) -> {
                     if (e != null) {
-                        CallTask<DistServerCall, DistResult, BatcherKey> task;
+                        ICallTask<DistServerCall, DistResult, BatcherKey> task;
                         while ((task = tasks.poll()) != null) {
-                            task.callResult.completeExceptionally(e);
+                            task.resultPromise().completeExceptionally(e);
                         }
                     } else {
                         Map<ClientInfo, Map<String, DistReply.Code>> resultMap = new HashMap<>();
@@ -109,16 +110,16 @@ public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, 
                             DistReply.Result result = v.getResults(i);
                             resultMap.put(pubMsgPack.getPublisher(), result.getTopicMap());
                         }
-                        CallTask<DistServerCall, DistResult, BatcherKey> task;
+                        ICallTask<DistServerCall, DistResult, BatcherKey> task;
                         while ((task = tasks.poll()) != null) {
-                            ClientInfo publisher = task.call.publisher;
-                            String topic = task.call.topic;
+                            ClientInfo publisher = task.call().publisher;
+                            String topic = task.call().topic;
                             switch (resultMap.get(publisher).get(topic)) {
-                                case OK -> task.callResult.complete(DistResult.OK);
-                                case NO_MATCH -> task.callResult.complete(DistResult.NO_MATCH);
+                                case OK -> task.resultPromise().complete(DistResult.OK);
+                                case NO_MATCH -> task.resultPromise().complete(DistResult.NO_MATCH);
                                 case BACK_PRESSURE_REJECTED ->
-                                    task.callResult.complete(DistResult.BACK_PRESSURE_REJECTED);
-                                case ERROR -> task.callResult.complete(DistResult.ERROR);
+                                    task.resultPromise().complete(DistResult.BACK_PRESSURE_REJECTED);
+                                case ERROR -> task.resultPromise().complete(DistResult.ERROR);
                             }
                         }
                     }

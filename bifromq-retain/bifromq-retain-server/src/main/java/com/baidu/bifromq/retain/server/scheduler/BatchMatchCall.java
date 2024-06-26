@@ -20,7 +20,7 @@ import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
-import com.baidu.bifromq.basescheduler.CallTask;
+import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.retain.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchParam;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
@@ -63,23 +63,23 @@ public class BatchMatchCall extends BatchQueryCall<MatchCall, MatchCallResult> {
     }
 
     @Override
-    protected void handleOutput(Queue<CallTask<MatchCall, MatchCallResult, QueryCallBatcherKey>> batchedTasks,
+    protected void handleOutput(Queue<ICallTask<MatchCall, MatchCallResult, QueryCallBatcherKey>> batchedTasks,
                                 ROCoProcOutput output) {
-        CallTask<MatchCall, MatchCallResult, QueryCallBatcherKey> task;
+        ICallTask<MatchCall, MatchCallResult, QueryCallBatcherKey> task;
         while ((task = batchedTasks.poll()) != null) {
-            task.callResult.complete(new MatchCallResult(MatchReply.Result.OK, output.getRetainService()
+            task.resultPromise().complete(new MatchCallResult(MatchReply.Result.OK, output.getRetainService()
                 .getBatchMatch()
                 .getResultPackMap()
-                .getOrDefault(task.call.tenantId(),
+                .getOrDefault(task.call().tenantId(),
                     MatchResultPack.getDefaultInstance())
-                .getResultsOrDefault(task.call.topicFilter(),
+                .getResultsOrDefault(task.call().topicFilter(),
                     MatchResult.getDefaultInstance()).getOk()
                 .getMessagesList()));
         }
     }
 
     @Override
-    protected void handleException(CallTask<MatchCall, MatchCallResult, QueryCallBatcherKey> callTask, Throwable e) {
-        callTask.callResult.complete(new MatchCallResult(MatchReply.Result.ERROR, Collections.emptyList()));
+    protected void handleException(ICallTask<MatchCall, MatchCallResult, QueryCallBatcherKey> callTask, Throwable e) {
+        callTask.resultPromise().complete(new MatchCallResult(MatchReply.Result.ERROR, Collections.emptyList()));
     }
 }

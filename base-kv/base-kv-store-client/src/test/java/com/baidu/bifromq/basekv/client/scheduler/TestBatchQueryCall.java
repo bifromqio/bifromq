@@ -17,7 +17,7 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
-import com.baidu.bifromq.basescheduler.CallTask;
+import com.baidu.bifromq.basescheduler.ICallTask;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.Iterator;
@@ -43,18 +43,18 @@ public class TestBatchQueryCall extends BatchQueryCall<ByteString, ByteString> {
     }
 
     @Override
-    protected void handleOutput(Queue<CallTask<ByteString, ByteString, QueryCallBatcherKey>> batchedTasks,
+    protected void handleOutput(Queue<ICallTask<ByteString, ByteString, QueryCallBatcherKey>> batchedTasks,
                                 ROCoProcOutput output) {
-        CallTask<ByteString, ByteString, QueryCallBatcherKey> task;
+        ICallTask<ByteString, ByteString, QueryCallBatcherKey> task;
         while ((task = batchedTasks.poll()) != null) {
             // just echo the request
-            task.callResult.complete(task.call);
+            task.resultPromise().complete(task.call());
         }
 
     }
 
     @Override
-    protected void handleException(CallTask<ByteString, ByteString, QueryCallBatcherKey> callTask, Throwable e) {
-        callTask.callResult.completeExceptionally(e);
+    protected void handleException(ICallTask<ByteString, ByteString, QueryCallBatcherKey> callTask, Throwable e) {
+        callTask.resultPromise().completeExceptionally(e);
     }
 }

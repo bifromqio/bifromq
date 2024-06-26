@@ -33,11 +33,11 @@ import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public abstract class Batcher<Call, CallResult, BatcherKey> {
-    private final Queue<IBatchCall<Call, CallResult, BatcherKey>> batchPool;
-    private final Queue<CallTask<Call, CallResult, BatcherKey>> callTaskBuffers = new ConcurrentLinkedQueue<>();
+public abstract class Batcher<CallT, CallResultT, BatcherKeyT> {
+    private final Queue<IBatchCall<CallT, CallResultT, BatcherKeyT>> batchPool;
+    private final Queue<ICallTask<CallT, CallResultT, BatcherKeyT>> callTaskBuffers = new ConcurrentLinkedQueue<>();
     protected final String name;
-    protected final BatcherKey batcherKey;
+    protected final BatcherKeyT batcherKey;
     private final AtomicBoolean triggering = new AtomicBoolean();
     private final MovingAverage avgLatencyNanos;
     private final long tolerableLatencyNanos;
@@ -56,11 +56,11 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
     private final AtomicInteger emaMaxBatchSize = new AtomicInteger();
     private volatile int maxBatchSize = Integer.MAX_VALUE;
 
-    protected Batcher(BatcherKey batcherKey, String name, long tolerableLatencyNanos, long burstLatencyNanos) {
+    protected Batcher(BatcherKeyT batcherKey, String name, long tolerableLatencyNanos, long burstLatencyNanos) {
         this(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos, 1);
     }
 
-    protected Batcher(BatcherKey batcherKey,
+    protected Batcher(BatcherKeyT batcherKey,
                       String name,
                       long tolerableLatencyNanos,
                       long burstLatencyNanos,
@@ -96,20 +96,20 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
             .register(Metrics.globalRegistry);
     }
 
-    Batcher<Call, CallResult, BatcherKey> init() {
+    Batcher<CallT, CallResultT, BatcherKeyT> init() {
         for (int i = 0; i < maxPipelineDepth.get(); i++) {
             batchPool.offer(newBatch());
         }
         return this;
     }
 
-    public final CompletableFuture<CallResult> submit(BatcherKey batcherKey, Call request) {
+    public final CompletableFuture<CallResultT> submit(BatcherKeyT batcherKey, CallT request) {
         if (avgLatencyNanos.estimate() < burstLatencyNanos) {
-            CallTask<Call, CallResult, BatcherKey> callTask = new CallTask<>(batcherKey, request);
+            ICallTask<CallT, CallResultT, BatcherKeyT> callTask = new CallTask<>(batcherKey, request);
             boolean offered = callTaskBuffers.offer(callTask);
             assert offered;
             trigger();
-            return callTask.callResult;
+            return callTask.resultPromise();
         } else {
             dropCounter.increment();
             return CompletableFuture.failedFuture(new BackPressureException("Too high average latency"));
@@ -117,7 +117,7 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
     }
 
     public void close() {
-        IBatchCall<Call, CallResult, BatcherKey> batchCall;
+        IBatchCall<CallT, CallResultT, BatcherKeyT> batchCall;
         while ((batchCall = batchPool.poll()) != null) {
             batchCall.destroy();
         }
@@ -130,7 +130,7 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
         Metrics.globalRegistry.remove(queueingTimeSummary);
     }
 
-    protected abstract IBatchCall<Call, CallResult, BatcherKey> newBatch();
+    protected abstract IBatchCall<CallT, CallResultT, BatcherKeyT> newBatch();
 
     private void trigger() {
         if (triggering.compareAndSet(false, true)) {
@@ -152,16 +152,16 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
     private void batchAndEmit() {
         pipelineDepth.incrementAndGet();
         long buildStart = System.nanoTime();
-        IBatchCall<Call, CallResult, BatcherKey> batchCall = batchPool.poll();
+        IBatchCall<CallT, CallResultT, BatcherKeyT> batchCall = batchPool.poll();
         assert batchCall != null;
         int batchSize = 0;
-        LinkedList<CallTask<Call, CallResult, BatcherKey>> batchedTasks = new LinkedList<>();
-        CallTask<Call, CallResult, BatcherKey> callTask;
+        LinkedList<ICallTask<CallT, CallResultT, BatcherKeyT>> batchedTasks = new LinkedList<>();
+        ICallTask<CallT, CallResultT, BatcherKeyT> callTask;
         while (batchSize < maxBatchSize && (callTask = callTaskBuffers.poll()) != null) {
             batchCall.add(callTask);
             batchedTasks.add(callTask);
             batchSize++;
-            queueingTimeSummary.record(System.nanoTime() - callTask.ts);
+            queueingTimeSummary.record(System.nanoTime() - callTask.ts());
         }
         batchSizeSummary.record(batchSize);
         long execStart = System.nanoTime();
@@ -182,7 +182,7 @@ public abstract class Batcher<Call, CallResult, BatcherKey> {
                     batchExecTimer.record(thisLatency, TimeUnit.NANOSECONDS);
                 }
                 batchedTasks.forEach(t -> {
-                    long callLatency = execEnd - t.ts;
+                    long callLatency = execEnd - t.ts();
                     avgLatencyNanos.observe(callLatency);
                     batchCallTimer.record(callLatency, TimeUnit.NANOSECONDS);
                 });

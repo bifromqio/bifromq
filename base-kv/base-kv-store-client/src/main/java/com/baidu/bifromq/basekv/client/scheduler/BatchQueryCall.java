@@ -20,8 +20,8 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
-import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
+import com.baidu.bifromq.basescheduler.ICallTask;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalListener;
@@ -62,9 +62,9 @@ public abstract class BatchQueryCall<Req, Resp> implements IBatchCall<Req, Resp,
     }
 
     @Override
-    public void add(CallTask<Req, Resp, QueryCallBatcherKey> callTask) {
+    public void add(ICallTask<Req, Resp, QueryCallBatcherKey> callTask) {
         BatchQueryCall.BatchCallTask<Req, Resp> lastBatchCallTask;
-        QueryCallBatcherKey batcherKey = callTask.batcherKey;
+        QueryCallBatcherKey batcherKey = callTask.batcherKey();
         if ((lastBatchCallTask = batchCallTasks.peekLast()) != null) {
             if (lastBatchCallTask.storeId.equals(batcherKey.storeId) && lastBatchCallTask.ver == batcherKey.ver) {
                 lastBatchCallTask.batchedTasks.add(callTask);
@@ -82,10 +82,10 @@ public abstract class BatchQueryCall<Req, Resp> implements IBatchCall<Req, Resp,
 
     protected abstract ROCoProcInput makeBatch(Iterator<Req> reqIterator);
 
-    protected abstract void handleOutput(Queue<CallTask<Req, Resp, QueryCallBatcherKey>> batchedTasks,
+    protected abstract void handleOutput(Queue<ICallTask<Req, Resp, QueryCallBatcherKey>> batchedTasks,
                                          ROCoProcOutput output);
 
-    protected abstract void handleException(CallTask<Req, Resp, QueryCallBatcherKey> callTask, Throwable e);
+    protected abstract void handleException(ICallTask<Req, Resp, QueryCallBatcherKey> callTask, Throwable e);
 
     @Override
     public void reset() {
@@ -117,7 +117,7 @@ public abstract class BatchQueryCall<Req, Resp> implements IBatchCall<Req, Resp,
 
     private CompletableFuture<Void> fireBatchCall(BatchQueryCall.BatchCallTask<Req, Resp> batchCallTask) {
         ROCoProcInput input = makeBatch(batchCallTask.batchedTasks.stream()
-            .map(call -> call.call).iterator());
+            .map(ICallTask::call).iterator());
         long reqId = System.nanoTime();
         return storePipelines.get(batchCallTask.storeId)
             .query(KVRangeRORequest.newBuilder()
@@ -135,7 +135,7 @@ public abstract class BatchQueryCall<Req, Resp> implements IBatchCall<Req, Resp,
             })
             .handle((v, e) -> {
                 if (e != null) {
-                    CallTask<Req, Resp, QueryCallBatcherKey> callTask;
+                    ICallTask<Req, Resp, QueryCallBatcherKey> callTask;
                     while ((callTask = batchCallTask.batchedTasks.poll()) != null) {
                         handleException(callTask, e);
                     }
@@ -151,7 +151,7 @@ public abstract class BatchQueryCall<Req, Resp> implements IBatchCall<Req, Resp,
     private static class BatchCallTask<Req, Resp> {
         final String storeId;
         final long ver;
-        final LinkedList<CallTask<Req, Resp, QueryCallBatcherKey>> batchedTasks = new LinkedList<>();
+        final LinkedList<ICallTask<Req, Resp, QueryCallBatcherKey>> batchedTasks = new LinkedList<>();
 
         private BatchCallTask(String storeId, long ver) {
             this.storeId = storeId;

@@ -19,7 +19,7 @@ import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
-import com.baidu.bifromq.basescheduler.CallTask;
+import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.records.ScopedInbox;
 import com.baidu.bifromq.inbox.rpc.proto.TouchReply;
 import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
@@ -39,7 +39,7 @@ public class BatchTouchCall extends BatchMutationCall<TouchRequest, TouchReply> 
     }
 
     @Override
-    protected BatchCallTask<TouchRequest, TouchReply> newBatch(String storeId, long ver) {
+    protected MutationCallTaskBatch<TouchRequest, TouchReply> newBatch(String storeId, long ver) {
         return new BatchTouchCallTask(storeId, ver);
     }
 
@@ -63,29 +63,31 @@ public class BatchTouchCall extends BatchMutationCall<TouchRequest, TouchReply> 
     }
 
     @Override
-    protected void handleOutput(Queue<CallTask<TouchRequest, TouchReply, MutationCallBatcherKey>> batchedTasks,
+    protected void handleOutput(Queue<ICallTask<TouchRequest, TouchReply, MutationCallBatcherKey>> batchedTasks,
                                 RWCoProcOutput output) {
         assert batchedTasks.size() == output.getInboxService().getBatchTouch().getCodeCount();
-        CallTask<TouchRequest, TouchReply, MutationCallBatcherKey> callTask;
+        ICallTask<TouchRequest, TouchReply, MutationCallBatcherKey> callTask;
         int i = 0;
         while ((callTask = batchedTasks.poll()) != null) {
-            TouchReply.Builder replyBuilder = TouchReply.newBuilder().setReqId(callTask.call.getReqId());
+            TouchReply.Builder replyBuilder = TouchReply.newBuilder().setReqId(callTask.call().getReqId());
             switch (output.getInboxService().getBatchTouch().getCode(i++)) {
-                case OK -> callTask.callResult.complete(replyBuilder.setCode(TouchReply.Code.OK).build());
-                case NO_INBOX -> callTask.callResult.complete(replyBuilder.setCode(TouchReply.Code.NO_INBOX).build());
-                case CONFLICT -> callTask.callResult.complete(replyBuilder.setCode(TouchReply.Code.CONFLICT).build());
-                case ERROR -> callTask.callResult.complete(replyBuilder.setCode(TouchReply.Code.ERROR).build());
+                case OK -> callTask.resultPromise().complete(replyBuilder.setCode(TouchReply.Code.OK).build());
+                case NO_INBOX ->
+                    callTask.resultPromise().complete(replyBuilder.setCode(TouchReply.Code.NO_INBOX).build());
+                case CONFLICT ->
+                    callTask.resultPromise().complete(replyBuilder.setCode(TouchReply.Code.CONFLICT).build());
+                default -> callTask.resultPromise().complete(replyBuilder.setCode(TouchReply.Code.ERROR).build());
             }
         }
     }
 
     @Override
-    protected void handleException(CallTask<TouchRequest, TouchReply, MutationCallBatcherKey> callTask,
+    protected void handleException(ICallTask<TouchRequest, TouchReply, MutationCallBatcherKey> callTask,
                                    Throwable e) {
-        callTask.callResult.complete(TouchReply.newBuilder().setCode(TouchReply.Code.ERROR).build());
+        callTask.resultPromise().complete(TouchReply.newBuilder().setCode(TouchReply.Code.ERROR).build());
     }
 
-    private static class BatchTouchCallTask extends BatchCallTask<TouchRequest, TouchReply> {
+    private static class BatchTouchCallTask extends MutationCallTaskBatch<TouchRequest, TouchReply> {
         private final Set<ScopedInbox> inboxes = new HashSet<>();
 
         private BatchTouchCallTask(String storeId, long ver) {
@@ -93,21 +95,21 @@ public class BatchTouchCall extends BatchMutationCall<TouchRequest, TouchReply> 
         }
 
         @Override
-        protected void add(CallTask<TouchRequest, TouchReply, MutationCallBatcherKey> callTask) {
+        protected void add(ICallTask<TouchRequest, TouchReply, MutationCallBatcherKey> callTask) {
             super.add(callTask);
             inboxes.add(new ScopedInbox(
-                callTask.call.getTenantId(),
-                callTask.call.getInboxId(),
-                callTask.call.getIncarnation())
+                callTask.call().getTenantId(),
+                callTask.call().getInboxId(),
+                callTask.call().getIncarnation())
             );
         }
 
         @Override
-        protected boolean isBatchable(CallTask<TouchRequest, TouchReply, MutationCallBatcherKey> callTask) {
+        protected boolean isBatchable(ICallTask<TouchRequest, TouchReply, MutationCallBatcherKey> callTask) {
             return !inboxes.contains(new ScopedInbox(
-                callTask.call.getTenantId(),
-                callTask.call.getInboxId(),
-                callTask.call.getIncarnation()));
+                callTask.call().getTenantId(),
+                callTask.call().getInboxId(),
+                callTask.call().getIncarnation()));
         }
     }
 }

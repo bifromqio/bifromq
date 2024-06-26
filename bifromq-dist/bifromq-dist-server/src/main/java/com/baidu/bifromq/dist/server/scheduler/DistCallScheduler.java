@@ -29,9 +29,9 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.basescheduler.ICallScheduler;
+import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistPack;
@@ -108,7 +108,7 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
         }
 
         private class BatchDistCall implements IBatchCall<DistWorkerCall, Map<String, Integer>, Integer> {
-            private final Queue<CallTask<DistWorkerCall, Map<String, Integer>, Integer>> tasks = new ArrayDeque<>(128);
+            private final Queue<ICallTask<DistWorkerCall, Map<String, Integer>, Integer>> tasks = new ArrayDeque<>(128);
             private Map<String, Map<String, Map<ClientInfo, Iterable<Message>>>> batch = new HashMap<>(128);
 
             @Override
@@ -117,10 +117,10 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
             }
 
             @Override
-            public void add(CallTask<DistWorkerCall, Map<String, Integer>, Integer> callTask) {
+            public void add(ICallTask<DistWorkerCall, Map<String, Integer>, Integer> callTask) {
                 Map<String, Map<ClientInfo, Iterable<Message>>> clientMsgsByTopic =
-                    batch.computeIfAbsent(callTask.call.tenantId, k -> new HashMap<>());
-                callTask.call.publisherMsgPacks.forEach(senderMsgPack ->
+                    batch.computeIfAbsent(callTask.call().tenantId, k -> new HashMap<>());
+                callTask.call().publisherMsgPacks.forEach(senderMsgPack ->
                     senderMsgPack.getMessagePackList().forEach(topicMsgs ->
                         clientMsgsByTopic.computeIfAbsent(topicMsgs.getTopic(), k -> new HashMap<>())
                             .compute(senderMsgPack.getPublisher(), (k, v) -> {
@@ -199,10 +199,10 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                     .toArray(CompletableFuture[]::new);
                 return CompletableFuture.allOf(distReplyFutures)
                     .handle((v, e) -> {
-                        CallTask<DistWorkerCall, Map<String, Integer>, Integer> task;
+                        ICallTask<DistWorkerCall, Map<String, Integer>, Integer> task;
                         if (e != null) {
                             while ((task = tasks.poll()) != null) {
-                                task.callResult.completeExceptionally(e);
+                                task.resultPromise().completeExceptionally(e);
                             }
                         } else {
                             // aggregate fanout from each reply
@@ -224,13 +224,13 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                             }
                             while ((task = tasks.poll()) != null) {
                                 Map<String, Integer> allTopicFanouts =
-                                    topicFanoutByTenant.get(task.call.tenantId);
+                                    topicFanoutByTenant.get(task.call().tenantId);
                                 Map<String, Integer> topicFanouts = new HashMap<>();
-                                task.call.publisherMsgPacks.forEach(clientMessagePack ->
+                                task.call().publisherMsgPacks.forEach(clientMessagePack ->
                                     clientMessagePack.getMessagePackList().forEach(topicMessagePack ->
                                         topicFanouts.put(topicMessagePack.getTopic(),
                                             allTopicFanouts.getOrDefault(topicMessagePack.getTopic(), 0))));
-                                task.callResult.complete(topicFanouts);
+                                task.resultPromise().complete(topicFanouts);
                             }
                         }
                         return null;

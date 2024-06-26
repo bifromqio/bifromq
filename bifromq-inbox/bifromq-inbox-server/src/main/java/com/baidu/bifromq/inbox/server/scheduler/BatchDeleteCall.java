@@ -19,7 +19,7 @@ import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
-import com.baidu.bifromq.basescheduler.CallTask;
+import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.records.ScopedInbox;
 import com.baidu.bifromq.inbox.storage.proto.BatchDeleteReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchDeleteRequest;
@@ -39,7 +39,8 @@ public class BatchDeleteCall extends BatchMutationCall<BatchDeleteRequest.Params
     }
 
     @Override
-    protected BatchCallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result> newBatch(String storeId, long ver) {
+    protected MutationCallTaskBatch<BatchDeleteRequest.Params, BatchDeleteReply.Result> newBatch(String storeId,
+                                                                                                 long ver) {
         return new BatchDeleteCallTask(storeId, ver);
     }
 
@@ -59,27 +60,28 @@ public class BatchDeleteCall extends BatchMutationCall<BatchDeleteRequest.Params
 
     @Override
     protected void handleOutput(
-        Queue<CallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result, MutationCallBatcherKey>> batchedTasks,
+        Queue<ICallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result, MutationCallBatcherKey>> batchedTasks,
         RWCoProcOutput output) {
-        CallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result, MutationCallBatcherKey> callTask;
+        ICallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result, MutationCallBatcherKey> callTask;
         assert batchedTasks.size() == output.getInboxService().getBatchDelete().getResultCount();
 
         int i = 0;
         while ((callTask = batchedTasks.poll()) != null) {
-            callTask.callResult.complete(output.getInboxService().getBatchDelete().getResult(i++));
+            callTask.resultPromise().complete(output.getInboxService().getBatchDelete().getResult(i++));
         }
     }
 
     @Override
     protected void handleException(
-        CallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result, MutationCallBatcherKey> callTask,
+        ICallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result, MutationCallBatcherKey> callTask,
         Throwable e) {
-        callTask.callResult.complete(BatchDeleteReply.Result.newBuilder()
+        callTask.resultPromise().complete(BatchDeleteReply.Result.newBuilder()
             .setCode(BatchDeleteReply.Code.ERROR)
             .build());
     }
 
-    private static class BatchDeleteCallTask extends BatchCallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result> {
+    private static class BatchDeleteCallTask extends
+        MutationCallTaskBatch<BatchDeleteRequest.Params, BatchDeleteReply.Result> {
         private final Set<ScopedInbox> inboxes = new HashSet<>();
 
         private BatchDeleteCallTask(String storeId, long ver) {
@@ -88,22 +90,22 @@ public class BatchDeleteCall extends BatchMutationCall<BatchDeleteRequest.Params
 
         @Override
         protected void add(
-            CallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result, MutationCallBatcherKey> callTask) {
+            ICallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result, MutationCallBatcherKey> callTask) {
             super.add(callTask);
             inboxes.add(new ScopedInbox(
-                callTask.call.getTenantId(),
-                callTask.call.getInboxId(),
-                callTask.call.getIncarnation())
+                callTask.call().getTenantId(),
+                callTask.call().getInboxId(),
+                callTask.call().getIncarnation())
             );
         }
 
         @Override
         protected boolean isBatchable(
-            CallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result, MutationCallBatcherKey> callTask) {
+            ICallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result, MutationCallBatcherKey> callTask) {
             return !inboxes.contains(new ScopedInbox(
-                callTask.call.getTenantId(),
-                callTask.call.getInboxId(),
-                callTask.call.getIncarnation()));
+                callTask.call().getTenantId(),
+                callTask.call().getInboxId(),
+                callTask.call().getIncarnation()));
         }
     }
 }

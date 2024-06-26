@@ -19,8 +19,8 @@ import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LAT
 
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
+import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
 import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
@@ -69,7 +69,7 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryR
         private final IDeliverer deliverer;
 
         private class DeliveryBatchCall implements IBatchCall<DeliveryCall, DeliveryResult.Code, DelivererKey> {
-            private final Queue<CallTask<DeliveryCall, DeliveryResult.Code, DelivererKey>> tasks =
+            private final Queue<ICallTask<DeliveryCall, DeliveryResult.Code, DelivererKey>> tasks =
                 new ArrayDeque<>(128);
             private Map<String, Map<MessagePackWrapper, Set<MatchInfo>>> batch = new HashMap<>(128);
 
@@ -79,10 +79,10 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryR
             }
 
             @Override
-            public void add(CallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> callTask) {
-                batch.computeIfAbsent(callTask.call.tenantId, k -> new LinkedHashMap<>(128))
-                    .computeIfAbsent(callTask.call.msgPackWrapper, k -> new HashSet<>())
-                    .add(callTask.call.matchInfo);
+            public void add(ICallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> callTask) {
+                batch.computeIfAbsent(callTask.call().tenantId, k -> new LinkedHashMap<>(128))
+                    .computeIfAbsent(callTask.call().msgPackWrapper, k -> new HashSet<>())
+                    .add(callTask.call().matchInfo);
                 tasks.add(callTask);
             }
 
@@ -102,25 +102,25 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryR
                 return deliverer.deliver(requestBuilder.build())
                     .handle((reply, e) -> {
                         if (e != null) {
-                            CallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> task;
+                            ICallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> task;
                             while ((task = tasks.poll()) != null) {
-                                task.callResult.completeExceptionally(e);
+                                task.resultPromise().completeExceptionally(e);
                             }
                         } else {
-                            CallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> task;
+                            ICallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> task;
                             Map<String, Map<MatchInfo, DeliveryResult.Code>> resultMap =
                                 toMap(reply.getResultMap());
                             while ((task = tasks.poll()) != null) {
                                 DeliveryResult.Code result = resultMap
-                                    .getOrDefault(task.call.tenantId, Collections.emptyMap())
-                                    .get(task.call.matchInfo);
+                                    .getOrDefault(task.call().tenantId, Collections.emptyMap())
+                                    .get(task.call().matchInfo);
                                 if (result != null) {
-                                    task.callResult.complete(result);
+                                    task.resultPromise().complete(result);
                                 } else {
                                     log.warn("[{}]No deliver result: tenantId={}, route={}, batcherKey={}",
-                                        this.hashCode(), task.call.tenantId, task.call.matchInfo,
-                                        task.call.delivererKey);
-                                    task.callResult.complete(DeliveryResult.Code.OK);
+                                        this.hashCode(), task.call().tenantId, task.call().matchInfo,
+                                        task.call().delivererKey);
+                                    task.resultPromise().complete(DeliveryResult.Code.OK);
                                 }
                             }
                         }

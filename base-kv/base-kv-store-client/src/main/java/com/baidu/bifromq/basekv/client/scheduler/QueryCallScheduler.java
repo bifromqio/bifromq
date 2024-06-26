@@ -20,7 +20,7 @@ import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.Optional;
 
-public abstract class QueryCallScheduler<Req, Resp> extends BatchCallScheduler<Req, Resp, QueryCallBatcherKey> {
+public abstract class QueryCallScheduler<ReqT, RespT> extends BatchCallScheduler<ReqT, RespT, QueryCallBatcherKey> {
     protected final IBaseKVStoreClient storeClient;
 
     public QueryCallScheduler(String name,
@@ -41,16 +41,16 @@ public abstract class QueryCallScheduler<Req, Resp> extends BatchCallScheduler<R
     }
 
 
-    protected String selectStore(KVRangeSetting setting, Req request) {
+    protected String selectStore(KVRangeSetting setting, ReqT request) {
         return setting.leader;
     }
 
-    protected abstract int selectQueue(Req request);
+    protected abstract int selectQueue(ReqT request);
 
-    protected abstract ByteString rangeKey(Req request);
+    protected abstract ByteString rangeKey(ReqT request);
 
     @Override
-    protected final Optional<QueryCallBatcherKey> find(Req req) {
+    protected final Optional<QueryCallBatcherKey> find(ReqT req) {
         return storeClient.findByKey(rangeKey(req)).map(
             range -> new QueryCallBatcherKey(range.id, selectStore(range, req), selectQueue(req), range.ver));
     }

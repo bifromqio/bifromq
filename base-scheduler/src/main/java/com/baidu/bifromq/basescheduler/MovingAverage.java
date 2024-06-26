@@ -13,68 +13,89 @@
 
 package com.baidu.bifromq.basescheduler;
 
-import com.netflix.concurrency.limits.internal.Preconditions;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class MovingAverage {
     private final long freshness;
-    private final Stat[] observation;
+    private final Observation[] observations;
+    private final AtomicReference<Stat> lastStat = new AtomicReference<>(new Stat(0, 0, 0, 0));
     private long total;
     private int head;
     private int tail;
-    private volatile long lastObserveTs;
-    private volatile long avg;
-    private volatile long max;
 
     public MovingAverage(int precision, Duration freshness) {
-        Preconditions.checkArgument(precision > 0, "Precision must be positive");
-        observation = new Stat[precision + 1]; // one more for sentinel
-        for (int i = 0; i < observation.length; i++) {
-            observation[i] = new Stat();
+        assert precision > 0 : "Precision must be positive";
+        observations = new Observation[precision + 1]; // one more for sentinel
+        for (int i = 0; i < observations.length; i++) {
+            observations[i] = new Observation();
         }
         this.freshness = freshness.toNanos();
     }
 
     public synchronized void observe(long read) {
-        lastObserveTs = System.nanoTime();
-        observation[head].ts = lastObserveTs;
-        observation[head].read = read;
+        long lastObserveTs = System.nanoTime();
+        observations[head].ts = lastObserveTs;
+        observations[head].read = read;
         total += read;
-        head = (head + 1) % observation.length;
+        head = (head + 1) % observations.length;
         if (head == tail) {
             // make room for head
-            total -= observation[head].read;
-            tail = (tail + 1) % observation.length;
+            total -= observations[head].read;
+            tail = (tail + 1) % observations.length;
         }
-        while (lastObserveTs - observation[tail].ts > freshness) {
+        while (lastObserveTs - observations[tail].ts > freshness) {
             // remove staled observation
-            total -= observation[tail].read;
-            tail = (tail + 1) % observation.length;
+            total -= observations[tail].read;
+            tail = (tail + 1) % observations.length;
         }
-        avg = total / ((head - tail + observation.length) % observation.length);
-        max = Math.max(max, read);
+        updateStat(read, lastObserveTs);
     }
 
     public long max() {
         long now = System.nanoTime();
-        if (now - lastObserveTs > freshness) {
+        Stat stat = lastStat.get();
+        if (now - stat.lastObserveTs > freshness) {
             return 0;
         } else {
-            return max;
+            return stat.max;
         }
     }
 
     public long estimate() {
         long now = System.nanoTime();
-        if (now - lastObserveTs > freshness) {
+        Stat stat = lastStat.get();
+        if (now - stat.lastObserveTs > freshness) {
             return 0;
         } else {
-            return avg;
+            return stat.avg;
         }
     }
 
-    private static class Stat {
+    private long calcAvg() {
+        int count = (head - tail + observations.length) % observations.length;
+        long avg = 0;
+        if (count > 0) {
+            avg = total / count;
+        }
+        return avg;
+    }
+
+    private void updateStat(long read, long lastObserveTs) {
+        Stat lastStat = this.lastStat.get();
+        if (lastObserveTs - lastStat.lastMaxObserveTs > freshness || read >= lastStat.max) {
+            lastStat = new Stat(calcAvg(), read, lastObserveTs, lastObserveTs);
+        } else {
+            lastStat = new Stat(calcAvg(), lastStat.max, lastObserveTs, lastStat.lastMaxObserveTs);
+        }
+        this.lastStat.set(lastStat);
+    }
+
+    private static class Observation {
         private long ts;
         private long read;
+    }
+
+    private record Stat(long avg, long max, long lastObserveTs, long lastMaxObserveTs) {
     }
 }

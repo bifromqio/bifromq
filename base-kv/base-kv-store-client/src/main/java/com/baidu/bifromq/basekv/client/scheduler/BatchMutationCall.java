@@ -20,8 +20,8 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
-import com.baidu.bifromq.basescheduler.CallTask;
 import com.baidu.bifromq.basescheduler.IBatchCall;
+import com.baidu.bifromq.basescheduler.ICallTask;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalListener;
@@ -35,10 +35,10 @@ import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public abstract class BatchMutationCall<Req, Resp> implements IBatchCall<Req, Resp, MutationCallBatcherKey> {
+public abstract class BatchMutationCall<ReqT, RespT> implements IBatchCall<ReqT, RespT, MutationCallBatcherKey> {
     private final KVRangeId rangeId;
     private final LoadingCache<String, IMutationPipeline> storePipelines;
-    private final Deque<BatchCallTask<Req, Resp>> batchCallTasks = new ArrayDeque<>();
+    private final Deque<MutationCallTaskBatch<ReqT, RespT>> batchCallTasks = new ArrayDeque<>();
 
     protected BatchMutationCall(KVRangeId rangeId, IBaseKVStoreClient storeClient, Duration pipelineExpiryTime) {
         this.rangeId = rangeId;
@@ -53,10 +53,10 @@ public abstract class BatchMutationCall<Req, Resp> implements IBatchCall<Req, Re
     }
 
     @Override
-    public final void add(CallTask<Req, Resp, MutationCallBatcherKey> callTask) {
-        BatchCallTask<Req, Resp> lastBatchCallTask;
-        MutationCallBatcherKey batcherKey = callTask.batcherKey;
-        assert callTask.batcherKey.id.equals(rangeId);
+    public final void add(ICallTask<ReqT, RespT, MutationCallBatcherKey> callTask) {
+        MutationCallTaskBatch<ReqT, RespT> lastBatchCallTask;
+        MutationCallBatcherKey batcherKey = callTask.batcherKey();
+        assert callTask.batcherKey().id.equals(rangeId);
         if ((lastBatchCallTask = batchCallTasks.peekLast()) != null) {
             if (lastBatchCallTask.storeId.equals(batcherKey.leaderStoreId) && lastBatchCallTask.ver == batcherKey.ver) {
                 if (!lastBatchCallTask.isBatchable(callTask)) {
@@ -76,16 +76,16 @@ public abstract class BatchMutationCall<Req, Resp> implements IBatchCall<Req, Re
         }
     }
 
-    protected BatchCallTask<Req, Resp> newBatch(String storeId, long ver) {
-        return new BatchCallTask<>(storeId, ver);
+    protected MutationCallTaskBatch<ReqT, RespT> newBatch(String storeId, long ver) {
+        return new MutationCallTaskBatch<>(storeId, ver);
     }
 
-    protected abstract RWCoProcInput makeBatch(Iterator<Req> reqIterator);
+    protected abstract RWCoProcInput makeBatch(Iterator<ReqT> reqIterator);
 
-    protected abstract void handleOutput(Queue<CallTask<Req, Resp, MutationCallBatcherKey>> batchedTasks,
+    protected abstract void handleOutput(Queue<ICallTask<ReqT, RespT, MutationCallBatcherKey>> batchedTasks,
                                          RWCoProcOutput output);
 
-    protected abstract void handleException(CallTask<Req, Resp, MutationCallBatcherKey> callTask, Throwable e);
+    protected abstract void handleException(ICallTask<ReqT, RespT, MutationCallBatcherKey> callTask, Throwable e);
 
     @Override
     public void reset() {
@@ -94,7 +94,7 @@ public abstract class BatchMutationCall<Req, Resp> implements IBatchCall<Req, Re
 
     @Override
     public CompletableFuture<Void> execute() {
-        BatchCallTask<Req, Resp> batchCallTask = batchCallTasks.poll();
+        MutationCallTaskBatch<ReqT, RespT> batchCallTask = batchCallTasks.poll();
         if (batchCallTask == null) {
             return CompletableFuture.completedFuture(null);
         }
@@ -108,16 +108,15 @@ public abstract class BatchMutationCall<Req, Resp> implements IBatchCall<Req, Re
     }
 
     private CompletableFuture<Void> fireBatchCall() {
-        BatchCallTask<Req, Resp> batchCallTask = batchCallTasks.poll();
+        MutationCallTaskBatch<ReqT, RespT> batchCallTask = batchCallTasks.poll();
         if (batchCallTask == null) {
             return CompletableFuture.completedFuture(null);
         }
         return fireBatchCall(batchCallTask);
     }
 
-    private CompletableFuture<Void> fireBatchCall(BatchCallTask<Req, Resp> batchCallTask) {
-        RWCoProcInput input = makeBatch(batchCallTask.batchedTasks.stream()
-            .map(call -> call.call).iterator());
+    private CompletableFuture<Void> fireBatchCall(MutationCallTaskBatch<ReqT, RespT> batchCallTask) {
+        RWCoProcInput input = makeBatch(batchCallTask.batchedTasks.stream().map(ICallTask::call).iterator());
         long reqId = System.nanoTime();
         return storePipelines.get(batchCallTask.storeId)
             .execute(KVRangeRWRequest.newBuilder()
@@ -135,7 +134,7 @@ public abstract class BatchMutationCall<Req, Resp> implements IBatchCall<Req, Re
             })
             .handle((v, e) -> {
                 if (e != null) {
-                    CallTask<Req, Resp, MutationCallBatcherKey> callTask;
+                    ICallTask<ReqT, RespT, MutationCallBatcherKey> callTask;
                     while ((callTask = batchCallTask.batchedTasks.poll()) != null) {
                         handleException(callTask, e);
                     }
@@ -147,21 +146,22 @@ public abstract class BatchMutationCall<Req, Resp> implements IBatchCall<Req, Re
             .thenCompose(v -> fireBatchCall());
     }
 
-    protected static class BatchCallTask<Req, Resp> {
+    protected static class MutationCallTaskBatch<CallT, CallResultT> {
         private final String storeId;
         private final long ver;
-        private final LinkedList<CallTask<Req, Resp, MutationCallBatcherKey>> batchedTasks = new LinkedList<>();
+        private final LinkedList<ICallTask<CallT, CallResultT, MutationCallBatcherKey>> batchedTasks =
+            new LinkedList<>();
 
-        protected BatchCallTask(String storeId, long ver) {
+        protected MutationCallTaskBatch(String storeId, long ver) {
             this.storeId = storeId;
             this.ver = ver;
         }
 
-        protected void add(CallTask<Req, Resp, MutationCallBatcherKey> callTask) {
+        protected void add(ICallTask<CallT, CallResultT, MutationCallBatcherKey> callTask) {
             this.batchedTasks.add(callTask);
         }
 
-        protected boolean isBatchable(CallTask<Req, Resp, MutationCallBatcherKey> callTask) {
+        protected boolean isBatchable(ICallTask<CallT, CallResultT, MutationCallBatcherKey> callTask) {
             return true;
         }
     }

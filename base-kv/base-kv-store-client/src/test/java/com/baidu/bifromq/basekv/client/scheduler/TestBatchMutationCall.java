@@ -17,7 +17,7 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
-import com.baidu.bifromq.basescheduler.CallTask;
+import com.baidu.bifromq.basescheduler.ICallTask;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.HashSet;
@@ -33,7 +33,7 @@ public class TestBatchMutationCall extends BatchMutationCall<ByteString, ByteStr
     }
 
     @Override
-    protected BatchCallTask<ByteString, ByteString> newBatch(String storeId, long ver) {
+    protected MutationCallTaskBatch<ByteString, ByteString> newBatch(String storeId, long ver) {
         return new TestBatchCallTask(storeId, ver);
     }
 
@@ -49,21 +49,21 @@ public class TestBatchMutationCall extends BatchMutationCall<ByteString, ByteStr
     }
 
     @Override
-    protected void handleOutput(Queue<CallTask<ByteString, ByteString, MutationCallBatcherKey>> batchedTasks,
+    protected void handleOutput(Queue<ICallTask<ByteString, ByteString, MutationCallBatcherKey>> batchedTasks,
                                 RWCoProcOutput output) {
-        CallTask<ByteString, ByteString, MutationCallBatcherKey> task;
+        ICallTask<ByteString, ByteString, MutationCallBatcherKey> task;
         while ((task = batchedTasks.poll()) != null) {
             // just echo the request
-            task.callResult.complete(task.call);
+            task.resultPromise().complete(task.call());
         }
     }
 
     @Override
-    protected void handleException(CallTask<ByteString, ByteString, MutationCallBatcherKey> callTask, Throwable e) {
-        callTask.callResult.completeExceptionally(e);
+    protected void handleException(ICallTask<ByteString, ByteString, MutationCallBatcherKey> callTask, Throwable e) {
+        callTask.resultPromise().completeExceptionally(e);
     }
 
-    private static class TestBatchCallTask extends BatchCallTask<ByteString, ByteString> {
+    private static class TestBatchCallTask extends MutationCallTaskBatch<ByteString, ByteString> {
         private final Set<ByteString> keys = new HashSet<>();
 
         protected TestBatchCallTask(String storeId, long ver) {
@@ -71,14 +71,14 @@ public class TestBatchMutationCall extends BatchMutationCall<ByteString, ByteStr
         }
 
         @Override
-        protected void add(CallTask<ByteString, ByteString, MutationCallBatcherKey> callTask) {
+        protected void add(ICallTask<ByteString, ByteString, MutationCallBatcherKey> callTask) {
             super.add(callTask);
-            keys.add(callTask.call);
+            keys.add(callTask.call());
         }
 
         @Override
-        protected boolean isBatchable(CallTask<ByteString, ByteString, MutationCallBatcherKey> callTask) {
-            return !keys.contains(callTask.call);
+        protected boolean isBatchable(ICallTask<ByteString, ByteString, MutationCallBatcherKey> callTask) {
+            return !keys.contains(callTask.call());
         }
     }
 }

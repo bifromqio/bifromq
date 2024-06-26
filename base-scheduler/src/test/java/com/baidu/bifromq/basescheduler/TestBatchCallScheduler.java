@@ -60,7 +60,7 @@ public class TestBatchCallScheduler extends BatchCallScheduler<Integer, Integer,
     public class TestBatcher extends Batcher<Integer, Integer, Integer> {
         public class TestBatchCall implements IBatchCall<Integer, Integer, Integer> {
             private final AtomicInteger count = new AtomicInteger();
-            private final Queue<CallTask<Integer, Integer, Integer>> batch = new ConcurrentLinkedQueue<>();
+            private final Queue<ICallTask<Integer, Integer, Integer>> batch = new ConcurrentLinkedQueue<>();
             private CompletableFuture<Void> onBatchDone = new CompletableFuture<>();
 
             @Override
@@ -71,7 +71,7 @@ public class TestBatchCallScheduler extends BatchCallScheduler<Integer, Integer,
             }
 
             @Override
-            public void add(CallTask<Integer, Integer, Integer> callTask) {
+            public void add(ICallTask<Integer, Integer, Integer> callTask) {
                 batch.add(callTask);
                 count.incrementAndGet();
             }
@@ -116,8 +116,8 @@ public class TestBatchCallScheduler extends BatchCallScheduler<Integer, Integer,
             TestBatchCall call = calls.poll();
             if (call != null) {
                 executor.schedule(() -> {
-                    for (CallTask<Integer, Integer, Integer> task : call.batch) {
-                        task.callResult.complete(task.call);
+                    for (ICallTask<Integer, Integer, Integer> task : call.batch) {
+                        task.resultPromise().complete(task.call());
                     }
                     executor1.execute(() -> {
                         call.onBatchDone.complete(null);

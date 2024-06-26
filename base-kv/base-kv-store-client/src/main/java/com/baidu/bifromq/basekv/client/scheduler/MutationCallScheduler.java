@@ -22,7 +22,8 @@ import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public abstract class MutationCallScheduler<Req, Resp> extends BatchCallScheduler<Req, Resp, MutationCallBatcherKey> {
+public abstract class MutationCallScheduler<ReqT, RespT>
+    extends BatchCallScheduler<ReqT, RespT, MutationCallBatcherKey> {
     protected final IBaseKVStoreClient storeClient;
 
     public MutationCallScheduler(String name,
@@ -43,10 +44,10 @@ public abstract class MutationCallScheduler<Req, Resp> extends BatchCallSchedule
     }
 
     @Override
-    protected final Optional<MutationCallBatcherKey> find(Req subCall) {
+    protected final Optional<MutationCallBatcherKey> find(ReqT subCall) {
         Optional<KVRangeSetting> rangeSetting = storeClient.findByKey(rangeKey(subCall));
         return rangeSetting.map(setting -> new MutationCallBatcherKey(setting.id, setting.leader, setting.ver));
     }
 
-    protected abstract ByteString rangeKey(Req call);
+    protected abstract ByteString rangeKey(ReqT call);
 }

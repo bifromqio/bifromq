@@ -30,13 +30,13 @@ import java.util.concurrent.atomic.LongAdder;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
-    implements IBatchCallScheduler<Call, CallResult> {
+public abstract class BatchCallScheduler<CallT, CallResultT, BatcherKeyT>
+    implements IBatchCallScheduler<CallT, CallResultT> {
     private static final int BATCHER_EXPIRY_SECONDS = 600;
-    private final ICallScheduler<Call> callScheduler;
+    private final ICallScheduler<CallT> callScheduler;
     private final long tolerableLatencyNanos;
     private final long burstLatencyNanos;
-    private final LoadingCache<BatcherKey, Batcher<Call, CallResult, BatcherKey>> batchers;
+    private final LoadingCache<BatcherKeyT, Batcher<CallT, CallResultT, BatcherKeyT>> batchers;
     private final LongAdder runningCalls = new LongAdder();
     private final Gauge runningCallsGauge;
     private final Gauge batcherNumGauge;
@@ -54,14 +54,14 @@ public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
     }
 
     public BatchCallScheduler(String name,
-                              ICallScheduler<Call> reqScheduler,
+                              ICallScheduler<CallT> reqScheduler,
                               Duration tolerableLatency,
                               Duration burstLatency) {
         this(name, reqScheduler, tolerableLatency, burstLatency, Duration.ofSeconds(BATCHER_EXPIRY_SECONDS));
     }
 
     public BatchCallScheduler(String name,
-                              ICallScheduler<Call> reqScheduler,
+                              ICallScheduler<CallT> reqScheduler,
                               Duration tolerableLatency,
                               Duration burstLatency,
                               Duration batcherExpiry) {
@@ -77,7 +77,7 @@ public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
         batchers = Caffeine.newBuilder()
             .scheduler(Scheduler.systemScheduler())
             .expireAfterAccess(batcherExpiry)
-            .evictionListener((RemovalListener<BatcherKey, Batcher<Call, CallResult, BatcherKey>>)
+            .evictionListener((RemovalListener<BatcherKeyT, Batcher<CallT, CallResultT, BatcherKeyT>>)
                 (key, value, removalCause) -> {
                     if (value != null) {
                         value.close();
@@ -98,23 +98,23 @@ public abstract class BatchCallScheduler<Call, CallResult, BatcherKey>
             .register(Metrics.globalRegistry);
     }
 
-    protected abstract Batcher<Call, CallResult, BatcherKey> newBatcher(String name,
-                                                                        long tolerableLatencyNanos,
-                                                                        long burstLatencyNanos,
-                                                                        BatcherKey key);
+    protected abstract Batcher<CallT, CallResultT, BatcherKeyT> newBatcher(String name,
+                                                                           long tolerableLatencyNanos,
+                                                                           long burstLatencyNanos,
+                                                                           BatcherKeyT key);
 
-    protected abstract Optional<BatcherKey> find(Call call);
+    protected abstract Optional<BatcherKeyT> find(CallT call);
 
     @Override
-    public CompletableFuture<CallResult> schedule(Call request) {
+    public CompletableFuture<CallResultT> schedule(CallT request) {
         callSchedCounter.increment();
         runningCalls.increment();
         return callScheduler.submit(request)
             .thenCompose(req -> {
                 try {
-                    Optional<BatcherKey> batcherKey = find(req);
+                    Optional<BatcherKeyT> batcherKey = find(req);
                     if (batcherKey.isPresent()) {
-                        Batcher<Call, CallResult, BatcherKey> batcher = batchers.get(batcherKey.get());
+                        Batcher<CallT, CallResultT, BatcherKeyT> batcher = batchers.get(batcherKey.get());
                         callSubmitCounter.increment();
                         return batcher.submit(batcherKey.get(), req);
                     } else {

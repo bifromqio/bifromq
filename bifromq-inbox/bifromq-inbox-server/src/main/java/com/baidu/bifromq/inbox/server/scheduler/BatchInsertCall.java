@@ -19,7 +19,7 @@ import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
-import com.baidu.bifromq.basescheduler.CallTask;
+import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.records.ScopedInbox;
 import com.baidu.bifromq.inbox.storage.proto.BatchInsertReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
@@ -37,7 +37,7 @@ public class BatchInsertCall extends BatchMutationCall<InboxSubMessagePack, Batc
     }
 
     @Override
-    protected BatchCallTask<InboxSubMessagePack, BatchInsertReply.Result> newBatch(String storeId, long ver) {
+    protected MutationCallTaskBatch<InboxSubMessagePack, BatchInsertReply.Result> newBatch(String storeId, long ver) {
         return new BatchInsertCallTask(storeId, ver);
     }
 
@@ -56,25 +56,26 @@ public class BatchInsertCall extends BatchMutationCall<InboxSubMessagePack, Batc
 
     @Override
     protected void handleOutput(
-        Queue<CallTask<InboxSubMessagePack, BatchInsertReply.Result, MutationCallBatcherKey>> batchedTasks,
+        Queue<ICallTask<InboxSubMessagePack, BatchInsertReply.Result, MutationCallBatcherKey>> batchedTasks,
         RWCoProcOutput output) {
         assert batchedTasks.size() == output.getInboxService().getBatchInsert().getResultCount();
-        CallTask<InboxSubMessagePack, BatchInsertReply.Result, MutationCallBatcherKey> task;
+        ICallTask<InboxSubMessagePack, BatchInsertReply.Result, MutationCallBatcherKey> task;
         int i = 0;
         while ((task = batchedTasks.poll()) != null) {
-            task.callResult.complete(output.getInboxService().getBatchInsert().getResult(i++));
+            task.resultPromise().complete(output.getInboxService().getBatchInsert().getResult(i++));
         }
     }
 
     @Override
     protected void handleException(
-        CallTask<InboxSubMessagePack, BatchInsertReply.Result, MutationCallBatcherKey> callTask,
+        ICallTask<InboxSubMessagePack, BatchInsertReply.Result, MutationCallBatcherKey> callTask,
         Throwable e) {
-        callTask.callResult.complete(
+        callTask.resultPromise().complete(
             BatchInsertReply.Result.newBuilder().setCode(BatchInsertReply.Code.ERROR).build());
     }
 
-    private static class BatchInsertCallTask extends BatchCallTask<InboxSubMessagePack, BatchInsertReply.Result> {
+    private static class BatchInsertCallTask extends
+        MutationCallTaskBatch<InboxSubMessagePack, BatchInsertReply.Result> {
         private final Set<ScopedInbox> inboxes = new HashSet<>();
 
         private BatchInsertCallTask(String storeId, long ver) {
@@ -82,22 +83,22 @@ public class BatchInsertCall extends BatchMutationCall<InboxSubMessagePack, Batc
         }
 
         @Override
-        protected void add(CallTask<InboxSubMessagePack, BatchInsertReply.Result, MutationCallBatcherKey> callTask) {
+        protected void add(ICallTask<InboxSubMessagePack, BatchInsertReply.Result, MutationCallBatcherKey> callTask) {
             super.add(callTask);
             inboxes.add(new ScopedInbox(
-                callTask.call.getTenantId(),
-                callTask.call.getInboxId(),
-                callTask.call.getIncarnation())
+                callTask.call().getTenantId(),
+                callTask.call().getInboxId(),
+                callTask.call().getIncarnation())
             );
         }
 
         @Override
         protected boolean isBatchable(
-            CallTask<InboxSubMessagePack, BatchInsertReply.Result, MutationCallBatcherKey> callTask) {
+            ICallTask<InboxSubMessagePack, BatchInsertReply.Result, MutationCallBatcherKey> callTask) {
             return !inboxes.contains(new ScopedInbox(
-                callTask.call.getTenantId(),
-                callTask.call.getInboxId(),
-                callTask.call.getIncarnation()));
+                callTask.call().getTenantId(),
+                callTask.call().getInboxId(),
+                callTask.call().getIncarnation()));
         }
     }
 }

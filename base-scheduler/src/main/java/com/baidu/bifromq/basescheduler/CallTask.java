@@ -15,14 +15,34 @@ package com.baidu.bifromq.basescheduler;
 
 import java.util.concurrent.CompletableFuture;
 
-public class CallTask<Call, CallResult, BatcherKey> {
-    public final BatcherKey batcherKey;
-    public final Call call;
-    public final CompletableFuture<CallResult> callResult = new CompletableFuture<>();
-    public final long ts = System.nanoTime();
+class CallTask<CallT, CallResultT, BatcherKeyT> implements ICallTask<CallT, CallResultT, BatcherKeyT> {
+    private final BatcherKeyT batcherKey;
+    private final CallT call;
+    private final CompletableFuture<CallResultT> resultPromise = new CompletableFuture<>();
+    private final long ts = System.nanoTime();
 
-    CallTask(BatcherKey batcherKey, Call call) {
+    CallTask(BatcherKeyT batcherKey, CallT call) {
         this.batcherKey = batcherKey;
         this.call = call;
+    }
+
+    @Override
+    public CallT call() {
+        return call;
+    }
+
+    @Override
+    public CompletableFuture<CallResultT> resultPromise() {
+        return resultPromise;
+    }
+
+    @Override
+    public BatcherKeyT batcherKey() {
+        return batcherKey;
+    }
+
+    @Override
+    public long ts() {
+        return ts;
     }
 }

@@ -40,7 +40,7 @@ public class BatchCallSchedulerTest {
     }
 
     @AfterMethod
-    public void teardown() {
+    public void tearDown() {
         executor.shutdown();
     }
 

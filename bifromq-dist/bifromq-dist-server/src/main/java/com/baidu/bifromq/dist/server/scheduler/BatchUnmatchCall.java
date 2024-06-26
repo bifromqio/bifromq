@@ -22,7 +22,7 @@ import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
-import com.baidu.bifromq.basescheduler.CallTask;
+import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
@@ -61,18 +61,18 @@ public class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchR
     }
 
     @Override
-    protected void handleException(CallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey> callTask,
+    protected void handleException(ICallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey> callTask,
                                    Throwable e) {
-        callTask.callResult.completeExceptionally(e);
+        callTask.resultPromise().completeExceptionally(e);
     }
 
     @Override
-    protected void handleOutput(Queue<CallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey>> batchedTasks,
+    protected void handleOutput(Queue<ICallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey>> batchedTasks,
                                 RWCoProcOutput output) {
-        CallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey> callTask;
+        ICallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey> callTask;
         while ((callTask = batchedTasks.poll()) != null) {
             BatchUnmatchReply reply = output.getDistService().getBatchUnmatch();
-            UnmatchRequest request = callTask.call;
+            UnmatchRequest request = callTask.call();
             String qInboxId = toQInboxId(request.getBrokerId(), request.getReceiverId(), request.getDelivererKey());
             String scopedTopicFilter = toScopedTopicFilter(request.getTenantId(), qInboxId, request.getTopicFilter());
             BatchUnmatchReply.Result result =
@@ -87,8 +87,8 @@ public class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchR
                     yield UnmatchReply.Result.ERROR;
             };
 
-            callTask.callResult.complete(UnmatchReply.newBuilder()
-                .setReqId(callTask.call.getReqId())
+            callTask.resultPromise().complete(UnmatchReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
                 .setResult(unmatchResult)
                 .build());
         }

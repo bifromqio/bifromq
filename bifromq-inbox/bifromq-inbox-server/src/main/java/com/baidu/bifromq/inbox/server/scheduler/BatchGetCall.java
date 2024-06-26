@@ -19,7 +19,7 @@ import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
-import com.baidu.bifromq.basescheduler.CallTask;
+import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.rpc.proto.GetReply;
 import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchGetRequest;
@@ -59,22 +59,22 @@ public class BatchGetCall extends BatchQueryCall<GetRequest, GetReply> {
     }
 
     @Override
-    protected void handleOutput(Queue<CallTask<GetRequest, GetReply, QueryCallBatcherKey>> batchedTasks,
+    protected void handleOutput(Queue<ICallTask<GetRequest, GetReply, QueryCallBatcherKey>> batchedTasks,
                                 ROCoProcOutput output) {
-        CallTask<GetRequest, GetReply, QueryCallBatcherKey> task;
+        ICallTask<GetRequest, GetReply, QueryCallBatcherKey> task;
         assert batchedTasks.size() == output.getInboxService().getBatchGet().getResultCount();
         int i = 0;
         while ((task = batchedTasks.poll()) != null) {
             List<InboxVersion> inboxVersions =
                 output.getInboxService().getBatchGet().getResult(i++).getVersionList();
             if (inboxVersions.isEmpty()) {
-                task.callResult.complete(GetReply.newBuilder()
-                    .setReqId(task.call.getReqId())
+                task.resultPromise().complete(GetReply.newBuilder()
+                    .setReqId(task.call().getReqId())
                     .setCode(GetReply.Code.NO_INBOX)
                     .build());
             } else {
-                task.callResult.complete(GetReply.newBuilder()
-                    .setReqId(task.call.getReqId())
+                task.resultPromise().complete(GetReply.newBuilder()
+                    .setReqId(task.call().getReqId())
                     .setCode(GetReply.Code.EXIST)
                     .addAllInbox(inboxVersions) // always using highest incarnation
                     .build());
@@ -83,10 +83,10 @@ public class BatchGetCall extends BatchQueryCall<GetRequest, GetReply> {
     }
 
     @Override
-    protected void handleException(CallTask<GetRequest, GetReply, QueryCallBatcherKey> callTask,
+    protected void handleException(ICallTask<GetRequest, GetReply, QueryCallBatcherKey> callTask,
                                    Throwable e) {
-        callTask.callResult.complete(GetReply.newBuilder()
-            .setReqId(callTask.call.getReqId())
+        callTask.resultPromise().complete(GetReply.newBuilder()
+            .setReqId(callTask.call().getReqId())
             .setCode(GetReply.Code.ERROR)
             .build());
     }

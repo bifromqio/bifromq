@@ -19,7 +19,7 @@ import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
-import com.baidu.bifromq.basescheduler.CallTask;
+import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
@@ -63,18 +63,18 @@ public class BatchFetchCall extends BatchQueryCall<IInboxFetchScheduler.InboxFet
 
     @Override
     protected void handleOutput(
-        Queue<CallTask<IInboxFetchScheduler.InboxFetch, Fetched, QueryCallBatcherKey>> batchedTasks,
+        Queue<ICallTask<IInboxFetchScheduler.InboxFetch, Fetched, QueryCallBatcherKey>> batchedTasks,
         ROCoProcOutput output) {
-        CallTask<IInboxFetchScheduler.InboxFetch, Fetched, QueryCallBatcherKey> task;
+        ICallTask<IInboxFetchScheduler.InboxFetch, Fetched, QueryCallBatcherKey> task;
         int i = 0;
         while ((task = batchedTasks.poll()) != null) {
-            task.callResult.complete(output.getInboxService().getBatchFetch().getResult(i++));
+            task.resultPromise().complete(output.getInboxService().getBatchFetch().getResult(i++));
         }
     }
 
     @Override
-    protected void handleException(CallTask<IInboxFetchScheduler.InboxFetch, Fetched, QueryCallBatcherKey> callTask,
+    protected void handleException(ICallTask<IInboxFetchScheduler.InboxFetch, Fetched, QueryCallBatcherKey> callTask,
                                    Throwable e) {
-        callTask.callResult.completeExceptionally(e);
+        callTask.resultPromise().completeExceptionally(e);
     }
 }

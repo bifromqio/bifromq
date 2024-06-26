@@ -15,10 +15,13 @@ package com.baidu.bifromq.basescheduler;
 
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import java.time.Duration;
+import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Test;
 
+@Slf4j
 public class MovingAverageTest {
     @Test
     public void baseCase() {
@@ -62,5 +65,17 @@ public class MovingAverageTest {
         movingAverage.observe(40);
         movingAverage.observe(10);
         assertEquals(movingAverage.estimate(), 25);
+    }
+
+    @Test
+    public void dataExpiration() throws InterruptedException {
+        MovingAverage movingAverage = new MovingAverage(5, Duration.ofMillis(500));
+        movingAverage.observe(100);
+        movingAverage.observe(200);
+        // Wait longer than freshness period
+        Thread.sleep(600);
+        movingAverage.observe(300);
+        assertTrue(Math.abs(300 - movingAverage.estimate()) < 1);
+        assertEquals(300, movingAverage.max());
     }
 }

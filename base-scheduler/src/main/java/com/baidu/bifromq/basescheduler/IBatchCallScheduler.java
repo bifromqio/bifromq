@@ -15,8 +15,23 @@ package com.baidu.bifromq.basescheduler;
 
 import java.util.concurrent.CompletableFuture;
 
-public interface IBatchCallScheduler<Req, Resp> {
-    CompletableFuture<Resp> schedule(Req request);
+/**
+ * Interface for batch call scheduler.
+ *
+ * @param <ReqT>  the type of the request to be fulfilled in batch
+ * @param <RespT> the type of the response expected
+ */
+public interface IBatchCallScheduler<ReqT, RespT> {
+    /**
+     * Schedule a request to be fulfilled in batch.
+     *
+     * @param request the request to be fulfilled in batch
+     * @return a future which will complete when the request is fulfilled
+     */
+    CompletableFuture<RespT> schedule(ReqT request);
 
+    /**
+     * Close the batch call scheduler and release any resources associated.
+     */
     void close();
 }

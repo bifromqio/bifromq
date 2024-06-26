@@ -19,7 +19,7 @@ import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
-import com.baidu.bifromq.basescheduler.CallTask;
+import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.records.ScopedInbox;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
@@ -41,7 +41,7 @@ public class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachRepl
     }
 
     @Override
-    protected BatchCallTask<DetachRequest, DetachReply> newBatch(String storeId, long ver) {
+    protected MutationCallTaskBatch<DetachRequest, DetachReply> newBatch(String storeId, long ver) {
         return new BatchDetachCallTask(storeId, ver);
     }
 
@@ -70,16 +70,15 @@ public class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachRepl
     }
 
     @Override
-    protected void handleOutput(
-        Queue<CallTask<DetachRequest, DetachReply, MutationCallBatcherKey>> batchedTasks,
-        RWCoProcOutput output) {
-        CallTask<DetachRequest, DetachReply, MutationCallBatcherKey> callTask;
+    protected void handleOutput(Queue<ICallTask<DetachRequest, DetachReply, MutationCallBatcherKey>> batchedTasks,
+                                RWCoProcOutput output) {
+        ICallTask<DetachRequest, DetachReply, MutationCallBatcherKey> callTask;
         assert batchedTasks.size() == output.getInboxService().getBatchDetach().getResultCount();
 
         int i = 0;
         while ((callTask = batchedTasks.poll()) != null) {
             BatchDetachReply.Result result = output.getInboxService().getBatchDetach().getResult(i++);
-            DetachReply.Builder replyBuilder = DetachReply.newBuilder().setReqId(callTask.call.getReqId());
+            DetachReply.Builder replyBuilder = DetachReply.newBuilder().setReqId(callTask.call().getReqId());
             switch (result.getCode()) {
                 case OK -> {
                     replyBuilder
@@ -91,19 +90,19 @@ public class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachRepl
                 }
                 case NO_INBOX -> replyBuilder.setCode(DetachReply.Code.NO_INBOX);
                 case CONFLICT -> replyBuilder.setCode(DetachReply.Code.CONFLICT);
-                case ERROR -> replyBuilder.setCode(DetachReply.Code.ERROR);
+                default -> replyBuilder.setCode(DetachReply.Code.ERROR);
             }
-            callTask.callResult.complete(replyBuilder.build());
+            callTask.resultPromise().complete(replyBuilder.build());
         }
     }
 
     @Override
-    protected void handleException(CallTask<DetachRequest, DetachReply, MutationCallBatcherKey> callTask,
+    protected void handleException(ICallTask<DetachRequest, DetachReply, MutationCallBatcherKey> callTask,
                                    Throwable e) {
-        callTask.callResult.complete(DetachReply.newBuilder().setCode(DetachReply.Code.ERROR).build());
+        callTask.resultPromise().complete(DetachReply.newBuilder().setCode(DetachReply.Code.ERROR).build());
     }
 
-    private static class BatchDetachCallTask extends BatchCallTask<DetachRequest, DetachReply> {
+    private static class BatchDetachCallTask extends MutationCallTaskBatch<DetachRequest, DetachReply> {
         private final Set<ScopedInbox> inboxes = new HashSet<>();
 
         private BatchDetachCallTask(String storeId, long ver) {
@@ -111,21 +110,21 @@ public class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachRepl
         }
 
         @Override
-        protected void add(CallTask<DetachRequest, DetachReply, MutationCallBatcherKey> callTask) {
+        protected void add(ICallTask<DetachRequest, DetachReply, MutationCallBatcherKey> callTask) {
             super.add(callTask);
             inboxes.add(new ScopedInbox(
-                callTask.call.getClient().getTenantId(),
-                callTask.call.getInboxId(),
-                callTask.call.getIncarnation())
+                callTask.call().getClient().getTenantId(),
+                callTask.call().getInboxId(),
+                callTask.call().getIncarnation())
             );
         }
 
         @Override
-        protected boolean isBatchable(CallTask<DetachRequest, DetachReply, MutationCallBatcherKey> callTask) {
+        protected boolean isBatchable(ICallTask<DetachRequest, DetachReply, MutationCallBatcherKey> callTask) {
             return !inboxes.contains(new ScopedInbox(
-                callTask.call.getClient().getTenantId(),
-                callTask.call.getInboxId(),
-                callTask.call.getIncarnation()));
+                callTask.call().getClient().getTenantId(),
+                callTask.call().getInboxId(),
+                callTask.call().getIncarnation()));
         }
     }
 }

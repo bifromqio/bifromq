@@ -19,7 +19,7 @@ import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
-import com.baidu.bifromq.basescheduler.CallTask;
+import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.records.ScopedInbox;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
@@ -39,7 +39,7 @@ public class BatchUnsubCall extends BatchMutationCall<UnsubRequest, UnsubReply> 
     }
 
     @Override
-    protected BatchCallTask<UnsubRequest, UnsubReply> newBatch(String storeId, long ver) {
+    protected MutationCallTaskBatch<UnsubRequest, UnsubReply> newBatch(String storeId, long ver) {
         return new BatchUnsubCallTask(storeId, ver);
     }
 
@@ -64,32 +64,32 @@ public class BatchUnsubCall extends BatchMutationCall<UnsubRequest, UnsubReply> 
     }
 
     @Override
-    protected void handleOutput(Queue<CallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey>> batchedTasks,
+    protected void handleOutput(Queue<ICallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey>> batchedTasks,
                                 RWCoProcOutput output) {
         assert batchedTasks.size() == output.getInboxService().getBatchUnsub().getCodeCount();
-        CallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey> task;
+        ICallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey> task;
         int i = 0;
         while ((task = batchedTasks.poll()) != null) {
-            UnsubReply.Builder replyBuilder = UnsubReply.newBuilder().setReqId(task.call.getReqId());
+            UnsubReply.Builder replyBuilder = UnsubReply.newBuilder().setReqId(task.call().getReqId());
             switch (output.getInboxService().getBatchUnsub().getCode(i++)) {
-                case OK -> task.callResult.complete(replyBuilder.setCode(UnsubReply.Code.OK).build());
-                case NO_INBOX -> task.callResult.complete(replyBuilder.setCode(UnsubReply.Code.NO_INBOX).build());
-                case NO_SUB -> task.callResult.complete(replyBuilder.setCode(UnsubReply.Code.NO_SUB).build());
-                case CONFLICT -> task.callResult.complete(replyBuilder.setCode(UnsubReply.Code.CONFLICT).build());
-                case ERROR -> task.callResult.complete(replyBuilder.setCode(UnsubReply.Code.ERROR).build());
+                case OK -> task.resultPromise().complete(replyBuilder.setCode(UnsubReply.Code.OK).build());
+                case NO_INBOX -> task.resultPromise().complete(replyBuilder.setCode(UnsubReply.Code.NO_INBOX).build());
+                case NO_SUB -> task.resultPromise().complete(replyBuilder.setCode(UnsubReply.Code.NO_SUB).build());
+                case CONFLICT -> task.resultPromise().complete(replyBuilder.setCode(UnsubReply.Code.CONFLICT).build());
+                default -> task.resultPromise().complete(replyBuilder.setCode(UnsubReply.Code.ERROR).build());
             }
         }
     }
 
     @Override
-    protected void handleException(CallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey> callTask, Throwable e) {
-        callTask.callResult.complete(UnsubReply.newBuilder()
-            .setReqId(callTask.call.getReqId())
+    protected void handleException(ICallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey> callTask, Throwable e) {
+        callTask.resultPromise().complete(UnsubReply.newBuilder()
+            .setReqId(callTask.call().getReqId())
             .setCode(UnsubReply.Code.ERROR)
             .build());
     }
 
-    private static class BatchUnsubCallTask extends BatchCallTask<UnsubRequest, UnsubReply> {
+    private static class BatchUnsubCallTask extends MutationCallTaskBatch<UnsubRequest, UnsubReply> {
         private final Set<ScopedInbox> inboxes = new HashSet<>();
 
         private BatchUnsubCallTask(String storeId, long ver) {
@@ -97,21 +97,21 @@ public class BatchUnsubCall extends BatchMutationCall<UnsubRequest, UnsubReply> 
         }
 
         @Override
-        protected void add(CallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey> callTask) {
+        protected void add(ICallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey> callTask) {
             super.add(callTask);
             inboxes.add(new ScopedInbox(
-                callTask.call.getTenantId(),
-                callTask.call.getInboxId(),
-                callTask.call.getIncarnation())
+                callTask.call().getTenantId(),
+                callTask.call().getInboxId(),
+                callTask.call().getIncarnation())
             );
         }
 
         @Override
-        protected boolean isBatchable(CallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey> callTask) {
+        protected boolean isBatchable(ICallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey> callTask) {
             return !inboxes.contains(new ScopedInbox(
-                callTask.call.getTenantId(),
-                callTask.call.getInboxId(),
-                callTask.call.getIncarnation()));
+                callTask.call().getTenantId(),
+                callTask.call().getInboxId(),
+                callTask.call().getIncarnation()));
         }
     }
 }
