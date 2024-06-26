@@ -76,7 +76,12 @@ final class DistClient implements IDistClient {
             .build();
         log.trace("Handling match request:\n{}", request);
         return rpcClient.invoke(tenantId, null, request, DistServiceGrpc.getMatchMethod())
-            .thenApply(v -> MatchResult.values()[v.getResult().getNumber()])
+            .thenApply(v -> switch (v.getResult()) {
+                case OK -> MatchResult.OK;
+                case EXCEED_LIMIT -> MatchResult.EXCEED_LIMIT;
+                case BACK_PRESSURE_REJECTED -> MatchResult.BACK_PRESSURE_REJECTED;
+                default -> MatchResult.ERROR;
+            })
             .exceptionally(e -> {
                 log.debug("Failed to match", e);
                 return MatchResult.ERROR;
@@ -96,7 +101,12 @@ final class DistClient implements IDistClient {
             .build();
         log.trace("Handling unsub request:\n{}", request);
         return rpcClient.invoke(tenantId, null, request, DistServiceGrpc.getUnmatchMethod())
-            .thenApply(v -> UnmatchResult.values()[v.getResult().getNumber()])
+            .thenApply(v -> switch (v.getResult()) {
+                case OK -> UnmatchResult.OK;
+                case NOT_EXISTED -> UnmatchResult.NOT_EXISTED;
+                case BACK_PRESSURE_REJECTED -> UnmatchResult.BACK_PRESSURE_REJECTED;
+                default -> UnmatchResult.ERROR;
+            })
             .exceptionally(e -> {
                 log.debug("Failed to unmatch", e);
                 return UnmatchResult.ERROR;

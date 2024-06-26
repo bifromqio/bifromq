@@ -23,6 +23,7 @@ import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.metrics.ITenantMeter;
+import com.baidu.bifromq.mqtt.session.IMQTTSession;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
@@ -52,7 +53,7 @@ public class LocalDistService implements ILocalDistService {
 
     private static class LocalRoutes {
         private final String localizedReceiverId;
-        public final Map<String, IMQTTTransientSession> routeList = new ConcurrentHashMap<>();
+        public final Set<String> routeList = Sets.newConcurrentHashSet();
 
         private LocalRoutes(int bucketId) {
             this.localizedReceiverId = ILocalDistService.localize(bucketId + "_" + System.nanoTime());
@@ -73,15 +74,17 @@ public class LocalDistService implements ILocalDistService {
     private final IEventCollector eventCollector;
     private final String serverId;
 
-    private final ConcurrentMap<String, IMQTTTransientSession> sessionMap = new ConcurrentHashMap<>();
+    private final ILocalSessionRegistry sessionRegistry;
 
     private final ConcurrentMap<TopicFilter, CompletableFuture<LocalRoutes>> routeMap = new ConcurrentHashMap<>();
 
     public LocalDistService(String serverId,
+                            ILocalSessionRegistry sessionRegistry,
                             IDistClient distClient,
                             IResourceThrottler resourceThrottler,
                             IEventCollector eventCollector) {
         this.serverId = serverId;
+        this.sessionRegistry = sessionRegistry;
         this.distClient = distClient;
         this.resourceThrottler = resourceThrottler;
         this.eventCollector = eventCollector;
@@ -97,7 +100,6 @@ public class LocalDistService implements ILocalDistService {
 
     @Override
     public CompletableFuture<MatchResult> match(long reqId, String topicFilter, IMQTTTransientSession session) {
-        sessionMap.put(session.channelId(), session);
         if (TopicUtil.isSharedSubscription(topicFilter)) {
             return distClient.match(reqId,
                 session.clientInfo().getTenantId(),
@@ -117,7 +119,7 @@ public class LocalDistService implements ILocalDistService {
                                 toDelivererKey(localRoutes.localizedReceiverId(), serverId), 0)
                             .thenApply(matchResult -> {
                                 if (matchResult == MatchResult.OK) {
-                                    localRoutes.routeList.put(session.channelId(), session);
+                                    localRoutes.routeList.add(session.channelId());
                                     return localRoutes;
                                 }
                                 throw new AddRouteException(matchResult);
@@ -128,7 +130,7 @@ public class LocalDistService implements ILocalDistService {
                             if (e != null) {
                                 updated.completeExceptionally(e);
                             } else {
-                                routeList.routeList.put(session.channelId(), session);
+                                routeList.routeList.add(session.channelId());
                                 updated.complete(routeList);
                             }
                         });
@@ -138,8 +140,8 @@ public class LocalDistService implements ILocalDistService {
             return toReturn
                 .handle((routeList, e) -> {
                     if (e != null) {
-                        routeMap.remove(new TopicFilter(session.clientInfo().getTenantId(), topicFilter, bucketId),
-                            toReturn);
+                        routeMap.remove(
+                            new TopicFilter(session.clientInfo().getTenantId(), topicFilter, bucketId), toReturn);
                         if (e instanceof AddRouteException) {
                             return ((AddRouteException) e).matchResult;
                         }
@@ -160,9 +162,7 @@ public class LocalDistService implements ILocalDistService {
     }
 
     @Override
-    public CompletableFuture<UnmatchResult> unmatch(long reqId, String topicFilter,
-                                                    IMQTTTransientSession session) {
-        sessionMap.remove(session.channelId(), session);
+    public CompletableFuture<UnmatchResult> unmatch(long reqId, String topicFilter, IMQTTTransientSession session) {
         if (TopicUtil.isSharedSubscription(topicFilter)) {
             return distClient.unmatch(reqId,
                 session.clientInfo().getTenantId(),
@@ -179,7 +179,7 @@ public class LocalDistService implements ILocalDistService {
                             if (e != null) {
                                 updated.completeExceptionally(e);
                             } else {
-                                localRoutes.routeList.remove(session.channelId(), session);
+                                localRoutes.routeList.remove(session.channelId());
                                 if (localRoutes.routeList.isEmpty()) {
                                     distClient.unmatch(reqId,
                                             k.tenantId,
@@ -210,9 +210,8 @@ public class LocalDistService implements ILocalDistService {
             return toReturn
                 .handle((r, e) -> {
                     if (e != null) {
-                        routeMap.remove(new TopicFilter(session.clientInfo().getTenantId(), topicFilter,
-                                bucketId),
-                            toReturn);
+                        routeMap.remove(
+                            new TopicFilter(session.clientInfo().getTenantId(), topicFilter, bucketId), toReturn);
                         if (e instanceof RemoveRouteException) {
                             // we use exception to return the unmatch result
                             return ((RemoveRouteException) e).unmatchResult;
@@ -245,10 +244,11 @@ public class LocalDistService implements ILocalDistService {
                 for (MatchInfo matchInfo : writePack.getMatchInfoList()) {
                     if (!noSub.contains(matchInfo) && !skip.contains(matchInfo)) {
                         if (ILocalDistService.isGlobal(matchInfo.getReceiverId())) {
-                            IMQTTTransientSession session =
-                                sessionMap.get(ILocalDistService.parseReceiverId(matchInfo.getReceiverId()));
-                            if (session != null) {
-                                boolean success = session.publish(matchInfo, singletonList(topicMsgPack));
+                            IMQTTSession session =
+                                sessionRegistry.get(ILocalDistService.parseReceiverId(matchInfo.getReceiverId()));
+                            if (session instanceof IMQTTTransientSession) {
+                                boolean success =
+                                    ((IMQTTTransientSession) session).publish(matchInfo, singletonList(topicMsgPack));
                                 if (success) {
                                     ok.add(matchInfo);
                                 } else {
@@ -282,20 +282,28 @@ public class LocalDistService implements ILocalDistService {
                                 boolean published = false;
                                 if (!isFanOutThrottled) {
                                     fanout *= localRoutes.routeList.size();
-                                    for (IMQTTTransientSession session : localRoutes.routeList.values()) {
+                                    for (String sessionId : localRoutes.routeList) {
                                         // at least one session should publish the message
-                                        if (session.publish(matchInfo, singletonList(topicMsgPack))) {
-                                            published = true;
+                                        IMQTTSession session = sessionRegistry.get(sessionId);
+                                        if (session instanceof IMQTTTransientSession) {
+                                            if (((IMQTTTransientSession) session).publish(matchInfo,
+                                                singletonList(topicMsgPack))) {
+                                                published = true;
+                                            }
                                         }
                                     }
                                 } else {
                                     // send to one subscriber to make sure matchinfo not lost
-                                    for (IMQTTTransientSession session : localRoutes.routeList.values()) {
+                                    for (String sessionId : localRoutes.routeList) {
                                         // at least one session should publish the message
-                                        if (session.publish(matchInfo, singletonList(topicMsgPack))) {
-                                            published = true;
-                                            hasFanOutDone = true;
-                                            break;
+                                        IMQTTSession session = sessionRegistry.get(sessionId);
+                                        if (session instanceof IMQTTTransientSession) {
+                                            if (((IMQTTTransientSession) session)
+                                                .publish(matchInfo, singletonList(topicMsgPack))) {
+                                                published = true;
+                                                hasFanOutDone = true;
+                                                break;
+                                            }
                                         }
                                     }
                                 }

@@ -47,6 +47,7 @@ message UnmatchReply {
     OK = 0;
     BACK_PRESSURE_REJECTED = 1;
     ERROR = 2;
+    NOT_EXISTED = 3;
   }
   uint64 reqId = 1;
   Result result = 2;

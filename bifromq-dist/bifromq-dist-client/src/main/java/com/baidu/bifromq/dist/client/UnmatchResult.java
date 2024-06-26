@@ -14,5 +14,5 @@
 package com.baidu.bifromq.dist.client;
 
 public enum UnmatchResult {
-    OK, BACK_PRESSURE_REJECTED, ERROR;
+    OK, NOT_EXISTED, BACK_PRESSURE_REJECTED, ERROR;
 }

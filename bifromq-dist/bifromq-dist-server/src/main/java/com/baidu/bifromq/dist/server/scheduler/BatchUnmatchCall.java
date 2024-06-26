@@ -77,9 +77,19 @@ public class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchR
             String scopedTopicFilter = toScopedTopicFilter(request.getTenantId(), qInboxId, request.getTopicFilter());
             BatchUnmatchReply.Result result =
                 reply.getResultsOrDefault(scopedTopicFilter, BatchUnmatchReply.Result.ERROR);
+            UnmatchReply.Result unmatchResult = switch (result) {
+                case OK:
+                    yield UnmatchReply.Result.OK;
+                case NOT_EXISTED:
+                    yield UnmatchReply.Result.NOT_EXISTED;
+                case ERROR:
+                default:
+                    yield UnmatchReply.Result.ERROR;
+            };
+
             callTask.callResult.complete(UnmatchReply.newBuilder()
                 .setReqId(callTask.call.getReqId())
-                .setResult(UnmatchReply.Result.forNumber(result.getNumber()))
+                .setResult(unmatchResult)
                 .build());
         }
     }

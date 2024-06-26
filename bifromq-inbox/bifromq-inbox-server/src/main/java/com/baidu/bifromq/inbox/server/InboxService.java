@@ -23,6 +23,7 @@ import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetai
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.UnmatchResult;
@@ -327,54 +328,64 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     public void sub(SubRequest request, StreamObserver<SubReply> responseObserver) {
         log.trace("Handling sub {}", request);
         response(tenantId -> subScheduler.schedule(request)
-                .thenCompose(subReply -> {
-                    if (subReply.getCode() == SubReply.Code.OK || subReply.getCode() == SubReply.Code.EXISTS) {
-                        return distClient.match(request.getReqId(),
-                                request.getTenantId(),
-                                request.getTopicFilter(),
-                                distInboxId(request.getInboxId(), request.getIncarnation()),
-                                getDelivererKey(request.getInboxId()), inboxClient.id())
-                            .thenApply(matchResult -> {
-                                switch (matchResult) {
-                                    case OK -> {
-                                        return subReply;
-                                    }
-                                    case EXCEED_LIMIT -> {
-                                        return SubReply.newBuilder()
-                                            .setReqId(request.getReqId())
-                                            .setCode(SubReply.Code.EXCEED_LIMIT).build();
-                                    }
-                                    default -> {
-                                        return SubReply.newBuilder()
-                                            .setReqId(request.getReqId())
-                                            .setCode(SubReply.Code.ERROR).build();
-                                    }
+            .thenCompose(subReply -> {
+                if (subReply.getCode() == SubReply.Code.OK || subReply.getCode() == SubReply.Code.EXISTS) {
+                    return distClient.match(request.getReqId(),
+                            request.getTenantId(),
+                            request.getTopicFilter(),
+                            distInboxId(request.getInboxId(), request.getIncarnation()),
+                            getDelivererKey(request.getInboxId()), inboxClient.id())
+                        .thenApply(matchResult -> {
+                            switch (matchResult) {
+                                case OK -> {
+                                    return subReply;
                                 }
-                            });
-                    }
-                    return CompletableFuture.completedFuture(subReply);
-                })
-                .exceptionally(e -> {
-                    log.debug("Failed to subscribe", e);
+                                case EXCEED_LIMIT -> {
+                                    return SubReply.newBuilder()
+                                        .setReqId(request.getReqId())
+                                        .setCode(SubReply.Code.EXCEED_LIMIT).build();
+                                }
+                                case BACK_PRESSURE_REJECTED -> {
+                                    return SubReply.newBuilder()
+                                        .setReqId(request.getReqId())
+                                        .setCode(SubReply.Code.BACK_PRESSURE_REJECTED).build();
+                                }
+                                default -> {
+                                    return SubReply.newBuilder()
+                                        .setReqId(request.getReqId())
+                                        .setCode(SubReply.Code.ERROR).build();
+                                }
+                            }
+                        });
+                }
+                return CompletableFuture.completedFuture(subReply);
+            })
+            .exceptionally(e -> {
+                log.debug("Failed to subscribe", e);
+                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
                     return SubReply.newBuilder()
                         .setReqId(request.getReqId())
-                        .setCode(SubReply.Code.ERROR)
+                        .setCode(SubReply.Code.BACK_PRESSURE_REJECTED)
                         .build();
-                })
-                .whenComplete((v, e) -> {
-                    //update monitored deadline record
-                    if (v != null &&
-                        (v.getCode() == SubReply.Code.OK
-                            || v.getCode() == SubReply.Code.EXISTS
-                            || v.getCode() == SubReply.Code.EXCEED_LIMIT)) {
-                        ScopedInbox scopedInbox = new ScopedInbox(
-                            request.getTenantId(),
-                            request.getInboxId(),
-                            request.getIncarnation());
-                        delayTaskRunner.touch(scopedInbox);
-                    }
-                })
-            , responseObserver);
+                }
+                return SubReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(SubReply.Code.ERROR)
+                    .build();
+            })
+            .whenComplete((v, e) -> {
+                //update monitored deadline record
+                if (v != null
+                    && (v.getCode() == SubReply.Code.OK
+                    || v.getCode() == SubReply.Code.EXISTS
+                    || v.getCode() == SubReply.Code.EXCEED_LIMIT)) {
+                    ScopedInbox scopedInbox = new ScopedInbox(
+                        request.getTenantId(),
+                        request.getInboxId(),
+                        request.getIncarnation());
+                    delayTaskRunner.touch(scopedInbox);
+                }
+            }), responseObserver);
     }
 
     @Override
@@ -388,21 +399,32 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         request.getInboxId(),
                         request.getIncarnation(),
                         request.getTopicFilter())
-                        .thenApply(unmatchResult -> {
-                            if (unmatchResult == UnmatchResult.OK) {
-                                return v;
-                            } else {
-                                return UnsubReply.newBuilder()
-                                    .setReqId(request.getReqId())
-                                    .setCode(UnsubReply.Code.ERROR)
-                                    .build();
-                            }
+                        .thenApply(unmatchResult -> switch (unmatchResult) {
+                            case OK -> v;
+                            case NOT_EXISTED -> UnsubReply.newBuilder()
+                                .setReqId(request.getReqId())
+                                .setCode(UnsubReply.Code.NO_SUB)
+                                .build();
+                            case BACK_PRESSURE_REJECTED -> UnsubReply.newBuilder()
+                                .setReqId(request.getReqId())
+                                .setCode(UnsubReply.Code.BACK_PRESSURE_REJECTED)
+                                .build();
+                            case ERROR -> UnsubReply.newBuilder()
+                                .setReqId(request.getReqId())
+                                .setCode(UnsubReply.Code.ERROR)
+                                .build();
                         });
                 }
                 return CompletableFuture.completedFuture(v);
             })
             .exceptionally(e -> {
                 log.debug("Failed to unsubscribe", e);
+                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                    return UnsubReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(UnsubReply.Code.BACK_PRESSURE_REJECTED)
+                        .build();
+                }
                 return UnsubReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setCode(UnsubReply.Code.ERROR)

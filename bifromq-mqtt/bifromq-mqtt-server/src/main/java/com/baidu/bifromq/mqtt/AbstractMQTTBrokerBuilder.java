@@ -161,7 +161,7 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
     public T distClient(IDistClient distClient) {
         this.distClient = distClient;
         sessionRegistry = new LocalSessionRegistry();
-        distService = new LocalDistService(brokerId(), distClient, resourceThrottler, eventCollector);
+        distService = new LocalDistService(brokerId(), sessionRegistry, distClient, resourceThrottler, eventCollector);
         return thisT();
     }
 

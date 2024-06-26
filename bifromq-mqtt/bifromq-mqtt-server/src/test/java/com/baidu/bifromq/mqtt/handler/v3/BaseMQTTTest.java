@@ -13,6 +13,34 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
+import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.DebugModeEnabled;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.ForceTransient;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.InBoundBandWidth;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicFiltersPerSub;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLength;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevelLength;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevels;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxUserPayloadBytes;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.OutBoundBandWidth;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainEnabled;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainMessageMatchLimit;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
+import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
+
 import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
@@ -70,15 +98,6 @@ import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttDecoder;
 import io.netty.handler.traffic.ChannelTrafficShapingHandler;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
-import org.mockito.stubbing.Answer;
-import org.mockito.stubbing.OngoingStubbing;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
-
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -87,34 +106,14 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-
-import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.DebugModeEnabled;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.ForceTransient;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.InBoundBandWidth;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicFiltersPerSub;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLength;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevelLength;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevels;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxUserPayloadBytes;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.OutBoundBandWidth;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainEnabled;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainMessageMatchLimit;
-import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
-import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
+import org.mockito.stubbing.Answer;
+import org.mockito.stubbing.OngoingStubbing;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 
 public abstract class BaseMQTTTest {
 
@@ -163,22 +162,22 @@ public abstract class BaseMQTTTest {
         closeable = MockitoAnnotations.openMocks(this);
         testTicker = new TestTicker();
         sessionRegistry = new LocalSessionRegistry();
-        distService = new LocalDistService(serverId, distClient, resourceThrottler, eventCollector);
+        distService = new LocalDistService(serverId, sessionRegistry, distClient, resourceThrottler, eventCollector);
         sessionContext = MQTTSessionContext.builder()
-                .authProvider(authProvider)
-                .eventCollector(eventCollector)
-                .resourceThrottler(resourceThrottler)
-                .settingProvider(settingProvider)
-                .distClient(distClient)
-                .inboxClient(inboxClient)
-                .retainClient(retainClient)
-                .sessionDictClient(sessionDictClient)
-                .localSessionRegistry(sessionRegistry)
-                .localDistService(distService)
-                .defaultKeepAliveTimeSeconds(300)
-                .ticker(testTicker)
-                .serverId(serverId)
-                .build();
+            .authProvider(authProvider)
+            .eventCollector(eventCollector)
+            .resourceThrottler(resourceThrottler)
+            .settingProvider(settingProvider)
+            .distClient(distClient)
+            .inboxClient(inboxClient)
+            .retainClient(retainClient)
+            .sessionDictClient(sessionDictClient)
+            .localSessionRegistry(sessionRegistry)
+            .localDistService(distService)
+            .defaultKeepAliveTimeSeconds(300)
+            .ticker(testTicker)
+            .serverId(serverId)
+            .build();
         channel = new EmbeddedChannel(true, true, channelInitializer());
         channel.freezeTime();
         // common mocks
@@ -203,8 +202,8 @@ public abstract class BaseMQTTTest {
                 pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(256 * 1024)); //256kb
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
                 pipeline.addLast(ConditionalRejectHandler.NAME,
-                        new ConditionalRejectHandler(Sets.newHashSet(HeapMemPressureCondition.INSTANCE),
-                                eventCollector));
+                    new ConditionalRejectHandler(Sets.newHashSet(HeapMemPressureCondition.INSTANCE),
+                        eventCollector));
                 pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(2));
             }
         };
@@ -213,7 +212,7 @@ public abstract class BaseMQTTTest {
     protected void mockSettings() {
         Mockito.lenient().when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
         Mockito.lenient().when(settingProvider.provide(any(Setting.class), anyString())).thenAnswer(
-                invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
+            invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
         Mockito.lenient().when(settingProvider.provide(eq(InBoundBandWidth), anyString())).thenReturn(51200 * 1024L);
         Mockito.lenient().when(settingProvider.provide(eq(OutBoundBandWidth), anyString())).thenReturn(51200 * 1024L);
         Mockito.lenient().when(settingProvider.provide(eq(ForceTransient), anyString())).thenReturn(false);
@@ -233,130 +232,130 @@ public abstract class BaseMQTTTest {
         Map<String, String> attrsMap = new HashMap<>();
         Tags.of(attrsKeyValues).iterator().forEachRemaining(tag -> attrsMap.put(tag.getKey(), tag.getValue()));
         when(authProvider.auth(any(MQTT3AuthData.class)))
-                .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
-                        .setOk(Ok.newBuilder()
-                                .setTenantId(tenantId)
-                                .setUserId(userId)
-                                .putAllAttrs(attrsMap)
-                                .build())
-                        .build()));
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTenantId(tenantId)
+                    .setUserId(userId)
+                    .putAllAttrs(attrsMap)
+                    .build())
+                .build()));
     }
 
     protected void mockAuthReject(Reject.Code code, String reason) {
         when(authProvider.auth(any(MQTT3AuthData.class)))
-                .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
-                        .setReject(Reject.newBuilder()
-                                .setCode(code)
-                                .setReason(reason)
-                                .build())
-                        .build()));
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setReject(Reject.newBuilder()
+                    .setCode(code)
+                    .setReason(reason)
+                    .build())
+                .build()));
     }
 
     protected void mockAuthCheck(boolean allow) {
         when(authProvider.checkPermission(any(ClientInfo.class), any()))
-                .thenReturn(CompletableFuture.completedFuture(allow ?
-                        CheckResult.newBuilder()
-                                .setGranted(Granted.getDefaultInstance())
-                                .build() :
-                        CheckResult.newBuilder()
-                                .setDenied(Denied.getDefaultInstance())
-                                .build()));
+            .thenReturn(CompletableFuture.completedFuture(allow ?
+                CheckResult.newBuilder()
+                    .setGranted(Granted.getDefaultInstance())
+                    .build() :
+                CheckResult.newBuilder()
+                    .setDenied(Denied.getDefaultInstance())
+                    .build()));
     }
 
     protected void mockInboxGet(boolean success) {
         when(inboxClient.get(any()))
-                .thenReturn(CompletableFuture.completedFuture(success ?
-                        GetReply.newBuilder().setCode(GetReply.Code.EXIST).build() :
-                        GetReply.newBuilder().setCode(GetReply.Code.NO_INBOX).build()));
+            .thenReturn(CompletableFuture.completedFuture(success ?
+                GetReply.newBuilder().setCode(GetReply.Code.EXIST).build() :
+                GetReply.newBuilder().setCode(GetReply.Code.NO_INBOX).build()));
     }
 
     protected void mockInboxGet(InboxVersion... inboxVersions) {
         when(inboxClient.get(any()))
-                .thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder()
-                        .setCode(inboxVersions.length > 0 ? GetReply.Code.EXIST : GetReply.Code.NO_INBOX)
-                        .addAllInbox(List.of(inboxVersions))
-                        .build()));
+            .thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder()
+                .setCode(inboxVersions.length > 0 ? GetReply.Code.EXIST : GetReply.Code.NO_INBOX)
+                .addAllInbox(List.of(inboxVersions))
+                .build()));
     }
 
     protected void mockInboxGetError() {
         when(inboxClient.get(any()))
-                .thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder()
-                        .setCode(GetReply.Code.ERROR)
-                        .build()));
+            .thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder()
+                .setCode(GetReply.Code.ERROR)
+                .build()));
     }
 
     protected void mockAttach(AttachReply.Code code) {
         when(inboxClient.attach(any()))
-                .thenReturn(CompletableFuture.completedFuture(AttachReply.newBuilder().setCode(code).build()));
+            .thenReturn(CompletableFuture.completedFuture(AttachReply.newBuilder().setCode(code).build()));
     }
 
     protected void mockDetach(DetachReply.Code code) {
         when(inboxClient.detach(any()))
-                .thenReturn(CompletableFuture.completedFuture(DetachReply.newBuilder().setCode(code).build()));
+            .thenReturn(CompletableFuture.completedFuture(DetachReply.newBuilder().setCode(code).build()));
     }
 
     protected void mockInboxCreate(boolean success) {
         when(inboxClient.create(any()))
-                .thenReturn(CompletableFuture.completedFuture(CreateReply.newBuilder()
-                        .setCode(success ? CreateReply.Code.OK : CreateReply.Code.ERROR)
-                        .build())
-                );
+            .thenReturn(CompletableFuture.completedFuture(CreateReply.newBuilder()
+                .setCode(success ? CreateReply.Code.OK : CreateReply.Code.ERROR)
+                .build())
+            );
     }
 
     protected void mockInboxCreate(CreateReply.Code code) {
         when(inboxClient.create(any()))
-                .thenReturn(CompletableFuture.completedFuture(CreateReply.newBuilder()
-                        .setCode(code)
-                        .build())
-                );
+            .thenReturn(CompletableFuture.completedFuture(CreateReply.newBuilder()
+                .setCode(code)
+                .build())
+            );
     }
 
     protected void mockInboxExpire(boolean success) {
         when(inboxClient.expire(any()))
-                .thenReturn(CompletableFuture.completedFuture(ExpireReply.newBuilder()
-                        .setCode(success ? ExpireReply.Code.OK : ExpireReply.Code.ERROR)
-                        .build()));
+            .thenReturn(CompletableFuture.completedFuture(ExpireReply.newBuilder()
+                .setCode(success ? ExpireReply.Code.OK : ExpireReply.Code.ERROR)
+                .build()));
     }
 
     protected void mockInboxExpire(ExpireReply.Code code) {
         when(inboxClient.expire(any()))
-                .thenReturn(CompletableFuture.completedFuture(ExpireReply.newBuilder()
-                        .setCode(code)
-                        .build()));
+            .thenReturn(CompletableFuture.completedFuture(ExpireReply.newBuilder()
+                .setCode(code)
+                .build()));
     }
 
     protected void mockInboxCommit(CommitReply.Code code) {
         when(inboxClient.commit(any()))
-                .thenReturn(
-                        CompletableFuture.completedFuture(CommitReply.newBuilder().setCode(code).build()));
+            .thenReturn(
+                CompletableFuture.completedFuture(CommitReply.newBuilder().setCode(code).build()));
     }
 
     protected void mockDistMatch(QoS qos, boolean success) {
         when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
-                .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
+            .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
     }
 
     protected void mockDistMatch(String topic, boolean success) {
         when(distClient.match(anyLong(), anyString(), eq(topic), anyString(), anyString(), anyInt()))
-                .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
+            .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
     }
 
 
     protected void mockInboxSub(QoS qos, boolean success) {
         when(inboxClient.sub(any())).thenReturn(CompletableFuture.completedFuture(
-                SubReply.newBuilder()
-                        .setCode(success ? SubReply.Code.OK : SubReply.Code.ERROR)
-                        .build()));
+            SubReply.newBuilder()
+                .setCode(success ? SubReply.Code.OK : SubReply.Code.ERROR)
+                .build()));
     }
 
     protected void mockDistUnmatch(boolean... success) {
         CompletableFuture<UnmatchResult>[] unsubResults = new CompletableFuture[success.length];
         for (int i = 0; i < success.length; i++) {
             unsubResults[i] = success[i] ? CompletableFuture.completedFuture(UnmatchResult.OK)
-                    : CompletableFuture.failedFuture(new RuntimeException("InternalError"));
+                : CompletableFuture.failedFuture(new RuntimeException("InternalError"));
         }
         OngoingStubbing<CompletableFuture<UnmatchResult>> ongoingStubbing =
-                when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()));
+            when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()));
         for (CompletableFuture<UnmatchResult> result : unsubResults) {
             ongoingStubbing = ongoingStubbing.thenReturn(result);
         }
@@ -364,20 +363,20 @@ public abstract class BaseMQTTTest {
 
     protected void mockDistDist(boolean success) {
         when(distClient.pub(anyLong(), anyString(), any(), any(ClientInfo.class)))
-                .thenReturn(CompletableFuture.completedFuture(success ? DistResult.OK : DistResult.ERROR));
+            .thenReturn(CompletableFuture.completedFuture(success ? DistResult.OK : DistResult.ERROR));
     }
 
     protected void mockDistBackPressure() {
         when(distClient.pub(anyLong(), anyString(), any(), any(ClientInfo.class)))
-                .thenReturn(CompletableFuture.completedFuture(DistResult.BACK_PRESSURE_REJECTED));
+            .thenReturn(CompletableFuture.completedFuture(DistResult.BACK_PRESSURE_REJECTED));
     }
 
     protected void mockSessionReg() {
         when(sessionDictClient.reg(any(), any())).thenAnswer(
-                (Answer<ISessionRegister>) invocation -> {
-                    onKick.set(invocation.getArgument(1));
-                    return sessionRegister;
-                });
+            (Answer<ISessionRegister>) invocation -> {
+                onKick.set(invocation.getArgument(1));
+                return sessionRegister;
+            });
     }
 
     protected void mockInboxReader() {
@@ -394,15 +393,15 @@ public abstract class BaseMQTTTest {
 
     protected void mockRetainMatch() {
         when(retainClient.match(any()))
-                .thenReturn(CompletableFuture.completedFuture(
-                        MatchReply.newBuilder().setResult(MatchReply.Result.OK).build()
-                ));
+            .thenReturn(CompletableFuture.completedFuture(
+                MatchReply.newBuilder().setResult(MatchReply.Result.OK).build()
+            ));
     }
 
     protected void mockRetainPipeline(RetainReply.Result result) {
         when(retainClient.retain(anyLong(), anyString(), any(QoS.class), any(ByteString.class), anyInt(),
-                any(ClientInfo.class)))
-                .thenReturn(CompletableFuture.completedFuture(RetainReply.newBuilder().setResult(result).build()));
+            any(ClientInfo.class)))
+            .thenReturn(CompletableFuture.completedFuture(RetainReply.newBuilder().setResult(result).build()));
     }
 
     protected void verifyEvent(EventType... types) {
