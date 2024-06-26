@@ -859,6 +859,7 @@
                             <exclude>**/proto/*.class</exclude>
                             <exclude>io/grpc/**/*.class</exclude>
                             <exclude>com/baidu/bifromq/baserpc/**/*.class</exclude>
+                            <exclude>com/baidu/bifromq/plugin/authprovider/type/*.class</exclude>
                         </excludes>
                     </configuration>
                     <executions>
