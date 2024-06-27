@@ -17,7 +17,7 @@
 
     <groupId>com.baidu.bifromq</groupId>
     <artifactId>bifromq-parent</artifactId>
-    <version>3.2.0-SNAPSHOT</version>
+    <version>3.2.0</version>
     <modules>
         <module>base-env</module>
         <module>base-cluster</module>

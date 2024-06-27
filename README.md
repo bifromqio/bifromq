@@ -23,7 +23,7 @@ cloud service.
   * Tenant-level Runtime Setting
   * Tenant-level Resource Throttling
   * Event
-  * System/Tenant-level Monitoring
+  * System/Tenant-level Metrics
 
 ## Documentation
 

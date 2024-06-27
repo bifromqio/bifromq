@@ -17,7 +17,7 @@ BifroMQ 是一个高性能且支持分布式的 MQTT Broker 实现，它原生�
   * 租户级运行时设置 (Runtime Setting)
   * 租户级资源限制 (Resource Throttling)
   * 事件 (Event)
-  * 系统/租户级别的监控 (System/Tenant-level Monitoring)
+  * 系统/租户级别的监控指标 (System/Tenant-level Metrics)
 
 ## 文档
 
@@ -60,7 +60,7 @@ mvn wrapper:wrapper
 ./mvnw -U clean package
 ```
 
-构建输出包括位于`/build/build-bifromq-starters/target/`下：
+构建输出位于`/build/build-bifromq-starters/target/`下：
 
 * `bifromq-<VERSION>-windows-standalone.zip`
 * `bifromq-<VERSION>-standalone.tar.gz`
@@ -68,7 +68,7 @@ mvn wrapper:wrapper
 #### 运行测试
 
 在项目根文件夹执行以下命令来运行所有测试用例，包括单元测试和集成测试。
-注意：测试可能需要一些时间来完成
+注意：完整的测试运行可能需要一些时间
 
 ```
 mvn test
