@@ -1,4 +1,4 @@
-name: tag push maven deploy
+name: maven-central-publish
 
 on:
   push:
