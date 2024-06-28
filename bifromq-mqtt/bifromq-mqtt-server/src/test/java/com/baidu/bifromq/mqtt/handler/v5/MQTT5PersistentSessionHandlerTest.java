@@ -45,9 +45,9 @@ import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.Fetched.Result;
+import com.baidu.bifromq.mqtt.handler.BaseSessionHandlerTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
-import com.baidu.bifromq.mqtt.handler.BaseSessionHandlerTest;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5DisconnectReasonCode;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
@@ -111,6 +111,7 @@ public class MQTT5PersistentSessionHandlerTest extends BaseSessionHandlerTest {
                 super.channelActive(ctx);
                 ctx.pipeline().addLast(MQTT5PersistentSessionHandler.builder()
                     .settings(new TenantSettings(tenantId, settingProvider))
+                    .tenantMeter(tenantMeter)
                     .connMsg(MqttMessageBuilders.connect()
                         .protocolVersion(MqttVersion.MQTT_5)
                         .build())

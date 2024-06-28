@@ -233,6 +233,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     private int receivingCount = 0;
 
     protected MQTTSessionHandler(TenantSettings settings,
+                                 ITenantMeter tenantMeter,
                                  String userSessionId,
                                  int keepAliveTimeSeconds,
                                  ClientInfo clientInfo,
@@ -246,7 +247,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         this.keepAliveTimeSeconds = keepAliveTimeSeconds;
         this.clientInfo = clientInfo;
         this.willMessage = willMessage;
-        this.tenantMeter = ITenantMeter.get(clientInfo.getTenantId());
+        this.tenantMeter = tenantMeter;
         this.throttler = new MPSThrottler(settings.maxMsgPerSec);
         this.idleTimeoutNanos = Duration.ofMillis(keepAliveTimeSeconds * 1500L).toNanos(); // x1.5
         resendQueue = new TreeSet<>(Comparator.comparingLong(this::ackTimeoutNanos));
@@ -386,7 +387,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         MqttMessage mqttMessage = (MqttMessage) msg;
         log.trace("Received {}", mqttMessage);
         if (mqttMessage.decoderResult().isSuccess()) {
-            tenantMeter.recordSummary(MqttIngressBytes, mqttMessage.fixedHeader().remainingLength() + 1);
+            tenantMeter.recordSummary(MqttIngressBytes, sizer.sizeByHeader(mqttMessage.fixedHeader()));
             lastActiveAtNanos = sessionCtx.nanoTime();
             if (log.isTraceEnabled()) {
                 log.trace("Received mqtt message:{}", mqttMessage);

@@ -13,25 +13,6 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
-import static com.baidu.bifromq.metrics.TenantMetric.MqttAuthFailureCount;
-import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.goAway;
-import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.ok;
-import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_BROKER_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_1_VALUE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_VALUE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
-import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD;
-import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_IDENTIFIER_REJECTED;
-import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_NOT_AUTHORIZED;
-import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_UNAVAILABLE;
-import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION;
-
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
@@ -71,11 +52,31 @@ import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttConnectReturnCode;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageBuilders;
+import lombok.extern.slf4j.Slf4j;
+
+import javax.annotation.Nullable;
 import java.net.InetSocketAddress;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import javax.annotation.Nullable;
-import lombok.extern.slf4j.Slf4j;
+
+import static com.baidu.bifromq.metrics.TenantMetric.MqttAuthFailureCount;
+import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.goAway;
+import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.ok;
+import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_BROKER_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_1_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_IDENTIFIER_REJECTED;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_NOT_AUTHORIZED;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_UNAVAILABLE;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION;
 
 @Slf4j
 public class MQTT3ConnectHandler extends MQTTConnectHandler {
@@ -146,7 +147,9 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                             .putMetadata(MQTT_CLIENT_ID_KEY, message.payload().clientIdentifier())
                             .putMetadata(MQTT_CHANNEL_ID_KEY, ctx.channel().id().asLongText())
                             .putMetadata(MQTT_CLIENT_ADDRESS_KEY,
-                                Optional.ofNullable(clientAddress).map(InetSocketAddress::toString).orElse(""))
+                                Optional.ofNullable(clientAddress)
+                                    .map(InetSocketAddress::toString)
+                                    .orElse(""))
                             .putMetadata(MQTT_CLIENT_BROKER_KEY, ChannelAttrs.mqttSessionContext(ctx).serverId)
                             .build());
                     }
@@ -180,12 +183,14 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                             }
                             // fallthrough
                             default -> {
-                                log.error("Unexpected error from auth provider:{}", authResult.getReject().getReason());
+                                log.error("Unexpected error from auth provider:{}",
+                                    authResult.getReject().getReason());
                                 return goAway(MqttMessageBuilders
                                         .connAck()
                                         .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
                                         .build(),
-                                    getLocal(AuthError.class).cause(reject.getReason()).peerAddress(clientAddress));
+                                    getLocal(AuthError.class).cause(reject.getReason())
+                                        .peerAddress(clientAddress));
                             }
                         }
                     }
@@ -306,6 +311,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
     @Override
     protected final MQTTSessionHandler buildTransientSessionHandler(MqttConnectMessage connMsg,
                                                                     TenantSettings settings,
+                                                                    ITenantMeter tenantMeter,
                                                                     String userSessionId,
                                                                     int keepAliveSeconds,
                                                                     @Nullable LWT willMessage,
@@ -313,6 +319,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                                                                     ChannelHandlerContext ctx) {
         return MQTT3TransientSessionHandler.builder()
             .settings(settings)
+            .tenantMeter(tenantMeter)
             .userSessionId(userSessionId)
             .keepAliveTimeSeconds(keepAliveSeconds)
             .clientInfo(clientInfo)
@@ -324,6 +331,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
     @Override
     protected final MQTTSessionHandler buildPersistentSessionHandler(MqttConnectMessage connMsg,
                                                                      TenantSettings settings,
+                                                                     ITenantMeter tenantMeter,
                                                                      String userSessionId,
                                                                      int keepAliveSeconds,
                                                                      int sessionExpiryInterval,
@@ -333,6 +341,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                                                                      ChannelHandlerContext ctx) {
         return MQTT3PersistentSessionHandler.builder()
             .settings(settings)
+            .tenantMeter(tenantMeter)
             .userSessionId(userSessionId)
             .keepAliveTimeSeconds(keepAliveSeconds)
             .sessionExpirySeconds(settings.maxSEI)

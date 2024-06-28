@@ -48,6 +48,7 @@ import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
+import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.mqtt.session.IMQTTPersistentSession;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
@@ -98,6 +99,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     private ScheduledFuture<?> touchTimeout;
 
     protected MQTTPersistentSessionHandler(TenantSettings settings,
+                                           ITenantMeter tenantMeter,
                                            String userSessionId,
                                            int keepAliveTimeSeconds,
                                            int sessionExpirySeconds,
@@ -105,7 +107,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                                            @Nullable MQTTConnectHandler.ExistingSession existingSession,
                                            @Nullable LWT willMessage,
                                            ChannelHandlerContext ctx) {
-        super(settings, userSessionId, keepAliveTimeSeconds, clientInfo, willMessage, ctx);
+        super(settings, tenantMeter, userSessionId, keepAliveTimeSeconds, clientInfo, willMessage, ctx);
         this.sessionPresent = existingSession != null;
         this.inboxClient = sessionCtx.inboxClient;
         if (sessionPresent) {

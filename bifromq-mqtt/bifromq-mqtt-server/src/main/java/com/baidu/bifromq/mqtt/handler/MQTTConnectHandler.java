@@ -13,11 +13,14 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
+import static com.baidu.bifromq.metrics.TenantMetric.MqttIngressBytes;
 import static com.baidu.bifromq.mqtt.handler.MQTTSessionIdUtil.userSessionId;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION_TYPE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION_TYPE_P_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION_TYPE_T_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_5_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalConnectPerSecond;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalConnections;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalSessionMemoryBytes;
@@ -31,6 +34,7 @@ import com.baidu.bifromq.inbox.rpc.proto.GetReply;
 import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
+import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.handler.condition.DirectMemPressureCondition;
 import com.baidu.bifromq.mqtt.handler.condition.HeapMemPressureCondition;
 import com.baidu.bifromq.mqtt.handler.condition.InboundResourceCondition;
@@ -38,6 +42,7 @@ import com.baidu.bifromq.mqtt.handler.record.GoAway;
 import com.baidu.bifromq.mqtt.session.IMQTTPersistentSession;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
+import com.baidu.bifromq.mqtt.utils.IMQTTMessageSizer;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.ProtocolError;
@@ -321,6 +326,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
 
     protected abstract MQTTSessionHandler buildTransientSessionHandler(MqttConnectMessage connMsg,
                                                                        TenantSettings settings,
+                                                                       ITenantMeter tenantMeter,
                                                                        String userSessionId,
                                                                        int keepAliveSeconds,
                                                                        @Nullable LWT willMessage,
@@ -329,6 +335,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
 
     protected abstract MQTTSessionHandler buildPersistentSessionHandler(MqttConnectMessage connMsg,
                                                                         TenantSettings settings,
+                                                                        ITenantMeter tenantMeter,
                                                                         String userSessionId,
                                                                         int keepAliveSeconds,
                                                                         int sessionExpiryInterval,
@@ -357,10 +364,14 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                 HeapMemPressureCondition.INSTANCE,
                 new InboundResourceCondition(resourceThrottler, clientInfo)),
                 eventCollector, sessionCtx::nanoTime, clientInfo));
-
+        ITenantMeter tenantMeter = ITenantMeter.get(clientInfo.getTenantId());
+        IMQTTMessageSizer sizer = clientInfo.getMetadataOrDefault(MQTT_PROTOCOL_VER_KEY, "")
+                .equals(MQTT_PROTOCOL_VER_5_VALUE) ? IMQTTMessageSizer.mqtt5() : IMQTTMessageSizer.mqtt3();
+        tenantMeter.recordSummary(MqttIngressBytes, sizer.sizeByHeader(connMsg.fixedHeader()));
         MQTTSessionHandler sessionHandler = buildTransientSessionHandler(
             connMsg,
             settings,
+                tenantMeter,
             userSessionId,
             keepAliveSeconds,
             willMessage,
@@ -411,8 +422,13 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                 new InboundResourceCondition(resourceThrottler, clientInfo)),
                 eventCollector, sessionCtx::nanoTime, clientInfo));
 
+        ITenantMeter tenantMeter = ITenantMeter.get(clientInfo.getTenantId());
+        IMQTTMessageSizer sizer = clientInfo.getMetadataOrDefault(MQTT_PROTOCOL_VER_KEY, "")
+                .equals(MQTT_PROTOCOL_VER_5_VALUE) ? IMQTTMessageSizer.mqtt5() : IMQTTMessageSizer.mqtt3();
+        tenantMeter.recordSummary(MqttIngressBytes, sizer.sizeByHeader(connMsg.fixedHeader()));
         MQTTSessionHandler sessionHandler = buildPersistentSessionHandler(connMsg,
             settings,
+                tenantMeter,
             userSessionId,
             keepAliveSeconds,
             sessionExpiryInterval,

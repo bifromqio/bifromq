@@ -109,6 +109,7 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
                 super.channelActive(ctx);
                 ctx.pipeline().addLast(MQTT3PersistentSessionHandler.builder()
                     .settings(new TenantSettings(tenantId, settingProvider))
+                    .tenantMeter(tenantMeter)
                     .userSessionId(userSessionId(clientInfo))
                     .keepAliveTimeSeconds(120)
                     .clientInfo(clientInfo)

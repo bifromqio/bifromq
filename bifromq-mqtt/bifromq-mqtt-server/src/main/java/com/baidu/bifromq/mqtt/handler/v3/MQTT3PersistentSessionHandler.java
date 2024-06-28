@@ -14,6 +14,7 @@
 package com.baidu.bifromq.mqtt.handler.v3;
 
 import com.baidu.bifromq.inbox.storage.proto.LWT;
+import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper;
 import com.baidu.bifromq.mqtt.handler.MQTTConnectHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTPersistentSessionHandler;
@@ -28,6 +29,7 @@ public final class MQTT3PersistentSessionHandler extends MQTTPersistentSessionHa
 
     @Builder
     public MQTT3PersistentSessionHandler(TenantSettings settings,
+                                         ITenantMeter tenantMeter,
                                          String userSessionId,
                                          int keepAliveTimeSeconds,
                                          int sessionExpirySeconds,
@@ -36,6 +38,7 @@ public final class MQTT3PersistentSessionHandler extends MQTTPersistentSessionHa
                                          @Nullable LWT willMessage,
                                          ChannelHandlerContext ctx) {
         super(settings,
+            tenantMeter,
             userSessionId,
             keepAliveTimeSeconds,
             sessionExpirySeconds,

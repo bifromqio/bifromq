@@ -15,8 +15,12 @@ package com.baidu.bifromq.mqtt.utils;
 
 import static io.netty.buffer.ByteBufUtil.utf8Bytes;
 
+import io.netty.handler.codec.mqtt.MqttFixedHeader;
 import io.netty.handler.codec.mqtt.MqttMessage;
 
+/**
+ * The interface for calculating the size of the mqtt message.
+ */
 public interface IMQTTMessageSizer {
     int MIN_CONTROL_PACKET_SIZE = 16;
 
@@ -62,6 +66,27 @@ public interface IMQTTMessageSizer {
             }
         };
 
+    /**
+     * Calculate the size of the message by the fixed header from decoded mqtt message.
+     *
+     * @param header the fixed header of the message
+     * @return the size of the message
+     */
+    default int sizeByHeader(MqttFixedHeader header) {
+        int remainingLength = header.remainingLength();
+        int fixedHeaderSize = 1;
+        int remainingLengthSize = 1; // at least one byte
+        if (remainingLength > 127) {
+            remainingLengthSize = 2;
+            if (remainingLength > 16383) {
+                remainingLengthSize = 3;
+                if (remainingLength > 2097151) {
+                    remainingLengthSize = 4;
+                }
+            }
+        }
+        return fixedHeaderSize + remainingLengthSize + remainingLength;
+    }
 
     static int sizeBinary(byte[] binary) {
         // 2 bytes for encoding size prefix in Binary Data, [MQTT5-1.5.6]

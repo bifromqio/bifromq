@@ -41,6 +41,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -64,6 +65,7 @@ import com.baidu.bifromq.inbox.storage.proto.Fetched.Builder;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
+import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.MockableTest;
 import com.baidu.bifromq.mqtt.service.ILocalDistService;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
@@ -92,9 +94,11 @@ import com.baidu.bifromq.type.TopicMessagePack;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
+import io.micrometer.core.instrument.Timer;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.mqtt.MqttSubAckMessage;
 import io.netty.handler.codec.mqtt.MqttUnsubAckMessage;
+import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -106,8 +110,10 @@ import java.util.function.Consumer;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 import org.mockito.stubbing.Answer;
 import org.mockito.stubbing.OngoingStubbing;
+import org.testng.annotations.BeforeMethod;
 
 public class BaseSessionHandlerTest extends MockableTest {
 
@@ -136,6 +142,8 @@ public class BaseSessionHandlerTest extends MockableTest {
     protected ISettingProvider settingProvider;
     @Mock
     protected IInboxClient.IInboxReader inboxReader;
+    @Mock
+    protected ITenantMeter tenantMeter;
 
     protected final String tenantId = "tenantId";
     protected final String serverId = "serverId";
@@ -158,6 +166,12 @@ public class BaseSessionHandlerTest extends MockableTest {
     protected Consumer<Fetched> inboxFetchConsumer;
     protected List<Integer> fetchHints = new ArrayList<>();
     protected AtomicReference<Consumer<ClientInfo>> onKick = new AtomicReference<>();
+
+    public void setup(Method method) {
+        super.setup(method);
+        when(tenantMeter.timer(any())).thenReturn(mock(Timer.class));
+    }
+
 
     protected void verifySubAck(MqttSubAckMessage subAckMessage, int[] expectedReasonCodes) {
         assertEquals(subAckMessage.payload().reasonCodes().size(), expectedReasonCodes.length);

@@ -18,6 +18,7 @@ import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
+import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
 import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
@@ -83,12 +84,13 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     private AtomicLong subNumGauge;
 
     protected MQTTTransientSessionHandler(TenantSettings settings,
+                                          ITenantMeter tenantMeter,
                                           String userSessionId,
                                           int keepAliveTimeSeconds,
                                           ClientInfo clientInfo,
                                           @Nullable LWT willMessage,
                                           ChannelHandlerContext ctx) {
-        super(settings, userSessionId, keepAliveTimeSeconds, clientInfo, willMessage, ctx);
+        super(settings, tenantMeter, userSessionId, keepAliveTimeSeconds, clientInfo, willMessage, ctx);
     }
 
     @Override
