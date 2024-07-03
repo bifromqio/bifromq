@@ -339,6 +339,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         super.handlerAdded(ctx);
         ChannelAttrs.trafficShaper(ctx).setReadLimit(settings.inboundBandwidth);
         ChannelAttrs.trafficShaper(ctx).setWriteLimit(settings.outboundBandwidth);
+        ChannelAttrs.trafficShaper(ctx).setMaxWriteSize(settings.outboundBandwidth);
         ChannelAttrs.setMaxPayload(settings.maxPacketSize, ctx);
         sessionCtx.localSessionRegistry.add(channelId(), this);
         sessionRegister = ChannelAttrs.mqttSessionContext(ctx).sessionDictClient
