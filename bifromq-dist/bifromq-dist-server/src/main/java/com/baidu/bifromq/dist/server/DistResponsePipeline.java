@@ -21,7 +21,7 @@ import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_DIRECT_
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_SLOWDOWN_TIMEOUT_SECONDS;
 
-import com.baidu.bifromq.baseenv.MemInfo;
+import com.baidu.bifromq.baseenv.MemUsage;
 import com.baidu.bifromq.baserpc.ResponsePipeline;
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
@@ -54,11 +54,8 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
                          StreamObserver<DistReply> responseObserver,
                          IEventCollector eventCollector,
                          LoadingCache<String, RunningAverage> tenantFanouts) {
-        super(responseObserver, () -> {
-            MemInfo.MemUsage usage = MemInfo.usage();
-            return usage.nettyDirectMemoryUsage() > SLOWDOWN_DIRECT_MEM_USAGE
-                || usage.heapMemoryUsage() > SLOWDOWN_HEAP_MEM_USAGE;
-        }, SLOWDOWN_TIMEOUT);
+        super(responseObserver, () -> MemUsage.local().nettyDirectMemoryUsage() > SLOWDOWN_DIRECT_MEM_USAGE
+            || MemUsage.local().heapMemoryUsage() > SLOWDOWN_HEAP_MEM_USAGE, SLOWDOWN_TIMEOUT);
         this.distCallScheduler = distCallScheduler;
         this.eventCollector = eventCollector;
         this.tenantFanouts = tenantFanouts;

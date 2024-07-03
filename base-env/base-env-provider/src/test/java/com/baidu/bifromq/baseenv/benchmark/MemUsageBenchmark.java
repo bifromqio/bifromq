@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.baseenv.benchmark;
 
-import com.baidu.bifromq.baseenv.MemInfo;
+import com.baidu.bifromq.baseenv.MemUsage;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -31,20 +31,25 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Thread)
-public class MemInfoBenchmark {
+public class MemUsageBenchmark {
     @Setup(Level.Trial)
     public void setUp() {
         // Initialize MemInfo if necessary
     }
 
     @Benchmark
-    public double benchmarkHeapMemoryUsage() {
-        return MemInfo.nettyDirectMemoryUsage();
+    public double benchmarkNettyDirectMemUsage() {
+        return MemUsage.local().nettyDirectMemoryUsage();
+    }
+
+    @Benchmark
+    public double benchmarkHeapMemUsage() {
+        return MemUsage.local().heapMemoryUsage();
     }
 
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
-            .include(MemInfoBenchmark.class.getSimpleName())
+            .include(MemUsageBenchmark.class.getSimpleName())
             .forks(1)
             .warmupIterations(5)
             .measurementIterations(5)

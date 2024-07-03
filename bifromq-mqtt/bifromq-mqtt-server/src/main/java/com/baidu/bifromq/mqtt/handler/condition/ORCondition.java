@@ -13,23 +13,35 @@
 
 package com.baidu.bifromq.mqtt.handler.condition;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE;
+/**
+ * Group of conditions that are met if any of the conditions are met.
+ */
+public class ORCondition implements Condition {
+    private final Condition[] conditions;
+    private String message;
 
-import com.baidu.bifromq.baseenv.MemUsage;
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
+    public static Condition or(Condition... conditions) {
+        return new ORCondition(conditions);
+    }
 
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
-public class HeapMemPressureCondition implements Condition {
-    public static final HeapMemPressureCondition INSTANCE = new HeapMemPressureCondition();
-    private static final double MAX_HEAP_MEMORY_USAGE = INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE.get();
+    public ORCondition(Condition... conditions) {
+        this.conditions = conditions;
+    }
 
+    @Override
     public boolean meet() {
-        return MemUsage.local().heapMemoryUsage() > MAX_HEAP_MEMORY_USAGE;
+        for (Condition condition : conditions) {
+            if (condition.meet()) {
+                message = condition.toString();
+                return true;
+            }
+        }
+        message = "";
+        return false;
     }
 
     @Override
     public String toString() {
-        return "HighHeapMemoryUsage";
+        return message;
     }
 }

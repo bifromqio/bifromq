@@ -17,7 +17,7 @@ import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_DIRECT_
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_SLOWDOWN_TIMEOUT_SECONDS;
 
-import com.baidu.bifromq.baseenv.MemInfo;
+import com.baidu.bifromq.baseenv.MemUsage;
 import com.baidu.bifromq.baserpc.RPCContext;
 import com.baidu.bifromq.baserpc.ResponsePipeline;
 import com.baidu.bifromq.inbox.records.ScopedInbox;
@@ -51,11 +51,8 @@ class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply> {
     public InboxWriterPipeline(IWriteCallback writeCallback,
                                ISendRequestHandler handler,
                                StreamObserver<SendReply> responseObserver) {
-        super(responseObserver, () -> {
-            MemInfo.MemUsage usage = MemInfo.usage();
-            return usage.nettyDirectMemoryUsage() > SLOWDOWN_DIRECT_MEM_USAGE
-                || usage.heapMemoryUsage() > SLOWDOWN_HEAP_MEM_USAGE;
-        }, SLOWDOWN_TIMEOUT);
+        super(responseObserver, () -> MemUsage.local().nettyDirectMemoryUsage() > SLOWDOWN_DIRECT_MEM_USAGE
+            || MemUsage.local().heapMemoryUsage() > SLOWDOWN_HEAP_MEM_USAGE, SLOWDOWN_TIMEOUT);
         this.writeCallback = writeCallback;
         this.handler = handler;
         this.delivererKey = RPCContext.WCH_HASH_KEY_CTX_KEY.get();

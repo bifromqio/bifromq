@@ -52,6 +52,11 @@ import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
+import com.baidu.bifromq.plugin.authprovider.type.Denied;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS1Confirmed;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS2Confirmed;
+import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
@@ -110,6 +115,7 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
                 ctx.pipeline().addLast(MQTT3PersistentSessionHandler.builder()
                     .settings(new TenantSettings(tenantId, settingProvider))
                     .tenantMeter(tenantMeter)
+                    .oomCondition(oomCondition)
                     .userSessionId(userSessionId(clientInfo))
                     .keepAliveTimeSeconds(120)
                     .clientInfo(clientInfo)
@@ -250,8 +256,13 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
     @Test
     public void qoS0PubAuthFailed() {
         // not by pass
+        when(authProvider.checkPermission(any(ClientInfo.class),
+            argThat(action -> action.hasSub() && action.getSub().getQos() == QoS.AT_MOST_ONCE)))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setDenied(Denied.getDefaultInstance())
+                .build()));
+
         mockInboxCommit(CommitReply.Code.OK);
-        mockCheckPermission(false);
         mockDistUnMatch(true);
         inboxFetchConsumer.accept(fetch(5, 128, QoS.AT_MOST_ONCE));
         channel.runPendingTasks();
@@ -320,8 +331,13 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
     @Test
     public void qoS1PubAuthFailed() {
         // not by pass
-        mockCheckPermission(false);
+        when(authProvider.checkPermission(any(ClientInfo.class),
+            argThat(action -> action.hasSub() && action.getSub().getQos() == QoS.AT_LEAST_ONCE)))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setDenied(Denied.getDefaultInstance())
+                .build()));
         mockDistUnMatch(true);
+        when(inboxClient.unsub(any())).thenReturn(new CompletableFuture<>());
         int messageCount = 3;
         inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE));
         channel.runPendingTasks();
@@ -329,7 +345,13 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
             MqttPublishMessage message = channel.readOutbound();
             assertNull(message);
         }
-        verifyEvent(QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED);
+        verifyEvent(QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED, QOS1_CONFIRMED, QOS1_CONFIRMED);
+        verify(eventCollector, times(5)).report(argThat(e -> {
+            if (e instanceof QoS1Confirmed evt) {
+                return !evt.delivered();
+            }
+            return true;
+        }));
         verify(inboxClient, times(messageCount)).unsub(any());
     }
 
@@ -361,8 +383,13 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
     @Test
     public void qoS2PubAuthFailed() {
         // not by pass
-        mockCheckPermission(false);
+        when(authProvider.checkPermission(any(ClientInfo.class),
+            argThat(action -> action.hasSub() && action.getSub().getQos() == EXACTLY_ONCE)))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setDenied(Denied.getDefaultInstance())
+                .build()));
         mockDistUnMatch(true);
+        when(inboxClient.unsub(any())).thenReturn(new CompletableFuture<>());
         int messageCount = 3;
         inboxFetchConsumer.accept(fetch(messageCount, 128, EXACTLY_ONCE));
         channel.runPendingTasks();
@@ -370,7 +397,13 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
             MqttPublishMessage message = channel.readOutbound();
             assertNull(message);
         }
-        verifyEvent(QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED);
+        verifyEvent(QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED, QOS2_CONFIRMED, QOS2_CONFIRMED);
+        verify(eventCollector, times(5)).report(argThat(e -> {
+            if (e instanceof QoS2Confirmed evt) {
+                return !evt.delivered();
+            }
+            return true;
+        }));
         verify(inboxClient, times(messageCount)).unsub(any());
     }
 

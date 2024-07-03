@@ -13,13 +13,14 @@
 
 package com.baidu.bifromq.mqtt.handler.ws;
 
+import static com.baidu.bifromq.mqtt.handler.condition.ORCondition.or;
+
 import com.baidu.bifromq.mqtt.handler.ConditionalRejectHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageDebounceHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTPreludeHandler;
 import com.baidu.bifromq.mqtt.handler.condition.DirectMemPressureCondition;
 import com.baidu.bifromq.mqtt.handler.condition.HeapMemPressureCondition;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.google.common.collect.Sets;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelPipeline;
@@ -53,8 +54,8 @@ public class MqttOverWSHandler extends ChannelInboundHandlerAdapter {
             pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(maxMQTTConnectPacketSize));
             pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
             pipeline.addLast(ConditionalRejectHandler.NAME,
-                new ConditionalRejectHandler(Sets.newHashSet(DirectMemPressureCondition.INSTANCE,
-                    HeapMemPressureCondition.INSTANCE), eventCollector));
+                new ConditionalRejectHandler(or(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE),
+                    eventCollector));
             pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(connectTimeoutSeconds));
             // Remove the handshake listener after adding MQTT handlers.
             ctx.pipeline().remove(this);

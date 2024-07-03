@@ -13,6 +13,9 @@
 
 package com.baidu.bifromq.mqtt.handler.condition;
 
+/**
+ * Condition interface.
+ */
 public interface Condition {
     boolean meet();
 }

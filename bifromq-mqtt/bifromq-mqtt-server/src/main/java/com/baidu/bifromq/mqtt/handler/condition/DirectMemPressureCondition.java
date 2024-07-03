@@ -15,7 +15,7 @@ package com.baidu.bifromq.mqtt.handler.condition;
 
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE;
 
-import com.baidu.bifromq.baseenv.MemInfo;
+import com.baidu.bifromq.baseenv.MemUsage;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
@@ -26,7 +26,7 @@ public class DirectMemPressureCondition implements Condition {
 
     @Override
     public boolean meet() {
-        return MemInfo.nettyDirectMemoryUsage() > MAX_DIRECT_MEMORY_USAGE;
+        return MemUsage.local().nettyDirectMemoryUsage() > MAX_DIRECT_MEMORY_USAGE;
     }
 
     @Override

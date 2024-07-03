@@ -26,7 +26,6 @@ import com.baidu.bifromq.mqtt.handler.condition.Condition;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.type.ClientInfo;
-import com.google.common.collect.Sets;
 import io.netty.channel.embedded.EmbeddedChannel;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
@@ -48,8 +47,7 @@ public class ConditionalSlowDownHandlerTest extends MockableTest {
         when(slowDownCondition.meet()).thenReturn(true);
         when(nanoProvider.get()).thenReturn(0L);
         EmbeddedChannel embeddedChannel = new EmbeddedChannel(
-            new ConditionalSlowDownHandler(
-                Sets.newHashSet(slowDownCondition), eventCollector, nanoProvider, clientInfo));
+            new ConditionalSlowDownHandler(slowDownCondition, eventCollector, nanoProvider, clientInfo));
         embeddedChannel.writeInbound("1");
         assertEquals(embeddedChannel.readInbound(), "1");
         assertFalse(embeddedChannel.config().isAutoRead());
@@ -73,7 +71,7 @@ public class ConditionalSlowDownHandlerTest extends MockableTest {
         when(nanoProvider.get()).thenReturn(0L);
         EmbeddedChannel embeddedChannel =
             new EmbeddedChannel(
-                new ConditionalSlowDownHandler(Sets.newHashSet(slowDownCondition), eventCollector, nanoProvider,
+                new ConditionalSlowDownHandler(slowDownCondition, eventCollector, nanoProvider,
                     clientInfo));
         embeddedChannel.writeInbound("1");
         assertEquals(embeddedChannel.readInbound(), "1");

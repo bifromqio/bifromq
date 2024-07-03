@@ -19,6 +19,8 @@ import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.MQTTConnectHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
+import com.baidu.bifromq.mqtt.handler.condition.DirectMemPressureCondition;
+import com.baidu.bifromq.mqtt.handler.condition.HeapMemPressureCondition;
 import com.baidu.bifromq.mqtt.handler.record.GoAway;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
@@ -62,6 +64,7 @@ import java.util.concurrent.CompletableFuture;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttAuthFailureCount;
 import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.goAway;
 import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.ok;
+import static com.baidu.bifromq.mqtt.handler.condition.ORCondition.or;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
@@ -320,6 +323,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
         return MQTT3TransientSessionHandler.builder()
             .settings(settings)
             .tenantMeter(tenantMeter)
+            .oomCondition(or(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE))
             .userSessionId(userSessionId)
             .keepAliveTimeSeconds(keepAliveSeconds)
             .clientInfo(clientInfo)
@@ -342,6 +346,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
         return MQTT3PersistentSessionHandler.builder()
             .settings(settings)
             .tenantMeter(tenantMeter)
+            .oomCondition(or(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE))
             .userSessionId(userSessionId)
             .keepAliveTimeSeconds(keepAliveSeconds)
             .sessionExpirySeconds(settings.maxSEI)

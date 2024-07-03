@@ -60,6 +60,7 @@ import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.metrics.ITenantMeter;
+import com.baidu.bifromq.mqtt.handler.condition.Condition;
 import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply;
@@ -90,8 +91,10 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReaso
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Dropped;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Pushed;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS1Confirmed;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS1Dropped;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS1Pushed;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS2Confirmed;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS2Dropped;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS2Pushed;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS2Received;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.MsgRetained;
@@ -119,7 +122,6 @@ import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader;
 import io.netty.handler.codec.mqtt.MqttPubAckMessage;
 import io.netty.handler.codec.mqtt.MqttPublishMessage;
-import io.netty.handler.codec.mqtt.MqttQoS;
 import io.netty.handler.codec.mqtt.MqttSubAckMessage;
 import io.netty.handler.codec.mqtt.MqttSubscribeMessage;
 import io.netty.handler.codec.mqtt.MqttTopicSubscription;
@@ -156,14 +158,20 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         private final String topicFilter;
         private final TopicFilterOption option;
         private final int bytesSize;
+        private final boolean permissionGranted;
 
-        public SubMessage(String topic, Message message, ClientInfo publisher, String topicFilter,
-                          TopicFilterOption option) {
+        public SubMessage(String topic,
+                          Message message,
+                          ClientInfo publisher,
+                          String topicFilter,
+                          TopicFilterOption option,
+                          boolean permissionGranted) {
             this.topic = topic;
             this.message = message;
             this.publisher = publisher;
             this.topicFilter = topicFilter;
             this.option = option;
+            this.permissionGranted = permissionGranted;
             this.bytesSize = topic.length() + topicFilter.length() + message.getPayload().size();
         }
 
@@ -209,6 +217,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     protected final ClientInfo clientInfo;
     protected final AtomicLong memUsage;
     protected final ITenantMeter tenantMeter;
+    private final Condition oomCondition;
     private final long idleTimeoutNanos;
     private final MPSThrottler throttler;
     private final Set<CompletableFuture<?>> fgTasks = new HashSet<>();
@@ -234,6 +243,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
 
     protected MQTTSessionHandler(TenantSettings settings,
                                  ITenantMeter tenantMeter,
+                                 Condition oomCondition,
                                  String userSessionId,
                                  int keepAliveTimeSeconds,
                                  ClientInfo clientInfo,
@@ -243,6 +253,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             IMQTTMessageSizer.mqtt5() : IMQTTMessageSizer.mqtt3();
         this.ctx = ctx;
         this.settings = settings;
+        this.oomCondition = oomCondition;
         this.userSessionId = userSessionId;
         this.keepAliveTimeSeconds = keepAliveTimeSeconds;
         this.clientInfo = clientInfo;
@@ -681,7 +692,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     private void handlePubAckMsg(MqttPubAckMessage mqttMessage) {
         int packetId = mqttMessage.variableHeader().messageId();
         if (isConfirming(packetId)) {
-            SubMessage confirmed = confirm(packetId);
+            SubMessage confirmed = confirm(packetId, true);
             tenantMeter.recordSummary(MqttQoS1DeliverBytes, confirmed.message().getPayload().size());
         } else {
             log.trace("No packetId to confirm released: sessionId={}, packetId={}",
@@ -707,7 +718,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                         .clientInfo(clientInfo));
                 }
             } else {
-                confirm(packetId);
+                confirm(packetId, true);
             }
         } else {
             handleProtocolResponse(helper().respondPubRecMsg(message, true));
@@ -718,14 +729,14 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         MqttMessageIdVariableHeader variableHeader = (MqttMessageIdVariableHeader) message.variableHeader();
         int packetId = variableHeader.messageId();
         if (isConfirming(packetId)) {
-            SubMessage confirmed = confirm(packetId);
+            SubMessage confirmed = confirm(packetId, true);
             if (settings.debugMode) {
                 eventCollector.report(getLocal(QoS2Confirmed.class)
                     .reqId(confirmed.message().getMessageId())
                     .messageId(packetId)
                     .isRetain(confirmed.isRetain())
                     .sender(confirmed.publisher())
-                    .delivered(false)
+                    .delivered(true)
                     .topic(confirmed.topic())
                     .matchedFilter(confirmed.topicFilter())
                     .size(confirmed.message().getPayload().size())
@@ -754,7 +765,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         return clientReceiveMaximum() - unconfirmedPacketIds.size();
     }
 
-    private SubMessage confirm(int packetId) {
+    private SubMessage confirm(int packetId, boolean delivered) {
         ConfirmingMessage confirmingMsg = unconfirmedPacketIds.get(packetId);
         SubMessage msg = null;
         if (confirmingMsg != null) {
@@ -780,16 +791,33 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                     .messageId(packetId)
                                     .isRetain(confirmed.isRetain())
                                     .sender(confirmed.publisher())
-                                    .delivered(true)
+                                    .delivered(delivered)
                                     .topic(confirmed.topic())
                                     .matchedFilter(confirmed.topicFilter())
                                     .size(confirmed.message().getPayload().size())
                                     .clientInfo(clientInfo));
                             }
                         }
-                        case EXACTLY_ONCE -> tenantMeter.timer(MqttQoS2ExternalLatency)
-                            .record(now - confirmingMsg.timestamp, TimeUnit.NANOSECONDS);
+                        case EXACTLY_ONCE -> {
+                            tenantMeter.timer(MqttQoS2ExternalLatency)
+                                .record(now - confirmingMsg.timestamp, TimeUnit.NANOSECONDS);
+                            if (!delivered && settings.debugMode) {
+                                eventCollector.report(getLocal(QoS2Confirmed.class)
+                                    .reqId(confirmed.message().getMessageId())
+                                    .messageId(packetId)
+                                    .isRetain(confirmed.isRetain())
+                                    .sender(confirmed.publisher())
+                                    .delivered(false)
+                                    .topic(confirmed.topic())
+                                    .matchedFilter(confirmed.topicFilter())
+                                    .size(confirmed.message().getPayload().size())
+                                    .clientInfo(clientInfo));
+                            }
+                        }
                     }
+                } else {
+                    // the seq should be confirmed one by one, stop at first unconfirmed msg
+                    break;
                 }
             }
             if (resendTask != null && !resendTask.isDone()) {
@@ -808,10 +836,115 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
 
     protected final void sendQoS0SubMessage(SubMessage msg) {
         assert msg.qos() == AT_MOST_ONCE;
-        sendMqttPubMessage(-1, msg, msg.topicFilter(), msg.publisher(), false);
+        ClientInfo publisher = msg.publisher();
+        String topicFilter = msg.topicFilter();
+        TopicFilterOption option = msg.option();
+        MqttPublishMessage pubMsg = helper().buildMqttPubMessage(0, msg, false);
+        int msgSize = sizer.sizeOf(pubMsg).encodedBytes();
+        assert ctx.executor().inEventLoop();
+        if (!msg.permissionGranted()) {
+            eventCollector.report(getLocal(QoS0Dropped.class)
+                .reason(DropReason.NoSubPermission)
+                .isRetain(false)
+                .sender(publisher)
+                .topic(msg.topic)
+                .matchedFilter(topicFilter)
+                .size(msgSize)
+                .clientInfo(clientInfo()));
+            // unsubscribe the topic filter when no permission
+            addBgTask(unsubTopicFilter(System.nanoTime(), topicFilter));
+            return;
+        }
+        if (option.getNoLocal() && clientInfo.equals(publisher)) {
+            // skip local sub
+            if (settings.debugMode) {
+                eventCollector.report(getLocal(QoS0Dropped.class)
+                    .reason(DropReason.NoLocal)
+                    .isRetain(false)
+                    .sender(publisher)
+                    .topic(msg.topic)
+                    .matchedFilter(topicFilter)
+                    .size(msgSize)
+                    .clientInfo(clientInfo()));
+            }
+            return;
+        }
+        if (messageExpiryInterval(pubMsg.variableHeader().properties()).orElse(Integer.MAX_VALUE) < 0) {
+            // If the Message Expiry Interval has passed and the Server has not managed to start onward delivery to a matching subscriber, then it MUST delete the copy of the message for that subscriber [MQTT-3.3.2-5]
+            if (settings.debugMode) {
+                eventCollector.report(getLocal(QoS0Dropped.class)
+                    .reason(DropReason.Expired)
+                    .isRetain(false)
+                    .sender(publisher)
+                    .topic(msg.topic)
+                    .matchedFilter(topicFilter)
+                    .size(msgSize)
+                    .clientInfo(clientInfo()));
+            }
+            return;
+        }
+        if (oomCondition.meet()) {
+            eventCollector.report(getLocal(QoS0Dropped.class)
+                .reason(DropReason.ResourceExhausted)
+                .isRetain(false)
+                .sender(publisher)
+                .topic(msg.topic)
+                .matchedFilter(topicFilter)
+                .size(msgSize)
+                .clientInfo(clientInfo()));
+            return;
+        }
+        if (!ctx.channel().isActive()) {
+            eventCollector.report(getLocal(QoS0Dropped.class)
+                .reason(DropReason.ChannelClosed)
+                .isRetain(false)
+                .sender(publisher)
+                .topic(msg.topic)
+                .matchedFilter(topicFilter)
+                .size(msgSize)
+                .clientInfo(clientInfo()));
+            return;
+        }
+        if (!ctx.channel().isWritable()) {
+            eventCollector.report(getLocal(QoS0Dropped.class)
+                .reason(DropReason.Overflow)
+                .isRetain(false)
+                .sender(publisher)
+                .topic(msg.topic)
+                .matchedFilter(topicFilter)
+                .size(msgSize)
+                .clientInfo(clientInfo()));
+            return;
+        }
+        memUsage.addAndGet(msgSize);
+        writeAndFlush(pubMsg).addListener(f -> {
+            memUsage.addAndGet(-msgSize);
+            if (f.isSuccess()) {
+                if (settings.debugMode) {
+                    eventCollector.report(getLocal(QoS0Pushed.class)
+                        .reqId(pubMsg.variableHeader().packetId())
+                        .isRetain(msg.isRetain())
+                        .sender(publisher)
+                        .matchedFilter(topicFilter)
+                        .topic(msg.topic)
+                        .size(msgSize)
+                        .clientInfo(clientInfo));
+                }
+            } else {
+                // TODO: add cause to event
+                eventCollector.report(getLocal(QoS0Dropped.class)
+                    .reason(DropReason.InternalError)
+                    .isRetain(false)
+                    .sender(publisher)
+                    .topic(msg.topic)
+                    .matchedFilter(topicFilter)
+                    .size(msgSize)
+                    .clientInfo(clientInfo()));
+            }
+        });
     }
 
-    protected final void sendConfirmableMessage(long seq, SubMessage msg) {
+    protected final void sendConfirmableSubMessage(long seq, SubMessage msg) {
         assert seq > -1;
         ConfirmingMessage confirmingMessage = new ConfirmingMessage(seq, msg, sessionCtx.nanoTime());
         ConfirmingMessage prev = unconfirmedPacketIds.putIfAbsent(confirmingMessage.packetId(), confirmingMessage);
@@ -820,9 +953,117 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             if (resendTask == null || resendTask.isDone()) {
                 scheduleResend();
             }
-            sendMqttPubMessage(seq, msg, msg.topicFilter(), msg.publisher(), false);
+            sendConfirmableSubMessage(seq, msg, msg.topicFilter(), msg.publisher(), false);
         } else {
             log.warn("Bad state: sequence duplicate seq={}", seq);
+        }
+    }
+
+    private void sendConfirmableSubMessage(long seq,
+                                           SubMessage msg,
+                                           String topicFilter,
+                                           ClientInfo publisher,
+                                           boolean isDup) {
+        int packetId = packetId(seq);
+        MqttPublishMessage pubMsg = helper().buildMqttPubMessage(packetId, msg, isDup);
+        TopicFilterOption option = msg.option();
+        int msgSize = sizer.sizeOf(pubMsg).encodedBytes();
+        if (!msg.permissionGranted()) {
+            reportDropConfirmableMsgEvent(msg, DropReason.NoSubPermission);
+            ctx.executor().execute(() -> confirm(packetId, false));
+            addBgTask(this.unsubTopicFilter(System.nanoTime(), topicFilter));
+            return;
+        }
+        if (option.getNoLocal() && clientInfo.equals(publisher)) {
+            // skip local sub
+            if (settings.debugMode) {
+                eventCollector.report(getLocal(QoS0Dropped.class)
+                    .reason(DropReason.NoLocal)
+                    .isRetain(false)
+                    .sender(publisher)
+                    .topic(msg.topic)
+                    .matchedFilter(topicFilter)
+                    .size(msgSize)
+                    .clientInfo(clientInfo()));
+            }
+            ctx.executor().execute(() -> confirm(packetId, false));
+            return;
+        }
+        if (messageExpiryInterval(pubMsg.variableHeader().properties()).orElse(Integer.MAX_VALUE) < 0) {
+            //  If the Message Expiry Interval has passed and the Server has not managed to start onward delivery to a matching subscriber, then it MUST delete the copy of the message for that subscriber [MQTT-3.3.2-5]
+            if (settings.debugMode) {
+                reportDropConfirmableMsgEvent(msg, DropReason.Expired);
+            }
+            ctx.executor().execute(() -> confirm(packetId, false));
+            return;
+        }
+        if (oomCondition.meet()) {
+            reportDropConfirmableMsgEvent(msg, DropReason.ResourceExhausted);
+            ctx.executor().execute(() -> confirm(packetId, false));
+            return;
+        }
+        if (!ctx.channel().isActive()) {
+            reportDropConfirmableMsgEvent(msg, DropReason.ChannelClosed);
+            return;
+        }
+        if (!ctx.channel().isWritable()) {
+            reportDropConfirmableMsgEvent(msg, DropReason.Overflow);
+            return;
+        }
+        memUsage.addAndGet(msgSize);
+        writeAndFlush(pubMsg).addListener(f -> {
+            memUsage.addAndGet(-msgSize);
+            if (f.isSuccess()) {
+                if (settings.debugMode) {
+                    switch (pubMsg.fixedHeader().qosLevel()) {
+                        case AT_LEAST_ONCE -> eventCollector.report(getLocal(QoS1Pushed.class)
+                            .reqId(pubMsg.variableHeader().packetId())
+                            .messageId(pubMsg.variableHeader().packetId())
+                            .dup(false)
+                            .isRetain(pubMsg.fixedHeader().isRetain())
+                            .sender(publisher)
+                            .matchedFilter(topicFilter)
+                            .topic(pubMsg.variableHeader().topicName())
+                            .size(msgSize)
+                            .clientInfo(clientInfo));
+                        case EXACTLY_ONCE -> eventCollector.report(getLocal(QoS2Pushed.class)
+                            .reqId(pubMsg.variableHeader().packetId())
+                            .messageId(pubMsg.variableHeader().packetId())
+                            .dup(false)
+                            .isRetain(pubMsg.fixedHeader().isRetain())
+                            .sender(publisher)
+                            .matchedFilter(topicFilter)
+                            .topic(pubMsg.variableHeader().topicName())
+                            .size(msgSize)
+                            .clientInfo(clientInfo));
+                    }
+                }
+            } else {
+                reportDropConfirmableMsgEvent(msg, DropReason.InternalError);
+            }
+        });
+    }
+
+    private void reportDropConfirmableMsgEvent(SubMessage subMsg, DropReason reason) {
+        switch (subMsg.qos()) {
+            case AT_LEAST_ONCE -> eventCollector.report(getLocal(QoS1Dropped.class)
+                .reason(reason)
+                .reqId(subMsg.message().getMessageId())
+                .isRetain(subMsg.isRetain())
+                .sender(subMsg.publisher())
+                .topic(subMsg.topic())
+                .matchedFilter(subMsg.topicFilter())
+                .size(subMsg.message().getPayload().size())
+                .clientInfo(clientInfo()));
+            case EXACTLY_ONCE -> eventCollector.report(getLocal(QoS2Dropped.class)
+                .reason(reason)
+                .reqId(subMsg.message().getMessageId())
+                .isRetain(subMsg.isRetain())
+                .sender(subMsg.publisher())
+                .topic(subMsg.topic())
+                .matchedFilter(subMsg.topicFilter())
+                .size(subMsg.message().getPayload().size())
+                .clientInfo(clientInfo()));
         }
     }
 
@@ -847,74 +1088,13 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             if (confirmingMessage.sentCount < settings.maxResendTimes + 1) {
                 resendQueue.remove(confirmingMessage);
                 confirmingMessage.sentCount++;
-                sendMqttPubMessage(confirmingMessage.seq, confirmingMessage.message,
+                sendConfirmableSubMessage(confirmingMessage.seq, confirmingMessage.message,
                     confirmingMessage.message.topicFilter(), confirmingMessage.message.publisher(), true);
                 resendQueue.add(confirmingMessage);
             } else {
-                confirm(confirmingMessage.packetId());
+                confirm(confirmingMessage.packetId(), false);
             }
         }
-    }
-
-    private void sendMqttPubMessage(long seq, SubMessage msg, String topicFilter, ClientInfo publisher, boolean isDup) {
-        MqttPublishMessage pubMsg = helper().buildMqttPubMessage(packetId(seq), msg, isDup);
-        if (messageExpiryInterval(pubMsg.variableHeader().properties()).orElse(Integer.MAX_VALUE) < 0) {
-            //  If the Message Expiry Interval has passed and the Server has not managed to start onward delivery to a matching subscriber, then it MUST delete the copy of the message for that subscriber [MQTT-3.3.2-5]
-            return;
-        }
-        int msgSize = sizer.sizeOf(pubMsg).encodedBytes();
-        if (!ctx.channel().isWritable()) {
-            if (pubMsg.fixedHeader().qosLevel() == MqttQoS.AT_MOST_ONCE) {
-                eventCollector.report(getLocal(QoS0Dropped.class)
-                    .reason(DropReason.Overflow)
-                    .isRetain(false)
-                    .sender(publisher)
-                    .topic(msg.topic)
-                    .matchedFilter(topicFilter)
-                    .size(msgSize)
-                    .clientInfo(clientInfo()));
-            }
-            // qos1 and qos2 will be resent by the server
-            return;
-        }
-        memUsage.addAndGet(msgSize);
-        writeAndFlush(pubMsg).addListener(f -> {
-            memUsage.addAndGet(-msgSize);
-            if (f.isSuccess()) {
-                if (settings.debugMode) {
-                    switch (pubMsg.fixedHeader().qosLevel()) {
-                        case AT_MOST_ONCE -> eventCollector.report(getLocal(QoS0Pushed.class)
-                            .reqId(pubMsg.variableHeader().packetId())
-                            .isRetain(msg.isRetain())
-                            .sender(publisher)
-                            .matchedFilter(topicFilter)
-                            .topic(msg.topic)
-                            .size(msgSize)
-                            .clientInfo(clientInfo));
-                        case AT_LEAST_ONCE -> eventCollector.report(getLocal(QoS1Pushed.class)
-                            .reqId(pubMsg.variableHeader().packetId())
-                            .messageId(pubMsg.variableHeader().packetId())
-                            .dup(false)
-                            .isRetain(pubMsg.fixedHeader().isRetain())
-                            .sender(publisher)
-                            .matchedFilter(topicFilter)
-                            .topic(pubMsg.variableHeader().topicName())
-                            .size(msgSize)
-                            .clientInfo(clientInfo));
-                        case EXACTLY_ONCE -> eventCollector.report(getLocal(QoS2Pushed.class)
-                            .reqId(pubMsg.variableHeader().packetId())
-                            .messageId(pubMsg.variableHeader().packetId())
-                            .dup(false)
-                            .isRetain(pubMsg.fixedHeader().isRetain())
-                            .sender(publisher)
-                            .matchedFilter(topicFilter)
-                            .topic(pubMsg.variableHeader().topicName())
-                            .size(msgSize)
-                            .clientInfo(clientInfo));
-                    }
-                }
-            }
-        });
     }
 
     private boolean isExceedReceivingMaximum() {

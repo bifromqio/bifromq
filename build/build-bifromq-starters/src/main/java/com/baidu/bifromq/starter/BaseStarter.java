@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.starter;
 
-import com.baidu.bifromq.baseenv.MemInfo;
+import com.baidu.bifromq.baseenv.MemUsage;
 import com.baidu.bifromq.starter.config.StarterConfig;
 import com.baidu.bifromq.starter.config.standalone.model.SSLContextConfig;
 import com.baidu.bifromq.starter.config.standalone.model.ServerSSLContextConfig;
@@ -148,7 +148,8 @@ public abstract class BaseStarter<T extends StarterConfig> implements IStarter {
         // netty default allocator metrics
         new NettyAllocatorMetrics(UnpooledByteBufAllocator.DEFAULT).bindTo(Metrics.globalRegistry);
 
-        Gauge.builder("netty.direct.memory.usage", MemInfo::nettyDirectMemoryUsage).register(Metrics.globalRegistry);
+        Gauge.builder("netty.direct.memory.usage", () -> MemUsage.local().nettyDirectMemoryUsage())
+            .register(Metrics.globalRegistry);
     }
 
     @Override

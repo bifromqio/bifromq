@@ -25,7 +25,6 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.ChannelE
 import io.netty.channel.embedded.EmbeddedChannel;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
-import org.testng.collections.Sets;
 
 public class ConditionalRejectHandlerTest extends MockableTest {
     @Mock
@@ -37,8 +36,7 @@ public class ConditionalRejectHandlerTest extends MockableTest {
     public void testReject() {
         when(rejectCondition.meet()).thenReturn(true);
         EmbeddedChannel embeddedChannel =
-            new EmbeddedChannel(new ConditionalRejectHandler(Sets.newHashSet(rejectCondition), eventCollector));
-        embeddedChannel.writeInbound("1");
+            new EmbeddedChannel(new ConditionalRejectHandler(rejectCondition, eventCollector));
         assertFalse(embeddedChannel.isOpen());
         verify(eventCollector).report(argThat(e -> e instanceof ChannelError));
     }

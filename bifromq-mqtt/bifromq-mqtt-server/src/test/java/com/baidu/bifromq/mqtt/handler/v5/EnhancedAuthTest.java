@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.handler.v5;
 
+import static com.baidu.bifromq.mqtt.handler.condition.ORCondition.or;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -122,7 +123,7 @@ public class EnhancedAuthTest extends MockableTest {
                         pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder());
                         pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
                         pipeline.addLast(ConditionalRejectHandler.NAME,
-                            new ConditionalRejectHandler(Sets.newHashSet(HeapMemPressureCondition.INSTANCE),
+                            new ConditionalRejectHandler(or(HeapMemPressureCondition.INSTANCE),
                                 eventCollector));
                         pipeline.addLast(connectHandler);
                     }));

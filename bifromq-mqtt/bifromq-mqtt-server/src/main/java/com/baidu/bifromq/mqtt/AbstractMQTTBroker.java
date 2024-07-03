@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.mqtt;
 
+import static com.baidu.bifromq.mqtt.handler.condition.ORCondition.or;
+
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
@@ -26,7 +28,6 @@ import com.baidu.bifromq.mqtt.handler.condition.HeapMemPressureCondition;
 import com.baidu.bifromq.mqtt.handler.ws.MqttOverWSHandler;
 import com.baidu.bifromq.mqtt.handler.ws.WebSocketOnlyHandler;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
-import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.RateLimiter;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.netty4.NettyEventExecutorMetrics;
@@ -173,7 +174,7 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                     pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
                     pipeline.addLast(ConditionalRejectHandler.NAME,
                         new ConditionalRejectHandler(
-                            Sets.newHashSet(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE),
+                            or(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE),
                             sessionContext.eventCollector));
                     pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
                 }));
@@ -196,7 +197,7 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                     pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
                     pipeline.addLast(ConditionalRejectHandler.NAME,
                         new ConditionalRejectHandler(
-                            Sets.newHashSet(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE),
+                            or(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE),
                             sessionContext.eventCollector));
                     pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
                 }));

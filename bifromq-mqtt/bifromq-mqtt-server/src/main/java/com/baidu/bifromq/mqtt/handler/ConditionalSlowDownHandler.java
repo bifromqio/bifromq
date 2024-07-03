@@ -25,7 +25,6 @@ import com.baidu.bifromq.type.ClientInfo;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import java.time.Duration;
-import java.util.Set;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -37,7 +36,7 @@ public class ConditionalSlowDownHandler extends ChannelInboundHandlerAdapter {
     public static final String NAME = "SlowDownHandler";
     private static final long MAX_SLOWDOWN_TIME =
         Duration.ofSeconds(((Integer) MAX_SLOWDOWN_TIMEOUT_SECONDS.get()).longValue()).toNanos();
-    private final Set<Condition> slowDownConditions;
+    private final Condition slowDownCondition;
     private final Supplier<Long> nanoProvider;
     private final IEventCollector eventCollector;
     private final ClientInfo clientInfo;
@@ -45,11 +44,11 @@ public class ConditionalSlowDownHandler extends ChannelInboundHandlerAdapter {
     private ScheduledFuture<?> resumeTask;
     private long slowDownAt = Long.MAX_VALUE;
 
-    public ConditionalSlowDownHandler(Set<Condition> slowDownConditions,
+    public ConditionalSlowDownHandler(Condition slowDownCondition,
                                       IEventCollector eventCollector,
                                       Supplier<Long> nanoProvider,
                                       ClientInfo clientInfo) {
-        this.slowDownConditions = slowDownConditions;
+        this.slowDownCondition = slowDownCondition;
         this.eventCollector = eventCollector;
         this.nanoProvider = nanoProvider;
         this.clientInfo = clientInfo;
@@ -71,20 +70,17 @@ public class ConditionalSlowDownHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
-        for (Condition slowDownCondition : slowDownConditions) {
-            if (slowDownCondition.meet()) {
-                ctx.channel().config().setAutoRead(false);
-                slowDownAt = nanoProvider.get();
-                scheduleResumeRead();
-                break;
-            }
+        if (slowDownCondition.meet()) {
+            ctx.channel().config().setAutoRead(false);
+            slowDownAt = nanoProvider.get();
+            scheduleResumeRead();
         }
         ctx.fireChannelRead(msg);
     }
 
     @Override
     public void channelReadComplete(ChannelHandlerContext ctx) {
-        if (slowDownConditions.stream().noneMatch(Condition::meet)) {
+        if (!slowDownCondition.meet()) {
             ctx.channel().config().setAutoRead(true);
             slowDownAt = Long.MAX_VALUE;
         } else {
@@ -101,7 +97,7 @@ public class ConditionalSlowDownHandler extends ChannelInboundHandlerAdapter {
     }
 
     private void resumeRead() {
-        if (slowDownConditions.stream().noneMatch(Condition::meet)) {
+        if (!slowDownCondition.meet()) {
             if (!ctx.channel().config().isAutoRead()) {
                 ctx.channel().config().setAutoRead(true);
                 ctx.read();
@@ -118,17 +114,15 @@ public class ConditionalSlowDownHandler extends ChannelInboundHandlerAdapter {
     private boolean closeIfNeeded() {
         if (nanoProvider.get() - slowDownAt > MAX_SLOWDOWN_TIME) {
             ctx.close();
-            for (Condition slowDownCondition : slowDownConditions) {
-                if (slowDownCondition.meet()) {
-                    if (slowDownCondition instanceof InboundResourceCondition) {
-                        eventCollector.report(getLocal(OutOfTenantResource.class)
-                            .reason(slowDownCondition.toString())
-                            .clientInfo(clientInfo));
-                    }
-                    eventCollector.report(getLocal(ResourceThrottled.class)
+            if (slowDownCondition.meet()) {
+                if (slowDownCondition instanceof InboundResourceCondition) {
+                    eventCollector.report(getLocal(OutOfTenantResource.class)
                         .reason(slowDownCondition.toString())
                         .clientInfo(clientInfo));
                 }
+                eventCollector.report(getLocal(ResourceThrottled.class)
+                    .reason(slowDownCondition.toString())
+                    .clientInfo(clientInfo));
             }
             return true;
         }

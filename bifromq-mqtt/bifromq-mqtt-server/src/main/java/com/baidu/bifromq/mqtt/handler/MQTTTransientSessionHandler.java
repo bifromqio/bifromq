@@ -13,49 +13,6 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
-import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.dist.client.MatchResult;
-import com.baidu.bifromq.dist.client.UnmatchResult;
-import com.baidu.bifromq.inbox.storage.proto.LWT;
-import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
-import com.baidu.bifromq.metrics.ITenantMeter;
-import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
-import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
-import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.DropReason;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS0Dropped;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS1Dropped;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS2Dropped;
-import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStart;
-import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStop;
-import com.baidu.bifromq.retain.rpc.proto.MatchReply;
-import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
-import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.MatchInfo;
-import com.baidu.bifromq.type.Message;
-import com.baidu.bifromq.type.QoS;
-import com.baidu.bifromq.type.TopicMessagePack;
-import io.micrometer.core.instrument.Timer;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.mqtt.MqttMessage;
-import lombok.extern.slf4j.Slf4j;
-
-import javax.annotation.Nullable;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.Optional;
-import java.util.SortedMap;
-import java.util.TreeMap;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
-
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS0InternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS1InternalLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttQoS2InternalLatency;
@@ -74,8 +31,48 @@ import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalTrans
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalTransientSubscriptions;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalTransientUnsubscribePerSecond;
 
+import com.baidu.bifromq.basehlc.HLC;
+import com.baidu.bifromq.dist.client.MatchResult;
+import com.baidu.bifromq.dist.client.UnmatchResult;
+import com.baidu.bifromq.inbox.storage.proto.LWT;
+import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
+import com.baidu.bifromq.metrics.ITenantMeter;
+import com.baidu.bifromq.mqtt.handler.condition.Condition;
+import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
+import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
+import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
+import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStart;
+import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStop;
+import com.baidu.bifromq.retain.rpc.proto.MatchReply;
+import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
+import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.MatchInfo;
+import com.baidu.bifromq.type.Message;
+import com.baidu.bifromq.type.QoS;
+import com.baidu.bifromq.type.TopicMessagePack;
+import io.micrometer.core.instrument.Timer;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.mqtt.MqttMessage;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.NavigableMap;
+import java.util.Optional;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
+import javax.annotation.Nullable;
+import lombok.extern.slf4j.Slf4j;
+
 @Slf4j
 public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler implements IMQTTTransientSession {
+
     // the topicFilters could be accessed concurrently
     private final Map<String, TopicFilterOption> topicFilters = new ConcurrentHashMap<>();
     private final NavigableMap<Long, SubMessage> inbox = new TreeMap<>();
@@ -85,12 +82,13 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
 
     protected MQTTTransientSessionHandler(TenantSettings settings,
                                           ITenantMeter tenantMeter,
+                                          Condition oomCondition,
                                           String userSessionId,
                                           int keepAliveTimeSeconds,
                                           ClientInfo clientInfo,
                                           @Nullable LWT willMessage,
                                           ChannelHandlerContext ctx) {
-        super(settings, tenantMeter, userSessionId, keepAliveTimeSeconds, clientInfo, willMessage, ctx);
+        super(settings, tenantMeter, oomCondition, userSessionId, keepAliveTimeSeconds, clientInfo, willMessage, ctx);
     }
 
     @Override
@@ -257,45 +255,22 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     private void publish(String topicFilter,
                          TopicFilterOption option,
                          List<TopicMessagePack> topicMsgPacks) {
-        QoS subQoS = option.getQos();
-        addFgTask(authProvider.checkPermission(clientInfo(), buildSubAction(topicFilter, subQoS)))
-                .thenAccept(checkResult -> {
-                    assert ctx.executor().inEventLoop();
-                    if (checkResult.hasGranted()) {
-                        AtomicInteger totalMsgBytesSize = new AtomicInteger();
-                        forEach(topicFilter, option, topicMsgPacks, subMsg -> {
-                            logInternalLatency(subMsg);
-                            if (!ctx.channel().isActive()) {
-                                reportDropEvent(subMsg, DropReason.ChannelClosed);
-                                return;
-                            }
-                            if (option.getNoLocal() && clientInfo.equals(subMsg.publisher())) {
-                                // skip local sub
-                                if (settings.debugMode) {
-                                    reportDropEvent(subMsg, DropReason.NoLocal);
-                                }
-                                return;
-                            }
-                            if (subMsg.qos() == QoS.AT_MOST_ONCE) {
-                                sendQoS0SubMessage(subMsg);
-                            } else {
-                                if (inbox.size() >= settings.inboxQueueLength) {
-                                    reportDropEvent(subMsg, DropReason.Overflow);
-                                    return;
-                                }
-                                inbox.put(msgSeqNo++, subMsg);
-                                totalMsgBytesSize.addAndGet(subMsg.estBytes());
-                            }
-                        });
-                        memUsage.addAndGet(totalMsgBytesSize.get());
-                        send();
+        assert ctx.executor().inEventLoop();
+        addFgTask(authProvider.checkPermission(clientInfo(), buildSubAction(topicFilter, option.getQos())))
+            .thenAccept(checkResult -> {
+                AtomicInteger totalMsgBytesSize = new AtomicInteger();
+                forEach(topicFilter, option, topicMsgPacks, checkResult.hasGranted(), subMsg -> {
+                    logInternalLatency(subMsg);
+                    if (subMsg.qos() == QoS.AT_MOST_ONCE) {
+                        sendQoS0SubMessage(subMsg);
                     } else {
-                        forEach(topicFilter, option, topicMsgPacks,
-                                bufferMsg -> reportDropEvent(bufferMsg, DropReason.NoSubPermission));
-                        // treat no permission as no_inbox
-                        addBgTask(this.unsubTopicFilter(System.nanoTime(), topicFilter));
+                        inbox.put(msgSeqNo++, subMsg);
+                        totalMsgBytesSize.addAndGet(subMsg.estBytes());
                     }
                 });
+                memUsage.addAndGet(totalMsgBytesSize.get());
+                send();
+            });
     }
 
     private void send() {
@@ -308,54 +283,24 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
             Map.Entry<Long, SubMessage> entry = itr.next();
             long seq = entry.getKey();
             SubMessage msg = entry.getValue();
-            sendConfirmableMessage(seq, msg);
+            sendConfirmableSubMessage(seq, msg);
             nextSendSeq = seq + 1;
         }
     }
 
     private void logInternalLatency(SubMessage message) {
-        (switch (message.qos()) {
+        Timer timer = switch (message.qos()) {
             case AT_MOST_ONCE -> tenantMeter.timer(MqttQoS0InternalLatency);
             case AT_LEAST_ONCE -> tenantMeter.timer(MqttQoS1InternalLatency);
             default -> tenantMeter.timer(MqttQoS2InternalLatency);
-        }).record(HLC.INST.getPhysical() - message.message().getTimestamp(), TimeUnit.MILLISECONDS);
-    }
-
-    private void reportDropEvent(SubMessage subMsg, DropReason reason) {
-        switch (subMsg.qos()) {
-            case AT_MOST_ONCE -> eventCollector.report(getLocal(QoS0Dropped.class)
-                    .reason(reason)
-                    .reqId(subMsg.message().getMessageId())
-                    .isRetain(subMsg.isRetain())
-                    .sender(subMsg.publisher())
-                    .topic(subMsg.topic())
-                    .matchedFilter(subMsg.topicFilter())
-                    .size(subMsg.message().getPayload().size())
-                    .clientInfo(clientInfo()));
-            case AT_LEAST_ONCE -> eventCollector.report(getLocal(QoS1Dropped.class)
-                    .reason(reason)
-                    .reqId(subMsg.message().getMessageId())
-                    .isRetain(subMsg.isRetain())
-                    .sender(subMsg.publisher())
-                    .topic(subMsg.topic())
-                    .matchedFilter(subMsg.topicFilter())
-                    .size(subMsg.message().getPayload().size())
-                    .clientInfo(clientInfo()));
-            case EXACTLY_ONCE -> eventCollector.report(getLocal(QoS2Dropped.class)
-                    .reason(reason)
-                    .reqId(subMsg.message().getMessageId())
-                    .isRetain(subMsg.isRetain())
-                    .sender(subMsg.publisher())
-                    .topic(subMsg.topic())
-                    .matchedFilter(subMsg.topicFilter())
-                    .size(subMsg.message().getPayload().size())
-                    .clientInfo(clientInfo()));
-        }
+        };
+        timer.record(HLC.INST.getPhysical() - message.message().getTimestamp(), TimeUnit.MILLISECONDS);
     }
 
     private void forEach(String topicFilter,
                          TopicFilterOption option,
                          List<TopicMessagePack> topicMessagePacks,
+                         boolean permissionGranted,
                          Consumer<SubMessage> consumer) {
         for (TopicMessagePack topicMsgPack : topicMessagePacks) {
             String topic = topicMsgPack.getTopic();
@@ -364,7 +309,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                 ClientInfo publisher = senderMsgPack.getPublisher();
                 List<Message> messages = senderMsgPack.getMessageList();
                 for (Message message : messages) {
-                    consumer.accept(new SubMessage(topic, message, publisher, topicFilter, option));
+                    consumer.accept(new SubMessage(topic, message, publisher, topicFilter, option, permissionGranted));
                 }
             }
         }

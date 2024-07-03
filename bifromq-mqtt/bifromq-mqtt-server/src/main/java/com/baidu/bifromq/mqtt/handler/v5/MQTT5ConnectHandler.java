@@ -19,6 +19,8 @@ import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.MQTTConnectHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
+import com.baidu.bifromq.mqtt.handler.condition.DirectMemPressureCondition;
+import com.baidu.bifromq.mqtt.handler.condition.HeapMemPressureCondition;
 import com.baidu.bifromq.mqtt.handler.record.GoAway;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5AuthReasonCode;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
@@ -66,6 +68,7 @@ import java.util.concurrent.CompletableFuture;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttAuthFailureCount;
 import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.goAway;
 import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.ok;
+import static com.baidu.bifromq.mqtt.handler.condition.ORCondition.or;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authData;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authMethod;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.isUTF8Payload;
@@ -597,6 +600,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
             .connMsg(connMsg)
             .settings(settings)
             .tenantMeter(tenantMeter)
+            .oomCondition(or(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE))
             .userSessionId(userSessionId)
             .clientInfo(clientInfo)
             .keepAliveTimeSeconds(keepAliveSeconds)
@@ -620,6 +624,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
             .connMsg(connMsg)
             .settings(settings)
             .tenantMeter(tenantMeter)
+            .oomCondition(or(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE))
             .userSessionId(userSessionId)
             .clientInfo(clientInfo)
             .existingSession(existingSession)

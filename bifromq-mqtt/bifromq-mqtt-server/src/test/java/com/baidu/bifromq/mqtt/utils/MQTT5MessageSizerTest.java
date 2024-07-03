@@ -106,7 +106,9 @@ public class MQTT5MessageSizerTest extends MockableTest {
                 Message.newBuilder()
                     .setPayload(ByteString.copyFromUtf8("payload"))
                     .build(),
-                ClientInfo.getDefaultInstance(), "topicFilter", TopicFilterOption.getDefaultInstance()))
+                ClientInfo.getDefaultInstance(), "topicFilter",
+                TopicFilterOption.getDefaultInstance(),
+                true))
             .build();
         verifySize(message);
     }

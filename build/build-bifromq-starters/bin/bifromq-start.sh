@@ -127,10 +127,6 @@ if [ -z "$JVM_PERF_OPTS" ]; then
   JVM_PERF_OPTS="-server -XX:MaxInlineLevel=15 -Djava.awt.headless=true"
 fi
 
-function evalOpts() {
-   EVAL_JVM_GC_OPTS=("$@")
-}
-
 # GC options
 if [ -z "$JVM_GC_OPTS" ]; then
   JVM_GC_OPTS="-XX:+UnlockExperimentalVMOptions \
@@ -139,6 +135,7 @@ if [ -z "$JVM_GC_OPTS" ]; then
   -XX:ZAllocationSpikeTolerance=5 \
   -Xlog:async \
   -Xlog:gc:file='${LOG_DIR}/gc-%t.log:time,tid,tags:filecount=5,filesize=50m' \
+  -XX:+CrashOnOutOfMemoryError \
   -XX:+HeapDumpOnOutOfMemoryError \
   -XX:HeapDumpPath='${LOG_DIR}' \
 "
@@ -162,10 +159,7 @@ if [ -z "$JVM_HEAP_OPTS" ]; then
   JVM_HEAP_OPTS="-Xms$(memory_in_mb ${MIN_HEAP_MEMORY})m -Xmx$(memory_in_mb ${HEAP_MEMORY})m -XX:MetaspaceSize=${META_SPACE_MEMORY} -XX:MaxMetaspaceSize=${MAX_META_SPACE_MEMORY} -XX:MaxDirectMemorySize=${MAX_DIRECT_MEMORY}"
 fi
 
-# Generic jvm settings you want to add
-if [ -z "$EXTRA_JVM_OPTS" ]; then
-  EXTRA_JVM_OPTS=""
-fi
+EXTRA_JVM_OPTS="$EXTRA_JVM_OPTS -Dio.netty.tryReflectionSetAccessible=true -Dio.netty.allocator.cacheTrimIntervalMillis=5000 --add-opens java.base/java.nio=ALL-UNNAMED"
 
 # Set Debug options if enabled
 if [ "x$JVM_DEBUG" = "xtrue" ]; then

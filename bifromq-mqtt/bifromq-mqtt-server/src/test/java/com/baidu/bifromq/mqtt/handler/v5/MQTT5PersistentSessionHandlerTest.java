@@ -24,6 +24,7 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_PUSHED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_CONFIRMED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_DROPPED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_PUSHED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_CONFIRMED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DROPPED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACKED;
@@ -51,6 +52,8 @@ import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5DisconnectReasonCode;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS1Confirmed;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS2Confirmed;
 import com.baidu.bifromq.type.QoS;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
@@ -112,6 +115,7 @@ public class MQTT5PersistentSessionHandlerTest extends BaseSessionHandlerTest {
                 ctx.pipeline().addLast(MQTT5PersistentSessionHandler.builder()
                     .settings(new TenantSettings(tenantId, settingProvider))
                     .tenantMeter(tenantMeter)
+                    .oomCondition(oomCondition)
                     .connMsg(MqttMessageBuilders.connect()
                         .protocolVersion(MqttVersion.MQTT_5)
                         .build())
@@ -357,6 +361,7 @@ public class MQTT5PersistentSessionHandlerTest extends BaseSessionHandlerTest {
         // not by pass
         mockCheckPermission(false);
         mockDistUnMatch(true);
+        when(inboxClient.unsub(any())).thenReturn(new CompletableFuture<>());
         int messageCount = 3;
         inboxFetchConsumer.accept(fetch(messageCount, 128, AT_LEAST_ONCE));
         channel.runPendingTasks();
@@ -364,7 +369,13 @@ public class MQTT5PersistentSessionHandlerTest extends BaseSessionHandlerTest {
             MqttPublishMessage message = channel.readOutbound();
             assertNull(message);
         }
-        verifyEvent(QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED);
+        verifyEvent(QOS1_DROPPED, QOS1_DROPPED, QOS1_DROPPED, QOS1_CONFIRMED, QOS1_CONFIRMED);
+        verify(eventCollector, times(5)).report(argThat(e -> {
+            if (e instanceof QoS1Confirmed evt) {
+                return !evt.delivered();
+            }
+            return true;
+        }));
         verify(inboxClient, times(messageCount)).unsub(any());
     }
 
@@ -398,6 +409,7 @@ public class MQTT5PersistentSessionHandlerTest extends BaseSessionHandlerTest {
         // not by pass
         mockCheckPermission(false);
         mockDistUnMatch(true);
+        when(inboxClient.unsub(any())).thenReturn(new CompletableFuture<>());
         int messageCount = 3;
         inboxFetchConsumer.accept(fetch(messageCount, 128, EXACTLY_ONCE));
         channel.runPendingTasks();
@@ -405,7 +417,13 @@ public class MQTT5PersistentSessionHandlerTest extends BaseSessionHandlerTest {
             MqttPublishMessage message = channel.readOutbound();
             assertNull(message);
         }
-        verifyEvent(QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED);
+        verifyEvent(QOS2_DROPPED, QOS2_DROPPED, QOS2_DROPPED, QOS2_CONFIRMED, QOS2_CONFIRMED);
+        verify(eventCollector, times(5)).report(argThat(e -> {
+            if (e instanceof QoS2Confirmed evt) {
+                return !evt.delivered();
+            }
+            return true;
+        }));
         verify(inboxClient, times(messageCount)).unsub(any());
     }
 

@@ -19,6 +19,7 @@ import com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper;
 import com.baidu.bifromq.mqtt.handler.MQTTConnectHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTPersistentSessionHandler;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
+import com.baidu.bifromq.mqtt.handler.condition.Condition;
 import com.baidu.bifromq.type.ClientInfo;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
@@ -35,6 +36,7 @@ public final class MQTT5PersistentSessionHandler extends MQTTPersistentSessionHa
     public MQTT5PersistentSessionHandler(MqttConnectMessage connMsg,
                                          TenantSettings settings,
                                          ITenantMeter tenantMeter,
+                                         Condition oomCondition,
                                          String userSessionId,
                                          int keepAliveTimeSeconds,
                                          int sessionExpirySeconds,
@@ -43,7 +45,8 @@ public final class MQTT5PersistentSessionHandler extends MQTTPersistentSessionHa
                                          @Nullable LWT willMessage,
                                          ChannelHandlerContext ctx) {
         super(settings,
-                tenantMeter,
+            tenantMeter,
+            oomCondition,
             userSessionId,
             keepAliveTimeSeconds,
             sessionExpirySeconds,

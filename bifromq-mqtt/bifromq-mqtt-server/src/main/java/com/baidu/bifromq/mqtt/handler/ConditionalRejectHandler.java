@@ -20,32 +20,31 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.ChannelError;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class ConditionalRejectHandler extends ChannelInboundHandlerAdapter {
     public static final String NAME = "ConditionalRejectHandler";
-    private final Set<Condition> rejectConditions;
+    private final Condition rejectCondition;
     private final IEventCollector eventCollector;
 
-    public ConditionalRejectHandler(Set<Condition> rejectConditions, IEventCollector eventCollector) {
-        this.rejectConditions = rejectConditions;
+    public ConditionalRejectHandler(Condition rejectCondition, IEventCollector eventCollector) {
+        this.rejectCondition = rejectCondition;
         this.eventCollector = eventCollector;
     }
 
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) {
-        for (Condition cond : rejectConditions) {
-            if (cond.meet()) {
-                log.debug("Reject connection due to {}: remote={}", cond, ctx.channel().remoteAddress());
-                ctx.close();
-                eventCollector.report(getLocal(ChannelError.class)
-                    .peerAddress(ChannelAttrs.socketAddress(ctx.channel()))
-                    .cause(new RuntimeException("Reject connection due to " + cond)));
-                return;
-            }
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        if (rejectCondition.meet()) {
+            log.debug("Reject connection due to {}: remote={}", rejectCondition, ctx.channel().remoteAddress());
+            // ensure no read will happen
+            ctx.channel().config().setAutoRead(false);
+            ctx.close();
+            eventCollector.report(getLocal(ChannelError.class)
+                .peerAddress(ChannelAttrs.socketAddress(ctx.channel()))
+                .cause(new RuntimeException("Reject connection due to " + rejectCondition)));
+            return;
         }
-        ctx.fireChannelRead(msg);
+        super.channelActive(ctx);
     }
 }

@@ -88,7 +88,6 @@ import com.baidu.bifromq.sessiondict.client.ISessionRegister;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
-import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Tags;
 import io.netty.channel.ChannelInitializer;
@@ -202,7 +201,7 @@ public abstract class BaseMQTTTest {
                 pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(256 * 1024)); //256kb
                 pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
                 pipeline.addLast(ConditionalRejectHandler.NAME,
-                    new ConditionalRejectHandler(Sets.newHashSet(HeapMemPressureCondition.INSTANCE),
+                    new ConditionalRejectHandler(HeapMemPressureCondition.INSTANCE,
                         eventCollector));
                 pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(2));
             }

@@ -15,6 +15,7 @@ package com.baidu.bifromq.mqtt.handler;
 
 import static com.baidu.bifromq.metrics.TenantMetric.MqttIngressBytes;
 import static com.baidu.bifromq.mqtt.handler.MQTTSessionIdUtil.userSessionId;
+import static com.baidu.bifromq.mqtt.handler.condition.ORCondition.or;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION_TYPE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION_TYPE_P_VALUE;
@@ -52,7 +53,6 @@ import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.type.ClientInfo;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.bifromq.plugin.resourcethrottler.TenantResourceType;
-import com.google.common.collect.Sets;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
@@ -359,19 +359,18 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
         ctx.pipeline().addBefore(ctx.executor(), MqttDecoder.class.getName(), MQTTPacketFilter.NAME,
             new MQTTPacketFilter(maxPacketSize, settings, clientInfo, eventCollector));
         ctx.pipeline().replace(ctx.pipeline().get(ConditionalRejectHandler.NAME),
-            ConditionalSlowDownHandler.NAME, new ConditionalSlowDownHandler(Sets.newHashSet(
-                DirectMemPressureCondition.INSTANCE,
-                HeapMemPressureCondition.INSTANCE,
-                new InboundResourceCondition(resourceThrottler, clientInfo)),
+            ConditionalSlowDownHandler.NAME, new ConditionalSlowDownHandler(
+                or(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE,
+                    new InboundResourceCondition(resourceThrottler, clientInfo)),
                 eventCollector, sessionCtx::nanoTime, clientInfo));
         ITenantMeter tenantMeter = ITenantMeter.get(clientInfo.getTenantId());
         IMQTTMessageSizer sizer = clientInfo.getMetadataOrDefault(MQTT_PROTOCOL_VER_KEY, "")
-                .equals(MQTT_PROTOCOL_VER_5_VALUE) ? IMQTTMessageSizer.mqtt5() : IMQTTMessageSizer.mqtt3();
+            .equals(MQTT_PROTOCOL_VER_5_VALUE) ? IMQTTMessageSizer.mqtt5() : IMQTTMessageSizer.mqtt3();
         tenantMeter.recordSummary(MqttIngressBytes, sizer.sizeByHeader(connMsg.fixedHeader()));
         MQTTSessionHandler sessionHandler = buildTransientSessionHandler(
             connMsg,
             settings,
-                tenantMeter,
+            tenantMeter,
             userSessionId,
             keepAliveSeconds,
             willMessage,
@@ -416,19 +415,18 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
         ctx.pipeline().addBefore(ctx.executor(), MqttDecoder.class.getName(), MQTTPacketFilter.NAME,
             new MQTTPacketFilter(maxPacketSize, settings, clientInfo, eventCollector));
         ctx.pipeline().replace(ctx.pipeline().get(ConditionalRejectHandler.NAME),
-            ConditionalSlowDownHandler.NAME, new ConditionalSlowDownHandler(Sets.newHashSet(
-                DirectMemPressureCondition.INSTANCE,
-                HeapMemPressureCondition.INSTANCE,
-                new InboundResourceCondition(resourceThrottler, clientInfo)),
+            ConditionalSlowDownHandler.NAME, new ConditionalSlowDownHandler(
+                or(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE,
+                    new InboundResourceCondition(resourceThrottler, clientInfo)),
                 eventCollector, sessionCtx::nanoTime, clientInfo));
 
         ITenantMeter tenantMeter = ITenantMeter.get(clientInfo.getTenantId());
         IMQTTMessageSizer sizer = clientInfo.getMetadataOrDefault(MQTT_PROTOCOL_VER_KEY, "")
-                .equals(MQTT_PROTOCOL_VER_5_VALUE) ? IMQTTMessageSizer.mqtt5() : IMQTTMessageSizer.mqtt3();
+            .equals(MQTT_PROTOCOL_VER_5_VALUE) ? IMQTTMessageSizer.mqtt5() : IMQTTMessageSizer.mqtt3();
         tenantMeter.recordSummary(MqttIngressBytes, sizer.sizeByHeader(connMsg.fixedHeader()));
         MQTTSessionHandler sessionHandler = buildPersistentSessionHandler(connMsg,
             settings,
-                tenantMeter,
+            tenantMeter,
             userSessionId,
             keepAliveSeconds,
             sessionExpiryInterval,
