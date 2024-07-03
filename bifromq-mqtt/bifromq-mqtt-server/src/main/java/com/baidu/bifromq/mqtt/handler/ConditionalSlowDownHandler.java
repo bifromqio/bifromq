@@ -18,7 +18,6 @@ import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_SLOWDOWN_TIMEOUT_SEC
 
 import com.baidu.bifromq.mqtt.handler.condition.Condition;
 import com.baidu.bifromq.mqtt.handler.condition.InboundResourceCondition;
-import com.baidu.bifromq.baserpc.utils.MemInfo;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
@@ -74,8 +73,6 @@ public class ConditionalSlowDownHandler extends ChannelInboundHandlerAdapter {
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
         for (Condition slowDownCondition : slowDownConditions) {
             if (slowDownCondition.meet()) {
-                log.debug("Stop read: directMemoryUsage={}, heapMemoryUsage={}, remote={}",
-                    MemInfo.directMemoryUsage(), MemInfo.heapMemoryUsage(), ctx.channel().remoteAddress());
                 ctx.channel().config().setAutoRead(false);
                 slowDownAt = nanoProvider.get();
                 scheduleResumeRead();
@@ -107,8 +104,6 @@ public class ConditionalSlowDownHandler extends ChannelInboundHandlerAdapter {
         if (slowDownConditions.stream().noneMatch(Condition::meet)) {
             if (!ctx.channel().config().isAutoRead()) {
                 ctx.channel().config().setAutoRead(true);
-                log.debug("Resume read: directMemoryUsage={}, heapMemoryUsage={}, remote={}",
-                    MemInfo.directMemoryUsage(), MemInfo.heapMemoryUsage(), ctx.channel().remoteAddress());
                 ctx.read();
                 slowDownAt = Long.MAX_VALUE;
             }

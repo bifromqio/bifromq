@@ -17,8 +17,8 @@ import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_DIRECT_
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE;
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_SLOWDOWN_TIMEOUT_SECONDS;
 
+import com.baidu.bifromq.baseenv.MemInfo;
 import com.baidu.bifromq.baserpc.ResponsePipeline;
-import com.baidu.bifromq.baserpc.utils.MemInfo;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import io.grpc.stub.StreamObserver;
@@ -35,8 +35,11 @@ class LocalSessionWritePipeline extends ResponsePipeline<WriteRequest, WriteRepl
     private final ILocalDistService localDistService;
 
     public LocalSessionWritePipeline(ILocalDistService localDistService, StreamObserver<WriteReply> responseObserver) {
-        super(responseObserver, () -> MemInfo.directMemoryUsage() > SLOWDOWN_DIRECT_MEM_USAGE
-            || MemInfo.heapMemoryUsage() > SLOWDOWN_HEAP_MEM_USAGE, SLOWDOWN_TIMEOUT);
+        super(responseObserver, () -> {
+            MemInfo.MemUsage usage = MemInfo.usage();
+            return usage.nettyDirectMemoryUsage() > SLOWDOWN_DIRECT_MEM_USAGE
+                || usage.heapMemoryUsage() > SLOWDOWN_HEAP_MEM_USAGE;
+        }, SLOWDOWN_TIMEOUT);
         this.localDistService = localDistService;
     }
 

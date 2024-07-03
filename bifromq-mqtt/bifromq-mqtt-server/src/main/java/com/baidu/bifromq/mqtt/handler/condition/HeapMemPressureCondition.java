@@ -15,7 +15,7 @@ package com.baidu.bifromq.mqtt.handler.condition;
 
 import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE;
 
-import com.baidu.bifromq.baserpc.utils.MemInfo;
+import com.baidu.bifromq.baseenv.MemInfo;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
