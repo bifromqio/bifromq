@@ -13,12 +13,15 @@
 
 package com.baidu.bifromq.starter;
 
+import com.baidu.bifromq.baseenv.MemInfo;
 import com.baidu.bifromq.starter.config.StarterConfig;
 import com.baidu.bifromq.starter.config.standalone.model.SSLContextConfig;
 import com.baidu.bifromq.starter.config.standalone.model.ServerSSLContextConfig;
+import com.baidu.bifromq.starter.metrics.netty.PooledByteBufAllocator;
 import com.baidu.bifromq.starter.utils.ConfigUtil;
 import com.baidu.bifromq.starter.utils.ResourceUtil;
 import com.google.common.base.Strings;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ClassLoaderMetrics;
 import io.micrometer.core.instrument.binder.jvm.JvmCompilationMetrics;
@@ -30,7 +33,6 @@ import io.micrometer.core.instrument.binder.jvm.JvmThreadMetrics;
 import io.micrometer.core.instrument.binder.netty4.NettyAllocatorMetrics;
 import io.micrometer.core.instrument.binder.system.ProcessorMetrics;
 import io.micrometer.core.instrument.binder.system.UptimeMetrics;
-import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.OpenSsl;
@@ -141,9 +143,12 @@ public abstract class BaseStarter<T extends StarterConfig> implements IStarter {
         JvmHeapPressureMetrics jvmHeapPressureMetrics = new JvmHeapPressureMetrics();
         jvmHeapPressureMetrics.bindTo(Metrics.globalRegistry);
         closeables.add(jvmHeapPressureMetrics);
+        // using nonblocking version of netty allocator metrics
+        new NettyAllocatorMetrics(PooledByteBufAllocator.INSTANCE).bindTo(Metrics.globalRegistry);
         // netty default allocator metrics
-        new NettyAllocatorMetrics(PooledByteBufAllocator.DEFAULT).bindTo(Metrics.globalRegistry);
         new NettyAllocatorMetrics(UnpooledByteBufAllocator.DEFAULT).bindTo(Metrics.globalRegistry);
+
+        Gauge.builder("netty.direct.memory.usage", MemInfo::nettyDirectMemoryUsage).register(Metrics.globalRegistry);
     }
 
     @Override
