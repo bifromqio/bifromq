@@ -7,76 +7,118 @@ assignees: ''
 
 ---
 
-⚠️ **Please ensure that the provided information is as detailed and clear as possible. Lack of information may delay the resolution of the issue.**
+## ⚠️ *Important: Please read before submitting an issue*
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+To ensure prompt and effective support from our community, please provide one of the following with your issue
+description:
 
-**BifroMQ**
-- Version: [e.g. 3.1.x **We highly recommend you to try the latest version first.**]
-- Deployment: [e.g. Standalone | Cluster | Docker | Kubernetes | etc]
+1. Complete and reproducible steps to consistently recreate the problem, including:
 
-**To Reproduce**
+- The version of BifroMQ being used (Note: Unless otherwise stated, the BifroMQ team only supports the latest major
+  version. Please try to reproduce the issue with the latest version)
+- Detailed deployment configuration
+- Hardware specifications and operating system environment
+- Any publicly available test tools or programs used to reproduce the issue
+- Step-by-step instructions to replicate the problem
 
-Steps to reproduce the behavior, Please include necessary information such as(but not limited to):
+OR
 
-*** PUB Client ***:
-- MQTT Connection:
-   - ClientIdentifier:
-   - etc...
-- MQTT Pub:
-   - Topic: 
-   - QoS: [0|1|2]
-   - Retain: [true | false]
-*** SUB Client ***:
-- MQTT Connection:
-   - Clean Session: [true | false]
-   - ClientIdentifier: 
-   - etc...
-- MQTT Sub:
-   - TopicFilter: 
-   - QoS: [0|1|2]
+2. All relevant data or environmental details that can aid in diagnosing the issue, made publicly accessible (e.g., via
+   public file sharing or accessible links). This may include but is not limited to:
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+- Debug-level logs
+- All contents of the data directory for BifroMQ
+- The content of configuration files and other relevant information
+- Any other pertinent details
 
-**Logs**
-If applicable, add related logs to help troubleshoot.
+Issues that only describe symptoms without providing either of the above may not contain enough valuable data for
+problem identification and are unlikely to receive a response from the team.
 
-**Configurations**
-You can copy from the beginning of info.log and paste here.
-See also: https://bifromq.io/docs/admin_guide/configuration/configs_print
+If you cannot meet either of these requirements, please contact [email](hello@bifromq.io) for paid consulting services.
+Alternatively, we encourage you to submit a Pull Request with an Issue Fix to become an
+external [contributor](https://github.com/bifromqio/bifromq/blob/main/CLA.md) to BifroMQ.
 
-**OS(please complete the following information):**
- - OS: [e.g. CentOS 8]
- - Kernel Version [e.g. 5.6]
-    - Kernel Specific Settings: [e.g. TCP, FD, etc]
+## ⚠️ *重要提示：提交问题前请仔细阅读*
 
-**JVM:**
-- Version: [e.g. 17]
-- Arguments: [e.g. if override any JVM arguments]
+为了确保社区能够迅速有效地为您提供支持，请在描述问题时提供以下两项中的任意一项：
 
-**Performance Related**
+1. 完整且可稳定复现问题的详细步骤，包括：
 
-If your problem is performance-related, please provide as much detailed information as possible according to the list.
+- 使用的 BifroMQ 版本（注意：除非特别声明，BifroMQ 团队仅对最新的主要版本提供支持。请尝试使用最新版本复现该问题）
+- 详细的部署配置
+- 硬件规格和操作系统环境
+- 用于复现问题的公开可用的测试工具或程序
+- 逐步复现问题的操作说明
 
-- HOST:
-  - Cluster node count: [e.g. 1|3]
-  - CPU: [e.g. vCPU number]
-  - Memory: [e.g. 32G]
-- Network:
-  - Bandwidth: [e.g. 1Gbps]
-  - Latency: [e.g. 1ms]
-- Load:
-  - PUB count: [e.g. 1000]
-  - SUB count: [e.g. 1000]
-  - PUB QPS per connection: [e.g. 10msg/s]
-  - SUB QPS per connection: [e.g. 10msg/s]
-  - Payload size: [e.g. 1KB]
-- FanIn & FanOut
-  - FanIn: [e.g. 5 means one sub client recieves messages from average 5 pub clients]
-  - FanOut: [e.g. 5 means one message is subscribed by average 5 sub clients]
-  - Please describe here how do you design your topic pattern and pub/sub messages: [e.g. 10 pub clients send messages to the topic: tp/{deviceName}/event, which each client use its unique deviceName. One sub client subscribe the topicfilter tp/+/event to recieve all the messages.]
+或者
+
+2. 有助于诊断问题的所有相关数据或环境细节，以公开可访问的方式提供（例如，通过公共文件共享或可访问的链接）。这可能包括但不限于：
+
+- 调试级别的日志
+- 完整的BifroMQ `data` 目录的内容
+- 配置文件内容和其他相关信息
+- 其他任何相关的重要信息
+
+仅描述现象而不提供上述两项中任意一项的问题报告，通常无法为问题定位提供足够有价值的信息，因此可能不会得到团队的响应。
+
+如果您无法满足这两项要求中的任何一项，请联系[邮箱](hello@bifromq.io) 获取付费咨询服务。另外，我们也鼓励您提交解决问题的
+Pull Request，成为 BifroMQ 的[外部贡献者](https://github.com/bifromqio/bifromq/blob/main/CLA.md)。
+
+### **Describe the bug**
+
+A clear and concise description of what the bug is, and what you expected to happen.
+
+#### **Environment**
+
+- Version: [e.g. 3.2.x **We highly recommend you to verify your issue using the latest version first.**]
+- JVM Version: [e.g. OpenJDK17]
+- Hardware Spec: [e.g. 4C16G, 1Gbps NIC]
+- OS: [e.g. CentOS 8]
+- The Testing Tools
+- etc
+
+#### **Reproducible Steps**
+
+Steps to reproduce the behavior
+
+1. The steps to setup your cluster, including the configuration for each node
+2. The testing steps to reproduce the issue, including following important information:
+
+- ***PUB Client Parameters***
+  - MQTT Connection:
+    - ClientIdentifier:
+    - etc...
+  - MQTT Pub:
+    - Topic:
+    - QoS: [0|1|2]
+    - Retain: [true | false]
+- ***SUB Client Parameters***:
+  - MQTT Connection:
+    - Clean Session: [true | false]
+    - ClientIdentifier:
+    - etc...
+  - MQTT Sub:
+    - TopicFilter:
+    - QoS: [0|1|2]
+- ***The Load Generated***
+  - Connection Count:
+    - PUB Client count: [e.g. 1000]
+    - SUB Client count: [e.g. 1000]
+  - Load Generated:
+    - PUB QPS per connection: [e.g. 10msg/s]
+    - SUB QPS per connection: [e.g. 10msg/s]
+    - Payload size: [e.g. 1KB]
+    - FanIn: [e.g. 5 means one sub client receives messages from average 5 pub clients]
+    - FanOut: [e.g. 5 means one message is subscribed by average 5 sub clients]
+    - topic and subscription
+      pattern: [e.g. 10 pub clients send messages to the topic: tp/{deviceName}/event, which each client use its unique deviceName. One sub client subscribe the topicfilter tp/+/event to recieve all the messages.]
+
+#### **Publicly Accessible Diagnostic Data**(If Reproducible Steps are not available)
+
+- Log files downloadable link:
+- BifroMQ `data` downloadable link:
+- Configuration files downloadable link:
+- etc
 
 **Additional context**
 Add any other context about the problem here.
