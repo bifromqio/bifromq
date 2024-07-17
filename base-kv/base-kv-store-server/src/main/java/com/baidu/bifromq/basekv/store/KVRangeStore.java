@@ -47,6 +47,7 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
+import com.baidu.bifromq.basekv.store.range.IKVRange;
 import com.baidu.bifromq.basekv.store.range.IKVRangeFSM;
 import com.baidu.bifromq.basekv.store.range.KVRange;
 import com.baidu.bifromq.basekv.store.range.KVRangeFSM;
@@ -194,7 +195,16 @@ public class KVRangeStore implements IKVRangeStore {
             kvRangeEngine.spaces().forEach((id, keyRange) -> {
                 KVRangeId rangeId = KVRangeIdUtil.fromString(id);
                 if (walStorageEngine.has(rangeId)) {
-                    putAndOpen(loadKVRangeFSM(rangeId, keyRange));
+                    IKVRangeWALStore walStore = walStorageEngine.get(rangeId);
+                    IKVRange range = new KVRange(keyRange);
+                    // verify the integrity of wal and range state
+                    if (!validate(range, walStore)) {
+                        log.warn("Destroy inconsistent key range: {}", id);
+                        keyRange.destroy();
+                        walStore.destroy();
+                        return;
+                    }
+                    putAndOpen(loadKVRangeFSM(rangeId, range, walStore));
                 } else {
                     log.debug("Destroy orphan key range: {}", id);
                     keyRange.destroy();
@@ -202,6 +212,14 @@ public class KVRangeStore implements IKVRangeStore {
             });
             updateDescriptorList();
         }).toCompletableFuture().join();
+    }
+
+    private boolean validate(IKVRange range, IKVRangeWALStore walStore) {
+        if (range.lastAppliedIndex() > -1
+            && range.lastAppliedIndex() < walStore.latestSnapshot().getIndex()) {
+            return false;
+        }
+        return true;
     }
 
     @Override
@@ -385,7 +403,8 @@ public class KVRangeStore implements IKVRangeStore {
                                 if (!walStorageEngine.has(rangeId)) {
                                     walStorageEngine.create(rangeId, request.getInitSnapshot());
                                 }
-                                putAndOpen(loadKVRangeFSM(rangeId, keyRange));
+                                putAndOpen(
+                                    loadKVRangeFSM(rangeId, new KVRange(keyRange), walStorageEngine.get(rangeId)));
                             }
                             updateDescriptorList();
                             messenger.send(StoreMessage.newBuilder()
@@ -583,17 +602,16 @@ public class KVRangeStore implements IKVRangeStore {
         });
     }
 
-    private IKVRangeFSM loadKVRangeFSM(KVRangeId rangeId, ICPableKVSpace keyRange) {
+    private IKVRangeFSM loadKVRangeFSM(KVRangeId rangeId, IKVRange range, IKVRangeWALStore walStore) {
         checkStarted();
         log.debug("Load existing kvrange: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), id);
-        assert walStorageEngine.has(rangeId);
         return new KVRangeFSM(clusterId,
             id,
             rangeId,
             coProcFactory,
             this::ensureCompatibility,
-            new KVRange(keyRange),
-            walStorageEngine.get(rangeId),
+            range,
+            walStore,
             queryExecutor,
             bgTaskExecutor,
             opts.getKvRangeOptions(),

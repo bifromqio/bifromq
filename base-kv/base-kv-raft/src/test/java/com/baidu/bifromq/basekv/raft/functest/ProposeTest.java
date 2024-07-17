@@ -249,7 +249,7 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
             group.entryAt(leader, 5);
             fail();
         } catch (Throwable e) {
-            assertTrue(e.getCause() instanceof IllegalArgumentException);
+            assertTrue(e.getCause() instanceof IndexOutOfBoundsException);
         }
         assertTrue(group.entryAt(leader, 6).isPresent());
         try {

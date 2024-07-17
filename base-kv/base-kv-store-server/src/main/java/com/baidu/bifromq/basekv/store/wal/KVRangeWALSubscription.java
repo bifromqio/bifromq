@@ -60,14 +60,14 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
             .subscribe(task -> fetchRunner.add(() -> {
                 applyRunner.cancelAll();
                 applyRunner.add(installSnapshot(task.snapshot, task.leader, task.onDone))
-                    .thenAccept(snap -> {
+                    .thenAccept(snap -> fetchRunner.add(() -> {
                         log.debug(
                             "Snapshot installed: range={}, ver={}, state={}, checkpoint={}, lastAppliedIndex={}",
                             KVRangeIdUtil.toString(snap.getId()),
                             snap.getVer(), snap.getState(), snap.getCheckpointId(), snap.getLastAppliedIndex());
                         lastFetchedIdx.set(snap.getLastAppliedIndex());
                         commitIdx.set(-1);
-                    });
+                    }));
             })));
         disposables.add(commitIndex
             .subscribe(c -> fetchRunner.add(() -> {
@@ -96,9 +96,11 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
             return wal.retrieveCommitted(lastFetchedIdx.get() + 1, maxFetchBytes)
                 .handleAsync((logEntries, e) -> {
                     if (e != null) {
-                        log.debug("Failed to retrieve log from wal from index[{}]", lastFetchedIdx.get() + 1, e);
+                        log.error("Failed to retrieve log from wal from index[{}]", lastFetchedIdx.get() + 1, e);
                         fetching.set(false);
-                        scheduleFetchWAL();
+                        if (!(e instanceof IndexOutOfBoundsException)) {
+                            scheduleFetchWAL();
+                        }
                     } else {
                         fetchRunner.add(() -> {
                             LogEntry entry = null;

@@ -18,6 +18,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -74,7 +75,7 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
     public void retrieveFailAndRetry() {
         when(wal.retrieveCommitted(0, maxSize))
             .thenReturn(
-                CompletableFuture.failedFuture(new IllegalArgumentException()),
+                CompletableFuture.failedFuture(new RuntimeException("For Testing")),
                 CompletableFuture.completedFuture(Iterators.forArray(LogEntry.newBuilder()
                     .setTerm(0)
                     .setIndex(0)
@@ -92,6 +93,23 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
         latch.await();
         verify(wal, times(2)).retrieveCommitted(0, maxSize);
     }
+
+    @SneakyThrows
+    @Test
+    public void NoRetryWhenIndexOutOfBound() {
+        when(wal.retrieveCommitted(0, maxSize))
+            .thenReturn(
+                CompletableFuture.failedFuture(new IndexOutOfBoundsException("For Testing")),
+                CompletableFuture.completedFuture(Iterators.forArray(LogEntry.newBuilder()
+                    .setTerm(0)
+                    .setIndex(0)
+                    .build())));
+        KVRangeWALSubscription walSub =
+            new KVRangeWALSubscription(maxSize, wal, commitIndexSource, -1, subscriber, executor);
+        commitIndexSource.onNext(0L);
+        verify(wal, timeout(1000).times(0)).retrieveCommitted(eq(0L), eq(maxSize));
+    }
+
 
     @SneakyThrows
     @Test

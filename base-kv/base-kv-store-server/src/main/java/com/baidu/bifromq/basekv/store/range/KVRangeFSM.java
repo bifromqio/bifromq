@@ -594,6 +594,13 @@ public class KVRangeFSM implements IKVRangeFSM {
 
     private CompletableFuture<Void> apply(LogEntry entry) {
         CompletableFuture<Void> onDone = new CompletableFuture<>();
+        if (kvRange.lastAppliedIndex() > entry.getIndex()) {
+            // skip already applied log
+            log.warn("Should skip already applied log: rangeId={}, storeId={}, index={}",
+                KVRangeIdUtil.toString(id), hostStoreId, entry.getIndex());
+            onDone.complete(null);
+            return onDone;
+        }
         switch (entry.getTypeCase()) {
             case CONFIG -> {
                 IKVRangeWriter<?> rangeWriter = kvRange.toWriter();
