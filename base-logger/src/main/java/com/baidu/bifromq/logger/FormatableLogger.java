@@ -401,7 +401,7 @@ public class FormatableLogger implements Logger {
         if (!delegate.isWarnEnabled()) {
             return;
         }
-        doLog(delegate::warn, format, arguments);
+        doLogVarArgs(delegate::warn, format, arguments);
     }
 
     @Override
