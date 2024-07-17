@@ -40,6 +40,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.DBOptions;
+import org.rocksdb.FlushOptions;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
@@ -150,9 +151,21 @@ public abstract class RocksDBKVEngine<
     protected void doStop() {
         log.info("Stopping RocksDBKVEngine[{}]", identity);
         metricManager.close();
+        log.debug("Flush RocksDBKVEngine[{}] before closing", identity);
+        try (FlushOptions flushOptions = new FlushOptions().setWaitForFlush(true)) {
+            db.flush(flushOptions);
+        } catch (Throwable e) {
+            log.error("Flush RocksDBKVEngine[{}] error", identity, e);
+        }
+
         kvSpaceMap.values().forEach(RocksDBKVSpace::close);
         db.destroyColumnFamilyHandle(defaultCFHandle);
         defaultCFDesc.getOptions().close();
+        try {
+            db.syncWal();
+        } catch (RocksDBException e) {
+            log.error("SyncWAL RocksDBKVEngine[{}] error", identity, e);
+        }
         db.close();
         dbOptions.close();
     }
