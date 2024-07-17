@@ -554,16 +554,38 @@ public class KVRangeStore implements IKVRangeStore {
         }
     }
 
-    private void quitKVRange(IKVRangeFSM range) {
+    private void quitKVRange(IKVRangeFSM range, boolean recreate) {
         mgmtTaskRunner.add(() -> {
             kvRangeMap.remove(range.id(), range);
-            return range.destroy().thenAccept(v -> updateDescriptorList());
+            return range.destroy()
+                .thenAccept(v -> {
+                    if (recreate) {
+                        log.debug("Recreate kvrange after destroy: rangeId={}, storeId={}",
+                            KVRangeIdUtil.toString(range.id()), id);
+                        KVRangeSnapshot rangeSnapshot = KVRangeSnapshot.newBuilder()
+                            .setId(range.id())
+                            .setVer(0)
+                            .setLastAppliedIndex(0)
+                            .setState(State.newBuilder().setType(Normal).build())
+                            .setBoundary(EMPTY_BOUNDARY)
+                            .build();
+                        Snapshot snapshot = Snapshot.newBuilder()
+                            // no voters
+                            .setClusterConfig(ClusterConfig.newBuilder().build())
+                            .setTerm(0)
+                            .setIndex(0)
+                            .setData(rangeSnapshot.toByteString())
+                            .build();
+                        putAndOpen(createKVRangeFSM(range.id(), snapshot, rangeSnapshot));
+                    }
+                    updateDescriptorList();
+                });
         });
     }
 
     private IKVRangeFSM loadKVRangeFSM(KVRangeId rangeId, ICPableKVSpace keyRange) {
         checkStarted();
-        log.debug("Load existing kvrange: rangeId={},storeId={}", KVRangeIdUtil.toString(rangeId), id);
+        log.debug("Load existing kvrange: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), id);
         assert walStorageEngine.has(rangeId);
         return new KVRangeFSM(clusterId,
             id,

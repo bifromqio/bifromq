@@ -119,13 +119,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class KVRangeFSM implements IKVRangeFSM {
+    public interface QuitListener {
+        void onQuit(IKVRangeFSM rangeToQuit, boolean recreate);
+    }
+
     enum Lifecycle {
         Init, // initialized but not open
         Opening,
@@ -181,7 +184,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                       Executor queryExecutor,
                       Executor bgExecutor,
                       KVRangeOptions opts,
-                      Consumer<KVRangeFSM> onQuit) {
+                      QuitListener quitListener) {
         this.opts = opts.toBuilder().build();
         this.id = id;
         this.hostStoreId = hostStoreId; // keep a local copy to decouple it from store's state
@@ -225,7 +228,21 @@ public class KVRangeFSM implements IKVRangeFSM {
                     return metricManager.recordSnapshotInstall(() -> KVRangeFSM.this.install(request, leader));
                 }
             }, fsmExecutor);
-        quitReason.thenAccept(v -> onQuit.accept(this));
+        quitReason.thenAccept(v -> {
+            // check if the range needs to be recreated after quit, this situation happens there are series configchange causing the replica
+            // be removed and added-back again, but the log apply progress is fall behind.
+            ClusterConfig config = wal.clusterConfig();
+            if (config.getCorrelateId().equals(kvRange.state().getTaskId())) {
+                quitListener.onQuit(this, false);
+            } else {
+                Set<String> members = newHashSet();
+                members.addAll(config.getVotersList());
+                members.addAll(config.getLearnersList());
+                members.addAll(config.getNextVotersList());
+                members.addAll(config.getNextLearnersList());
+                quitListener.onQuit(this, members.contains(hostStoreId));
+            }
+        });
     }
 
     @Override
@@ -247,7 +264,6 @@ public class KVRangeFSM implements IKVRangeFSM {
         if (lifecycle.get() != Init) {
             return;
         }
-        log.debug("Open kvrange: rangeId={}, storeId={}", KVRangeIdUtil.toString(id), hostStoreId);
         mgmtTaskRunner.add(() -> {
             if (lifecycle.compareAndSet(Init, Lifecycle.Opening)) {
                 this.messenger = messenger;
@@ -298,6 +314,12 @@ public class KVRangeFSM implements IKVRangeFSM {
                 clusterConfigSubject.onNext(wal.clusterConfig());
                 lifecycle.set(Open);
                 metricManager.reportLastAppliedIndex(kvRange.lastAppliedIndex());
+                log.debug("Open kvrange: rangeId={}, storeId={}, appliedIndex={}, state={}, ver={}",
+                    KVRangeIdUtil.toString(id),
+                    hostStoreId,
+                    kvRange.lastAppliedIndex(),
+                    kvRange.state().getType(),
+                    kvRange.version());
                 // make sure latest snapshot exists
                 if (!kvRange.hasCheckpoint(wal.latestSnapshot())) {
                     log.debug("Latest snapshot not available, do compaction: rangeId={}, storeId={}\n{}",
