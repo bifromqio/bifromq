@@ -596,7 +596,7 @@ public class KVRangeFSM implements IKVRangeFSM {
         CompletableFuture<Void> onDone = new CompletableFuture<>();
         if (kvRange.lastAppliedIndex() > entry.getIndex()) {
             // skip already applied log
-            log.warn("Should skip already applied log: rangeId={}, storeId={}, index={}",
+            log.debug("Skip already applied log: rangeId={}, storeId={}, index={}",
                 KVRangeIdUtil.toString(id), hostStoreId, entry.getIndex());
             onDone.complete(null);
             return onDone;

@@ -82,6 +82,24 @@ public class SessionStoreTest {
     }
 
     @Test
+    public void testAddDuplicatePersistentSession() {
+        SessionStore sessionStore = new SessionStore();
+        ClientInfo sessionOwner = ClientInfo.newBuilder()
+            .setTenantId("tenant1")
+            .putMetadata(MQTT_USER_ID_KEY, "userId")
+            .putMetadata(MQTT_CLIENT_ID_KEY, "clientId")
+            .putMetadata(MQTT_CLIENT_SESSION_TYPE, MQTT_CLIENT_SESSION_TYPE_P_VALUE)
+            .build();
+
+        sessionStore.add(sessionOwner, register1);
+        assertGaugeValue("tenant1", MqttLivePersistentSessionGauge, 1.0);
+
+        sessionStore.add(sessionOwner, register2);
+        assertGaugeValue("tenant1", MqttLivePersistentSessionGauge,
+            1.0); // Should not increment because it's a duplicate key
+    }
+
+    @Test
     public void testAddAndKickPrevious() {
         SessionStore sessionStore = new SessionStore();
         ClientInfo sessionOwner = ClientInfo.newBuilder()
@@ -148,6 +166,31 @@ public class SessionStoreTest {
 
         sessionStore.remove(sessionOwner, register1);
         assertNull(sessionStore.get(sessionOwner.getTenantId(), clientKey));
+    }
+
+    @Test
+    public void testRemoveNonexistentPersistentSession() {
+        SessionStore sessionStore = new SessionStore();
+        ClientInfo sessionOwner = ClientInfo.newBuilder()
+            .setTenantId("tenant2")
+            .putMetadata(MQTT_USER_ID_KEY, "userId")
+            .putMetadata(MQTT_CLIENT_ID_KEY, "clientId")
+            .putMetadata(MQTT_CLIENT_SESSION_TYPE, MQTT_CLIENT_SESSION_TYPE_P_VALUE)
+            .build();
+
+        // Add a persistent session
+        sessionStore.add(sessionOwner, register1);
+        assertGaugeValue("tenant2", MqttLivePersistentSessionGauge, 1.0);
+
+        // Attempt to remove a non-existent session
+        ClientInfo nonExistentSessionOwner = ClientInfo.newBuilder()
+            .setTenantId("tenant2")
+            .putMetadata(MQTT_USER_ID_KEY, "userId")
+            .putMetadata(MQTT_CLIENT_ID_KEY, "nonExistentClientId")
+            .putMetadata(MQTT_CLIENT_SESSION_TYPE, MQTT_CLIENT_SESSION_TYPE_P_VALUE)
+            .build();
+        sessionStore.remove(nonExistentSessionOwner, register2);
+        assertGaugeValue("tenant2", MqttLivePersistentSessionGauge, 1.0); // Should remain unchanged
     }
 
     @Test

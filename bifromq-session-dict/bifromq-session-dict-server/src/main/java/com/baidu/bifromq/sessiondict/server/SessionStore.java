@@ -53,7 +53,8 @@ public class SessionStore {
             gauging(tenantId, MqttLivePersistentSessionGauge, sessionCollection.persistentSessions::get);
             return sessionCollection;
         }).clients.put(clientKey, register);
-        if (sessionOwner.getMetadataOrDefault(MQTT_CLIENT_SESSION_TYPE, MQTT_CLIENT_SESSION_TYPE_T_VALUE)
+        if (prevRegister == null
+            && sessionOwner.getMetadataOrDefault(MQTT_CLIENT_SESSION_TYPE, MQTT_CLIENT_SESSION_TYPE_T_VALUE)
             .equals(MQTT_CLIENT_SESSION_TYPE_P_VALUE)) {
             tenantSessions.get(tenantId).persistentSessions.incrementAndGet();
         }
@@ -69,8 +70,8 @@ public class SessionStore {
             new ISessionRegister.ClientKey(sessionOwner.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),
                 sessionOwner.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""));
         tenantSessions.computeIfPresent(tenantId, (k, v) -> {
-            v.clients.remove(clientKey, register);
-            if (sessionOwner.getMetadataOrDefault(MQTT_CLIENT_SESSION_TYPE, MQTT_CLIENT_SESSION_TYPE_T_VALUE)
+            boolean removed = v.clients.remove(clientKey, register);
+            if (removed && sessionOwner.getMetadataOrDefault(MQTT_CLIENT_SESSION_TYPE, MQTT_CLIENT_SESSION_TYPE_T_VALUE)
                 .equals(MQTT_CLIENT_SESSION_TYPE_P_VALUE)) {
                 tenantSessions.get(tenantId).persistentSessions.decrementAndGet();
             }
