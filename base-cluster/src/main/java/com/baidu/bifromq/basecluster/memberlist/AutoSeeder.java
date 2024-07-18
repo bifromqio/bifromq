@@ -161,7 +161,7 @@ public final class AutoSeeder {
                     .build(), finalSeedAddr, true)
                 .whenComplete((v, e) -> {
                     if (e != null) {
-                        log.warn("failed to send join message to {}", finalSeedAddr, e);
+                        log.warn("failed to send join message to {}, due to {}", finalSeedAddr, e.getMessage());
                     }
                 });
         }

@@ -244,7 +244,7 @@ public final class TCPTransport extends AbstractTransport {
         CompletableFuture<Void> onDone = new CompletableFuture<>();
         getChannel(recipient).whenComplete((ch, e) -> {
             if (e != null) {
-                log.warn("Failed to connect to address: " + recipient, e);
+                log.debug("Failed to connect to address: {}", recipient, e);
                 onDone.completeExceptionally(e);
             } else {
                 if (ch.isWritable()) {

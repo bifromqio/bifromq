@@ -670,7 +670,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                         .collect(Collectors.toSet()))
                 .whenComplete((seedEndpoints, e) -> {
                     if (e != null) {
-                        log.warn("ClusterDomainName[{}] is unresolvable", clusterDomainName, e);
+                        log.warn("ClusterDomainName[{}] is unresolvable, due to {}", clusterDomainName, e.getMessage());
                     } else {
                         log.info("ClusterDomainName[{}] resolved to seedEndpoints: {}",
                             clusterDomainName, seedEndpoints);
