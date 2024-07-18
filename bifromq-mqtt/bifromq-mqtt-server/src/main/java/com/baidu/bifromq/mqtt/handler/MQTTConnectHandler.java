@@ -49,7 +49,7 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.ProtocolError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientconnected.ClientConnected;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.baidu.bifromq.sysprops.BifroMQSysProp;
+import com.baidu.bifromq.sysprops.props.SanityCheckMqttUtf8String;
 import com.baidu.bifromq.type.ClientInfo;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.bifromq.plugin.resourcethrottler.TenantResourceType;
@@ -71,7 +71,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
-    protected static final boolean SANITY_CHECK = BifroMQSysProp.MQTT_UTF8_SANITY_CHECK.get();
+    protected static final boolean SANITY_CHECK = SanityCheckMqttUtf8String.INSTANCE.get();
 
     public record ExistingSession(long incarnation, long version) {
 

@@ -105,7 +105,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.subhandling.UnsubAcked
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sessiondict.client.ISessionRegister;
-import com.baidu.bifromq.sysprops.BifroMQSysProp;
+import com.baidu.bifromq.sysprops.props.SanityCheckMqttUtf8String;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MQTTClientInfoConstants;
 import com.baidu.bifromq.type.Message;
@@ -147,7 +147,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class MQTTSessionHandler extends MQTTMessageHandler implements IMQTTSession {
-    protected static final boolean SANITY_CHECK = BifroMQSysProp.MQTT_UTF8_SANITY_CHECK.get();
+    protected static final boolean SANITY_CHECK = SanityCheckMqttUtf8String.INSTANCE.get();
 
     @Accessors(fluent = true)
     @Getter

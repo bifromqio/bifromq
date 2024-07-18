@@ -13,14 +13,13 @@
 
 package com.baidu.bifromq.mqtt.service;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_SLOWDOWN_TIMEOUT_SECONDS;
-
 import com.baidu.bifromq.baseenv.MemUsage;
 import com.baidu.bifromq.baserpc.ResponsePipeline;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
+import com.baidu.bifromq.sysprops.props.IngressSlowDownDirectMemoryUsage;
+import com.baidu.bifromq.sysprops.props.IngressSlowDownHeapMemoryUsage;
+import com.baidu.bifromq.sysprops.props.MaxSlowDownTimeoutSeconds;
 import io.grpc.stub.StreamObserver;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -28,10 +27,9 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class LocalSessionWritePipeline extends ResponsePipeline<WriteRequest, WriteReply> {
-    private static final double SLOWDOWN_DIRECT_MEM_USAGE = INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE.get();
-    private static final double SLOWDOWN_HEAP_MEM_USAGE = INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE.get();
-    private static final Duration SLOWDOWN_TIMEOUT =
-        Duration.ofSeconds(((Integer) MAX_SLOWDOWN_TIMEOUT_SECONDS.get()).longValue());
+    private static final double SLOWDOWN_DIRECT_MEM_USAGE = IngressSlowDownDirectMemoryUsage.INSTANCE.get();
+    private static final double SLOWDOWN_HEAP_MEM_USAGE = IngressSlowDownHeapMemoryUsage.INSTANCE.get();
+    private static final Duration SLOWDOWN_TIMEOUT = Duration.ofSeconds(MaxSlowDownTimeoutSeconds.INSTANCE.get());
     private final ILocalDistService localDistService;
 
     public LocalSessionWritePipeline(ILocalDistService localDistService, StreamObserver<WriteReply> responseObserver) {

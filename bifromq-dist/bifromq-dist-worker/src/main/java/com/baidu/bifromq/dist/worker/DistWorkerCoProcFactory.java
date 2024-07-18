@@ -13,9 +13,6 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_MATCH_PARALLELISM;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_FANOUT_SPLIT_THRESHOLD;
-
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
@@ -29,6 +26,8 @@ import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.worker.hinter.FanoutSplitHinter;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
+import com.baidu.bifromq.sysprops.props.DistMatchParallelism;
+import com.baidu.bifromq.sysprops.props.DistWorkerFanOutSplitThreshold;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
@@ -51,7 +50,7 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     private final IMessageDeliverer deliverer;
     private final ExecutorService matchExecutor;
     private final Duration loadEstWindow;
-    private final int fanoutSplitThreshold = DIST_WORKER_FANOUT_SPLIT_THRESHOLD.get();
+    private final int fanoutSplitThreshold = DistWorkerFanOutSplitThreshold.INSTANCE.get();
 
     public DistWorkerCoProcFactory(IDistClient distClient,
                                    IEventCollector eventCollector,
@@ -66,7 +65,7 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
         deliverer = new MessageDeliverer(subBrokerManager);
 
         matchExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            new ForkJoinPool(DIST_MATCH_PARALLELISM.get(), new ForkJoinPool.ForkJoinWorkerThreadFactory() {
+            new ForkJoinPool(DistMatchParallelism.INSTANCE.get(), new ForkJoinPool.ForkJoinWorkerThreadFactory() {
                 final AtomicInteger index = new AtomicInteger(0);
 
                 @Override

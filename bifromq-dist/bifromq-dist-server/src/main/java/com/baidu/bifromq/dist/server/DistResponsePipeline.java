@@ -16,10 +16,6 @@ package com.baidu.bifromq.dist.server;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.plugin.eventcollector.distservice.DistError.DistErrorCode.DROP_EXCEED_LIMIT;
 import static com.baidu.bifromq.plugin.eventcollector.distservice.DistError.DistErrorCode.RPC_FAILURE;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_CALL_QUEUES;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_SLOWDOWN_TIMEOUT_SECONDS;
 
 import com.baidu.bifromq.baseenv.MemUsage;
 import com.baidu.bifromq.baserpc.ResponsePipeline;
@@ -31,6 +27,10 @@ import com.baidu.bifromq.dist.server.scheduler.IDistCallScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DistError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.Disted;
+import com.baidu.bifromq.sysprops.props.DistWorkerCallQueueNum;
+import com.baidu.bifromq.sysprops.props.IngressSlowDownDirectMemoryUsage;
+import com.baidu.bifromq.sysprops.props.IngressSlowDownHeapMemoryUsage;
+import com.baidu.bifromq.sysprops.props.MaxSlowDownTimeoutSeconds;
 import com.baidu.bifromq.type.PublisherMessagePack;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import io.grpc.stub.StreamObserver;
@@ -41,10 +41,9 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
-    private static final double SLOWDOWN_DIRECT_MEM_USAGE = INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE.get();
-    private static final double SLOWDOWN_HEAP_MEM_USAGE = INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE.get();
-    private static final Duration SLOWDOWN_TIMEOUT =
-        Duration.ofSeconds(((Integer) MAX_SLOWDOWN_TIMEOUT_SECONDS.get()).longValue());
+    private static final double SLOWDOWN_DIRECT_MEM_USAGE = IngressSlowDownDirectMemoryUsage.INSTANCE.get();
+    private static final double SLOWDOWN_HEAP_MEM_USAGE = IngressSlowDownHeapMemoryUsage.INSTANCE.get();
+    private static final Duration SLOWDOWN_TIMEOUT = Duration.ofSeconds(MaxSlowDownTimeoutSeconds.INSTANCE.get());
     private final IEventCollector eventCollector;
     private final IDistCallScheduler distCallScheduler;
     private final LoadingCache<String, RunningAverage> tenantFanouts;
@@ -115,7 +114,7 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
     }
 
     private static class DistQueueAllocator {
-        private static final int QUEUE_NUMS = DIST_WORKER_CALL_QUEUES.get();
+        private static final int QUEUE_NUMS = DistWorkerCallQueueNum.INSTANCE.get();
         private static final AtomicInteger IDX = new AtomicInteger(0);
 
         public static int allocate() {

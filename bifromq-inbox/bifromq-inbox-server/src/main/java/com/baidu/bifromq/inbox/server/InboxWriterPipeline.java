@@ -13,10 +13,6 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_SLOWDOWN_TIMEOUT_SECONDS;
-
 import com.baidu.bifromq.baseenv.MemUsage;
 import com.baidu.bifromq.baserpc.RPCContext;
 import com.baidu.bifromq.baserpc.ResponsePipeline;
@@ -24,6 +20,9 @@ import com.baidu.bifromq.inbox.records.ScopedInbox;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
+import com.baidu.bifromq.sysprops.props.IngressSlowDownDirectMemoryUsage;
+import com.baidu.bifromq.sysprops.props.IngressSlowDownHeapMemoryUsage;
+import com.baidu.bifromq.sysprops.props.MaxSlowDownTimeoutSeconds;
 import io.grpc.stub.StreamObserver;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -31,10 +30,9 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply> {
-    private static final double SLOWDOWN_DIRECT_MEM_USAGE = INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE.get();
-    private static final double SLOWDOWN_HEAP_MEM_USAGE = INGRESS_SLOWDOWN_HEAP_MEMORY_USAGE.get();
-    private static final Duration SLOWDOWN_TIMEOUT =
-        Duration.ofSeconds(((Integer) MAX_SLOWDOWN_TIMEOUT_SECONDS.get()).longValue());
+    private static final double SLOWDOWN_DIRECT_MEM_USAGE = IngressSlowDownDirectMemoryUsage.INSTANCE.get();
+    private static final double SLOWDOWN_HEAP_MEM_USAGE = IngressSlowDownHeapMemoryUsage.INSTANCE.get();
+    private static final Duration SLOWDOWN_TIMEOUT = Duration.ofSeconds(MaxSlowDownTimeoutSeconds.INSTANCE.get());
 
     interface IWriteCallback {
         void afterWrite(ScopedInbox scopedInbox, String delivererKey);

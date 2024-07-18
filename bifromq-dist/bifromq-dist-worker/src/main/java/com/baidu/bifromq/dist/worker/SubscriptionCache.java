@@ -16,8 +16,6 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compare;
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordPrefixWithEscapedTopicFilter;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_MAX_CACHED_SUBS_PER_TENANT;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_TOPIC_MATCH_EXPIRY;
 import static java.util.Collections.singleton;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
@@ -28,6 +26,8 @@ import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.dist.entity.Matching;
 import com.baidu.bifromq.dist.util.TopicFilterMatcher;
 import com.baidu.bifromq.dist.util.TopicTrie;
+import com.baidu.bifromq.sysprops.props.DistMaxCachedRoutesPerTenant;
+import com.baidu.bifromq.sysprops.props.DistTopicMatchExpirySeconds;
 import com.baidu.bifromq.type.TopicMessage;
 import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
 import com.github.benmanes.caffeine.cache.CacheLoader;
@@ -67,7 +67,7 @@ public class SubscriptionCache {
     private final Timer internalMatchTimer;
 
     SubscriptionCache(KVRangeId id, Supplier<IKVReader> rangeReaderProvider, Executor matchExecutor) {
-        int expirySec = DIST_TOPIC_MATCH_EXPIRY.get();
+        int expirySec = DistTopicMatchExpirySeconds.INSTANCE.get();
         threadLocalReader = ThreadLocal.withInitial(rangeReaderProvider);
         tenantCache = Caffeine.newBuilder()
             .expireAfterAccess(expirySec * 3L, TimeUnit.SECONDS)
@@ -81,7 +81,7 @@ public class SubscriptionCache {
                 })
             .build(k -> Caffeine.newBuilder()
                 .scheduler(Scheduler.systemScheduler())
-                .maximumWeight(DIST_MAX_CACHED_SUBS_PER_TENANT.get())
+                .maximumWeight(DistMaxCachedRoutesPerTenant.INSTANCE.get())
                 .weigher(new Weigher<ScopedTopic, MatchResult>() {
                     @Override
                     public @NonNegative int weigh(ScopedTopic key, MatchResult value) {

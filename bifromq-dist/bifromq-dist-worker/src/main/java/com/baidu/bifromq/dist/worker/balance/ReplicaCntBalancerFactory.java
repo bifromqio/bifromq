@@ -13,16 +13,15 @@
 
 package com.baidu.bifromq.dist.worker.balance;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_RANGE_VOTER_COUNT;
-
 import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.ReplicaCntBalancer;
+import com.baidu.bifromq.sysprops.props.DistWorkerRangeVoterNum;
 
 public class ReplicaCntBalancerFactory implements IStoreBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String localStoreId) {
-        return new ReplicaCntBalancer(localStoreId, DIST_WORKER_RANGE_VOTER_COUNT.get(), -1);
+        return new ReplicaCntBalancer(localStoreId, DistWorkerRangeVoterNum.INSTANCE.get(), -1);
     }
 }

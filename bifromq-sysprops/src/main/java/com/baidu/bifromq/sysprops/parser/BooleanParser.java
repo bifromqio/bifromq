@@ -22,16 +22,16 @@ public class BooleanParser implements PropParser<Boolean> {
 
     @Override
     public Boolean parse(String value) {
-        if ("true".equalsIgnoreCase(value) ||
-            "y".equalsIgnoreCase(value) ||
-            "yes".equalsIgnoreCase(value) ||
-            "1".equals(value)) {
+        if ("true".equalsIgnoreCase(value)
+            || "y".equalsIgnoreCase(value)
+            || "yes".equalsIgnoreCase(value)
+            || "1".equals(value)) {
             return true;
         }
-        if ("false".equalsIgnoreCase(value) ||
-            "n".equalsIgnoreCase(value) ||
-            "no".equalsIgnoreCase(value) ||
-            "0".equals(value)) {
+        if ("false".equalsIgnoreCase(value)
+            || "n".equalsIgnoreCase(value)
+            || "no".equalsIgnoreCase(value)
+            || "0".equals(value)) {
             return false;
         }
         throw new SysPropParseException(String.format("Unable to parse %s to boolean", value));

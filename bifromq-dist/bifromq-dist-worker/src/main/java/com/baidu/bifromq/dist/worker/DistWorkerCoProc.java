@@ -30,7 +30,6 @@ import static com.baidu.bifromq.dist.entity.EntityUtil.toNormalMatchRecordKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toScopedTopicFilter;
 import static com.baidu.bifromq.dist.util.TopicUtil.isNormalTopicFilter;
 import static com.baidu.bifromq.dist.util.TopicUtil.isWildcardTopicFilter;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_FAN_OUT_PARALLELISM;
 import static java.util.Collections.singletonMap;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
@@ -63,6 +62,7 @@ import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;
 import com.baidu.bifromq.dist.rpc.proto.TopicFanout;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
+import com.baidu.bifromq.sysprops.props.DistFanOutParallelism;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.collect.Maps;
@@ -116,7 +116,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         this.tenantsState = new TenantsState(readerProvider.get(),
             "clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id));
         fanoutExecutorGroup = new DeliverExecutorGroup(deliverer,
-            eventCollector, resourceThrottler, distClient, DIST_FAN_OUT_PARALLELISM.get());
+            eventCollector, resourceThrottler, distClient, DistFanOutParallelism.INSTANCE.get());
         load();
     }
 

@@ -14,7 +14,6 @@
 package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_TOPIC_MATCH_EXPIRY;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.times;
@@ -33,6 +32,7 @@ import com.baidu.bifromq.dist.entity.GroupMatching;
 import com.baidu.bifromq.dist.entity.Matching;
 import com.baidu.bifromq.dist.entity.NormalMatching;
 import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;
+import com.baidu.bifromq.sysprops.props.DistTopicMatchExpirySeconds;
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.common.util.concurrent.MoreExecutors;
 import java.util.concurrent.ExecutorService;
@@ -60,7 +60,8 @@ public class SubscriptionCacheTest {
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
         id = KVRangeIdUtil.generate();
-        System.setProperty(DIST_TOPIC_MATCH_EXPIRY.propKey, "1");
+        System.setProperty(DistTopicMatchExpirySeconds.INSTANCE.propKey(), "1");
+        DistTopicMatchExpirySeconds.INSTANCE.resolve();
         when(rangeReaderProvider.get()).thenReturn(rangeReader);
         when(rangeReader.iterator()).thenReturn(kvIterator);
         matchExecutor = MoreExecutors.newDirectExecutorService();

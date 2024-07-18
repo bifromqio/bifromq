@@ -16,9 +16,6 @@ package com.baidu.bifromq.dist.server.scheduler;
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKeyPrefix;
 import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
 import static com.baidu.bifromq.dist.util.MessageUtil.buildBatchDistRequest;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_FANOUT_SPLIT_THRESHOLD;
 
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
@@ -35,6 +32,9 @@ import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistPack;
+import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
+import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
+import com.baidu.bifromq.sysprops.props.DistWorkerFanOutSplitThreshold;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessagePack;
@@ -57,13 +57,14 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
     implements IDistCallScheduler {
     private final IBaseKVStoreClient distWorkerClient;
     private final Function<String, Integer> tenantFanoutGetter;
-    private final int fanoutSplitThreshold = DIST_WORKER_FANOUT_SPLIT_THRESHOLD.get();
+    private final int fanoutSplitThreshold = DistWorkerFanOutSplitThreshold.INSTANCE.get();
 
     public DistCallScheduler(ICallScheduler<DistWorkerCall> reqScheduler,
                              IBaseKVStoreClient distWorkerClient,
                              Function<String, Integer> tenantFanoutGetter) {
-        super("dist_server_dist_batcher", reqScheduler, Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
-            Duration.ofMillis(DATA_PLANE_BURST_LATENCY_MS.get()));
+        super("dist_server_dist_batcher", reqScheduler,
+            Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
+            Duration.ofMillis(DataPlaneBurstLatencyMillis.INSTANCE.get()));
         this.distWorkerClient = distWorkerClient;
         this.tenantFanoutGetter = tenantFanoutGetter;
     }

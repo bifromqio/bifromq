@@ -13,6 +13,11 @@
 
 package com.baidu.bifromq.sysprops.parser;
 
+/**
+ * Parser interface for parsing system properties' string value.
+ *
+ * @param <T> the type of the parsed value
+ */
 public interface PropParser<T> {
     T parse(String value);
 }

@@ -14,13 +14,13 @@
 package com.baidu.bifromq.mqtt.handler;
 
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_SLOWDOWN_TIMEOUT_SECONDS;
 
 import com.baidu.bifromq.mqtt.handler.condition.Condition;
 import com.baidu.bifromq.mqtt.handler.condition.InboundResourceCondition;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
+import com.baidu.bifromq.sysprops.props.MaxSlowDownTimeoutSeconds;
 import com.baidu.bifromq.type.ClientInfo;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -35,7 +35,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ConditionalSlowDownHandler extends ChannelInboundHandlerAdapter {
     public static final String NAME = "SlowDownHandler";
     private static final long MAX_SLOWDOWN_TIME =
-        Duration.ofSeconds(((Integer) MAX_SLOWDOWN_TIMEOUT_SECONDS.get()).longValue()).toNanos();
+        Duration.ofSeconds(MaxSlowDownTimeoutSeconds.INSTANCE.get()).toNanos();
     private final Condition slowDownCondition;
     private final Supplier<Long> nanoProvider;
     private final IEventCollector eventCollector;

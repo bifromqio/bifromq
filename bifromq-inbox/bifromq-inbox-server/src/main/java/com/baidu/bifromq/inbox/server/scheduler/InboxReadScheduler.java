@@ -13,13 +13,11 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
-
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.QueryCallScheduler;
+import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
+import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
 import com.google.common.base.Preconditions;
-import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -27,8 +25,8 @@ public abstract class InboxReadScheduler<Req, Resp> extends QueryCallScheduler<R
     protected final int queuesPerRange;
 
     public InboxReadScheduler(int queuesPerRange, IBaseKVStoreClient inboxStoreClient, String name) {
-        super(name, inboxStoreClient, Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
-            Duration.ofSeconds(DATA_PLANE_BURST_LATENCY_MS.get()));
+        super(name, inboxStoreClient, Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
+            Duration.ofSeconds(DataPlaneBurstLatencyMillis.INSTANCE.get()));
         Preconditions.checkArgument(queuesPerRange > 0, "Queues per range must be positive");
         this.queuesPerRange = queuesPerRange;
     }

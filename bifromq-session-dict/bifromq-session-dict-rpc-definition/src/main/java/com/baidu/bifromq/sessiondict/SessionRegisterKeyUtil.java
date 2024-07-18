@@ -16,12 +16,12 @@ package com.baidu.bifromq.sessiondict;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 
-import com.baidu.bifromq.sysprops.BifroMQSysProp;
+import com.baidu.bifromq.sysprops.props.SessionRegisterNumber;
 import com.baidu.bifromq.type.ClientInfo;
 import java.util.Objects;
 
 public class SessionRegisterKeyUtil {
-    private static final int SESSION_REGISTER_NUM = BifroMQSysProp.SESSION_REGISTER_NUM.get();
+    private static final int SESSION_REGISTER_NUM = SessionRegisterNumber.INSTANCE.get();
 
     public static String toRegisterKey(ClientInfo owner) {
         return toRegisterKey(owner.getTenantId(), owner.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),

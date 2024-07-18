@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023. The BifroMQ Authors. All Rights Reserved.
+ * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,33 +13,40 @@
 
 package com.baidu.bifromq.sysprops;
 
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.sysprops.props.ClusterDomainResolveTimeoutSeconds;
+import java.util.HashSet;
+import java.util.Set;
+import org.reflections.Reflections;
 import org.testng.annotations.Test;
 
 public class BifroMQSysPropTest {
-    @Test
-    public void defaultValue() {
-        for (BifroMQSysProp prop : BifroMQSysProp.values()) {
-            assertTrue(prop.get().equals(prop.defVal()));
-        }
-    }
 
     @Test
-    public void emptyPropFallbackToDefaultValue() {
-        for (BifroMQSysProp prop : BifroMQSysProp.values()) {
-            System.setProperty(prop.propKey, "");
-            assertTrue(prop.get().equals(prop.defVal()));
-        }
-    }
-
-    @Test
-    public void unparseablePropFallbackToDefaultValue() {
-        for (BifroMQSysProp prop : BifroMQSysProp.values()) {
-            if (!(prop.defVal() instanceof String)) {
-                System.setProperty(prop.propKey, "bad prop");
-                assertTrue(prop.get().equals(prop.defVal()));
+    public void propKeyNoConflict() {
+        Reflections reflections = new Reflections(BifroMQSysProp.class.getPackageName());
+        Set<String> propKeys = new HashSet<>();
+        for (Class<? extends BifroMQSysProp> subclass : reflections.getSubTypesOf(BifroMQSysProp.class)) {
+            try {
+                // Assuming each subclass has a public static INSTANCE field
+                BifroMQSysProp<?, ?> instance = (BifroMQSysProp<?, ?>) subclass.getField("INSTANCE").get(null);
+                String propKey = instance.propKey();
+                assertTrue(propKeys.add(propKey), "Duplicate propKey found: " + propKey);
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                throw new RuntimeException("Failed to access INSTANCE field of subclass: " + subclass.getName(), e);
             }
         }
+    }
+
+    @Test
+    public void testResolve() {
+        ClusterDomainResolveTimeoutSeconds.INSTANCE.resolve();
+        assertEquals(ClusterDomainResolveTimeoutSeconds.INSTANCE.get(), Long.valueOf(120));
+
+        System.setProperty(ClusterDomainResolveTimeoutSeconds.INSTANCE.propKey(), "100");
+        ClusterDomainResolveTimeoutSeconds.INSTANCE.resolve();
+        assertEquals(ClusterDomainResolveTimeoutSeconds.INSTANCE.get(), Long.valueOf(100));
     }
 }

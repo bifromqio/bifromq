@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.dist.client.scheduler;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
 import static java.util.Collections.emptyMap;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
@@ -26,6 +24,8 @@ import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceGrpc;
+import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
+import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.PublisherMessagePack;
 import java.time.Duration;
@@ -43,8 +43,8 @@ public class DistServerCallScheduler extends BatchCallScheduler<DistServerCall, 
     private final IRPCClient rpcClient;
 
     public DistServerCallScheduler(IRPCClient rpcClient) {
-        super("dist_client_send_batcher", Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
-            Duration.ofMillis(DATA_PLANE_BURST_LATENCY_MS.get()));
+        super("dist_client_send_batcher", Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
+            Duration.ofMillis(DataPlaneBurstLatencyMillis.INSTANCE.get()));
         this.rpcClient = rpcClient;
     }
 

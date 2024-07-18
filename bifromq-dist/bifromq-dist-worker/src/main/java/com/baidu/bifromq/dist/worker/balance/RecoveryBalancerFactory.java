@@ -13,16 +13,15 @@
 
 package com.baidu.bifromq.dist.worker.balance;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_RECOVERY_TIMEOUT_MILLIS;
-
 import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.RecoveryBalancer;
+import com.baidu.bifromq.sysprops.props.DistWorkerRecoveryWaitTimeMillis;
 
 public class RecoveryBalancerFactory implements IStoreBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String localStoreId) {
-        return new RecoveryBalancer(localStoreId, DIST_WORKER_RECOVERY_TIMEOUT_MILLIS.get());
+        return new RecoveryBalancer(localStoreId, DistWorkerRecoveryWaitTimeMillis.INSTANCE.get());
     }
 }

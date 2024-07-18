@@ -14,7 +14,6 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import static com.baidu.bifromq.inbox.util.KeyUtil.inboxKeyPrefix;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_FETCH_QUEUES_PER_RANGE;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcher;
@@ -22,6 +21,7 @@ import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
+import com.baidu.bifromq.sysprops.props.InboxFetchQueuesPerRange;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.Objects;
@@ -31,7 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler.InboxFetch, Fetched>
     implements IInboxFetchScheduler {
     public InboxFetchScheduler(IBaseKVStoreClient inboxStoreClient) {
-        super(INBOX_FETCH_QUEUES_PER_RANGE.get(), inboxStoreClient, "inbox_server_fetch");
+        super(InboxFetchQueuesPerRange.INSTANCE.get(), inboxStoreClient, "inbox_server_fetch");
     }
 
     @Override

@@ -14,9 +14,6 @@
 package com.baidu.bifromq.starter;
 
 import static com.baidu.bifromq.starter.utils.ClusterDomainUtil.resolve;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_LOAD_EST_WINDOW_SECONDS;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_LOAD_EST_WINDOW_SECONDS;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.RETAIN_STORE_LOAD_EST_WINDOW_SECONDS;
 
 import com.baidu.bifromq.apiserver.APIServer;
 import com.baidu.bifromq.apiserver.IAPIServer;
@@ -62,6 +59,10 @@ import com.baidu.bifromq.starter.config.standalone.model.apiserver.APIServerConf
 import com.baidu.bifromq.starter.config.standalone.model.mqttserver.MQTTServerConfig;
 import com.baidu.bifromq.starter.utils.ConfigUtil;
 import com.baidu.bifromq.sysprops.BifroMQSysProp;
+import com.baidu.bifromq.sysprops.props.ClusterDomainResolveTimeoutSeconds;
+import com.baidu.bifromq.sysprops.props.DistWorkerLoadEstimationWindowSeconds;
+import com.baidu.bifromq.sysprops.props.InboxStoreLoadEstimationWindowSeconds;
+import com.baidu.bifromq.sysprops.props.RetainStoreLoadEstimationWindowSeconds;
 import com.google.common.base.Strings;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -87,9 +88,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.pf4j.PluginManager;
+import org.reflections.Reflections;
 
 @Slf4j
 public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
+    private StandaloneConfig config;
     private PluginManager pluginMgr;
     private ExecutorService rpcClientExecutor;
     private ExecutorService rpcServerExecutor;
@@ -127,6 +130,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
     @Override
     protected void init(StandaloneConfig config) {
+        this.config = config;
         defaultSysProps();
         StandaloneConfigConsolidator.consolidate(config);
         printConfigs(config);
@@ -202,39 +206,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .build();
         agentHost = IAgentHost.newInstance(agentHostOptions);
         agentHost.start();
-
-        String clusterDomainName = config.getClusterConfig().getClusterDomainName();
-        String seeds = config.getClusterConfig().getSeedEndpoints();
-        if (!Strings.isNullOrEmpty(clusterDomainName)) {
-            log.debug("AgentHost[{}] join clusterDomainName: {}",
-                config.getClusterConfig().getEnv(), clusterDomainName);
-            resolve(config.getClusterConfig().getClusterDomainName(),
-                Duration.ofSeconds(BifroMQSysProp.CLUSTER_DOMAIN_RESOLVE_TIMEOUT.get()))
-                .thenApply(seedAddrs ->
-                    Arrays.stream(seedAddrs)
-                        .map(addr -> new InetSocketAddress(addr, config.getClusterConfig().getPort()))
-                        .collect(Collectors.toSet()))
-                .whenComplete((seedEndpoints, e) -> {
-                    if (e != null) {
-                        log.warn("ClusterDomainName[{}] is unresolvable", clusterDomainName, e);
-                    } else {
-                        log.info("ClusterDomainName[{}] resolved to seedEndpoints: {}",
-                            clusterDomainName, seedEndpoints);
-                        joinSeeds(seedEndpoints);
-                    }
-                });
-        }
-        if (!Strings.isNullOrEmpty(seeds)) {
-            log.debug("AgentHost[{}] join seedEndpoints: {}", config.getClusterConfig().getEnv(), seeds);
-            Set<InetSocketAddress> seedEndpoints = Arrays.stream(seeds.split(","))
-                .map(endpoint -> {
-                    String[] hostPort = endpoint.trim().split(":");
-                    return new InetSocketAddress(hostPort[0], Integer.parseInt(hostPort[1]));
-                }).collect(Collectors.toSet());
-            joinSeeds(seedEndpoints);
-        }
         log.debug("Agent host started");
-
         clientCrdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
         clientCrdtService.start(agentHost);
         serverCrdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
@@ -271,8 +243,8 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             sharedIORPCServerBuilder.sslContext(buildServerSslContext(config.getRpcServerConfig().getSslConfig()));
             sharedBaseKVRPCServerBuilder.sslContext(buildServerSslContext(config.getRpcServerConfig().getSslConfig()));
         }
-        SslContext clientSslContext = config.getRpcClientConfig().getSslConfig() != null ?
-            buildClientSslContext(config.getRpcClientConfig().getSslConfig()) : null;
+        SslContext clientSslContext = config.getRpcClientConfig().getSslConfig() != null
+            ? buildClientSslContext(config.getRpcClientConfig().getSslConfig()) : null;
         distClient = IDistClient.newBuilder()
             .crdtService(clientCrdtService)
             .executor(rpcClientExecutor)
@@ -302,7 +274,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .queryExecutor(MoreExecutors.directExecutor())
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
-            .loadEstimateWindow(Duration.ofSeconds(RETAIN_STORE_LOAD_EST_WINDOW_SECONDS.get()))
+            .loadEstimateWindow(Duration.ofSeconds(RetainStoreLoadEstimationWindowSeconds.INSTANCE.get()))
             .gcInterval(Duration.ofSeconds(config.getStateStoreConfig().getRetainStoreConfig().getGcIntervalSeconds()))
             .balanceControllerOptions(
                 toControllerOptions(config.getStateStoreConfig().getRetainStoreConfig().getBalanceConfig())
@@ -348,7 +320,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .queryExecutor(MoreExecutors.directExecutor())
             .tickTaskExecutor(tickTaskExecutor)
             .bgTaskExecutor(bgTaskExecutor)
-            .loadEstimateWindow(Duration.ofSeconds(INBOX_STORE_LOAD_EST_WINDOW_SECONDS.get()))
+            .loadEstimateWindow(Duration.ofSeconds(InboxStoreLoadEstimationWindowSeconds.INSTANCE.get()))
             .gcInterval(Duration.ofSeconds(config.getStateStoreConfig().getInboxStoreConfig().getGcIntervalSeconds()))
             .balanceControllerOptions(
                 toControllerOptions(config.getStateStoreConfig().getInboxStoreConfig().getBalanceConfig())
@@ -445,7 +417,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .balanceControllerOptions(
                 toControllerOptions(config.getStateStoreConfig().getDistWorkerConfig().getBalanceConfig()))
             .subBrokerManager(subBrokerManager)
-            .loadEstimateWindow(Duration.ofSeconds(DIST_WORKER_LOAD_EST_WINDOW_SECONDS.get()))
+            .loadEstimateWindow(Duration.ofSeconds(DistWorkerLoadEstimationWindowSeconds.INSTANCE.get()))
             .build();
 
         distServer = IDistServer.nonStandaloneBuilder()
@@ -527,6 +499,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
     public void start() {
         super.start();
+        join();
         sessionDictServer.start();
 
         inboxStore.start();
@@ -664,19 +637,56 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         List<String> arguments = ManagementFactory.getRuntimeMXBean().getInputArguments();
         log.info("JVM arguments: \n  {}", String.join("\n  ", arguments));
 
-        log.info("Settings, which can be modified at runtime, allowing for dynamic adjustment of BifroMQ's " +
-            "service behavior per tenant. See https://bifromq.io/docs/plugin/setting_provider/");
+        log.info("Settings, which can be modified at runtime, allowing for dynamic adjustment of BifroMQ's "
+            + "service behavior per tenant. See https://bifromq.io/docs/plugin/setting_provider/");
         log.info("The initial value of each setting could be overridden by JVM arguments like: '-DMQTT5Enabled=false'");
         for (Setting setting : Setting.values()) {
             log.info("Setting: {}={}", setting.name(), setting.current(""));
         }
 
         log.info("BifroMQ system properties: ");
-        for (BifroMQSysProp prop : BifroMQSysProp.values()) {
-            log.info("BifroMQSysProp: {}={}", prop.propKey, prop.get());
+        Reflections reflections = new Reflections(BifroMQSysProp.class.getPackageName());
+        for (Class<? extends BifroMQSysProp> subclass : reflections.getSubTypesOf(BifroMQSysProp.class)) {
+            try {
+                BifroMQSysProp<?, ?> prop = (BifroMQSysProp<?, ?>) subclass.getField("INSTANCE").get(null);
+                log.info("BifroMQSysProp: {}={}", prop.propKey(), prop.get());
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                throw new RuntimeException("Failed to access INSTANCE field of subclass: " + subclass.getName(), e);
+            }
         }
-
         log.info("Consolidated Config(YAML): \n{}", ConfigUtil.serialize(config));
+    }
+
+    private void join() {
+        String env = config.getClusterConfig().getEnv();
+        String clusterDomainName = config.getClusterConfig().getClusterDomainName();
+        String seeds = config.getClusterConfig().getSeedEndpoints();
+        if (!Strings.isNullOrEmpty(clusterDomainName)) {
+            log.debug("AgentHost[{}] join clusterDomainName: {}", env, clusterDomainName);
+            resolve(clusterDomainName, Duration.ofSeconds(ClusterDomainResolveTimeoutSeconds.INSTANCE.get()))
+                .thenApply(seedAddrs ->
+                    Arrays.stream(seedAddrs)
+                        .map(addr -> new InetSocketAddress(addr, config.getClusterConfig().getPort()))
+                        .collect(Collectors.toSet()))
+                .whenComplete((seedEndpoints, e) -> {
+                    if (e != null) {
+                        log.warn("ClusterDomainName[{}] is unresolvable", clusterDomainName, e);
+                    } else {
+                        log.info("ClusterDomainName[{}] resolved to seedEndpoints: {}",
+                            clusterDomainName, seedEndpoints);
+                        joinSeeds(seedEndpoints);
+                    }
+                });
+        }
+        if (!Strings.isNullOrEmpty(seeds)) {
+            log.debug("AgentHost[{}] join seedEndpoints: {}", env, seeds);
+            Set<InetSocketAddress> seedEndpoints = Arrays.stream(seeds.split(","))
+                .map(endpoint -> {
+                    String[] hostPort = endpoint.trim().split(":");
+                    return new InetSocketAddress(hostPort[0], Integer.parseInt(hostPort[1]));
+                }).collect(Collectors.toSet());
+            joinSeeds(seedEndpoints);
+        }
     }
 
     private void joinSeeds(Set<InetSocketAddress> seeds) {

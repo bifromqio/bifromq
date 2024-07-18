@@ -14,16 +14,15 @@
 package com.baidu.bifromq.inbox.store.balance;
 
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_STORE_RECOVERY_TIMEOUT_MILLIS;
-
 import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.RecoveryBalancer;
+import com.baidu.bifromq.sysprops.props.InboxStoreRecoveryWaitTimeMillis;
 
 public class RecoveryBalancerFactory implements IStoreBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String localStoreId) {
-        return new RecoveryBalancer(localStoreId, INBOX_STORE_RECOVERY_TIMEOUT_MILLIS.get());
+        return new RecoveryBalancer(localStoreId, InboxStoreRecoveryWaitTimeMillis.INSTANCE.get());
     }
 }

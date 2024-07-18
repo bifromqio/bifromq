@@ -65,7 +65,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.TooLa
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS1PubAcked;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS2PubReced;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
-import com.baidu.bifromq.sysprops.BifroMQSysProp;
+import com.baidu.bifromq.sysprops.props.SanityCheckMqttUtf8String;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
@@ -91,7 +91,7 @@ import java.util.List;
 import java.util.Optional;
 
 public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
-    private static final boolean SANITY_CHECK = BifroMQSysProp.MQTT_UTF8_SANITY_CHECK.get();
+    private static final boolean SANITY_CHECK = SanityCheckMqttUtf8String.INSTANCE.get();
     private final TenantSettings settings;
     private final ClientInfo clientInfo;
     private final int clientReceiveMaximum;

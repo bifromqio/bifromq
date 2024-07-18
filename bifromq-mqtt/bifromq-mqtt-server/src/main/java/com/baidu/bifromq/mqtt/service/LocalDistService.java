@@ -15,7 +15,6 @@ package com.baidu.bifromq.mqtt.service;
 
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientFanOutBytes;
 import static com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil.toDelivererKey;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.MQTT_DELIVERERS_PER_SERVER;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalTransientFanOutBytesPerSeconds;
 import static java.util.Collections.singletonList;
 
@@ -32,6 +31,7 @@ import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResults;
+import com.baidu.bifromq.sysprops.props.DeliverersPerMqttServer;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.baidu.bifromq.util.SizeUtil;
@@ -46,7 +46,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 public class LocalDistService implements ILocalDistService {
-    static final int TOPIC_FILTER_BUCKET_NUM = MQTT_DELIVERERS_PER_SERVER.get();
+    static final int TOPIC_FILTER_BUCKET_NUM = DeliverersPerMqttServer.INSTANCE.get();
 
     private record TopicFilter(String tenantId, String topicFilter, int bucketId) {
     }

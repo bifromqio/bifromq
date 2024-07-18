@@ -13,16 +13,15 @@
 
 package com.baidu.bifromq.mqtt.handler.condition;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE;
-
 import com.baidu.bifromq.baseenv.MemUsage;
+import com.baidu.bifromq.sysprops.props.IngressSlowDownDirectMemoryUsage;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class DirectMemPressureCondition implements Condition {
     public static final DirectMemPressureCondition INSTANCE = new DirectMemPressureCondition();
-    private static final double MAX_DIRECT_MEMORY_USAGE = INGRESS_SLOWDOWN_DIRECT_MEMORY_USAGE.get();
+    private static final double MAX_DIRECT_MEMORY_USAGE = IngressSlowDownDirectMemoryUsage.INSTANCE.get();
 
     @Override
     public boolean meet() {

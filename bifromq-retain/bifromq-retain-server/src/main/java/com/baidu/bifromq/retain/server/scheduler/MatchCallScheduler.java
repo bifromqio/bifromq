@@ -14,8 +14,6 @@
 package com.baidu.bifromq.retain.server.scheduler;
 
 import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcher;
@@ -23,6 +21,8 @@ import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
 import com.baidu.bifromq.basekv.client.scheduler.QueryCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.IBatchCall;
+import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
+import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
@@ -32,8 +32,8 @@ import lombok.extern.slf4j.Slf4j;
 public class MatchCallScheduler extends QueryCallScheduler<MatchCall, MatchCallResult> implements IMatchCallScheduler {
     public MatchCallScheduler(IBaseKVStoreClient retainStoreClient) {
         super("retain_server_match_batcher", retainStoreClient,
-            Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
-            Duration.ofSeconds(DATA_PLANE_BURST_LATENCY_MS.get()));
+            Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
+            Duration.ofSeconds(DataPlaneBurstLatencyMillis.INSTANCE.get()));
     }
 
     @Override

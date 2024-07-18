@@ -35,10 +35,10 @@ public final class BaseHookLoader {
             Iterator<T> iterator = serviceLoader.iterator();
             iterator.forEachRemaining(factoryImpl -> {
                 String className = factoryImpl.getClass().getName();
-                if (className.trim().equals("")) {
+                if (className.trim().isEmpty()) {
                     throw new IllegalStateException("Anonymous implementation is not allowed");
                 }
-                log.info("Loaded {} implementation: {}", hookInterface.getSimpleName(), className);
+                log.debug("Loaded {} implementation: {}", hookInterface.getSimpleName(), className);
                 if (loadedFactories.putIfAbsent(className, factoryImpl) != null) {
                     throw new IllegalStateException("More than one implementations using same name " + className);
                 }

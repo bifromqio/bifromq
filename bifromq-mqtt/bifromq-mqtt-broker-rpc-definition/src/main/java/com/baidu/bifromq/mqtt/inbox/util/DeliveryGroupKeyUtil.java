@@ -13,10 +13,10 @@
 
 package com.baidu.bifromq.mqtt.inbox.util;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.MQTT_DELIVERERS_PER_SERVER;
+import com.baidu.bifromq.sysprops.props.DeliverersPerMqttServer;
 
 public class DeliveryGroupKeyUtil {
-    private static final int INBOX_GROUPS = MQTT_DELIVERERS_PER_SERVER.get();
+    private static final int INBOX_GROUPS = DeliverersPerMqttServer.INSTANCE.get();
 
     public static String toDelivererKey(String inboxId, String serverId) {
         return serverId + ":" + groupIdx(inboxId);

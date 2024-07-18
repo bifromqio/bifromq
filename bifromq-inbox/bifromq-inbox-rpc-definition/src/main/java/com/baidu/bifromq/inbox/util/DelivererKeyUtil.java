@@ -13,10 +13,10 @@
 
 package com.baidu.bifromq.inbox.util;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.INBOX_DELIVERERS;
+import com.baidu.bifromq.sysprops.props.InboxDelivererNum;
 
 public class DelivererKeyUtil {
-    private static final int INBOX_GROUPS = INBOX_DELIVERERS.get();
+    private static final int INBOX_GROUPS = InboxDelivererNum.INSTANCE.get();
 
     public static String getSubInboxId(String inboxId, long incarnation) {
         return inboxId + "_" + incarnation;

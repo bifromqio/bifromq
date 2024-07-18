@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.MAX_SLOWDOWN_TIMEOUT_SECONDS;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -25,6 +24,7 @@ import com.baidu.bifromq.mqtt.MockableTest;
 import com.baidu.bifromq.mqtt.handler.condition.Condition;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
+import com.baidu.bifromq.sysprops.props.MaxSlowDownTimeoutSeconds;
 import com.baidu.bifromq.type.ClientInfo;
 import io.netty.channel.embedded.EmbeddedChannel;
 import java.time.Duration;
@@ -81,8 +81,8 @@ public class ConditionalSlowDownHandlerTest extends MockableTest {
         embeddedChannel.runScheduledPendingTasks();
         assertFalse(embeddedChannel.config().isAutoRead());
 
-        embeddedChannel.advanceTimeBy(((Integer) MAX_SLOWDOWN_TIMEOUT_SECONDS.get()).longValue(), TimeUnit.SECONDS);
-        long now = Duration.ofSeconds(((Integer) MAX_SLOWDOWN_TIMEOUT_SECONDS.get()).longValue() + 1).toNanos();
+        embeddedChannel.advanceTimeBy(MaxSlowDownTimeoutSeconds.INSTANCE.get(), TimeUnit.SECONDS);
+        long now = Duration.ofSeconds(MaxSlowDownTimeoutSeconds.INSTANCE.get() + 1).toNanos();
         when(nanoProvider.get()).thenReturn(now);
         embeddedChannel.runScheduledPendingTasks();
         assertFalse(embeddedChannel.isOpen());

@@ -16,8 +16,6 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.dist.util.TopicUtil.escape;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentFanOutBytes;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_INLINE_FAN_OUT_THRESHOLD;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_TOPIC_MATCH_EXPIRY;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersistentFanOutBytesPerSeconds;
 import static com.google.common.hash.Hashing.murmur3_128;
 
@@ -29,6 +27,8 @@ import com.baidu.bifromq.dist.entity.NormalMatching;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
+import com.baidu.bifromq.sysprops.props.DistInlineFanOutThreshold;
+import com.baidu.bifromq.sysprops.props.DistTopicMatchExpirySeconds;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.baidu.bifromq.util.SizeUtil;
@@ -55,7 +55,7 @@ class DeliverExecutorGroup {
     // OuterCacheKey: OrderedSharedMatchingKey(<tenantId>, <escapedTopicFilter>)
     // InnerCacheKey: ClientInfo(<tenantId>, <type>, <metadata>)
     private final LoadingCache<OrderedSharedMatchingKey, Cache<ClientInfo, NormalMatching>> orderedSharedMatching;
-    private final int inlineFanOutThreshold = DIST_INLINE_FAN_OUT_THRESHOLD.get();
+    private final int inlineFanOutThreshold = DistInlineFanOutThreshold.INSTANCE.get();
     private final IEventCollector eventCollector;
     private final IResourceThrottler resourceThrottler;
     private final IDistClient distClient;
@@ -67,7 +67,7 @@ class DeliverExecutorGroup {
                          IResourceThrottler resourceThrottler,
                          IDistClient distClient,
                          int groupSize) {
-        int expirySec = DIST_TOPIC_MATCH_EXPIRY.get();
+        int expirySec = DistTopicMatchExpirySeconds.INSTANCE.get();
         this.eventCollector = eventCollector;
         this.resourceThrottler = resourceThrottler;
         this.distClient = distClient;

@@ -47,7 +47,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.Discard;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS1PubAcked;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.QoS2PubReced;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
-import com.baidu.bifromq.sysprops.BifroMQSysProp;
+import com.baidu.bifromq.sysprops.props.SanityCheckMqttUtf8String;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
@@ -73,7 +73,7 @@ import lombok.AllArgsConstructor;
 
 @AllArgsConstructor
 public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
-    private static final boolean SANITY_CHECK = BifroMQSysProp.MQTT_UTF8_SANITY_CHECK.get();
+    private static final boolean SANITY_CHECK = SanityCheckMqttUtf8String.INSTANCE.get();
     private final TenantSettings settings;
     private final ClientInfo clientInfo;
 

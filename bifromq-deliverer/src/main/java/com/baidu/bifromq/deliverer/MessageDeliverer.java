@@ -14,8 +14,6 @@
 package com.baidu.bifromq.deliverer;
 
 import static com.baidu.bifromq.plugin.subbroker.TypeUtil.toMap;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
 
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
@@ -27,6 +25,8 @@ import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
+import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
+import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
 import com.baidu.bifromq.type.MatchInfo;
 import java.time.Duration;
 import java.util.ArrayDeque;
@@ -47,8 +47,9 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryR
     private final ISubBrokerManager subBrokerManager;
 
     public MessageDeliverer(ISubBrokerManager subBrokerManager) {
-        super("dist_worker_deliver_batcher", Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
-            Duration.ofMillis(DATA_PLANE_BURST_LATENCY_MS.get()));
+        super("dist_worker_deliver_batcher",
+            Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
+            Duration.ofMillis(DataPlaneBurstLatencyMillis.INSTANCE.get()));
         this.subBrokerManager = subBrokerManager;
     }
 

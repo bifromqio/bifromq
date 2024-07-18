@@ -14,8 +14,6 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import static com.baidu.bifromq.inbox.util.KeyUtil.inboxKeyPrefix;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_BURST_LATENCY_MS;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DATA_PLANE_TOLERABLE_LATENCY_MS;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
@@ -25,6 +23,8 @@ import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
+import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
+import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
@@ -33,8 +33,9 @@ import lombok.extern.slf4j.Slf4j;
 public class InboxCommitScheduler extends MutationCallScheduler<CommitRequest, CommitReply>
     implements IInboxCommitScheduler {
     public InboxCommitScheduler(IBaseKVStoreClient inboxStoreClient) {
-        super("inbox_server_commit", inboxStoreClient, Duration.ofMillis(DATA_PLANE_TOLERABLE_LATENCY_MS.get()),
-            Duration.ofMillis(DATA_PLANE_BURST_LATENCY_MS.get()));
+        super("inbox_server_commit", inboxStoreClient,
+            Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
+            Duration.ofMillis(DataPlaneBurstLatencyMillis.INSTANCE.get()));
 
     }
 

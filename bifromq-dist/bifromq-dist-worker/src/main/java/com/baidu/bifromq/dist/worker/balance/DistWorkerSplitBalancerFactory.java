@@ -13,19 +13,18 @@
 
 package com.baidu.bifromq.dist.worker.balance;
 
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_SPLIT_IO_NANOS_LIMIT;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_SPLIT_MAX_CPU_USAGE;
-import static com.baidu.bifromq.sysprops.BifroMQSysProp.DIST_WORKER_SPLIT_MAX_IO_DENSITY;
-
 import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
+import com.baidu.bifromq.sysprops.props.DistWorkerSplitUnderCPUUsage;
+import com.baidu.bifromq.sysprops.props.DistWorkerSplitUnderIODensity;
+import com.baidu.bifromq.sysprops.props.DistWorkerSplitUnderIONanos;
 
 public class DistWorkerSplitBalancerFactory implements IStoreBalancerFactory {
     @Override
     public StoreBalancer newBalancer(String localStoreId) {
         return new DistWorkerSplitBalancer(localStoreId,
-            DIST_WORKER_SPLIT_MAX_CPU_USAGE.get(),
-            DIST_WORKER_SPLIT_MAX_IO_DENSITY.get(),
-            DIST_WORKER_SPLIT_IO_NANOS_LIMIT.get());
+            DistWorkerSplitUnderCPUUsage.INSTANCE.get(),
+            DistWorkerSplitUnderIODensity.INSTANCE.get(),
+            DistWorkerSplitUnderIONanos.INSTANCE.get());
     }
 }
