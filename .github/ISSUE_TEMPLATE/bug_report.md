@@ -31,10 +31,11 @@ OR
 - The content of configuration files and other relevant information
 - Any other pertinent details
 
-Issues that only describe symptoms without providing either of the above may not contain enough valuable data for
-problem identification and are unlikely to receive a response from the team.
+**Issues that only describe symptoms without providing either of the above may not contain enough valuable data for
+problem identification and are unlikely to receive a response from the team.**
 
-If you cannot meet either of these requirements, please contact [email](hello@bifromq.io) for paid consulting services.
+If you cannot meet either of these requirements, please contact [email](mailto:hello@bifromq.io) for paid consulting
+services.
 Alternatively, we encourage you to submit a Pull Request with an Issue Fix to become an
 external [contributor](https://github.com/bifromqio/bifromq/blob/main/CLA.md) to BifroMQ.
 
@@ -59,9 +60,9 @@ external [contributor](https://github.com/bifromqio/bifromq/blob/main/CLA.md) to
 - 配置文件内容和其他相关信息
 - 其他任何相关的重要信息
 
-仅描述现象而不提供上述两项中任意一项的问题报告，通常无法为问题定位提供足够有价值的信息，因此可能不会得到团队的响应。
+**仅描述现象而不提供上述两项中任意一项的问题报告，通常无法为问题定位提供足够有价值的信息，因此可能不会得到团队的响应。**
 
-如果您无法满足这两项要求中的任何一项，请联系[邮箱](hello@bifromq.io) 获取付费咨询服务。另外，我们也鼓励您提交解决问题的
+如果您无法满足这两项要求中的任何一项，请联系[邮箱](mailto:hello@bifromq.io) 获取付费咨询服务。另外，我们也鼓励您提交解决问题的
 Pull Request，成为 BifroMQ 的[外部贡献者](https://github.com/bifromqio/bifromq/blob/main/CLA.md)。
 
 ### **Describe the bug**
