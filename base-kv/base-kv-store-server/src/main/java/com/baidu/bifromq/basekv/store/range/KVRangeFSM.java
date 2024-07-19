@@ -732,12 +732,24 @@ public class KVRangeFSM implements IKVRangeFSM {
                     }
                 } else {
                     // request config change failed, the config entry is appended due to leader reelection
-                    rangeWriter.state(State.newBuilder()
-                        .setType(Normal)
-                        .setTaskId(taskId)
-                        .build());
-                    // no need to finish command here, it's already finished in RequestConfigChange entry application
-                    onDone.complete(() -> clusterConfigSubject.onNext(config));
+                    boolean remove = !members.contains(hostStoreId);
+                    if (remove) {
+                        rangeWriter.state(State.newBuilder()
+                            .setType(Removed)
+                            .setTaskId(taskId)
+                            .build());
+                        onDone.complete(() -> {
+                            clusterConfigSubject.onNext(config);
+                            quitReason.complete(Removed);
+                        });
+                    } else {
+                        rangeWriter.state(State.newBuilder()
+                            .setType(Normal)
+                            .setTaskId(taskId)
+                            .build());
+                        // no need to finish command here, it's already finished in RequestConfigChange entry application
+                        onDone.complete(() -> clusterConfigSubject.onNext(config));
+                    }
                 }
             }
             case MergedQuiting -> {
