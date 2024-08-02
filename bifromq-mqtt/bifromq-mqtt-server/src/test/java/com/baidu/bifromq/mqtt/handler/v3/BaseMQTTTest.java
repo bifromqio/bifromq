@@ -62,8 +62,10 @@ import com.baidu.bifromq.mqtt.handler.MQTTPreludeHandler;
 import com.baidu.bifromq.mqtt.handler.condition.HeapMemPressureCondition;
 import com.baidu.bifromq.mqtt.service.ILocalDistService;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
+import com.baidu.bifromq.mqtt.service.ILocalTopicRouter;
 import com.baidu.bifromq.mqtt.service.LocalDistService;
 import com.baidu.bifromq.mqtt.service.LocalSessionRegistry;
+import com.baidu.bifromq.mqtt.service.LocalTopicRouter;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.mqtt.utils.TestTicker;
@@ -161,7 +163,9 @@ public abstract class BaseMQTTTest {
         closeable = MockitoAnnotations.openMocks(this);
         testTicker = new TestTicker();
         sessionRegistry = new LocalSessionRegistry();
-        distService = new LocalDistService(serverId, sessionRegistry, distClient, resourceThrottler, eventCollector);
+        ILocalTopicRouter router = new LocalTopicRouter(serverId, distClient);
+        distService =
+            new LocalDistService(serverId, sessionRegistry, router, distClient, resourceThrottler);
         sessionContext = MQTTSessionContext.builder()
             .authProvider(authProvider)
             .eventCollector(eventCollector)

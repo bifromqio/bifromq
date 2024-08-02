@@ -14,46 +14,43 @@
 package com.baidu.bifromq.mqtt.service;
 
 import static com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil.toDelivererKey;
-import static com.baidu.bifromq.mqtt.service.LocalDistService.TOPIC_FILTER_BUCKET_NUM;
+import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalTransientFanOutBytesPerSeconds;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.only;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.dist.client.MatchResult;
-import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.mqtt.MockableTest;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
-import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
 import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
+import com.baidu.bifromq.plugin.subbroker.DeliveryResults;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -68,19 +65,21 @@ public class LocalDistServiceTest extends MockableTest {
     @Mock
     IResourceThrottler resourceThrottler;
     @Mock
-    IEventCollector eventCollector;
+    ILocalTopicRouter localTopicRouter;
+
+    LocalDistService localDistService;
 
     @BeforeMethod(alwaysRun = true)
     public void setup(Method method) {
         super.setup(method);
         when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
+        localDistService =
+            new LocalDistService(serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
     }
 
     @Test
     public void matchSharedSubTopicFilter() {
         String topicFilter = "$share/group/topicFilter";
-        LocalDistService localDistService =
-            new LocalDistService(serverId, localSessionRegistry, distClient, resourceThrottler, eventCollector);
         for (int i = 0; i < 100; i++) {
             IMQTTTransientSession session = mock(IMQTTTransientSession.class);
             String tenantId = "tenantId" + i;
@@ -100,8 +99,6 @@ public class LocalDistServiceTest extends MockableTest {
     @Test
     public void unmatchSharedSubTopicFilter() {
         String topicFilter = "$share/group/topicFilter";
-        LocalDistService localDistService =
-            new LocalDistService(serverId, localSessionRegistry, distClient, resourceThrottler, eventCollector);
         for (int i = 0; i < 100; i++) {
             IMQTTTransientSession session = mock(IMQTTTransientSession.class);
             String tenantId = "tenantId" + i;
@@ -120,205 +117,36 @@ public class LocalDistServiceTest extends MockableTest {
 
     @Test
     public void matchSameNonSharedTopicFilter() {
-        String topicFilter = "topicFilter";
-        LocalDistService localDistService =
-            new LocalDistService(serverId, localSessionRegistry, distClient, resourceThrottler, eventCollector);
-
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(new CompletableFuture<>());
         String tenantId = "tenantId";
+        String topicFilter = "topicFilter";
+        String channelId = "channelId";
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        for (int i = 0; i < 10 * TOPIC_FILTER_BUCKET_NUM; i++) {
-            IMQTTTransientSession session = mock(IMQTTTransientSession.class);
-            String channelId = "channelId" + i;
-            when(session.clientInfo()).thenReturn(clientInfo);
-            when(session.channelId()).thenReturn(channelId);
-            long reqId = System.nanoTime();
-            localDistService.match(reqId, topicFilter, session);
-        }
-        verify(distClient, atMost(TOPIC_FILTER_BUCKET_NUM)).match(
-            anyLong(),
-            eq(tenantId),
-            eq(topicFilter),
-            argThat(receiverId -> !ILocalDistService.isGlobal(receiverId)),
-            anyString(),
-            eq(0));
+        IMQTTTransientSession session = mock(IMQTTTransientSession.class);
+        when(session.clientInfo()).thenReturn(clientInfo);
+        when(session.channelId()).thenReturn(channelId);
+        localDistService.match(System.nanoTime(), topicFilter, session);
+        verify(localTopicRouter).addTopicRoute(anyLong(), eq(tenantId), eq(topicFilter), eq(channelId));
     }
 
     @Test
     public void unmatchSameNonSharedTopicFilter() {
         String topicFilter = "topicFilter";
-        LocalDistService localDistService =
-            new LocalDistService(serverId, localSessionRegistry, distClient, resourceThrottler, eventCollector);
-
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         String tenantId = "tenantId";
+        String channelId = "channelId";
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        List<IMQTTTransientSession> sessions = new ArrayList<>();
-        for (int i = 0; i < 10 * TOPIC_FILTER_BUCKET_NUM; i++) {
-            IMQTTTransientSession session = mock(IMQTTTransientSession.class);
-            sessions.add(session);
-            String channelId = "channelId" + i;
-            when(session.clientInfo()).thenReturn(clientInfo);
-            when(session.channelId()).thenReturn(channelId);
-            long reqId = System.nanoTime();
-            localDistService.match(reqId, topicFilter, session);
-        }
-        for (IMQTTTransientSession session : sessions) {
-            long reqId = System.nanoTime();
-            localDistService.unmatch(reqId, topicFilter, session);
-        }
-        verify(distClient, atMost(TOPIC_FILTER_BUCKET_NUM)).unmatch(
-            anyLong(),
-            eq(tenantId),
-            eq(topicFilter),
-            argThat(receiverId -> !ILocalDistService.isGlobal(receiverId)),
-            anyString(),
-            eq(0));
-    }
-
-    @Test
-    public void distClientMatchError() {
-        String topicFilter = "topicFilter";
-        LocalDistService localDistService =
-            new LocalDistService(serverId, localSessionRegistry, distClient, resourceThrottler, eventCollector);
-
-        CompletableFuture<MatchResult> matchFuture = new CompletableFuture<>();
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(matchFuture);
-        String tenantId = "tenantId";
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        List<IMQTTTransientSession> sessions = new ArrayList<>();
-        List<CompletableFuture<MatchResult>> matchFutures = new ArrayList<>();
-        for (int i = 0; i < 10 * TOPIC_FILTER_BUCKET_NUM; i++) {
-            IMQTTTransientSession session = mock(IMQTTTransientSession.class);
-            sessions.add(session);
-            String channelId = "channelId" + i;
-            when(session.clientInfo()).thenReturn(clientInfo);
-            when(session.channelId()).thenReturn(channelId);
-            long reqId = System.nanoTime();
-            matchFutures.add(localDistService.match(reqId, topicFilter, session));
-        }
-        matchFuture.complete(MatchResult.ERROR);
-        for (CompletableFuture<MatchResult> future : matchFutures) {
-            assertEquals(future.join(), MatchResult.ERROR);
-        }
-        ArgumentCaptor<String> receiverIdCaptor = ArgumentCaptor.forClass(String.class);
-        verify(distClient, atMost(TOPIC_FILTER_BUCKET_NUM)).match(
-            anyLong(),
-            eq(tenantId),
-            eq(topicFilter),
-            receiverIdCaptor.capture(),
-            anyString(),
-            eq(0));
-        List<MatchInfo> matchInfos = receiverIdCaptor.getAllValues().stream()
-            .map(receiverId -> MatchInfo.newBuilder()
-                .setReceiverId(receiverId)
-                .setTopicFilter(topicFilter).build())
-            .toList();
-        DeliveryReply reply = localDistService.dist(DeliveryRequest.newBuilder()
-            .putPackage(tenantId, DeliveryPackage.newBuilder()
-                .addPack(DeliveryPack.newBuilder()
-                    .addAllMatchInfo(matchInfos)
-                    .build())
-                .build())
-            .build()).join();
-        assertEquals(matchInfos.size(), reply.getResultMap().get(tenantId).getResultCount());
-        assertTrue(reply.getResultMap().get(tenantId).getResultList().stream()
-            .allMatch(result -> result.getCode() == DeliveryResult.Code.NO_SUB));
-        for (IMQTTTransientSession session : sessions) {
-            verify(session, never()).publish(any(), anyList());
-        }
-    }
-
-    @Test
-    public void distClientMatchException() {
-        String topicFilter = "topicFilter";
-        LocalDistService localDistService =
-            new LocalDistService(serverId, localSessionRegistry, distClient, resourceThrottler, eventCollector);
-
-        CompletableFuture<MatchResult> matchFuture = new CompletableFuture<>();
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(matchFuture);
-        String tenantId = "tenantId";
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        List<CompletableFuture<MatchResult>> matchFutures = new ArrayList<>();
-        for (int i = 0; i < 10 * TOPIC_FILTER_BUCKET_NUM; i++) {
-            IMQTTTransientSession session = mock(IMQTTTransientSession.class);
-            String channelId = "channelId" + i;
-            when(session.clientInfo()).thenReturn(clientInfo);
-            when(session.channelId()).thenReturn(channelId);
-            long reqId = System.nanoTime();
-            matchFutures.add(localDistService.match(reqId, topicFilter, session));
-        }
-        matchFuture.completeExceptionally(new RuntimeException("match failed"));
-        for (CompletableFuture<MatchResult> future : matchFutures) {
-            assertEquals(future.join(), MatchResult.ERROR);
-        }
-    }
-
-    @Test
-    public void distClientMatchOK() {
-        String topicFilter = "topicFilter";
-        LocalDistService localDistService =
-            new LocalDistService(serverId, localSessionRegistry, distClient, resourceThrottler, eventCollector);
-
-        CompletableFuture<MatchResult> matchFuture = new CompletableFuture<>();
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(matchFuture);
-        String tenantId = "tenantId";
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        List<IMQTTTransientSession> sessions = new ArrayList<>();
-        List<CompletableFuture<MatchResult>> matchFutures = new ArrayList<>();
-        for (int i = 0; i < 10 * TOPIC_FILTER_BUCKET_NUM; i++) {
-            IMQTTTransientSession session = mock(IMQTTTransientSession.class);
-            sessions.add(session);
-            String channelId = "channelId" + i;
-            when(session.clientInfo()).thenReturn(clientInfo);
-            when(session.channelId()).thenReturn(channelId);
-            when(session.publish(any(), anyList())).thenReturn(true);
-            when(localSessionRegistry.get(channelId)).thenReturn(session);
-            long reqId = System.nanoTime();
-            matchFutures.add(localDistService.match(reqId, topicFilter, session));
-        }
-        matchFuture.complete(MatchResult.OK);
-        for (CompletableFuture<MatchResult> future : matchFutures) {
-            assertEquals(future.join(), MatchResult.OK);
-        }
-        ArgumentCaptor<String> receiverIdCaptor = ArgumentCaptor.forClass(String.class);
-        verify(distClient, atMost(TOPIC_FILTER_BUCKET_NUM)).match(
-            anyLong(),
-            eq(tenantId),
-            eq(topicFilter),
-            receiverIdCaptor.capture(),
-            anyString(),
-            eq(0));
-        List<MatchInfo> matchInfos = receiverIdCaptor.getAllValues().stream()
-            .map(receiverId -> MatchInfo.newBuilder()
-                .setReceiverId(receiverId)
-                .setTopicFilter(topicFilter).build())
-            .toList();
-        DeliveryReply reply = localDistService.dist(DeliveryRequest.newBuilder()
-            .putPackage(tenantId, DeliveryPackage.newBuilder()
-                .addPack(DeliveryPack.newBuilder()
-                    .addAllMatchInfo(matchInfos)
-                    .build())
-                .build())
-            .build()).join();
-        assertEquals(matchInfos.size(), reply.getResultMap().get(tenantId).getResultCount());
-        assertTrue(reply.getResultMap().get(tenantId).getResultList().stream()
-            .allMatch(result -> result.getCode() == DeliveryResult.Code.OK));
-        for (IMQTTTransientSession session : sessions) {
-            verify(session, times(1)).publish(any(), anyList());
-        }
+        long reqId = System.nanoTime();
+        IMQTTTransientSession session = mock(IMQTTTransientSession.class);
+        when(session.clientInfo()).thenReturn(clientInfo);
+        when(session.channelId()).thenReturn(channelId);
+        localDistService.unmatch(reqId, topicFilter, session);
+        verify(localTopicRouter).removeTopicRoute(anyLong(), eq(tenantId), eq(topicFilter), eq(channelId));
     }
 
     @Test
     public void sharedSubMatchingAndDist() {
         // Setup the local distribution service
         LocalDistService localDistService = new LocalDistService(
-            serverId, localSessionRegistry, distClient, resourceThrottler, eventCollector);
+            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
 
         // Define the shared subscription topic filter
         String topicFilter = "$share/group/sensor/data";
@@ -369,209 +197,361 @@ public class LocalDistServiceTest extends MockableTest {
     }
 
     @Test
-    public void matchSameTopicFilterTwice() {
-        String topicFilter = "topicFilter";
-        LocalDistService localDistService =
-            new LocalDistService(serverId, localSessionRegistry, distClient, resourceThrottler, eventCollector);
-
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
-        String tenantId = "tenantId";
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        IMQTTTransientSession session = mock(IMQTTTransientSession.class);
-        String channelId = "channelId";
-        when(session.clientInfo()).thenReturn(clientInfo);
-        when(session.channelId()).thenReturn(channelId);
-        when(session.publish(any(), anyList())).thenReturn(true);
-        when(localSessionRegistry.get(channelId)).thenReturn(session);
-        long reqId = System.nanoTime();
-        localDistService.match(reqId, topicFilter, session);
-        localDistService.match(reqId, topicFilter, session);
-
-        ArgumentCaptor<String> receiverIdCaptor = ArgumentCaptor.forClass(String.class);
-        verify(distClient, only()).match(
-            anyLong(),
-            eq(tenantId),
-            eq(topicFilter),
-            receiverIdCaptor.capture(),
-            anyString(),
-            eq(0));
-
-        List<MatchInfo> matchInfos = receiverIdCaptor.getAllValues().stream()
-            .map(receiverId -> MatchInfo.newBuilder()
-                .setReceiverId(receiverId)
-                .setTopicFilter(topicFilter).build())
-            .toList();
-
-        DeliveryReply reply = localDistService.dist(DeliveryRequest.newBuilder()
-            .putPackage(tenantId, DeliveryPackage.newBuilder()
-                .addPack(DeliveryPack.newBuilder()
-                    .addAllMatchInfo(matchInfos)
-                    .build())
+    public void deliverToLocalRoute() {
+        String tenantId = "tenant1";
+        String topic = "testTopic";
+        String topicFilter = "testTopic/#";
+        String channelId = "channel0";
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setReceiverId("receiverId")
+            .build();
+        TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
+        DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
+            .addPack(DeliveryPack.newBuilder()
+                .setMessagePack(topicMessagePack)
+                .addMatchInfo(matchInfo)
                 .build())
-            .build()).join();
-        assertEquals(matchInfos.size(), 1);
-        assertEquals(matchInfos.size(), reply.getResultCount());
-        verify(session, times(1)).publish(any(), anyList());
+            .build();
+        DeliveryRequest request = DeliveryRequest.newBuilder().putPackage(tenantId, deliveryPack).build();
+
+        IMQTTTransientSession mockTransientSession = mock(IMQTTTransientSession.class);
+        when(mockTransientSession.channelId()).thenReturn(channelId);
+        when(mockTransientSession.publish(any(), any())).thenReturn(true);
+        when(localSessionRegistry.get(anyString())).thenReturn(mockTransientSession);
+
+        ILocalTopicRouter.ILocalRoutes localRoutes = mock(ILocalTopicRouter.ILocalRoutes.class);
+        when(localRoutes.localReceiverId()).thenReturn("receiverId");
+        when(localRoutes.routeList()).thenReturn(Set.of(channelId));
+        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.of(
+            CompletableFuture.completedFuture(localRoutes)));
+
+        LocalDistService localDistService = new LocalDistService(
+            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
+
+        CompletableFuture<DeliveryReply> future = localDistService.dist(request);
+        DeliveryReply reply = future.join();
+
+        verify(localSessionRegistry).get(anyString());
+        verify(mockTransientSession).publish(any(), any());
+
+        assertNotNull(reply);
+        DeliveryResults results = reply.getResultMap().get(tenantId);
+        assertNotNull(results);
+        DeliveryResult result = results.getResult(0);
+        assertEquals(DeliveryResult.Code.OK, result.getCode());
     }
 
     @Test
-    public void unmatchNotExist() {
-        String topicFilter = "topicFilter";
-        LocalDistService localDistService =
-            new LocalDistService(serverId, localSessionRegistry, distClient, resourceThrottler, eventCollector);
+    public void deliverToMismatchedReceiver() {
+        String tenantId = "tenant1";
+        String topic = "testTopic";
+        String topicFilter = "testTopic/#";
+        String channelId = "channel0";
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setReceiverId("receiverIdA")
+            .build();
+        TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
+        DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
+            .addPack(DeliveryPack.newBuilder()
+                .setMessagePack(topicMessagePack)
+                .addMatchInfo(matchInfo)
+                .build())
+            .build();
+        DeliveryRequest request = DeliveryRequest.newBuilder().putPackage(tenantId, deliveryPack).build();
 
-        IMQTTTransientSession session = mock(IMQTTTransientSession.class);
-        when(session.channelId()).thenReturn("channelId");
-        when(session.clientInfo()).thenReturn(ClientInfo.newBuilder().setTenantId("tenantId").build());
-        CompletableFuture<UnmatchResult> result = localDistService.unmatch(System.nanoTime(), topicFilter, session);
-        assertEquals(result.join(), UnmatchResult.OK);
+        IMQTTTransientSession mockTransientSession = mock(IMQTTTransientSession.class);
+        when(mockTransientSession.channelId()).thenReturn(channelId);
+        when(mockTransientSession.publish(any(), any())).thenReturn(true);
+        when(localSessionRegistry.get(anyString())).thenReturn(mockTransientSession);
+
+        ILocalTopicRouter.ILocalRoutes localRoutes = mock(ILocalTopicRouter.ILocalRoutes.class);
+        when(localRoutes.localReceiverId()).thenReturn("receiverIdB");
+        when(localRoutes.routeList()).thenReturn(Set.of(channelId));
+        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.of(
+            CompletableFuture.completedFuture(localRoutes)));
+
+        LocalDistService localDistService = new LocalDistService(
+            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
+
+        CompletableFuture<DeliveryReply> future = localDistService.dist(request);
+        DeliveryReply reply = future.join();
+
+        DeliveryResults results = reply.getResultMap().get(tenantId);
+        DeliveryResult result = results.getResult(0);
+        assertEquals(DeliveryResult.Code.NO_SUB, result.getCode());
     }
 
     @Test
-    public void unmatchError() {
-        String topicFilter = "topicFilter";
-        LocalDistService localDistService =
-            new LocalDistService(serverId, localSessionRegistry, distClient, resourceThrottler, eventCollector);
-
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
-        String tenantId = "tenantId";
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        IMQTTTransientSession session = mock(IMQTTTransientSession.class);
-        String channelId = "channelId";
-        when(session.clientInfo()).thenReturn(clientInfo);
-        when(session.channelId()).thenReturn(channelId);
-        when(session.publish(any(), anyList())).thenReturn(true);
-        long reqId = System.nanoTime();
-        localDistService.match(reqId, topicFilter, session);
-        ArgumentCaptor<String> receiverIdCaptor = ArgumentCaptor.forClass(String.class);
-        verify(distClient, only()).match(
-            anyLong(),
-            eq(tenantId),
-            eq(topicFilter),
-            receiverIdCaptor.capture(),
-            anyString(),
-            eq(0));
-
-        List<MatchInfo> matchInfos = receiverIdCaptor.getAllValues().stream()
-            .map(receiverId -> MatchInfo.newBuilder()
-                .setReceiverId(receiverId)
-                .setTopicFilter(topicFilter).build())
-            .toList();
-
-        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(UnmatchResult.ERROR));
-        CompletableFuture<UnmatchResult> result = localDistService.unmatch(System.nanoTime(), topicFilter, session);
-        assertEquals(result.join(), UnmatchResult.ERROR);
-
-        DeliveryReply reply = localDistService.dist(DeliveryRequest.newBuilder()
-            .putPackage(tenantId, DeliveryPackage.newBuilder()
-                .addPack(DeliveryPack.newBuilder()
-                    .addAllMatchInfo(matchInfos)
-                    .build())
+    public void deliverToNoLocalRoute() {
+        String tenantId = "tenant1";
+        String topic = "testTopic";
+        String topicFilter = "testTopic/#";
+        String channelId = "channel0";
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setReceiverId("receiverId")
+            .build();
+        TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
+        DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
+            .addPack(DeliveryPack.newBuilder()
+                .setMessagePack(topicMessagePack)
+                .addMatchInfo(matchInfo)
                 .build())
-            .build()).join();
-        assertEquals(reply.getResultMap().get(tenantId).getResult(0).getCode(), DeliveryResult.Code.NO_SUB);
+            .build();
+        DeliveryRequest request = DeliveryRequest.newBuilder().putPackage(tenantId, deliveryPack).build();
 
-        verify(session, never()).publish(any(), anyList());
+        IMQTTTransientSession mockTransientSession = mock(IMQTTTransientSession.class);
+        when(mockTransientSession.channelId()).thenReturn(channelId);
+        when(mockTransientSession.publish(any(), any())).thenReturn(true);
+        when(localSessionRegistry.get(anyString())).thenReturn(mockTransientSession);
+
+        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.empty());
+
+        LocalDistService localDistService = new LocalDistService(
+            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
+
+        CompletableFuture<DeliveryReply> future = localDistService.dist(request);
+        DeliveryReply reply = future.join();
+
+        DeliveryResults results = reply.getResultMap().get(tenantId);
+        DeliveryResult result = results.getResult(0);
+        assertEquals(DeliveryResult.Code.NO_SUB, result.getCode());
     }
 
     @Test
-    public void unmatchException() {
-        String topicFilter = "topicFilter";
-        LocalDistService localDistService =
-            new LocalDistService(serverId, localSessionRegistry, distClient, resourceThrottler, eventCollector);
-
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
-        String tenantId = "tenantId";
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        IMQTTTransientSession session = mock(IMQTTTransientSession.class);
-        String channelId = "channelId";
-        when(session.clientInfo()).thenReturn(clientInfo);
-        when(session.channelId()).thenReturn(channelId);
-        when(session.publish(any(), anyList())).thenReturn(true);
-        long reqId = System.nanoTime();
-        localDistService.match(reqId, topicFilter, session);
-        ArgumentCaptor<String> receiverIdCaptor = ArgumentCaptor.forClass(String.class);
-        verify(distClient, only()).match(
-            anyLong(),
-            eq(tenantId),
-            eq(topicFilter),
-            receiverIdCaptor.capture(),
-            anyString(),
-            eq(0));
-
-        List<MatchInfo> matchInfos = receiverIdCaptor.getAllValues().stream()
-            .map(receiverId -> MatchInfo.newBuilder()
-                .setReceiverId(receiverId)
-                .setTopicFilter(topicFilter).build())
-            .toList();
-
-
-        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("unmatch failed")));
-        CompletableFuture<UnmatchResult> result = localDistService.unmatch(System.nanoTime(), topicFilter, session);
-        assertEquals(result.join(), UnmatchResult.ERROR);
-
-        DeliveryReply reply = localDistService.dist(DeliveryRequest.newBuilder()
-            .putPackage(tenantId, DeliveryPackage.newBuilder()
-                .addPack(DeliveryPack.newBuilder()
-                    .addAllMatchInfo(matchInfos)
-                    .build())
+    public void deliverToNoResolvedRoute() {
+        String tenantId = "tenant1";
+        String topic = "testTopic";
+        String topicFilter = "testTopic/#";
+        String channelId = "channel0";
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setReceiverId("receiverId")
+            .build();
+        TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
+        DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
+            .addPack(DeliveryPack.newBuilder()
+                .setMessagePack(topicMessagePack)
+                .addMatchInfo(matchInfo)
                 .build())
-            .build()).join();
-        assertEquals(reply.getResultMap().get(tenantId).getResult(0).getCode(), DeliveryResult.Code.NO_SUB);
-        verify(session, never()).publish(any(), anyList());
+            .build();
+        DeliveryRequest request = DeliveryRequest.newBuilder().putPackage(tenantId, deliveryPack).build();
+
+        IMQTTTransientSession mockTransientSession = mock(IMQTTTransientSession.class);
+        when(mockTransientSession.channelId()).thenReturn(channelId);
+        when(mockTransientSession.publish(any(), any())).thenReturn(true);
+        when(localSessionRegistry.get(anyString())).thenReturn(mockTransientSession);
+
+        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.of(new CompletableFuture<>()));
+
+        LocalDistService localDistService = new LocalDistService(
+            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
+
+        CompletableFuture<DeliveryReply> future = localDistService.dist(request);
+        DeliveryReply reply = future.join();
+
+        DeliveryResults results = reply.getResultMap().get(tenantId);
+        DeliveryResult result = results.getResult(0);
+        assertEquals(DeliveryResult.Code.OK, result.getCode());
     }
 
     @Test
-    public void unmatchOK() {
-        String topicFilter = "topicFilter";
-        LocalDistService localDistService =
-            new LocalDistService(serverId, localSessionRegistry, distClient, resourceThrottler, eventCollector);
-
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
-        String tenantId = "tenantId";
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        IMQTTTransientSession session = mock(IMQTTTransientSession.class);
-        String channelId = "channelId";
-        when(session.clientInfo()).thenReturn(clientInfo);
-        when(session.channelId()).thenReturn(channelId);
-        when(session.publish(any(), anyList())).thenReturn(true);
-        long reqId = System.nanoTime();
-        localDistService.match(reqId, topicFilter, session);
-        ArgumentCaptor<String> receiverIdCaptor = ArgumentCaptor.forClass(String.class);
-        verify(distClient, only()).match(
-            anyLong(),
-            eq(tenantId),
-            eq(topicFilter),
-            receiverIdCaptor.capture(),
-            anyString(),
-            eq(0));
-
-        List<MatchInfo> matchInfos = receiverIdCaptor.getAllValues().stream()
-            .map(receiverId -> MatchInfo.newBuilder()
-                .setReceiverId(receiverId)
-                .setTopicFilter(topicFilter).build())
-            .toList();
-
-
-        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
-            .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
-        CompletableFuture<UnmatchResult> result = localDistService.unmatch(System.nanoTime(), topicFilter, session);
-        assertEquals(result.join(), UnmatchResult.OK);
-
-        DeliveryReply reply = localDistService.dist(DeliveryRequest.newBuilder()
-            .putPackage(tenantId, DeliveryPackage.newBuilder()
-                .addPack(DeliveryPack.newBuilder()
-                    .addAllMatchInfo(matchInfos)
-                    .build())
+    public void deliverWhileRouteResolveException() {
+        String tenantId = "tenant1";
+        String topic = "testTopic";
+        String topicFilter = "testTopic/#";
+        String channelId = "channel0";
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setReceiverId("receiverId")
+            .build();
+        TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
+        DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
+            .addPack(DeliveryPack.newBuilder()
+                .setMessagePack(topicMessagePack)
+                .addMatchInfo(matchInfo)
                 .build())
-            .build()).join();
-        assertEquals(reply.getResultMap().get(tenantId).getResult(0).getCode(), DeliveryResult.Code.NO_SUB);
-        verify(session, never()).publish(any(), anyList());
+            .build();
+        DeliveryRequest request = DeliveryRequest.newBuilder().putPackage(tenantId, deliveryPack).build();
+
+        IMQTTTransientSession mockTransientSession = mock(IMQTTTransientSession.class);
+        when(mockTransientSession.channelId()).thenReturn(channelId);
+        when(mockTransientSession.publish(any(), any())).thenReturn(true);
+        when(localSessionRegistry.get(anyString())).thenReturn(mockTransientSession);
+
+        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(
+            Optional.of(CompletableFuture.failedFuture(new RuntimeException("Route resolve exception"))));
+
+        LocalDistService localDistService = new LocalDistService(
+            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
+
+        CompletableFuture<DeliveryReply> future = localDistService.dist(request);
+        DeliveryReply reply = future.join();
+
+        DeliveryResults results = reply.getResultMap().get(tenantId);
+        DeliveryResult result = results.getResult(0);
+        assertEquals(DeliveryResult.Code.OK, result.getCode());
+    }
+
+    @Test
+    public void fanOutThrottledDelivery() {
+        String tenantId = "tenant1";
+        String topic = "testTopic";
+        String topicFilter = "testTopic/#";
+        String channelId1 = "channel0";
+        String channelId2 = "channel1";
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setReceiverId("receiverId")
+            .build();
+        TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
+        DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
+            .addPack(DeliveryPack.newBuilder()
+                .setMessagePack(topicMessagePack)
+                .addMatchInfo(matchInfo)
+                .build())
+            .build();
+        DeliveryRequest request = DeliveryRequest.newBuilder().putPackage(tenantId, deliveryPack).build();
+
+        when(resourceThrottler.hasResource(eq(tenantId), eq(TotalTransientFanOutBytesPerSeconds))).thenReturn(false);
+
+        IMQTTTransientSession mockTransientSession1 = mock(IMQTTTransientSession.class);
+        when(mockTransientSession1.channelId()).thenReturn(channelId1);
+        when(mockTransientSession1.publish(any(), any())).thenReturn(true);
+        when(localSessionRegistry.get(channelId1)).thenReturn(mockTransientSession1);
+
+        IMQTTTransientSession mockTransientSession2 = mock(IMQTTTransientSession.class);
+        when(mockTransientSession2.channelId()).thenReturn(channelId2);
+        when(mockTransientSession2.publish(any(), any())).thenReturn(true);
+        when(localSessionRegistry.get(channelId2)).thenReturn(mockTransientSession2);
+
+        ILocalTopicRouter.ILocalRoutes localRoutes = mock(ILocalTopicRouter.ILocalRoutes.class);
+        when(localRoutes.localReceiverId()).thenReturn("receiverId");
+        when(localRoutes.routeList()).thenReturn(new LinkedHashSet<>() {{
+            add(channelId1);
+            add(channelId2);
+        }});
+        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.of(
+            CompletableFuture.completedFuture(localRoutes)));
+
+        LocalDistService localDistService = new LocalDistService(
+            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
+
+        CompletableFuture<DeliveryReply> future = localDistService.dist(request);
+        DeliveryReply reply = future.join();
+
+        verify(localSessionRegistry).get(channelId1);
+        verify(mockTransientSession1).publish(eq(matchInfo), eq(List.of(topicMessagePack)));
+        verify(mockTransientSession2, never()).publish(any(), any());
+
+        DeliveryResults results = reply.getResultMap().get(tenantId);
+        DeliveryResult result = results.getResult(0);
+        assertEquals(DeliveryResult.Code.OK, result.getCode());
+    }
+
+    @Test
+    public void fanOutThrottledDelivery1() {
+        String tenantId = "tenant1";
+        String topic1 = "testTopic";
+        String topic2 = "testTopic";
+        String topicFilter = "testTopic/#";
+        String channelId1 = "channel0";
+        String channelId2 = "channel1";
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setReceiverId("receiverId")
+            .build();
+        DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
+            .addPack(DeliveryPack.newBuilder()
+                .setMessagePack(TopicMessagePack.newBuilder().setTopic(topic1).build())
+                .addMatchInfo(matchInfo)
+                .build())
+            .addPack(DeliveryPack.newBuilder()
+                .setMessagePack(TopicMessagePack.newBuilder().setTopic(topic2).build())
+                .addMatchInfo(matchInfo)
+                .build())
+            .build();
+        DeliveryRequest request = DeliveryRequest.newBuilder().putPackage(tenantId, deliveryPack).build();
+
+        when(resourceThrottler.hasResource(eq(tenantId), eq(TotalTransientFanOutBytesPerSeconds))).thenReturn(false);
+
+        IMQTTTransientSession mockTransientSession1 = mock(IMQTTTransientSession.class);
+        when(mockTransientSession1.channelId()).thenReturn(channelId1);
+        when(mockTransientSession1.publish(any(), any())).thenReturn(true);
+        when(localSessionRegistry.get(channelId1)).thenReturn(mockTransientSession1);
+
+        IMQTTTransientSession mockTransientSession2 = mock(IMQTTTransientSession.class);
+        when(mockTransientSession2.channelId()).thenReturn(channelId2);
+        when(mockTransientSession2.publish(any(), any())).thenReturn(true);
+        when(localSessionRegistry.get(channelId2)).thenReturn(mockTransientSession2);
+
+        ILocalTopicRouter.ILocalRoutes localRoutes = mock(ILocalTopicRouter.ILocalRoutes.class);
+        when(localRoutes.localReceiverId()).thenReturn("receiverId");
+        when(localRoutes.routeList()).thenReturn(new LinkedHashSet<>() {{
+            add(channelId1);
+            add(channelId2);
+        }});
+        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.of(
+            CompletableFuture.completedFuture(localRoutes)));
+
+        LocalDistService localDistService = new LocalDistService(
+            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
+
+        CompletableFuture<DeliveryReply> future = localDistService.dist(request);
+        DeliveryReply reply = future.join();
+
+        verify(localSessionRegistry, times(2)).get(channelId1);
+        verify(mockTransientSession1, times(2)).publish(any(), any());
+        verify(mockTransientSession2, never()).publish(any(), any());
+
+        DeliveryResults results = reply.getResultMap().get(tenantId);
+        DeliveryResult result = results.getResult(0);
+        assertEquals(DeliveryResult.Code.OK, result.getCode());
+    }
+
+    @Test
+    public void publishFailedAsNoSub() {
+        String tenantId = "tenant1";
+        String topic = "testTopic";
+        String topicFilter = "testTopic/#";
+        String channelId = "channel0";
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setReceiverId("receiverId")
+            .build();
+        TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
+        DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
+            .addPack(DeliveryPack.newBuilder()
+                .setMessagePack(topicMessagePack)
+                .addMatchInfo(matchInfo)
+                .build())
+            .build();
+        DeliveryRequest request = DeliveryRequest.newBuilder().putPackage(tenantId, deliveryPack).build();
+
+        IMQTTTransientSession mockTransientSession = mock(IMQTTTransientSession.class);
+        when(mockTransientSession.channelId()).thenReturn(channelId);
+        when(mockTransientSession.publish(any(), any())).thenReturn(false);
+        when(localSessionRegistry.get(anyString())).thenReturn(mockTransientSession);
+
+        ILocalTopicRouter.ILocalRoutes localRoutes = mock(ILocalTopicRouter.ILocalRoutes.class);
+        when(localRoutes.localReceiverId()).thenReturn("receiverId");
+        when(localRoutes.routeList()).thenReturn(Set.of(channelId));
+        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.of(
+            CompletableFuture.completedFuture(localRoutes)));
+
+        LocalDistService localDistService = new LocalDistService(
+            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
+
+        CompletableFuture<DeliveryReply> future = localDistService.dist(request);
+        DeliveryReply reply = future.join();
+
+        verify(localSessionRegistry).get(anyString());
+        verify(mockTransientSession).publish(any(), any());
+
+        DeliveryResults results = reply.getResultMap().get(tenantId);
+        DeliveryResult result = results.getResult(0);
+        assertEquals(DeliveryResult.Code.NO_SUB, result.getCode());
     }
 }
