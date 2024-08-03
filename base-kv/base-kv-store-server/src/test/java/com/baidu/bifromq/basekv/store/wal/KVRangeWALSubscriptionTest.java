@@ -107,7 +107,7 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
         KVRangeWALSubscription walSub =
             new KVRangeWALSubscription(maxSize, wal, commitIndexSource, -1, subscriber, executor);
         commitIndexSource.onNext(0L);
-        verify(wal, timeout(1000).times(0)).retrieveCommitted(eq(0L), eq(maxSize));
+        verify(wal, timeout(1000).times(1)).retrieveCommitted(eq(0L), eq(maxSize));
     }
 
 
