@@ -195,7 +195,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         memUsage.addAndGet(-estBaseMemSize());
         int remainInboxSize =
             stagingBuffer.values().stream().reduce(0, (acc, msg) -> acc + msg.estBytes(), Integer::sum);
-        memUsage.addAndGet(-remainInboxSize);
+        if (remainInboxSize > 0) {
+            memUsage.addAndGet(-remainInboxSize);
+        }
         ctx.fireChannelInactive();
     }
 
@@ -502,6 +504,10 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     }
 
     private void pubBufferedMessage(InboxMessage inboxMsg) {
+        if (inboxMsg.getSeq() < nextSendSeq) {
+            // do not buffer message that has been sent
+            return;
+        }
         String topicFilter = inboxMsg.getTopicFilter();
         TopicFilterOption option = inboxMsg.getOption();
         addFgTask(authProvider.checkPermission(clientInfo(), buildSubAction(topicFilter, option.getQos())))
@@ -515,8 +521,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                 tenantMeter.timer(msg.qos() == AT_LEAST_ONCE ? MqttQoS1InternalLatency : MqttQoS2InternalLatency)
                     .record(HLC.INST.getPhysical() - message.getTimestamp(), TimeUnit.MILLISECONDS);
                 SubMessage prev = stagingBuffer.put(inboxMsg.getSeq(), msg);
-                assert prev == null;
-                memUsage.addAndGet(msg.estBytes());
+                if (prev == null) {
+                    memUsage.addAndGet(msg.estBytes());
+                }
             });
     }
 

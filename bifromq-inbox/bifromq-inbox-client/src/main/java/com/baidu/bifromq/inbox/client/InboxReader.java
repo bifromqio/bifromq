@@ -24,10 +24,8 @@ class InboxReader implements IInboxClient.IInboxReader {
     private final long incarnation;
     private final InboxFetchPipeline ppln;
     private final long sessionId = HLC.INST.get();
-    private int latestBufferCapacity = 100;
     private volatile long lastFetchQoS0Seq = -1;
     private volatile long lastFetchSendBufferSeq = -1;
-    private volatile long lastFetchQoS2Seq = -1;
 
     public InboxReader(String inboxId,
                        long incarnation,
@@ -54,7 +52,6 @@ class InboxReader implements IInboxClient.IInboxReader {
 
     @Override
     public void hint(int bufferCapacity) {
-        latestBufferCapacity = bufferCapacity;
         try {
             ppln.hint(sessionId, inboxId, incarnation, bufferCapacity, lastFetchQoS0Seq, lastFetchSendBufferSeq);
         } catch (Throwable e) {
