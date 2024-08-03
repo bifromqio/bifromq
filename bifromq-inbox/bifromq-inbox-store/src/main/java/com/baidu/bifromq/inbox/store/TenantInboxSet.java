@@ -13,16 +13,22 @@
 
 package com.baidu.bifromq.inbox.store;
 
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionNumGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionSpaceGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCountGauge;
+import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+
 import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStart;
 import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStop;
-
+import com.google.common.collect.Sets;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -30,11 +36,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionNumGauge;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionSpaceGauge;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCountGauge;
-import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
 /**
  * TenantInboxSet is used to hold all persistent session metadata in memory belonging to a tenant.
@@ -65,8 +66,8 @@ class TenantInboxSet {
                 // persistent session's lifetime is bounded by its corresponding inbox replicas
                 // so for 3 replicas inbox setting, a logical persistent session will have triple session lifetime
                 eventCollector.report(getLocal(MQTTSessionStart.class)
-                        .sessionId(metadata.getInboxId())
-                        .clientInfo(metadata.getClient()));
+                    .sessionId(metadata.getInboxId())
+                    .clientInfo(metadata.getClient()));
                 v = new TreeMap<>();
             }
             v.compute(metadata.getIncarnation(), (k1, v1) -> {
@@ -83,21 +84,21 @@ class TenantInboxSet {
     }
 
     void remove(String inboxId, long incarnation) {
-        inboxMetadataMap.computeIfPresent(inboxId, (v, k) -> {
+        inboxMetadataMap.computeIfPresent(inboxId, (k, m) -> {
             AtomicReference<InboxMetadata> removed = new AtomicReference<>();
-            k.computeIfPresent(incarnation, (k1, v1) -> {
+            m.computeIfPresent(incarnation, (k1, v1) -> {
                 // update the total sub count and used space with delta
                 totalSubCount.add(-v1.getTopicFiltersCount());
                 removed.set(v1);
                 return null;
             });
-            if (k.isEmpty()) {
+            if (m.isEmpty()) {
                 eventCollector.report(getLocal(MQTTSessionStop.class)
-                        .sessionId(inboxId)
-                        .clientInfo(removed.get().getClient()));
+                    .sessionId(inboxId)
+                    .clientInfo(removed.get().getClient()));
                 return null;
             }
-            return k;
+            return m;
         });
     }
 
@@ -106,7 +107,8 @@ class TenantInboxSet {
             String inboxId = entry.getKey();
             SortedMap<Long, InboxMetadata> map = entry.getValue();
             assert !map.isEmpty();
-            for (Long incarnation : map.keySet()) {
+            Set<Long> keys = Sets.newHashSet(map.keySet());
+            for (Long incarnation : keys) {
                 remove(inboxId, incarnation);
             }
         }
@@ -118,7 +120,7 @@ class TenantInboxSet {
 
     Optional<InboxMetadata> get(String inboxId, long incarnation) {
         return Optional.ofNullable(
-                inboxMetadataMap.getOrDefault(inboxId, Collections.emptySortedMap()).get(incarnation));
+            inboxMetadataMap.getOrDefault(inboxId, Collections.emptySortedMap()).get(incarnation));
     }
 
     Collection<InboxMetadata> getAll() {

@@ -253,9 +253,16 @@ public class TenantInboxSetTest extends MeterTest {
                 .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
                 .setClient(clientInfo)
                 .build();
+        final InboxMetadata inboxMetadata11 = InboxMetadata.newBuilder()
+            .setInboxId("testInboxId1")
+            .setIncarnation(2)
+            .putTopicFilters("topic1", TopicFilterOption.getDefaultInstance())
+            .setClient(clientInfo)
+            .build();
         TenantInboxSet inboxSet = new TenantInboxSet(eventCollector, tenantId, usedSpaceGetter);
         inboxSet.upsert(inboxMetadata);
         inboxSet.upsert(inboxMetadata1);
+        inboxSet.upsert(inboxMetadata11);
 
         reset(eventCollector);
         inboxSet.removeAll();
