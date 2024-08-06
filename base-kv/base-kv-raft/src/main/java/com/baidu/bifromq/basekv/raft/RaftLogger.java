@@ -30,7 +30,7 @@ public class RaftLogger extends SiftLogger {
     private final IRaftNodeState state;
 
     protected RaftLogger(IRaftNodeState state, String... tags) {
-        super("raft.logger", tags);
+        super(state.getClass(), tags);
         this.state = state;
     }
 

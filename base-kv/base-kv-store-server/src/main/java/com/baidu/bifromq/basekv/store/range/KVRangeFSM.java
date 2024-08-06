@@ -320,7 +320,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 clusterConfigSubject.onNext(wal.clusterConfig());
                 lifecycle.set(Open);
                 metricManager.reportLastAppliedIndex(kvRange.lastAppliedIndex());
-                log.debug("Open kvrange: appliedIndex={}, state={}, ver={}",
+                log.info("Open range: appliedIndex={}, state={}, ver={}",
                     kvRange.lastAppliedIndex(), kvRange.state().getType(), kvRange.version());
                 // make sure latest snapshot exists
                 if (!kvRange.hasCheckpoint(wal.latestSnapshot())) {
@@ -361,7 +361,7 @@ public class KVRangeFSM implements IKVRangeFSM {
             }
             case Open -> {
                 if (lifecycle.compareAndSet(Open, Lifecycle.Closing)) {
-                    log.debug("Closing range");
+                    log.info("Closing range");
                     clusterConfigSubject.onComplete();
                     descriptorSubject.onComplete();
                     disposables.dispose();
@@ -387,7 +387,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                             return awaitShutdown(fsmExecutor);
                         })
                         .whenComplete((v, e) -> {
-                            log.debug("Range closed");
+                            log.info("Range closed");
                             lifecycle.set(Closed);
                             closeSignal.complete(null);
                         });
@@ -683,10 +683,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                                                           IKVRangeWritable<?> rangeWriter) {
         CompletableFuture<Runnable> onDone = new CompletableFuture<>();
         State state = rangeWriter.state();
-        log.debug(
-            "Apply new config[term={}, index={}]: rangeId={}, storeId={}, state={}, leader={}\n{}",
-            term, index, KVRangeIdUtil.toString(id), hostStoreId, state,
-            wal.isLeader(), config);
+        log.debug("Apply new config[term={}, index={}]: state={}, leader={}\n{}",
+            term, index, state, wal.isLeader(), config);
         if (config.getNextVotersCount() != 0 || config.getNextLearnersCount() != 0) {
             // skip joint-config
             onDone.complete(() -> clusterConfigSubject.onNext(config));
@@ -970,7 +968,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                     log.info(
                         "Splitting range[term={}, index={}, taskId={}, ver={}, state={}]: newRangeId={}, splitKey={}",
                         logTerm, logIndex, taskId, ver, state,
-                        KVRangeIdUtil.toString(request.getNewId()), request.getSplitKey());
+                        KVRangeIdUtil.toString(request.getNewId()), request.getSplitKey().toStringUtf8());
                     Boundary[] boundaries = BoundaryUtil.split(boundary, request.getSplitKey());
                     Boundary leftBoundary = boundaries[0];
                     Boundary rightBoundary = boundaries[1];
@@ -1414,7 +1412,7 @@ public class KVRangeFSM implements IKVRangeFSM {
             if (isNotOpening()) {
                 return CompletableFuture.completedFuture(null);
             }
-            log.debug("Restoring from snapshot \n{}", snapshot);
+            log.info("Restoring from snapshot \n{}", snapshot);
             CompletableFuture<KVRangeSnapshot> onInstalled = new CompletableFuture<>();
             // the restore future is cancelable
             CompletableFuture<Void> restoreFuture = restorer.restoreFrom(leader, snapshot);
@@ -1436,7 +1434,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                     log.debug("Restored from snapshot error: \n{}", snapshot, e);
                     onInstalled.completeExceptionally(e);
                 } else {
-                    log.debug("Restored from snapshot: \n{}", snapshot);
+                    log.info("Restored from snapshot: \n{}", snapshot);
                     linearizer.afterLogApplied(snapshot.getLastAppliedIndex());
                     // reset the co-proc
                     coProc.reset(snapshot.getBoundary());
@@ -1495,7 +1493,7 @@ public class KVRangeFSM implements IKVRangeFSM {
     private CompletableFuture<Void> scheduleCheckpoint() {
         return mgmtTaskRunner.add(() -> metricManager.recordCompact(() -> {
             KVRangeSnapshot snapshot = kvRange.checkpoint();
-            log.debug("Checkpointing using snapshot:\n{}", snapshot);
+            log.info("Checkpointing using snapshot:\n{}", snapshot);
             return wal.compact(snapshot)
                 .thenAccept(v -> dumpSessions.forEach((sessionId, session) -> {
                     if (!session.checkpointId().equals(snapshot.getCheckpointId())) {
@@ -1544,7 +1542,7 @@ public class KVRangeFSM implements IKVRangeFSM {
     }
 
     private void handleSnapshotSyncRequest(String follower, SnapshotSyncRequest request) {
-        log.debug("Init snap-dump session for follower[{}]: sessionId={}\n{}",
+        log.info("Init snap-dump session for follower[{}]: sessionId={}\n{}",
             follower, request.getSessionId(), request.getSnapshot());
         KVRangeDumpSession session = new KVRangeDumpSession(follower, request, kvRange, messenger, fsmExecutor,
             Duration.ofSeconds(opts.getSnapshotSyncIdleTimeoutSec()),

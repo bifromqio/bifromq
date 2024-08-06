@@ -70,6 +70,7 @@ public class KVRangeWAL implements IKVRangeWAL, IRaftNode.ISnapshotInstaller {
     private final IKVRangeWALStore walStore;
     private final IRaftNode raftNode;
     private final AtomicLong ticks = new AtomicLong(0);
+    private final String[] tags;
 
     public KVRangeWAL(String clusterId,
                       String localId,
@@ -81,11 +82,11 @@ public class KVRangeWAL implements IKVRangeWAL, IRaftNode.ISnapshotInstaller {
         this.localId = localId;
         this.maxFetchBytes = maxFetchBytes;
         this.walStore = walStore;
-        String[] logCtx =
+        tags =
             new String[] {"clusterId", clusterId, "storeId", localId, "rangeId", KVRangeIdUtil.toString(rangeId)};
-        log = SiftLogger.getLogger(KVRangeWAL.class, logCtx);
+        log = SiftLogger.getLogger(KVRangeWAL.class, tags);
         raftNode = new RaftNode(raftConfig, walStore,
-            EnvProvider.INSTANCE.newThreadFactory("wal-raft-executor-" + KVRangeIdUtil.toString(rangeId)), logCtx);
+            EnvProvider.INSTANCE.newThreadFactory("wal-raft-executor-" + KVRangeIdUtil.toString(rangeId)), tags);
     }
 
     @Override
@@ -141,7 +142,7 @@ public class KVRangeWAL implements IKVRangeWAL, IRaftNode.ISnapshotInstaller {
     public IKVRangeWALSubscription subscribe(long lastFetchedIndex, IKVRangeWALSubscriber subscriber,
                                              Executor executor) {
         return new KVRangeWALSubscription(maxFetchBytes, this,
-            commitIndexSubject, lastFetchedIndex, subscriber, executor);
+            commitIndexSubject, lastFetchedIndex, subscriber, executor, tags);
     }
 
     @Override
@@ -166,7 +167,7 @@ public class KVRangeWAL implements IKVRangeWAL, IRaftNode.ISnapshotInstaller {
                     public CompletableFuture<KVRangeSnapshot> install(KVRangeSnapshot request, String leader) {
                         return CompletableFuture.failedFuture(new KVRangeException("Canceled once"));
                     }
-                }, executor);
+                }, executor, tags);
         onDone.whenCompleteAsync((v, e) -> walSub.stop(), executor);
         return onDone;
     }

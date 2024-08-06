@@ -17,6 +17,7 @@ import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.logger.SiftLogger;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import java.util.concurrent.CompletableFuture;
@@ -24,10 +25,10 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 class KVRangeWALSubscription implements IKVRangeWALSubscription {
+    private final Logger log;
     private final long maxFetchBytes;
     private final IKVRangeWAL wal;
     private final Executor executor;
@@ -45,7 +46,9 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
                            Observable<Long> commitIndex,
                            long lastFetchedIndex,
                            IKVRangeWALSubscriber subscriber,
-                           Executor executor) {
+                           Executor executor,
+                           String... tags) {
+        this.log = SiftLogger.getLogger(KVRangeWALSubscription.class, tags);
         this.maxFetchBytes = maxFetchBytes;
         this.wal = wal;
         this.executor = executor;
