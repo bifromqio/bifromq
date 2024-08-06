@@ -21,8 +21,8 @@ import com.baidu.bifromq.sysprops.props.DistWorkerSplitUnderIONanos;
 
 public class DistWorkerSplitBalancerFactory implements IStoreBalancerFactory {
     @Override
-    public StoreBalancer newBalancer(String localStoreId) {
-        return new DistWorkerSplitBalancer(localStoreId,
+    public StoreBalancer newBalancer(String clusterId, String localStoreId) {
+        return new DistWorkerSplitBalancer(clusterId, localStoreId,
             DistWorkerSplitUnderCPUUsage.INSTANCE.get(),
             DistWorkerSplitUnderIODensity.INSTANCE.get(),
             DistWorkerSplitUnderIONanos.INSTANCE.get());

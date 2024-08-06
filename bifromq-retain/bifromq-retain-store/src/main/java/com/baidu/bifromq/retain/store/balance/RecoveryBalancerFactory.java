@@ -22,7 +22,7 @@ import com.baidu.bifromq.sysprops.props.RetainStoreRecoveryWaitTimeMillis;
 public class RecoveryBalancerFactory implements IStoreBalancerFactory {
 
     @Override
-    public StoreBalancer newBalancer(String localStoreId) {
-        return new RecoveryBalancer(localStoreId, RetainStoreRecoveryWaitTimeMillis.INSTANCE.get());
+    public StoreBalancer newBalancer(String clusterId, String localStoreId) {
+        return new RecoveryBalancer(clusterId, localStoreId, RetainStoreRecoveryWaitTimeMillis.INSTANCE.get());
     }
 }

@@ -34,13 +34,14 @@ import org.testng.annotations.Test;
 
 public class RangeLeaderBalancerTest {
 
+    private static final String CLUSTER_ID = "clusterId";
     private static final String LOCAL_STORE_ID = "localStoreId";
 
     private RangeLeaderBalancer balancer;
 
     @BeforeMethod
     public void setup() {
-        balancer = new RangeLeaderBalancer(LOCAL_STORE_ID);
+        balancer = new RangeLeaderBalancer(CLUSTER_ID, LOCAL_STORE_ID);
     }
 
     @Test

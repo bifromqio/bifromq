@@ -43,7 +43,6 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import lombok.SneakyThrows;
-import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.Checkpoint;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
@@ -51,7 +50,6 @@ import org.rocksdb.FlushOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.WriteOptions;
 
-@Slf4j
 public class RocksDBCPableKVSpace
     extends RocksDBKVSpace<RocksDBCPableKVEngine, RocksDBCPableKVSpace, RocksDBCPableKVEngineConfigurator>
     implements ICPableKVSpace {
@@ -63,6 +61,7 @@ public class RocksDBCPableKVSpace
     private final AtomicReference<String> latestCheckpointId = new AtomicReference<>();
     private final Cache<String, IRocksDBKVSpaceCheckpoint> checkpoints;
     private final MetricManager metricMgr;
+    private final String[] tags;
     // keep a strong ref to latest checkpoint
     private IKVSpaceCheckpoint latestCheckpoint;
 
@@ -77,6 +76,7 @@ public class RocksDBCPableKVSpace
                                 String... tags) {
         super(id, cfDesc, cfHandle, db, configurator, engine, onDestroy, tags);
         this.engine = engine;
+        this.tags = tags;
         cpRootDir = new File(configurator.dbCheckpointRootDir(), id);
         this.checkpoint = Checkpoint.create(db);
         checkpoints = Caffeine.newBuilder().weakValues().build();
@@ -139,7 +139,7 @@ public class RocksDBCPableKVSpace
             }
             checkpoint.createCheckpoint(cpDir.toString());
             latestCheckpointId.set(cpId);
-            return new RocksDBKVSpaceCheckpoint(id, cpId, cpDir, this::isLatest);
+            return new RocksDBKVSpaceCheckpoint(id, cpId, cpDir, this::isLatest, tags);
         } catch (Throwable e) {
             throw new KVEngineException("Checkpoint key range error", e);
         }

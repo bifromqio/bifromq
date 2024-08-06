@@ -40,6 +40,7 @@ import com.baidu.bifromq.basekv.raft.proto.Voting;
 import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
 import com.baidu.bifromq.basekv.store.util.KVUtil;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -52,12 +53,12 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.function.Consumer;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 class KVRangeWALStore implements IKVRangeWALStore {
     private static final StableListener DEFAULT_STABLE_LISTENER = stabledIndex -> {
     };
+    private final Logger log;
     private final String storeId;
     private final KVRangeId rangeId;
     private final IWALableKVSpace kvSpace;
@@ -71,11 +72,14 @@ class KVRangeWALStore implements IKVRangeWALStore {
     private int logEntriesKeyInfix;
     private volatile StableListener stableListener = DEFAULT_STABLE_LISTENER;
 
-    KVRangeWALStore(String storeId, KVRangeId rangeId, IWALableKVSpace kvSpace, Consumer<KVRangeWALStore> onDestroy) {
+    KVRangeWALStore(String clusterId, String storeId, KVRangeId rangeId, IWALableKVSpace kvSpace,
+                    Consumer<KVRangeWALStore> onDestroy) {
         this.rangeId = rangeId;
         this.kvSpace = kvSpace;
         this.storeId = storeId;
         this.onDestroy = onDestroy;
+        log = SiftLogger.getLogger(KVRangeWALStore.class,
+            "clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(rangeId));
         load();
     }
 
@@ -125,8 +129,7 @@ class KVRangeWALStore implements IKVRangeWALStore {
         long snapLastIndex = snapshot.getIndex();
         long snapLastTerm = snapshot.getTerm();
         Optional<LogEntry> lastEntryInSS = entryAt(snapLastIndex);
-        log.debug("Compact logs using snapshot[term={}, index={}]: rangeId={}, storeId={}",
-            snapLastTerm, snapLastIndex, KVRangeIdUtil.toString(rangeId), storeId);
+        log.debug("Compact logs using snapshot[term={}, index={}]", snapLastTerm, snapLastIndex);
         IKVSpaceWriter writer = kvSpace.toWriter();
         if ((lastEntryInSS.isPresent() && lastEntryInSS.get().getTerm() == snapLastTerm) ||
             (lastEntryInSS.isEmpty() && latestSnapshot != null && latestSnapshot.getIndex() == snapLastIndex &&
@@ -145,8 +148,7 @@ class KVRangeWALStore implements IKVRangeWALStore {
                     break;
                 }
             }
-            log.trace("Truncating logs before index[{}]: rangeId={}, storeId={}",
-                truncateBeforeIndex, KVRangeIdUtil.toString(rangeId), storeId);
+            log.trace("Truncating logs before index[{}]", truncateBeforeIndex);
             try (IKVSpaceIterator it = kvSpace.newIterator()) {
                 // truncate log entry
                 writer.clear(Boundary.newBuilder()
@@ -165,11 +167,9 @@ class KVRangeWALStore implements IKVRangeWALStore {
                 // clear sub range will trigger compaction and implicit flush
 //                flushNotifier.notifyFlush();
             } catch (Throwable e) {
-                log.error("Unexpected error during truncating log: rangeId={}, storeId={}",
-                    KVRangeIdUtil.toString(rangeId), storeId, e);
+                log.error("Unexpected error during truncating log", e);
             } finally {
-                log.debug("Logs truncated before index[{}]: rangeId={}, storeId={}",
-                    truncateBeforeIndex, KVRangeIdUtil.toString(rangeId), storeId);
+                log.debug("Logs truncated before index[{}]", truncateBeforeIndex);
             }
         } else {
             // the snapshot represents a different history, it happens when installing snapshot from leader
@@ -186,7 +186,7 @@ class KVRangeWALStore implements IKVRangeWALStore {
             configEntryMap.clear();
 
             try {
-                log.trace("Truncating all logs: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), storeId);
+                log.trace("Truncating all logs");
                 // clear entire logs
                 writer.clear(Boundary.newBuilder()
                     .setStartKey(logEntriesKeyPrefixInfix(0))
@@ -198,10 +198,10 @@ class KVRangeWALStore implements IKVRangeWALStore {
                     .build());
                 writer.done();
                 flush();
-                log.debug("All logs of truncated: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), storeId);
+                log.debug("All logs of truncated");
                 // all previous index is stable after flush
             } catch (Throwable e) {
-                log.error("Log truncation failed: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), storeId, e);
+                log.error("Log truncation failed", e);
             }
         }
     }
@@ -230,7 +230,7 @@ class KVRangeWALStore implements IKVRangeWALStore {
             ByteString data = kvSpace.get(logEntryKey(logEntriesKeyInfix, index)).get();
             return Optional.of(LogEntry.parseFrom(data));
         } catch (InvalidProtocolBufferException e) {
-            log.error("Failed to parse log entry[index={}, rangeId={}]", index, KVRangeIdUtil.toString(rangeId), e);
+            log.error("Failed to parse log entry[index={}]", index, e);
             return Optional.empty();
         }
     }
@@ -300,13 +300,13 @@ class KVRangeWALStore implements IKVRangeWALStore {
 
     @Override
     public void stop() {
-        log.debug("Stop range wal storage: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), storeId);
+        log.debug("Stop WALStore");
         stableListener = DEFAULT_STABLE_LISTENER;
     }
 
     @Override
     public void destroy() {
-        log.debug("Destroy walStore: rangeId={}, storeId={} ", KVRangeIdUtil.toString(rangeId), storeId);
+        log.debug("Destroy WALStore");
         kvSpace.destroy();
         onDestroy.accept(this);
     }
@@ -406,8 +406,7 @@ class KVRangeWALStore implements IKVRangeWALStore {
         } catch (InvalidProtocolBufferException e) {
             throw new KVRangeStoreException("Failed to parse", e);
         } catch (NoSuchElementException e) {
-            log.error("Cluster config not found at index[{}]: kvRangeId={}, storeId={}",
-                configEntryIndex, KVRangeIdUtil.toString(rangeId), storeId);
+            log.error("Cluster config not found at index[{}]", configEntryIndex);
             throw new KVRangeStoreException("config not found", e);
         }
     }

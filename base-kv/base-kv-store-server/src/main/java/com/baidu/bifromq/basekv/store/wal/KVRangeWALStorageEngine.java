@@ -23,6 +23,7 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -30,14 +31,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.concurrent.NotThreadSafe;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
 /**
- * store engine
+ * WALStore engine.
  */
 @NotThreadSafe
-@Slf4j
 public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
+    private final Logger log;
+    private final String clusterId;
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private final Map<KVRangeId, KVRangeWALStore> instances = Maps.newConcurrentMap();
     private final IKVEngine<? extends IWALableKVSpace> kvEngine;
@@ -45,19 +47,21 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
     public KVRangeWALStorageEngine(String clusterId,
                                    String overrideIdentity,
                                    IWALableKVEngineConfigurator configurator) {
+        this.clusterId = clusterId;
         kvEngine = KVEngineFactory.createWALable(overrideIdentity, configurator);
+        log = SiftLogger.getLogger(KVRangeWALStorageEngine.class, "clusterId", clusterId, "storeId", kvEngine.id());
     }
 
     @Override
     public void stop() {
         if (state.compareAndSet(State.STARTED, State.STOPPING)) {
             try {
-                log.debug("Stopping WALStoreEngine[{}]", kvEngine.id());
+                log.debug("Stopping WALStoreEngine");
                 instances.values().forEach(KVRangeWALStore::stop);
                 kvEngine.stop();
                 state.set(State.STOPPED);
             } catch (Throwable e) {
-                log.warn("Failed to stop wal engine", e);
+                log.warn("Failed to stop WALStoreEngine", e);
             } finally {
                 state.set(State.TERMINATED);
             }
@@ -68,12 +72,12 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
     public void start() {
         if (state.compareAndSet(State.INIT, State.STARTING)) {
             try {
-                kvEngine.start("storeId", id(), "type", "wal");
+                kvEngine.start("clusterId", clusterId, "storeId", id(), "type", "wal");
                 loadExisting();
                 state.set(State.STARTED);
             } catch (Throwable e) {
                 state.set(State.TERMINATED);
-                throw new KVRangeStoreException("Failed to start wal engine", e);
+                throw new KVRangeStoreException("Failed to start WALStoreEngine", e);
             }
         }
     }
@@ -97,7 +101,8 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
             kvSpace.toWriter().put(KEY_LATEST_SNAPSHOT_BYTES, initSnapshot.toByteString())
                 .done();
             kvSpace.flush().join();
-            return new KVRangeWALStore(kvEngine.id(), kvRangeId, kvSpace, store -> instances.remove(kvRangeId, store));
+            return new KVRangeWALStore(clusterId, kvEngine.id(), kvRangeId, kvSpace,
+                store -> instances.remove(kvRangeId, store));
         });
         return instances.get(kvRangeId);
     }
@@ -122,8 +127,9 @@ public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
         kvEngine.spaces().forEach((String id, IWALableKVSpace kvSpace) -> {
             KVRangeId kvRangeId = KVRangeIdUtil.fromString(id);
             instances.put(kvRangeId,
-                new KVRangeWALStore(kvEngine.id(), kvRangeId, kvSpace, store -> instances.remove(kvRangeId, store)));
-            log.debug("WAL loaded: kvRangeId={}", KVRangeIdUtil.toString(kvRangeId));
+                new KVRangeWALStore(clusterId, kvEngine.id(), kvRangeId, kvSpace,
+                    store -> instances.remove(kvRangeId, store)));
+            log.debug("WALStore loaded: kvRangeId={}", KVRangeIdUtil.toString(kvRangeId));
 
         });
     }

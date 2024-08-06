@@ -19,7 +19,7 @@ import com.baidu.bifromq.basekv.balance.impl.RangeLeaderBalancer;
 
 public class RangeLeaderBalancerFactory implements IStoreBalancerFactory {
     @Override
-    public StoreBalancer newBalancer(String localStoreId) {
-        return new RangeLeaderBalancer(localStoreId);
+    public StoreBalancer newBalancer(String clusterId, String localStoreId) {
+        return new RangeLeaderBalancer(clusterId, localStoreId);
     }
 }

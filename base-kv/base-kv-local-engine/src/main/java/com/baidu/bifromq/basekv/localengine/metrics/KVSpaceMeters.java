@@ -27,9 +27,7 @@ import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 public class KVSpaceMeters {
     private static final Cleaner CLEANER = Cleaner.create();
 

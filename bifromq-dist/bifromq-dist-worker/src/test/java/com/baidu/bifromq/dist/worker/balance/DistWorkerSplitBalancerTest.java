@@ -42,13 +42,13 @@ import org.testng.annotations.Test;
 public class DistWorkerSplitBalancerTest {
     @Test
     public void noLocalDesc() {
-        DistWorkerSplitBalancer balancer = new DistWorkerSplitBalancer("local");
+        DistWorkerSplitBalancer balancer = new DistWorkerSplitBalancer("cluster", "local");
         assertFalse(balancer.balance().isPresent());
     }
 
     @Test
     public void cpuUsageExceedLimit() {
-        DistWorkerSplitBalancer balancer = new DistWorkerSplitBalancer("local");
+        DistWorkerSplitBalancer balancer = new DistWorkerSplitBalancer("cluster", "local");
         balancer.update(Collections.singleton(KVRangeStoreDescriptor
             .newBuilder()
             .setId("local")
@@ -84,7 +84,7 @@ public class DistWorkerSplitBalancerTest {
                 .build())
             .build()
         );
-        DistWorkerSplitBalancer balancer = new DistWorkerSplitBalancer("local", 0.8, 5, 20);
+        DistWorkerSplitBalancer balancer = new DistWorkerSplitBalancer("cluster", "local", 0.8, 5, 20);
         balancer.update(descriptors);
         Optional<BalanceCommand> command = balancer.balance();
         assertTrue(command.isPresent());
@@ -144,7 +144,7 @@ public class DistWorkerSplitBalancerTest {
                 .build())
             .build()
         );
-        DistWorkerSplitBalancer balancer = new DistWorkerSplitBalancer("local");
+        DistWorkerSplitBalancer balancer = new DistWorkerSplitBalancer("cluster", "local");
         balancer.update(descriptors);
         Optional<BalanceCommand> command = balancer.balance();
         assertFalse(command.isPresent());

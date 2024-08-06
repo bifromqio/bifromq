@@ -19,14 +19,16 @@ import com.baidu.bifromq.basecluster.memberlist.agent.IAgentMember;
 import com.baidu.bifromq.basekv.proto.KVRangeMessage;
 import com.baidu.bifromq.basekv.proto.StoreMessage;
 import com.baidu.bifromq.basekv.store.IStoreMessenger;
+import com.baidu.bifromq.logger.SiftLogger;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 class AgentHostStoreMessenger implements IStoreMessenger {
+    private final Logger log;
+
     static String agentId(String clusterId) {
         return "BaseKV:" + clusterId;
     }
@@ -44,6 +46,7 @@ class AgentHostStoreMessenger implements IStoreMessenger {
         this.storeId = storeId;
         this.agent = agentHost.host(agentId(clusterId));
         this.agentMember = agent.register(storeId);
+        log = SiftLogger.getLogger(AgentHostStoreMessenger.class, "clusterId", clusterId, "storeId", storeId);
     }
 
     @Override

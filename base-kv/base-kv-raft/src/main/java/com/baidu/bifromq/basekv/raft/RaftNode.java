@@ -307,7 +307,7 @@ public final class RaftNode implements IRaftNode {
         verifyTags(tags);
         verifyConfig(config);
         verifyStateStore(stateStore);
-        log = SiftLogger.getLogger(RaftLogger.buildSiftKey(tags), RaftNode.class);
+        log = SiftLogger.getLogger(RaftNode.class, tags);
         this.tags = tags;
         this.stateStorage = new MetricMonitoredStateStore(stateStore, Tags.of(tags));
         this.id = stateStorage.local();

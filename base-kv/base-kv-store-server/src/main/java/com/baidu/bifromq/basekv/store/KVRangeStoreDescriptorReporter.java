@@ -23,6 +23,7 @@ import com.baidu.bifromq.basecrdt.core.api.ORMapOperation;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
+import com.baidu.bifromq.logger.SiftLogger;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import java.util.HashMap;
@@ -30,11 +31,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 public class KVRangeStoreDescriptorReporter implements IKVRangeStoreDescriptorReporter {
     private static final long WAIT_CLEANUP_SPREAD_MILLIS = 1000L;
+    private final Logger log;
 
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final ICRDTService crdtService;
@@ -45,11 +46,13 @@ public class KVRangeStoreDescriptorReporter implements IKVRangeStoreDescriptorRe
     private KVRangeStoreDescriptor localStoreDescriptor;
 
     public KVRangeStoreDescriptorReporter(@NonNull String clusterId,
+                                          @NonNull String storeId,
                                           @NonNull ICRDTService crdtService,
                                           @NonNull Long deadStoreCleanupInMillis) {
         this.clusterId = clusterId;
         this.crdtService = crdtService;
         this.deadStoreCleanupInMillis = deadStoreCleanupInMillis;
+        log = SiftLogger.getLogger(KVRangeStoreDescriptorReporter.class, "clusterId", clusterId, "storeId", storeId);
         String uri = storeDescriptorMapCRDTURI(clusterId);
         crdtService.host(uri);
         Optional<IORMap> crdtOpt = crdtService.get(uri);
@@ -116,5 +119,4 @@ public class KVRangeStoreDescriptorReporter implements IKVRangeStoreDescriptorRe
             .of(CausalCRDTType.mvreg)
         );
     }
-
 }

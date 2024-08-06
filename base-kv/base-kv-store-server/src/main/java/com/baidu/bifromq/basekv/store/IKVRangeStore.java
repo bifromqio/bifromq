@@ -27,6 +27,7 @@ import java.util.concurrent.CompletionStage;
 
 public interface IKVRangeStore {
     String clusterId();
+
     String id();
 
     boolean isStarted();
@@ -45,6 +46,7 @@ public interface IKVRangeStore {
     boolean bootstrap();
 
     boolean isHosting(KVRangeId rangeId);
+
     /**
      * Recover unwritable ranges hosted in current store
      *

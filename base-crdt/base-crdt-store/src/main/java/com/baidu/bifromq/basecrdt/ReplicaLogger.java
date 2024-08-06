@@ -19,6 +19,6 @@ import com.baidu.bifromq.logger.SiftLogger;
 
 public class ReplicaLogger extends SiftLogger {
     public ReplicaLogger(Replica replica, Class<?> clazz) {
-        super(Formatter.toString(replica), clazz);
+        super(clazz, "sift_key", Formatter.toString(replica));
     }
 }

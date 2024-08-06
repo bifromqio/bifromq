@@ -37,7 +37,7 @@ public class RecoveryBalancerTest {
 
     @BeforeMethod
     public void setup() {
-        balancer = new RecoveryBalancer(LOCAL_STORE_ID, 200L);
+        balancer = new RecoveryBalancer("clusterId", LOCAL_STORE_ID, 200L);
     }
 
     @Test
@@ -114,7 +114,6 @@ public class RecoveryBalancerTest {
         Optional<BalanceCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isEmpty());
     }
-
 
 
 }

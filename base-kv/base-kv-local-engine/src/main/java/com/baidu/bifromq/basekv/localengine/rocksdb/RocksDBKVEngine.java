@@ -18,6 +18,7 @@ import static java.util.Collections.singletonList;
 
 import com.baidu.bifromq.basekv.localengine.AbstractKVEngine;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
+import com.baidu.bifromq.logger.SiftLogger;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
@@ -36,7 +37,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Stream;
-import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.DBOptions;
@@ -44,8 +44,8 @@ import org.rocksdb.FlushOptions;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
+import org.slf4j.Logger;
 
-@Slf4j
 public abstract class RocksDBKVEngine<
     E extends RocksDBKVEngine<E, T, C>,
     T extends RocksDBKVSpace<E, T, C>,
@@ -60,6 +60,7 @@ public abstract class RocksDBKVEngine<
     private final RocksDB db;
     private final ColumnFamilyDescriptor defaultCFDesc;
     private final ColumnFamilyHandle defaultCFHandle;
+    private final boolean isCreated;
     private String[] metricTags;
     private MetricManager metricManager;
 
@@ -70,8 +71,8 @@ public abstract class RocksDBKVEngine<
         dbRootDir = new File(configurator.dbRootDir());
         try (Options options = new Options()) {
             Files.createDirectories(dbRootDir.getAbsoluteFile().toPath());
-            boolean isCreation = isEmpty(dbRootDir.toPath());
-            if (isCreation) {
+            isCreated = isEmpty(dbRootDir.toPath());
+            if (isCreated) {
                 defaultCFDesc = new ColumnFamilyDescriptor(DEFAULT_NS.getBytes());
                 List<ColumnFamilyDescriptor> cfDescs = singletonList(defaultCFDesc);
                 List<ColumnFamilyHandle> cfHandles = new ArrayList<>();
@@ -96,10 +97,7 @@ public abstract class RocksDBKVEngine<
                     existingColumnFamilies.put(cfDesc, cfHandle);
                 }
             }
-
-            identity = loadIdentity(isCreation);
-            log.info("RocksDBKVEngine[{}] {} at path[{}]", identity, isCreation ? "initialized" : "loaded",
-                db.getName());
+            identity = loadIdentity(isCreated);
         } catch (Throwable e) {
             throw new KVEngineException("Failed to initialize RocksDB", e);
         }
@@ -130,10 +128,11 @@ public abstract class RocksDBKVEngine<
                                       String... tags);
 
     @Override
-    protected void doStart(String... metricTags) {
-        loadExisting(metricTags);
-        metricManager = new MetricManager(metricTags);
-        this.metricTags = metricTags;
+    protected void doStart(String... tags) {
+        log.info("RocksDBKVEngine[{}] {} at path[{}]", identity, isCreated ? "initialized" : "loaded", db.getName());
+        loadExisting(tags);
+        metricManager = new MetricManager(tags);
+        this.metricTags = tags;
     }
 
     @Override

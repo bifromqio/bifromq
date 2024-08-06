@@ -21,6 +21,7 @@ import com.baidu.bifromq.basekv.proto.SaveSnapshotDataRequest;
 import com.baidu.bifromq.basekv.proto.SnapshotSyncRequest;
 import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.logger.SiftLogger;
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.observers.DisposableObserver;
 import java.util.UUID;
@@ -28,10 +29,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 class KVRangeRestorer {
+    private final Logger log;
     private final IKVRange range;
     private final ISnapshotEnsurer snapshotEnsurer;
     private final IKVRangeMessenger messenger;
@@ -40,20 +41,21 @@ class KVRangeRestorer {
     private final int idleTimeSec;
     private final AtomicReference<RestoreSession> currentSession = new AtomicReference<>();
 
-    KVRangeRestorer(
-        KVRangeSnapshot startSnapshot,
-        IKVRange range,
-        ISnapshotEnsurer snapshotEnsurer,
-        IKVRangeMessenger messenger,
-        IKVRangeMetricManager metricManager,
-        Executor executor,
-        int idleTimeSec) {
+    KVRangeRestorer(KVRangeSnapshot startSnapshot,
+                    IKVRange range,
+                    ISnapshotEnsurer snapshotEnsurer,
+                    IKVRangeMessenger messenger,
+                    IKVRangeMetricManager metricManager,
+                    Executor executor,
+                    int idleTimeSec,
+                    String... tags) {
         this.range = range;
         this.snapshotEnsurer = snapshotEnsurer;
         this.messenger = messenger;
         this.metricManager = metricManager;
         this.executor = executor;
         this.idleTimeSec = idleTimeSec;
+        this.log = SiftLogger.getLogger(KVRangeRestorer.class, tags);
         RestoreSession initialSession = new RestoreSession(startSnapshot);
         initialSession.doneFuture.complete(null);
         currentSession.set(initialSession);

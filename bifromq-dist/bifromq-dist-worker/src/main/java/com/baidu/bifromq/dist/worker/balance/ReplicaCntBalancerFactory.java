@@ -21,7 +21,7 @@ import com.baidu.bifromq.sysprops.props.DistWorkerRangeVoterNum;
 public class ReplicaCntBalancerFactory implements IStoreBalancerFactory {
 
     @Override
-    public StoreBalancer newBalancer(String localStoreId) {
-        return new ReplicaCntBalancer(localStoreId, DistWorkerRangeVoterNum.INSTANCE.get(), -1);
+    public StoreBalancer newBalancer(String clusterId, String localStoreId) {
+        return new ReplicaCntBalancer(clusterId, localStoreId, DistWorkerRangeVoterNum.INSTANCE.get(), -1);
     }
 }

@@ -37,7 +37,6 @@ import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 
-@Slf4j
 class RocksDBKVSpaceWriterHelper {
     private final RocksDB db;
     private final WriteOptions writeOptions;

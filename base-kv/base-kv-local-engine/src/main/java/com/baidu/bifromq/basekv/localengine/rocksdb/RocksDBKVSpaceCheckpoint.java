@@ -43,8 +43,8 @@ import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.DBOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
+import org.slf4j.Logger;
 
-@Slf4j
 class RocksDBKVSpaceCheckpoint extends RocksDBKVSpaceReader implements IRocksDBKVSpaceCheckpoint {
     private static final Cleaner CLEANER = Cleaner.create();
 
@@ -58,7 +58,8 @@ class RocksDBKVSpaceCheckpoint extends RocksDBKVSpaceReader implements IRocksDBK
         ColumnFamilyHandle cfHandle,
         RocksDB roDB,
         DBOptions dbOptions,
-        Predicate<String> isLatest
+        Predicate<String> isLatest,
+        Logger log
     ) implements Runnable {
         @Override
         public void run() {
@@ -142,7 +143,8 @@ class RocksDBKVSpaceCheckpoint extends RocksDBKVSpaceReader implements IRocksDBK
                 cfHandle,
                 roDB,
                 dbOptions,
-                isLatest));
+                isLatest,
+                log));
         } catch (RocksDBException e) {
             throw new KVEngineException("Failed to open checkpoint", e);
         }

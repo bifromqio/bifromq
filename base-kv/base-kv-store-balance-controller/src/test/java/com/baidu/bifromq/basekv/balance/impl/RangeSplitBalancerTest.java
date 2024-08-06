@@ -37,16 +37,17 @@ import org.testng.annotations.Test;
 
 public class RangeSplitBalancerTest {
     private static final String HintType = "kv_io_mutation";
+    private final String clusterId = "clusterId";
 
     @Test
     public void noLocalDesc() {
-        RangeSplitBalancer balancer = new RangeSplitBalancer("local", HintType);
+        RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "local", HintType);
         assertFalse(balancer.balance().isPresent());
     }
 
     @Test
     public void cpuUsageExceedLimit() {
-        RangeSplitBalancer balancer = new RangeSplitBalancer("local", HintType);
+        RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "local", HintType);
         balancer.update(Collections.singleton(KVRangeStoreDescriptor
             .newBuilder()
             .setId("local")
@@ -77,7 +78,7 @@ public class RangeSplitBalancerTest {
                 .build())
             .build()
         );
-        RangeSplitBalancer balancer = new RangeSplitBalancer("local", HintType, 10, 0.8, 5, 20);
+        RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "local", HintType, 10, 0.8, 5, 20);
         balancer.update(descriptors);
         Optional<BalanceCommand> command = balancer.balance();
         assertTrue(command.isPresent());
@@ -107,7 +108,7 @@ public class RangeSplitBalancerTest {
                 .build())
             .build()
         );
-        RangeSplitBalancer balancer = new RangeSplitBalancer("local", HintType);
+        RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "local", HintType);
         balancer.update(descriptors);
         Optional<BalanceCommand> command = balancer.balance();
         assertFalse(command.isPresent());
@@ -134,7 +135,7 @@ public class RangeSplitBalancerTest {
                 .build())
             .build()
         );
-        RangeSplitBalancer balancer = new RangeSplitBalancer("local", HintType, 1, 0.8, 5, 20);
+        RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "local", HintType, 1, 0.8, 5, 20);
         balancer.update(descriptors);
         Optional<BalanceCommand> command = balancer.balance();
         assertFalse(command.isPresent());

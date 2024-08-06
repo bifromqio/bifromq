@@ -22,7 +22,6 @@ import lombok.Setter;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 @Accessors(fluent = true)
 @Setter
 public class BaseKVStoreServiceBuilder<P extends AbstractBaseKVStoreServerBuilder<P>> {

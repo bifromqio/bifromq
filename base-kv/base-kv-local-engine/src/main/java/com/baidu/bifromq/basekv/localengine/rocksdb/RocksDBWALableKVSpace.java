@@ -27,13 +27,11 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDB;
 import org.rocksdb.WriteOptions;
 
-@Slf4j
 public class RocksDBWALableKVSpace
     extends RocksDBKVSpace<RocksDBWALableKVEngine, RocksDBWALableKVSpace, RocksDBWALableKVEngineConfigurator>
     implements IWALableKVSpace {
@@ -110,12 +108,12 @@ public class RocksDBWALableKVSpace
         flushExecutor.submit(() -> {
             long flashStartAt = System.nanoTime();
             try {
-                log.debug("KVSpace[{}] flush wal start", id);
+                log.trace("KVSpace[{}] flush wal start", id);
                 try {
                     Timer.Sample start = Timer.start();
                     db.flushWal(configurator.fsyncWAL());
                     start.stop(metricMgr.flushTimer);
-                    log.debug("KVSpace[{}] flush complete", id);
+                    log.trace("KVSpace[{}] flush complete", id);
                 } catch (Throwable e) {
                     log.error("KVSpace[{}] flush error", id, e);
                     throw new KVEngineException("KVSpace flush error", e);

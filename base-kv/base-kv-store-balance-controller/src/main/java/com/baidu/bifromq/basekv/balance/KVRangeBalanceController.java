@@ -35,6 +35,7 @@ import com.baidu.bifromq.basekv.store.proto.RecoverRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipReply;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipRequest;
+import com.baidu.bifromq.logger.SiftLogger;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -108,7 +109,8 @@ public class KVRangeBalanceController {
 
     public void start(String localStoreId) {
         if (state.compareAndSet(State.Init, State.Started)) {
-            log = new BalanceControllerLogger(storeClient.clusterId(), localStoreId, "balancer.logger");
+            log =
+                SiftLogger.getLogger("balancer.logger", "clusterId", storeClient.clusterId(), "storeId", localStoreId);
 
             Map<String, IStoreBalancerFactory> balancerFactoryMap = BaseHookLoader.load(IStoreBalancerFactory.class);
             for (String factoryName : options.getBalancers()) {
@@ -116,7 +118,8 @@ public class KVRangeBalanceController {
                     log.warn("Balancer factory[{}] not found", factoryName);
                     continue;
                 }
-                StoreBalancer balancer = balancerFactoryMap.get(factoryName).newBalancer(localStoreId);
+                StoreBalancer balancer =
+                    balancerFactoryMap.get(factoryName).newBalancer(storeClient.clusterId(), localStoreId);
                 log.info("Balancer factory[{}] enabled for store[{}]", factoryName, localStoreId);
                 balancers.add(balancer);
             }

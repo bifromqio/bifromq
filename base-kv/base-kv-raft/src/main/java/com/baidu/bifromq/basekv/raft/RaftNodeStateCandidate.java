@@ -33,7 +33,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
 
 class RaftNodeStateCandidate extends RaftNodeState {
     private final QuorumTracker voteTracker;

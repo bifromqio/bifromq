@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023. The BifroMQ Authors. All Rights Reserved.
+ * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -11,12 +11,23 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.balance;
+package com.baidu.bifromq.logger;
 
-import com.baidu.bifromq.logger.SiftLogger;
-
-class BalanceControllerLogger extends SiftLogger {
-    protected BalanceControllerLogger(String clusterId, String storeId, String name) {
-        super(clusterId + "-" + storeId, name);
+public class SiftKeyUtil {
+    /**
+     * Build sift key from tags.
+     *
+     * @param tags tags
+     * @return sift key
+     */
+    public static String buildSiftKey(String... tags) {
+        StringBuilder logKey = new StringBuilder();
+        for (int i = 0; i < tags.length; i += 2) {
+            logKey.append(tags[i + 1]);
+            if (i + 2 < tags.length) {
+                logKey.append("-");
+            }
+        }
+        return logKey.toString();
     }
 }

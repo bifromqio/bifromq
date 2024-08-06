@@ -34,12 +34,11 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 public class RangeLeaderBalancer extends StoreBalancer {
     private volatile Set<KVRangeStoreDescriptor> latestStoreDescriptors = Collections.emptySet();
 
-    public RangeLeaderBalancer(String localStoreId) {
-        super(localStoreId);
+    public RangeLeaderBalancer(String clusterId, String localStoreId) {
+        super(clusterId, localStoreId);
     }
 
     @Override
@@ -73,7 +72,7 @@ public class RangeLeaderBalancer extends StoreBalancer {
         // check if there is KVRange with more than one leader
         double leaderCount = storeLeaders.keySet().stream().map(sl -> sl.leaderCount).reduce(Integer::sum).orElse(0);
         if (leaderCount > allLeaderIds.size()) {
-            log.warn("Failed to balance rangeLeaders for there is KVRange with more than one leader!");
+            log.debug("Failed to balance rangeLeaders for there is KVRange with more than one leader!");
             return Optional.empty();
         }
         return balanceStoreLeaders(localLeaderRangeDescriptors, storeLeaders, leaderCount);

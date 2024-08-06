@@ -35,6 +35,7 @@ import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.AbstractMessageLite;
 import com.google.protobuf.ByteString;
@@ -51,10 +52,10 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 import lombok.SneakyThrows;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 public class KVRangeWAL implements IKVRangeWAL, IRaftNode.ISnapshotInstaller {
+    private final Logger log;
     private final long maxFetchBytes;
     private final PublishSubject<SnapshotRestoredEvent> snapRestoreEventPublisher = PublishSubject.create();
     private final BehaviorSubject<Long> commitIndexSubject = BehaviorSubject.create();
@@ -80,9 +81,11 @@ public class KVRangeWAL implements IKVRangeWAL, IRaftNode.ISnapshotInstaller {
         this.localId = localId;
         this.maxFetchBytes = maxFetchBytes;
         this.walStore = walStore;
+        String[] logCtx =
+            new String[] {"clusterId", clusterId, "storeId", localId, "rangeId", KVRangeIdUtil.toString(rangeId)};
+        log = SiftLogger.getLogger(KVRangeWAL.class, logCtx);
         raftNode = new RaftNode(raftConfig, walStore,
-            EnvProvider.INSTANCE.newThreadFactory("wal-raft-executor-" + KVRangeIdUtil.toString(rangeId)),
-            "cluster", clusterId, "rangeId", KVRangeIdUtil.toString(rangeId), "storeId", localId);
+            EnvProvider.INSTANCE.newThreadFactory("wal-raft-executor-" + KVRangeIdUtil.toString(rangeId)), logCtx);
     }
 
     @Override
@@ -252,24 +255,29 @@ public class KVRangeWAL implements IKVRangeWAL, IRaftNode.ISnapshotInstaller {
 
     @Override
     public void start() {
+        log.debug("Starting KVRangeWAL");
         raftNode.start(this::sendRaftMessages, this::onRaftEvent, this);
         statusPublisher.onNext(raftNode.status());
     }
 
     @Override
     public CompletableFuture<Void> close() {
-        log.debug("Closing WAL: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), localId);
+        log.debug("Closing KVRangeWAL");
         raftMessagesPublisher.onComplete();
         commitIndexSubject.onComplete();
         snapInstallTaskPublisher.onComplete();
         electionPublisher.onComplete();
         syncStatePublisher.onComplete();
-        return raftNode.stop();
+        return raftNode.stop().whenComplete((v, e) -> log.debug("KVRangeWAL closed"));
     }
 
     @Override
     public CompletableFuture<Void> destroy() {
-        return close().thenAccept(v -> walStore.destroy());
+        log.debug("Destroying KVRangeWAL store");
+        return close().thenAccept(v -> {
+            walStore.destroy();
+            log.debug("KVRangeWAL store destroyed");
+        });
     }
 
     @Override

@@ -30,7 +30,7 @@ public class RaftLogger extends SiftLogger {
     private final IRaftNodeState state;
 
     protected RaftLogger(IRaftNodeState state, String... tags) {
-        super(buildSiftKey(tags), state.getClass());
+        super("raft.logger", tags);
         this.state = state;
     }
 
@@ -133,16 +133,5 @@ public class RaftLogger extends SiftLogger {
             clusterConfig.getLearnersList(),
             clusterConfig.getNextVotersList(),
             clusterConfig.getNextLearnersList());
-    }
-
-    public static String buildSiftKey(String... tags) {
-        StringBuilder logKey = new StringBuilder();
-        for (int i = 0; i < tags.length; i += 2) {
-            logKey.append(tags[i + 1]);
-            if (i + 2 < tags.length) {
-                logKey.append("-");
-            }
-        }
-        return logKey.toString();
     }
 }

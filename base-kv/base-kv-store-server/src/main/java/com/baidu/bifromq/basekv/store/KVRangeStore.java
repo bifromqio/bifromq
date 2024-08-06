@@ -56,6 +56,7 @@ import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.basekv.store.wal.IKVRangeWALStore;
 import com.baidu.bifromq.basekv.store.wal.KVRangeWALStorageEngine;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
@@ -85,10 +86,11 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 import lombok.NonNull;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 public class KVRangeStore implements IKVRangeStore {
+    private final Logger log;
+
     private enum Status {
         INIT, // store is created but cannot serve requests
         STARTING, // store is starting
@@ -133,6 +135,7 @@ public class KVRangeStore implements IKVRangeStore {
         this.walStorageEngine =
             new KVRangeWALStorageEngine(clusterId, opts.getOverrideIdentity(), opts.getWalEngineConfigurator());
         id = walStorageEngine.id();
+        log = SiftLogger.getLogger(KVRangeStore.class, "clusterId", clusterId, "storeId", id);
         if (opts.getOverrideIdentity() != null
             && !opts.getOverrideIdentity().trim().isEmpty()
             && !opts.getOverrideIdentity().equals(id)) {
@@ -174,8 +177,8 @@ public class KVRangeStore implements IKVRangeStore {
             try {
                 this.messenger = messenger;
                 walStorageEngine.start();
-                kvRangeEngine.start("storeId", id, "type", "data");
-                log.debug("KVRangeStore[{}] started", id);
+                kvRangeEngine.start("clusterId", clusterId, "storeId", id, "type", "data");
+                log.debug("KVRangeStore started");
                 status.set(Status.STARTED);
                 disposable.add(messenger.receive().subscribe(this::receive));
                 loadExisting();
@@ -226,7 +229,7 @@ public class KVRangeStore implements IKVRangeStore {
     public void stop() {
         if (status.compareAndSet(Status.STARTED, Status.CLOSING)) {
             try {
-                log.debug("Stop KVRange store[{}]", id);
+                log.debug("Stopping KVRange store");
                 List<CompletableFuture<Void>> closeFutures = new ArrayList<>();
                 try {
                     for (IKVRangeFSM rangeFSM : kvRangeMap.values()) {
@@ -393,8 +396,8 @@ public class KVRangeStore implements IKVRangeStore {
                             ICPableKVSpace keyRange = kvRangeEngine.spaces().get(KVRangeIdUtil.toString(rangeId));
                             if (keyRange == null) {
                                 if (walStorageEngine.has(rangeId)) {
-                                    log.warn("Staled WAL Store found, destroy it: rangeId={}, storeId={}",
-                                        KVRangeIdUtil.toString(rangeId), id);
+                                    log.warn("Staled WALStore found, destroy it: rangeId={}",
+                                        KVRangeIdUtil.toString(rangeId));
                                     walStorageEngine.get(rangeId).destroy();
                                 }
                                 putAndOpen(createKVRangeFSM(rangeId, request.getInitSnapshot(), rangeSnapshot));
@@ -579,8 +582,7 @@ public class KVRangeStore implements IKVRangeStore {
             return range.destroy()
                 .thenAccept(v -> {
                     if (recreate) {
-                        log.debug("Recreate kvrange after destroy: rangeId={}, storeId={}",
-                            KVRangeIdUtil.toString(range.id()), id);
+                        log.debug("Recreate kvrange after destroy: rangeId={}", KVRangeIdUtil.toString(range.id()));
                         KVRangeSnapshot rangeSnapshot = KVRangeSnapshot.newBuilder()
                             .setId(range.id())
                             .setVer(0)
@@ -604,7 +606,7 @@ public class KVRangeStore implements IKVRangeStore {
 
     private IKVRangeFSM loadKVRangeFSM(KVRangeId rangeId, IKVRange range, IKVRangeWALStore walStore) {
         checkStarted();
-        log.debug("Load existing kvrange: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), id);
+        log.debug("Load existing kvrange: rangeId={}", KVRangeIdUtil.toString(rangeId));
         return new KVRangeFSM(clusterId,
             id,
             rangeId,
@@ -619,7 +621,7 @@ public class KVRangeStore implements IKVRangeStore {
     }
 
     private IKVRangeFSM createKVRangeFSM(KVRangeId rangeId, Snapshot snapshot, KVRangeSnapshot rangeSnapshot) {
-        log.debug("Creating new kvrange: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), id);
+        log.debug("Creating new kvrange: rangeId={}", KVRangeIdUtil.toString(rangeId));
         IKVRangeWALStore walStore = walStorageEngine.create(rangeId, snapshot);
         return new KVRangeFSM(clusterId,
             id,
@@ -650,10 +652,9 @@ public class KVRangeStore implements IKVRangeStore {
                                                                 long ver,
                                                                 Boundary boundary,
                                                                 Set<KVRangeId> ignoreRanges) {
-        log.debug("Ensuring snapshot's compatibility: rangeId={}, storeId={}", KVRangeIdUtil.toString(rangeId), id);
+        log.debug("Ensuring snapshot's compatibility: rangeId={}", KVRangeIdUtil.toString(rangeId));
         List<IKVRangeFSM> overlapped = kvRangeMap.values().stream()
-            .filter(r -> !ignoreRanges.contains(r.id()) &&
-                isOverlap(r.boundary(), boundary) && !r.id().equals(rangeId))
+            .filter(r -> !ignoreRanges.contains(r.id()) && isOverlap(r.boundary(), boundary) && !r.id().equals(rangeId))
             .toList();
         if (overlapped.stream().anyMatch(r -> r.ver() > ver)) {
             return CompletableFuture.failedFuture(new KVRangeStoreException("Incompatible range version"));
@@ -662,12 +663,12 @@ public class KVRangeStore implements IKVRangeStore {
                     .map(d -> kvRangeMap.remove(d.id()))
                     .map(r -> {
                         KVRangeId overlappedRangeId = r.id();
-                        log.debug("Destroying overlapped range[{}]: rangeId={}, storeId={}",
-                            KVRangeIdUtil.toString(overlappedRangeId), KVRangeIdUtil.toString(rangeId), id);
+                        log.debug("Destroying overlapped range[{}]: rangeId={}",
+                            KVRangeIdUtil.toString(overlappedRangeId), KVRangeIdUtil.toString(rangeId));
                         return r.destroy()
                             .thenAccept(v -> {
-                                log.debug("Overlapped range[{}] destroyed: rangeId={}, storeId={}",
-                                    KVRangeIdUtil.toString(overlappedRangeId), KVRangeIdUtil.toString(rangeId), id);
+                                log.debug("Overlapped range[{}] destroyed: rangeId={}",
+                                    KVRangeIdUtil.toString(overlappedRangeId), KVRangeIdUtil.toString(rangeId));
                                 KVRangeSnapshot rangeSnapshot = KVRangeSnapshot.newBuilder()
                                     .setVer(0)
                                     .setId(overlappedRangeId)
@@ -681,8 +682,8 @@ public class KVRangeStore implements IKVRangeStore {
                                     .setIndex(0)
                                     .setData(rangeSnapshot.toByteString())
                                     .build();
-                                log.debug("Init range using Snapshot: rangeId={}, storeId={}\n{}",
-                                    KVRangeIdUtil.toString(overlappedRangeId), id, initSnapshot);
+                                log.debug("Init range using Snapshot: rangeId={}\n{}",
+                                    KVRangeIdUtil.toString(overlappedRangeId), initSnapshot);
                                 putAndOpen(createKVRangeFSM(overlappedRangeId, initSnapshot, rangeSnapshot));
                             });
                     })

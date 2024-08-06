@@ -34,7 +34,6 @@ import java.util.Optional;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 class DistWorkerSplitBalancer extends StoreBalancer {
     private static final double DEFAULT_CPU_USAGE_LIMIT = 0.8;
     private static final int DEFAULT_MAX_IO_DENSITY_PER_RANGE = 30;
@@ -44,15 +43,17 @@ class DistWorkerSplitBalancer extends StoreBalancer {
     private final long ioNanosLimitPerRange;
     private volatile Set<KVRangeStoreDescriptor> latestStoreDescriptors = Collections.emptySet();
 
-    public DistWorkerSplitBalancer(String localStoreId) {
-        this(localStoreId, DEFAULT_CPU_USAGE_LIMIT, DEFAULT_MAX_IO_DENSITY_PER_RANGE, DEFAULT_IO_NANOS_LIMIT_PER_RANGE);
+    public DistWorkerSplitBalancer(String clusterId, String localStoreId) {
+        this(clusterId, localStoreId, DEFAULT_CPU_USAGE_LIMIT, DEFAULT_MAX_IO_DENSITY_PER_RANGE,
+            DEFAULT_IO_NANOS_LIMIT_PER_RANGE);
     }
 
-    public DistWorkerSplitBalancer(String localStoreId,
+    public DistWorkerSplitBalancer(String clusterId,
+                                   String localStoreId,
                                    double cpuUsageLimit,
                                    int maxIoDensityPerRange,
                                    long ioNanoLimitPerRange) {
-        super(localStoreId);
+        super(clusterId, localStoreId);
         Preconditions.checkArgument(0 < cpuUsageLimit && cpuUsageLimit < 1.0, "Invalid cpu usage limit");
         this.cpuUsageLimit = cpuUsageLimit;
         this.maxIODensityPerRange = maxIoDensityPerRange;

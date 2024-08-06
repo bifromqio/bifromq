@@ -18,10 +18,8 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.Accessors;
-import lombok.extern.slf4j.Slf4j;
 
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
-@Slf4j
 @Accessors(fluent = true)
 @Setter
 public class NonStandaloneBaseKVStoreServerBuilder

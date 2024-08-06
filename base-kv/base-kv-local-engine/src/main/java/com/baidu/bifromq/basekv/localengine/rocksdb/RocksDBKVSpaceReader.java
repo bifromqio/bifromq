@@ -36,6 +36,7 @@ import org.rocksdb.Range;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.Slice;
+import org.slf4j.Logger;
 
 public abstract class RocksDBKVSpaceReader extends AbstractKVSpaceReader {
     protected RocksDBKVSpaceReader(String id, Tags tags) {

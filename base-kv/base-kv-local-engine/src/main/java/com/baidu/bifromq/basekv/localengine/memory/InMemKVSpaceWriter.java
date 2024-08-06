@@ -26,7 +26,6 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 public class InMemKVSpaceWriter<E extends InMemKVEngine<E, T>, T extends InMemKVSpace<E, T>> extends InMemKVSpaceReader
     implements IKVSpaceWriter {
     private final Map<ByteString, ByteString> metadataMap;

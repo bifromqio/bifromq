@@ -34,10 +34,12 @@ import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import lombok.extern.slf4j.Slf4j;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
 
+@Slf4j
 public class KVRangeQueryRunnerTest extends MockableTest {
     @Mock
     private IKVRange accessor;

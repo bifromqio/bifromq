@@ -13,8 +13,11 @@
 
 package com.baidu.bifromq.basekv.balance;
 
+/**
+ * The factory SPI to create {@link StoreBalancer}.
+ */
 public interface IStoreBalancerFactory {
 
-    StoreBalancer newBalancer(String localStoreId);
+    StoreBalancer newBalancer(String clusterId, String localStoreId);
 
 }

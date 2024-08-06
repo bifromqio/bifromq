@@ -27,13 +27,11 @@ import io.micrometer.core.instrument.Tags;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
-import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteOptions;
 
-@Slf4j
 class RocksDBKVSpaceWriter<
     E extends RocksDBKVEngine<E, T, C>,
     T extends RocksDBKVSpace<E, T, C>,

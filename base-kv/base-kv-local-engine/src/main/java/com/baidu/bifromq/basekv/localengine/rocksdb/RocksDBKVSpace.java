@@ -46,7 +46,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.SneakyThrows;
-import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
@@ -55,13 +54,13 @@ import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteOptions;
 
-@Slf4j
 abstract class RocksDBKVSpace<
     E extends RocksDBKVEngine<E, T, C>,
     T extends RocksDBKVSpace<E, T, C>,
     C extends RocksDBKVEngineConfigurator<C>
     >
     extends RocksDBKVSpaceReader implements IKVSpace {
+
     protected enum State {
         Init, Opening, Destroying, Closing, Terminated
     }
@@ -109,7 +108,6 @@ abstract class RocksDBKVSpace<
         compactionExecutor = new ThreadPoolExecutor(1, 1,
             0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
             EnvProvider.INSTANCE.newThreadFactory("keyrange-compactor"));
-
         metricMgr = new MetricManager(tags);
     }
 

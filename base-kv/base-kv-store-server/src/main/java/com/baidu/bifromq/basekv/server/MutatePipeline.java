@@ -19,19 +19,22 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.baserpc.ResponsePipeline;
+import com.baidu.bifromq.logger.SiftLogger;
 import io.grpc.stub.StreamObserver;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 class MutatePipeline extends ResponsePipeline<KVRangeRWRequest, KVRangeRWReply> {
+    private final Logger log;
     private final IKVRangeStore kvRangeStore;
 
     MutatePipeline(IKVRangeStore kvRangeStore, StreamObserver<KVRangeRWReply> responseObserver) {
         super(responseObserver);
         this.kvRangeStore = kvRangeStore;
+        this.log = SiftLogger.getLogger(MutatePipeline.class, "clusterId", kvRangeStore.clusterId(), "storeId",
+            kvRangeStore.id());
     }
 
     @Override

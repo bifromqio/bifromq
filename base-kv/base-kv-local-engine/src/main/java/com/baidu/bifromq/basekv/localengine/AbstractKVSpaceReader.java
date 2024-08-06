@@ -17,19 +17,31 @@ import static com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters.getTime
 
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMetric;
 import com.baidu.bifromq.basekv.proto.Boundary;
+import com.baidu.bifromq.logger.SiftLogger;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import org.slf4j.Logger;
 
 public abstract class AbstractKVSpaceReader implements IKVSpaceReader {
-
+    protected final Logger log;
     protected final String id;
     private final MetricManager metricMgr;
 
     protected AbstractKVSpaceReader(String id, Tags tags) {
         this.id = id;
         this.metricMgr = new MetricManager(tags);
+        List<String> allTags = new ArrayList<>();
+        tags.forEach(t -> {
+            allTags.add(t.getKey());
+            allTags.add(t.getValue());
+        });
+        allTags.add("spaceId");
+        allTags.add(id);
+        this.log = SiftLogger.getLogger(getClass(), allTags.toArray(String[]::new));
     }
 
     @Override

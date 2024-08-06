@@ -21,9 +21,11 @@ import com.baidu.bifromq.basekv.MockableTest;
 import com.google.common.util.concurrent.MoreExecutors;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
+import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
 
+@Slf4j
 public class KVRangeQueryLinearizerTest extends MockableTest {
     @Mock
     private Supplier<CompletableFuture<Long>> readIndexSupplier;

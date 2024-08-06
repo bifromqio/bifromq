@@ -13,24 +13,25 @@
 
 package com.baidu.bifromq.basekv.server;
 
-import com.baidu.bifromq.basekv.store.proto.NullableValue;
 import com.baidu.bifromq.basekv.store.IKVRangeStore;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.proto.KVRangeROReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
+import com.baidu.bifromq.basekv.store.proto.NullableValue;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.baserpc.ResponsePipeline;
+import com.baidu.bifromq.logger.SiftLogger;
 import io.grpc.stub.StreamObserver;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 class QueryPipeline extends ResponsePipeline<KVRangeRORequest, KVRangeROReply> {
 
+    private final Logger log;
     private final ConcurrentLinkedQueue<QueryTask> requests = new ConcurrentLinkedQueue<>();
     private final IKVRangeStore kvRangeStore;
     private final boolean linearized;
@@ -41,6 +42,8 @@ class QueryPipeline extends ResponsePipeline<KVRangeRORequest, KVRangeROReply> {
         super(responseObserver);
         this.linearized = linearized;
         this.kvRangeStore = kvRangeStore;
+        this.log = SiftLogger.getLogger(QueryPipeline.class, "clusterId", kvRangeStore.clusterId(), "storeId",
+            kvRangeStore.id());
     }
 
     @Override
@@ -66,22 +69,22 @@ class QueryPipeline extends ResponsePipeline<KVRangeRORequest, KVRangeROReply> {
                 }
                 task.queryFn.apply(request)
                     .exceptionally(e -> {
-                        if (e instanceof KVRangeException.BadVersion ||
-                            e.getCause() instanceof KVRangeException.BadVersion) {
+                        if (e instanceof KVRangeException.BadVersion
+                            || e.getCause() instanceof KVRangeException.BadVersion) {
                             return KVRangeROReply.newBuilder()
                                 .setReqId(request.getReqId())
                                 .setCode(ReplyCode.BadVersion)
                                 .build();
                         }
-                        if (e instanceof KVRangeException.TryLater ||
-                            e.getCause() instanceof KVRangeException.TryLater) {
+                        if (e instanceof KVRangeException.TryLater
+                            || e.getCause() instanceof KVRangeException.TryLater) {
                             return KVRangeROReply.newBuilder()
                                 .setReqId(request.getReqId())
                                 .setCode(ReplyCode.TryLater)
                                 .build();
                         }
-                        if (e instanceof KVRangeException.BadRequest ||
-                            e.getCause() instanceof KVRangeException.BadRequest) {
+                        if (e instanceof KVRangeException.BadRequest
+                            || e.getCause() instanceof KVRangeException.BadRequest) {
                             return KVRangeROReply.newBuilder()
                                 .setReqId(request.getReqId())
                                 .setCode(ReplyCode.BadRequest)

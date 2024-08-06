@@ -26,6 +26,7 @@ import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
+import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import java.util.List;
@@ -34,10 +35,11 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 class KVRangeQueryRunner implements IKVRangeQueryRunner {
+    private final Logger log;
+
     private interface QueryFunction<Req, Resp> {
         CompletableFuture<Resp> apply(IKVReader dataReader);
     }
@@ -54,12 +56,14 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
                        IKVRangeCoProc coProc,
                        Executor executor,
                        IKVRangeQueryLinearizer linearizer,
-                       List<IKVRangeSplitHinter> splitHinters) {
+                       List<IKVRangeSplitHinter> splitHinters,
+                       String... tags) {
         this.kvRange = kvRange;
         this.coProc = coProc;
         this.executor = executor;
         this.linearizer = linearizer;
         this.splitHinters = splitHinters;
+        this.log = SiftLogger.getLogger(KVRangeQueryRunner.class, tags);
     }
 
     // Execute a ROCommand

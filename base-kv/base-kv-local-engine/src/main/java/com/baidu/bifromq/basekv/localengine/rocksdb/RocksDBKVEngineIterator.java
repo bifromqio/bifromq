@@ -23,7 +23,6 @@ import org.rocksdb.RocksIterator;
 import org.rocksdb.Slice;
 import org.rocksdb.Snapshot;
 
-@Slf4j
 class RocksDBKVEngineIterator implements AutoCloseable {
     private static final Cleaner CLEANER = Cleaner.create();
 

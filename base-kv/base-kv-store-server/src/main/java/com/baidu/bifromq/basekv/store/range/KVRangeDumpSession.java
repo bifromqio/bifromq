@@ -22,6 +22,7 @@ import com.baidu.bifromq.basekv.proto.SnapshotSyncRequest;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.util.concurrent.RateLimiter;
 import io.reactivex.rxjava3.disposables.Disposable;
 import java.time.Duration;
@@ -30,10 +31,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 class KVRangeDumpSession {
+    private final Logger log;
+
     interface DumpBytesRecorder {
         void record(int bytes);
     }
@@ -60,7 +62,8 @@ class KVRangeDumpSession {
                        Executor executor,
                        Duration maxIdleDuration,
                        long bandwidth,
-                       DumpBytesRecorder recorder) {
+                       DumpBytesRecorder recorder,
+                       String... tags) {
         this.rangeId = accessor.id();
         this.peerStoreId = peerStoreId;
         this.request = request;
@@ -69,6 +72,7 @@ class KVRangeDumpSession {
         this.maxIdleDuration = maxIdleDuration;
         this.recorder = recorder;
         rateLimiter = RateLimiter.create(bandwidth);
+        this.log = SiftLogger.getLogger(KVRangeDumpSession.class, tags);
         if (!request.getSnapshot().hasCheckpointId()) {
             messenger.send(KVRangeMessage.newBuilder()
                 .setRangeId(request.getSnapshot().getId())

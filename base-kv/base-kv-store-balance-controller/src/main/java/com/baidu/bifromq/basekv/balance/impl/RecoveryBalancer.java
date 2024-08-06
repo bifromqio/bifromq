@@ -35,15 +35,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 public class RecoveryBalancer extends StoreBalancer {
 
     private final Cache<String, KVRangeStoreDescriptor> deadStoreCache;
 
     private Set<KVRangeStoreDescriptor> latestStoreDescriptors = new HashSet<>();
 
-    public RecoveryBalancer(String localStoreId, long deadStoreTimeoutMillis) {
-        super(localStoreId);
+    public RecoveryBalancer(String clusterId, String localStoreId, long deadStoreTimeoutMillis) {
+        super(clusterId, localStoreId);
         deadStoreCache = Caffeine.newBuilder()
             .expireAfterWrite(deadStoreTimeoutMillis, TimeUnit.MILLISECONDS)
             .build();

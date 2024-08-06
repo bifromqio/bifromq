@@ -61,8 +61,6 @@ abstract class RaftNodeState implements IRaftNodeState {
         }
     }
 
-    private static final String LOG_DETAILS_SUFFIX =
-        ": id={}, state={}, term={}, firstIndex={}, lastIndex={}, commitIndex={}, config={}";
     protected final String id;
     protected final RaftConfig config;
     protected final IRaftStateStore stateStorage;

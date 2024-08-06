@@ -15,13 +15,28 @@ package com.baidu.bifromq.basekv.balance;
 
 import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
+import com.baidu.bifromq.logger.SiftLogger;
 import java.util.Optional;
 import java.util.Set;
+import org.slf4j.Logger;
 
+/**
+ * The base class for implementing store balancer.
+ */
 public abstract class StoreBalancer {
+    protected final Logger log;
+    protected final String clusterId;
     protected final String localStoreId;
 
-    public StoreBalancer(String localStoreId) {
+    /**
+     * Constructor of StoreBalancer.
+     *
+     * @param clusterId    the id of the BaseKV cluster which the store belongs to
+     * @param localStoreId the id of the store which the balancer is responsible for
+     */
+    public StoreBalancer(String clusterId, String localStoreId) {
+        this.log = SiftLogger.getLogger("balancer.logger", "clusterId", clusterId, "storeId", localStoreId);
+        this.clusterId = clusterId;
         this.localStoreId = localStoreId;
     }
 

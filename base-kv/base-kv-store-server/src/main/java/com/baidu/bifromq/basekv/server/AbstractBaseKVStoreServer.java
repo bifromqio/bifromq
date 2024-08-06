@@ -57,9 +57,10 @@ abstract class AbstractBaseKVStoreServer<T extends AbstractBaseKVStoreServerBuil
     public final void start() {
         if (state.compareAndSet(State.INIT, State.STARTING)) {
             try {
-                log.debug("Starting BaseKVRangeStore server");
+                log.debug("Starting BaseKVStore server for '{}'", storeServiceMap.keySet());
                 storeServiceMap.values().forEach(BaseKVStoreService::start);
                 afterServiceStart();
+                log.debug("BaseKVStore server for '{}' started", storeServiceMap.keySet());
                 state.set(State.STARTED);
             } catch (Throwable e) {
                 state.set(State.FATALFAILURE);
@@ -72,12 +73,13 @@ abstract class AbstractBaseKVStoreServer<T extends AbstractBaseKVStoreServerBuil
     public void stop() {
         if (state.compareAndSet(State.STARTED, State.STOPPING)) {
             try {
-                log.debug("Shutting down BaseKVRangeStore server");
+                log.debug("Stopping BaseKVStore server[{}]", storeServiceMap.keySet());
                 beforeServiceStop();
                 storeServiceMap.values().forEach(BaseKVStoreService::stop);
             } catch (Throwable e) {
-                log.error("Error occurred during BaseKVRangeStore server shutdown", e);
+                log.error("Failed to stop BaseKVStore server[{}]", storeServiceMap.keySet(), e);
             } finally {
+                log.debug("BaseKVStore server[{}] stopped", storeServiceMap.keySet());
                 state.set(State.STOPPED);
             }
         }

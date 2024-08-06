@@ -17,7 +17,6 @@ import com.baidu.bifromq.baserpc.IRPCServer;
 import com.baidu.bifromq.baserpc.RPCServerBuilder;
 import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 final class StandaloneBaseKVStoreServer extends AbstractBaseKVStoreServer<StandaloneBaseKVStoreServerBuilder> {
     private final IRPCServer rpcServer;
 

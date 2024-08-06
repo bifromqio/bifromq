@@ -33,6 +33,7 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 public class ReplicaCntBalancerTest {
+    private static final String CLUSTER_ID = "storeId";
 
     private static final String LOCAL_STORE_ID = "localStoreId";
 
@@ -40,14 +41,14 @@ public class ReplicaCntBalancerTest {
 
     @Test
     public void balanceWithoutUpdate() {
-        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
+        balancer = new ReplicaCntBalancer(CLUSTER_ID, LOCAL_STORE_ID, 3, 3);
         Optional<BalanceCommand> balance = balancer.balance();
         Assert.assertTrue(balance.isEmpty());
     }
 
     @Test
     public void balanceWithOneStore() {
-        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
+        balancer = new ReplicaCntBalancer(CLUSTER_ID, LOCAL_STORE_ID, 3, 3);
         KVRangeId id = KVRangeIdUtil.generate();
         List<KVRangeDescriptor> rangeDescriptors =
             DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(LOCAL_STORE_ID), Sets.newHashSet());
@@ -62,7 +63,7 @@ public class ReplicaCntBalancerTest {
 
     @Test
     public void balanceWithTwoStore() {
-        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
+        balancer = new ReplicaCntBalancer(CLUSTER_ID, LOCAL_STORE_ID, 3, 3);
         KVRangeId id = KVRangeIdUtil.generate();
         List<KVRangeDescriptor> rangeDescriptors =
             DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(LOCAL_STORE_ID), Sets.newHashSet());
@@ -89,7 +90,7 @@ public class ReplicaCntBalancerTest {
 
     @Test
     public void balanceWithTwoRange() {
-        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
+        balancer = new ReplicaCntBalancer(CLUSTER_ID, LOCAL_STORE_ID, 3, 3);
         KVRangeId id_1 = KVRangeIdUtil.generate();
         List<KVRangeDescriptor> rangeDescriptors_1 =
             DescriptorUtils.generateRangeDesc(id_1, Sets.newHashSet(LOCAL_STORE_ID, "store2"), Sets.newHashSet());
@@ -122,7 +123,7 @@ public class ReplicaCntBalancerTest {
 
     @Test
     public void balanceWithThreeStore() {
-        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
+        balancer = new ReplicaCntBalancer(CLUSTER_ID, LOCAL_STORE_ID, 3, 3);
         KVRangeId id = KVRangeIdUtil.generate();
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1");
         List<String> learners = Lists.newArrayList();
@@ -155,7 +156,7 @@ public class ReplicaCntBalancerTest {
 
     @Test
     public void balanceWithFourStore() {
-        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
+        balancer = new ReplicaCntBalancer(CLUSTER_ID, LOCAL_STORE_ID, 3, 3);
         KVRangeId id = KVRangeIdUtil.generate();
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1", "store2");
         List<String> learners = Lists.newArrayList();
@@ -189,7 +190,7 @@ public class ReplicaCntBalancerTest {
 
     @Test
     public void balanceWithFourStore2() {
-        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 0);
+        balancer = new ReplicaCntBalancer(CLUSTER_ID, LOCAL_STORE_ID, 3, 0);
         KVRangeId id = KVRangeIdUtil.generate();
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1");
         List<String> learners = Lists.newArrayList();
@@ -230,7 +231,7 @@ public class ReplicaCntBalancerTest {
 
     @Test
     public void balanceWithFiveStore() {
-        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 1);
+        balancer = new ReplicaCntBalancer(CLUSTER_ID, LOCAL_STORE_ID, 3, 1);
         KVRangeId id = KVRangeIdUtil.generate();
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1");
         List<String> learners = Lists.newArrayList();
@@ -276,7 +277,7 @@ public class ReplicaCntBalancerTest {
 
     @Test
     public void balanceWithFiveStore2() {
-        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, -1);
+        balancer = new ReplicaCntBalancer(CLUSTER_ID, LOCAL_STORE_ID, 3, -1);
         KVRangeId id = KVRangeIdUtil.generate();
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1");
         List<String> learners = Lists.newArrayList();
@@ -322,7 +323,7 @@ public class ReplicaCntBalancerTest {
 
     @Test
     public void balanceWithTwoVotersAndThreeLearners() {
-        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
+        balancer = new ReplicaCntBalancer(CLUSTER_ID, LOCAL_STORE_ID, 3, 3);
         KVRangeId id = KVRangeIdUtil.generate();
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store2");
         List<String> learners = Lists.newArrayList("store3", "store4", "store5");
@@ -347,7 +348,7 @@ public class ReplicaCntBalancerTest {
 
     @Test
     public void rangeWithThreeVAndTwoAliveAndOneStoreSpare() throws InterruptedException {
-        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
+        balancer = new ReplicaCntBalancer(CLUSTER_ID, LOCAL_STORE_ID, 3, 3);
         KVRangeId id = KVRangeIdUtil.generate();
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1", "store2");
         List<String> learners = Lists.newArrayList();
@@ -381,7 +382,7 @@ public class ReplicaCntBalancerTest {
 
     @Test
     public void rangeWithThreeVAndThreeL() {
-        balancer = new ReplicaCntBalancer(LOCAL_STORE_ID, 3, 3);
+        balancer = new ReplicaCntBalancer(CLUSTER_ID, LOCAL_STORE_ID, 3, 3);
         KVRangeId id = KVRangeIdUtil.generate();
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1", "store2");
         List<String> learners = Lists.newArrayList("store3", "store4", "store5");

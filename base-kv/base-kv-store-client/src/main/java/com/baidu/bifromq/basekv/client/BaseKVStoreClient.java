@@ -58,6 +58,7 @@ import com.baidu.bifromq.baserpc.BluePrint;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.baserpc.exception.ServerNotFoundException;
 import com.baidu.bifromq.baserpc.utils.BehaviorSubject;
+import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -79,10 +80,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 final class BaseKVStoreClient implements IBaseKVStoreClient {
+    private final Logger log;
     private final String clusterId;
     private final IRPCClient rpcClient;
     private final ICRDTService crdtService;
@@ -118,6 +119,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
 
     BaseKVStoreClient(BaseKVStoreClientBuilder builder) {
         this.clusterId = builder.clusterId;
+        log = SiftLogger.getLogger(BaseKVStoreClient.class, "clusterId", clusterId);
         router = new KVRangeRouter(clusterId);
         BluePrint bluePrint = RPCBluePrint.build(clusterId);
         this.bootstrapMethod = bluePrint.methodDesc(

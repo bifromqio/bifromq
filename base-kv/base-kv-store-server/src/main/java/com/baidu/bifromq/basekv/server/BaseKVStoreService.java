@@ -41,16 +41,17 @@ import com.baidu.bifromq.basekv.store.proto.RecoverRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipReply;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipRequest;
+import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.collect.Sets;
 import io.grpc.stub.StreamObserver;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBase {
     private static final int DEAD_STORE_CLEANUP_TIME_FACTOR = 10;
+    private final Logger log;
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final IKVRangeStore kvRangeStore;
     private final IKVRangeStoreDescriptorReporter storeDescriptorReporter;
@@ -69,9 +70,11 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
         this.bootstrap = builder.bootstrap;
         this.clusterId = builder.clusterId;
         this.agentHost = builder.agentHost;
-        storeDescriptorReporter = new KVRangeStoreDescriptorReporter(clusterId, builder.serverBuilder.crdtService,
-            Duration.ofSeconds(builder.storeOptions.getStatsCollectIntervalSec()).toMillis() *
-                DEAD_STORE_CLEANUP_TIME_FACTOR);
+        log = SiftLogger.getLogger(BaseKVStoreService.class, "clusterId", clusterId, "storeId", kvRangeStore.id());
+        storeDescriptorReporter = new KVRangeStoreDescriptorReporter(clusterId, kvRangeStore.id(),
+            builder.serverBuilder.crdtService,
+            Duration.ofSeconds(builder.storeOptions.getStatsCollectIntervalSec()).toMillis()
+                * DEAD_STORE_CLEANUP_TIME_FACTOR);
     }
 
     public String clusterId() {
@@ -83,8 +86,7 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
     }
 
     public void start() {
-        log.debug("Starting BaseKVRangeStore: clusterId={}, storeId={}, bootstrap{}",
-            clusterId, kvRangeStore.id(), bootstrap);
+        log.debug("Starting BaseKVStore service: bootstrap={}", bootstrap);
         kvRangeStore.start(new AgentHostStoreMessenger(agentHost, clusterId, kvRangeStore.id()));
         if (bootstrap) {
             kvRangeStore.bootstrap();
@@ -92,13 +94,15 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
         // sync store descriptor via crdt
         disposables.add(kvRangeStore.describe().subscribe(storeDescriptorReporter::report));
         storeDescriptorReporter.start();
+        log.debug("BaseKVStore service started");
     }
 
     public void stop() {
-        log.debug("Stopping BaseKVRangeStore: clusterId={}, storeId={}", clusterId, kvRangeStore.id());
+        log.debug("Stopping BaseKVStore service");
         disposables.dispose();
         kvRangeStore.stop();
         storeDescriptorReporter.stop();
+        log.debug("BaseKVStore service stopped");
     }
 
     @Override
@@ -136,33 +140,31 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
     public void transferLeadership(TransferLeadershipRequest request,
                                    StreamObserver<TransferLeadershipReply> responseObserver) {
         response(tenantId -> kvRangeStore.transferLeadership(request.getVer(), request.getKvRangeId(),
-                    request.getNewLeaderStore())
-                .thenApply(result -> TransferLeadershipReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(ReplyCode.Ok)
-                    .build())
-                .exceptionally(e -> TransferLeadershipReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(convertKVRangeException(e))
-                    .build())
-            , responseObserver);
+                request.getNewLeaderStore())
+            .thenApply(result -> TransferLeadershipReply.newBuilder()
+                .setReqId(request.getReqId())
+                .setCode(ReplyCode.Ok)
+                .build())
+            .exceptionally(e -> TransferLeadershipReply.newBuilder()
+                .setReqId(request.getReqId())
+                .setCode(convertKVRangeException(e))
+                .build()), responseObserver);
     }
 
     @Override
     public void changeReplicaConfig(ChangeReplicaConfigRequest request,
                                     StreamObserver<ChangeReplicaConfigReply> responseObserver) {
         response(tenantId -> kvRangeStore.changeReplicaConfig(request.getVer(), request.getKvRangeId(),
-                    Sets.newHashSet(request.getNewVotersList()),
-                    Sets.newHashSet(request.getNewLearnersList()))
-                .thenApply(result -> ChangeReplicaConfigReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(ReplyCode.Ok)
-                    .build())
-                .exceptionally(e -> ChangeReplicaConfigReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(convertKVRangeException(e))
-                    .build())
-            , responseObserver);
+                Sets.newHashSet(request.getNewVotersList()),
+                Sets.newHashSet(request.getNewLearnersList()))
+            .thenApply(result -> ChangeReplicaConfigReply.newBuilder()
+                .setReqId(request.getReqId())
+                .setCode(ReplyCode.Ok)
+                .build())
+            .exceptionally(e -> ChangeReplicaConfigReply.newBuilder()
+                .setReqId(request.getReqId())
+                .setCode(convertKVRangeException(e))
+                .build()), responseObserver);
     }
 
     @Override

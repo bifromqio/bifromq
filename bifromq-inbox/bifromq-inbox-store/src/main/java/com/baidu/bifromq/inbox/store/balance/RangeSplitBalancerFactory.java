@@ -24,8 +24,8 @@ import com.baidu.bifromq.sysprops.props.InboxStoreSplitUnderIONanos;
 
 public class RangeSplitBalancerFactory implements IStoreBalancerFactory {
     @Override
-    public StoreBalancer newBalancer(String localStoreId) {
-        return new RangeSplitBalancer(localStoreId,
+    public StoreBalancer newBalancer(String clusterId, String localStoreId) {
+        return new RangeSplitBalancer(clusterId, localStoreId,
             "kv_io_mutation",
             InboxStoreSplitMaxRangeNum.INSTANCE.get(),
             InboxStoreSplitUnderCPUUsage.INSTANCE.get(),

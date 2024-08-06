@@ -18,7 +18,7 @@ import com.baidu.bifromq.basekv.balance.impl.RecoveryBalancer;
 public class TestRecoveryBalancerFactory implements IStoreBalancerFactory {
 
     @Override
-    public StoreBalancer newBalancer(String localStoreId) {
-        return new RecoveryBalancer(localStoreId, 1000L);
+    public StoreBalancer newBalancer(String clusterId, String localStoreId) {
+        return new RecoveryBalancer(clusterId, localStoreId, 1000L);
     }
 }

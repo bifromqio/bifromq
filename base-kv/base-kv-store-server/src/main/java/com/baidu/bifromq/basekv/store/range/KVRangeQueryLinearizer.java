@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
+import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.collect.Maps;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -22,10 +23,10 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 class KVRangeQueryLinearizer implements IKVRangeQueryLinearizer {
+    private final Logger log;
     private final ConcurrentMap<CompletableFuture<Long>, CompletableFuture<Void>> readIndexes = Maps.newConcurrentMap();
     private final ConcurrentLinkedDeque<ToLinearize> toBeLinearized = new ConcurrentLinkedDeque<>();
     private final Supplier<CompletableFuture<Long>> readIndexProvider;
@@ -34,10 +35,11 @@ class KVRangeQueryLinearizer implements IKVRangeQueryLinearizer {
     private volatile long lastAppliedIndex = 0;
 
     KVRangeQueryLinearizer(Supplier<CompletableFuture<Long>> readIndexProvider, Executor executor,
-                           long lastAppliedIndex) {
+                           long lastAppliedIndex, String... tags) {
         this.readIndexProvider = readIndexProvider;
         this.executor = executor;
         this.lastAppliedIndex = lastAppliedIndex;
+        this.log = SiftLogger.getLogger(KVRangeQueryLinearizer.class, tags);
     }
 
     @Override

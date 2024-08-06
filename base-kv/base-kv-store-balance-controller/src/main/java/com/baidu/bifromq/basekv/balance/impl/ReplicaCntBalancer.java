@@ -30,14 +30,13 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 public class ReplicaCntBalancer extends StoreBalancer {
     private final int voterCount;
     private final int learnerCount; // -1 represent no limit
     private volatile Set<KVRangeStoreDescriptor> latestStoreDescriptors = new HashSet<>();
 
-    public ReplicaCntBalancer(String localStoreId, int voterCount, int learnerCount) {
-        super(localStoreId);
+    public ReplicaCntBalancer(String clusterId, String localStoreId, int voterCount, int learnerCount) {
+        super(clusterId, localStoreId);
         this.voterCount = voterCount;
         this.learnerCount = learnerCount;
     }

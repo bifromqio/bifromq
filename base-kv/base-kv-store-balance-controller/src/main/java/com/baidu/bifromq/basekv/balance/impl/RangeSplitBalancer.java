@@ -26,9 +26,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 public class RangeSplitBalancer extends StoreBalancer {
     public static final String LOAD_TYPE_IO_DENSITY = "ioDensity";
     public static final String LOAD_TYPE_IO_LATENCY_NANOS = "ioLatencyNanos";
@@ -46,8 +44,9 @@ public class RangeSplitBalancer extends StoreBalancer {
     private final String hintType;
     private volatile Set<KVRangeStoreDescriptor> latestStoreDescriptors = Collections.emptySet();
 
-    public RangeSplitBalancer(String localStoreId, String hintType) {
-        this(localStoreId,
+    public RangeSplitBalancer(String clusterId, String localStoreId, String hintType) {
+        this(clusterId,
+            localStoreId,
             hintType,
             DEFAULT_MAX_RANGES_PER_STORE,
             DEFAULT_CPU_USAGE_LIMIT,
@@ -55,13 +54,14 @@ public class RangeSplitBalancer extends StoreBalancer {
             DEFAULT_IO_NANOS_LIMIT_PER_RANGE);
     }
 
-    public RangeSplitBalancer(String localStoreId,
+    public RangeSplitBalancer(String clusterId,
+                              String localStoreId,
                               String hintType,
                               int maxRanges,
                               double cpuUsageLimit,
                               int maxIoDensityPerRange,
                               long ioNanoLimitPerRange) {
-        super(localStoreId);
+        super(clusterId, localStoreId);
         this.hintType = hintType;
         this.maxRanges = maxRanges;
         this.cpuUsageLimit = cpuUsageLimit;

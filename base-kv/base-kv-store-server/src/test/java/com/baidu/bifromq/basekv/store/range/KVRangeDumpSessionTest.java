@@ -38,10 +38,12 @@ import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import java.time.Duration;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
 
+@Slf4j
 public class KVRangeDumpSessionTest extends MockableTest {
     @Mock
     private IKVRange rangeAccessor;

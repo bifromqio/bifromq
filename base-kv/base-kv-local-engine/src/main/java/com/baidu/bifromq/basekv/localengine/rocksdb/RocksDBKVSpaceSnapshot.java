@@ -28,14 +28,12 @@ import io.micrometer.core.instrument.Tags;
 import java.lang.ref.Cleaner;
 import java.util.Optional;
 import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.Snapshot;
 
-@Slf4j
 class RocksDBKVSpaceSnapshot extends AbstractKVSpaceReader implements IRocksDBKVSpaceCheckpoint {
     private static final Cleaner CLEANER = Cleaner.create();
 

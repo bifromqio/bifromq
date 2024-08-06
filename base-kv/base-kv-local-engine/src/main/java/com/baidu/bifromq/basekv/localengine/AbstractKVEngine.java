@@ -13,19 +13,22 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVSpace;
+import com.baidu.bifromq.logger.SiftLogger;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 public abstract class AbstractKVEngine<T extends IKVSpace> implements IKVEngine<T> {
     protected enum State {
         INIT, STARTING, STARTED, FATAL_FAILURE, STOPPING, STOPPED
     }
 
-    private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     protected final String overrideIdentity;
+    protected Logger log;
+    private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private Gauge gauge;
 
     public AbstractKVEngine(String overrideIdentity) {
@@ -37,13 +40,14 @@ public abstract class AbstractKVEngine<T extends IKVSpace> implements IKVEngine<
     }
 
     @Override
-    public void start(String... metricTags) {
+    public void start(String... tags) {
         if (state.compareAndSet(State.INIT, State.STARTING)) {
             try {
-                doStart(metricTags);
+                log = SiftLogger.getLogger(RocksDBCPableKVSpace.class, tags);
+                doStart(tags);
                 state.set(State.STARTED);
                 gauge = Gauge.builder("basekv.le.ranges", this.spaces()::size)
-                    .tags(metricTags)
+                    .tags(tags)
                     .register(Metrics.globalRegistry);
                 afterStart();
             } catch (Throwable e) {

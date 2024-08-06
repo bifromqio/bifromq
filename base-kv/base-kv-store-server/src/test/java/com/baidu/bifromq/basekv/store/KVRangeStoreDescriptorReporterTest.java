@@ -68,7 +68,7 @@ public class KVRangeStoreDescriptorReporterTest extends MockableTest {
     protected void doSetup(Method method) {
         String uri = storeDescriptorMapCRDTURI("testCluster");
         when(crdtService.get(uri)).thenAnswer((Answer<Optional<IORMap>>) invocation -> Optional.of(storeDescriptorMap));
-        storeDescriptorReporter = new KVRangeStoreDescriptorReporter("testCluster", crdtService, 200L);
+        storeDescriptorReporter = new KVRangeStoreDescriptorReporter("testCluster", localStoreId, crdtService, 200L);
         storeDescriptor = KVRangeStoreDescriptor.newBuilder()
             .setId(localStoreId)
             .setHlc(HLC.INST.get())

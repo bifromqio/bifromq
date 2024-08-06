@@ -16,7 +16,6 @@ package com.baidu.bifromq.basekv.server;
 import com.baidu.bifromq.baserpc.RPCServerBuilder;
 import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 final class NonStandaloneBaseKVStoreServer extends AbstractBaseKVStoreServer<NonStandaloneBaseKVStoreServerBuilder> {
     NonStandaloneBaseKVStoreServer(NonStandaloneBaseKVStoreServerBuilder builder) {
         super(builder);
