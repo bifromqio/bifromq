@@ -50,11 +50,6 @@ public class KVRangeWriter extends AbstractKVRangeMetadataUpdatable<KVRangeWrite
     }
 
     @Override
-    public IKVReader newDataReader() {
-        return new KVReader(spaceWriter, this);
-    }
-
-    @Override
     public void abort() {
         keyRangeWriter().abort();
     }

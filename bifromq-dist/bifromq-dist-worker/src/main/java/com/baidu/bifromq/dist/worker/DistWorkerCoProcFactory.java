@@ -14,10 +14,10 @@
 package com.baidu.bifromq.dist.worker;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.api.IKVRangeSplitHinter;
-import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.range.hinter.MutationKVLoadBasedSplitHinter;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
@@ -80,7 +80,7 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
 
     @Override
     public List<IKVRangeSplitHinter> createHinters(String clusterId, String storeId, KVRangeId id,
-                                                   Supplier<IKVReader> readerProvider) {
+                                                   Supplier<IKVCloseableReader> readerProvider) {
         return List.of(
             new FanoutSplitHinter(readerProvider, fanoutSplitThreshold,
                 "clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id)),
@@ -90,7 +90,7 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
 
     @Override
     public IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id,
-                                       Supplier<IKVReader> rangeReaderProvider) {
+                                       Supplier<IKVCloseableReader> rangeReaderProvider) {
         return new DistWorkerCoProc(clusterId, storeId, id, rangeReaderProvider, eventCollector, resourceThrottler,
             distClient, subBrokerManager, deliverer, matchExecutor);
     }

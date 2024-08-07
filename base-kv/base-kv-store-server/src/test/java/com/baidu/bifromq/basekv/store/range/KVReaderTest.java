@@ -15,6 +15,7 @@ package com.baidu.bifromq.basekv.store.range;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertFalse;
@@ -24,6 +25,8 @@ import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceReader;
 import com.baidu.bifromq.basekv.proto.Boundary;
+import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
+import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.google.protobuf.ByteString;
@@ -50,7 +53,7 @@ public class KVReaderTest extends MockableTest {
 
     @Test
     public void read() {
-        IKVReader reader = new KVReader(keyRangeReader, kvRangeReader);
+        IKVCloseableReader reader = new KVReader(keyRangeReader, kvRangeReader);
         // range
         when(kvRangeReader.boundary()).thenReturn(FULL_BOUNDARY);
         reader.boundary();
@@ -80,5 +83,20 @@ public class KVReaderTest extends MockableTest {
         when(keyRangeReader.get(any())).thenReturn(Optional.of(ByteString.copyFromUtf8("value")));
         ByteString getKey2 = ByteString.copyFromUtf8("getKey2");
         assertTrue(reader.get(getKey2).isPresent());
+    }
+
+    @Test
+    public void close() {
+        IKVCloseableReader reader = new KVReader(keyRangeReader, kvRangeReader);
+        reader.close();
+        verify(keyRangeIterator, never()).close();
+    }
+
+    @Test
+    public void closeItr() {
+        IKVCloseableReader reader = new KVReader(keyRangeReader, kvRangeReader);
+        IKVIterator iterator = reader.iterator();
+        reader.close();
+        verify(keyRangeIterator).close();
     }
 }

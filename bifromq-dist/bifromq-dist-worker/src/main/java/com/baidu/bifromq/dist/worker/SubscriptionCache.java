@@ -20,6 +20,7 @@ import static java.util.Collections.singleton;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
@@ -37,6 +38,7 @@ import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.github.benmanes.caffeine.cache.Scheduler;
 import com.github.benmanes.caffeine.cache.Weigher;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Metrics;
@@ -62,13 +64,18 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public class SubscriptionCache {
     private final LoadingCache<String, AsyncLoadingCache<ScopedTopic, MatchResult>> tenantCache;
     private final LoadingCache<String, AtomicLong> tenantVerCache;
+    private final Set<IKVCloseableReader> threadReaders = Sets.newConcurrentHashSet();
     private final ThreadLocal<IKVReader> threadLocalReader;
     private final Timer externalMatchTimer;
     private final Timer internalMatchTimer;
 
-    SubscriptionCache(KVRangeId id, Supplier<IKVReader> rangeReaderProvider, Executor matchExecutor) {
+    SubscriptionCache(KVRangeId id, Supplier<IKVCloseableReader> rangeReaderProvider, Executor matchExecutor) {
         int expirySec = DistTopicMatchExpirySeconds.INSTANCE.get();
-        threadLocalReader = ThreadLocal.withInitial(rangeReaderProvider);
+        threadLocalReader = ThreadLocal.withInitial(() -> {
+            IKVCloseableReader reader = rangeReaderProvider.get();
+            threadReaders.add(reader);
+            return reader;
+        });
         tenantCache = Caffeine.newBuilder()
             .expireAfterAccess(expirySec * 3L, TimeUnit.SECONDS)
             .scheduler(Scheduler.systemScheduler())
@@ -166,6 +173,7 @@ public class SubscriptionCache {
     public void close() {
         tenantCache.invalidateAll();
         tenantVerCache.invalidateAll();
+        threadReaders.forEach(IKVCloseableReader::close);
         Metrics.globalRegistry.remove(externalMatchTimer);
         Metrics.globalRegistry.remove(internalMatchTimer);
     }

@@ -17,6 +17,7 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.retain.utils.KeyUtil.parseTenantNS;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.api.IKVRangeSplitHinter;
@@ -42,7 +43,7 @@ public class RetainStoreCoProcFactory implements IKVRangeCoProcFactory {
 
     @Override
     public List<IKVRangeSplitHinter> createHinters(String clusterId, String storeId, KVRangeId id,
-                                                   Supplier<IKVReader> rangeReaderProvider) {
+                                                   Supplier<IKVCloseableReader> rangeReaderProvider) {
         return Collections.singletonList(
             new MutationKVLoadBasedSplitHinter(loadEstWindow, key -> {
                 // make sure retain message from one tenant do no cross range
@@ -54,7 +55,7 @@ public class RetainStoreCoProcFactory implements IKVRangeCoProcFactory {
     public IKVRangeCoProc createCoProc(String clusterId,
                                        String storeId,
                                        KVRangeId id,
-                                       Supplier<IKVReader> rangeReaderProvider) {
+                                       Supplier<IKVCloseableReader> rangeReaderProvider) {
         return new RetainStoreCoProc(clusterId, storeId, id, rangeReaderProvider);
     }
 }

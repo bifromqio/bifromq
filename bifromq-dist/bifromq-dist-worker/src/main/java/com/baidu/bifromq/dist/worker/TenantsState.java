@@ -18,7 +18,7 @@ import static com.baidu.bifromq.dist.entity.EntityUtil.tenantPrefix;
 import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
-import com.baidu.bifromq.basekv.store.api.IKVReader;
+import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
@@ -27,10 +27,10 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class TenantsState {
     private final Map<String, TenantRouteState> tenantRouteStates = new ConcurrentHashMap<>();
-    private final IKVReader reader;
+    private final IKVCloseableReader reader;
     private final String[] tags;
 
-    TenantsState(IKVReader reader, String... tags) {
+    TenantsState(IKVCloseableReader reader, String... tags) {
         this.reader = reader;
         this.tags = tags;
     }
@@ -90,6 +90,11 @@ class TenantsState {
     void reset() {
         tenantRouteStates.values().forEach(TenantRouteState::destroy);
         tenantRouteStates.clear();
+    }
+
+    void close() {
+        reset();
+        reader.close();
     }
 
     private Supplier<Number> getSpaceUsageProvider(String tenantId) {

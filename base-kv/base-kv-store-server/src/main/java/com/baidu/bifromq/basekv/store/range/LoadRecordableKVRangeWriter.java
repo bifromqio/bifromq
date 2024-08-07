@@ -14,7 +14,6 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
-import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 
 public class LoadRecordableKVRangeWriter extends KVRangeWriter {
@@ -28,11 +27,6 @@ public class LoadRecordableKVRangeWriter extends KVRangeWriter {
     @Override
     public IKVWriter kvWriter() {
         return new LoadRecordableKVWriter(super.kvWriter(), recorder);
-    }
-
-    @Override
-    public IKVReader newDataReader() {
-        return new LoadRecordableKVReader(super.newDataReader(), recorder);
     }
 
     @Override

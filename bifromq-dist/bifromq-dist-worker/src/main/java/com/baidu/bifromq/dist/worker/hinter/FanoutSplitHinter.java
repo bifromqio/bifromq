@@ -21,6 +21,7 @@ import static com.baidu.bifromq.dist.entity.EntityUtil.toMatchRecordKeyPrefix;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.SplitHint;
+import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVLoadRecord;
 import com.baidu.bifromq.basekv.store.api.IKVRangeSplitHinter;
@@ -30,12 +31,14 @@ import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.dist.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchRequest;
+import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -46,7 +49,8 @@ public class FanoutSplitHinter implements IKVRangeSplitHinter {
     public static final String LOAD_TYPE_FANOUT_TOPIC_FILTERS = "fanout_topicfilters";
     public static final String LOAD_TYPE_FANOUT_SCALE = "fanout_scale";
     private final int splitAtScale;
-    private final Supplier<IKVReader> readerSupplier;
+    private final Supplier<IKVCloseableReader> readerSupplier;
+    private final Set<IKVCloseableReader> threadReaders = Sets.newConcurrentHashSet();
     private final ThreadLocal<IKVReader> threadLocalKVReader;
     // key: matchRecordKeyPrefix, value: splitKey
     private final Map<ByteString, FanoutSplit> fanoutSplitKeys = new ConcurrentHashMap<>();
@@ -55,10 +59,14 @@ public class FanoutSplitHinter implements IKVRangeSplitHinter {
     private volatile Boundary boundary;
 
 
-    public FanoutSplitHinter(Supplier<IKVReader> readerSupplier, int splitAtScale, String... tags) {
+    public FanoutSplitHinter(Supplier<IKVCloseableReader> readerSupplier, int splitAtScale, String... tags) {
         this.splitAtScale = splitAtScale;
         this.readerSupplier = readerSupplier;
-        threadLocalKVReader = ThreadLocal.withInitial(readerSupplier);
+        threadLocalKVReader = ThreadLocal.withInitial(() -> {
+            IKVCloseableReader reader = readerSupplier.get();
+            threadReaders.add(reader);
+            return reader;
+        });
         boundary = readerSupplier.get().boundary();
         fanoutTopicFiltersGuage = Gauge.builder("dist.fanout.topicfilters", fanoutSplitKeys::size)
             .tags(tags)
@@ -147,6 +155,7 @@ public class FanoutSplitHinter implements IKVRangeSplitHinter {
 
     @Override
     public void close() {
+        threadReaders.forEach(IKVCloseableReader::close);
         Metrics.globalRegistry.remove(fanoutTopicFiltersGuage);
         Metrics.globalRegistry.remove(fanoutScaleGuage);
     }
@@ -167,19 +176,20 @@ public class FanoutSplitHinter implements IKVRangeSplitHinter {
             }
         });
         if (!splitCandidate.isEmpty()) {
-            IKVReader reader = readerSupplier.get();
-            for (ByteString matchKeyPrefix : splitCandidate.keySet()) {
-                RangeEstimation recEst = splitCandidate.get(matchKeyPrefix);
-                fanoutSplitKeys.computeIfAbsent(matchKeyPrefix, k -> {
-                    IKVIterator itr = reader.iterator();
-                    int i = 0;
-                    for (itr.seek(matchKeyPrefix); itr.isValid(); itr.next()) {
-                        if (i++ >= splitAtScale) {
-                            return new FanoutSplit(recEst, itr.key());
+            try (IKVCloseableReader reader = readerSupplier.get()) {
+                for (ByteString matchKeyPrefix : splitCandidate.keySet()) {
+                    RangeEstimation recEst = splitCandidate.get(matchKeyPrefix);
+                    fanoutSplitKeys.computeIfAbsent(matchKeyPrefix, k -> {
+                        IKVIterator itr = reader.iterator();
+                        int i = 0;
+                        for (itr.seek(matchKeyPrefix); itr.isValid(); itr.next()) {
+                            if (i++ >= splitAtScale) {
+                                return new FanoutSplit(recEst, itr.key());
+                            }
                         }
-                    }
-                    return null;
-                });
+                        return null;
+                    });
+                }
             }
         }
     }

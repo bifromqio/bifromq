@@ -24,8 +24,8 @@ import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
-import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.dist.entity.EntityUtil;
 import com.baidu.bifromq.dist.entity.GroupMatching;
@@ -48,11 +48,11 @@ import org.testng.annotations.Test;
 public class SubscriptionCacheTest {
     private KVRangeId id = KVRangeIdUtil.generate();
     @Mock
-    private IKVReader rangeReader;
+    private IKVCloseableReader rangeReader;
     @Mock
     private IKVIterator kvIterator;
     @Mock
-    private Supplier<IKVReader> rangeReaderProvider;
+    private Supplier<IKVCloseableReader> rangeReaderProvider;
     private ExecutorService matchExecutor;
     private AutoCloseable closeable;
 
@@ -68,7 +68,7 @@ public class SubscriptionCacheTest {
     }
 
     @AfterMethod
-    public void teardown() throws Exception {
+    public void tearDown() throws Exception {
         MoreExecutors.shutdownAndAwaitTermination(matchExecutor, 5, TimeUnit.SECONDS);
         closeable.close();
     }
@@ -234,5 +234,22 @@ public class SubscriptionCacheTest {
             assertEquals(inbox.matchInfo.getReceiverId(), "inbox1");
             assertEquals(inbox.delivererKey, "deliverer1");
         }
+    }
+
+    @Test
+    public void close() {
+        ScopedTopic scopedTopic = ScopedTopic.builder()
+            .tenantId("testTenant")
+            .topic("/test/user")
+            .boundary(FULL_BOUNDARY)
+            .build();
+        SubscriptionCache cache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor);
+        doNothing().when(kvIterator).seek(scopedTopic.matchRecordRange.getStartKey());
+        when(kvIterator.isValid()).thenReturn(false);
+
+        cache.get(scopedTopic).join();
+
+        cache.close();
+        verify(rangeReader).close();
     }
 }

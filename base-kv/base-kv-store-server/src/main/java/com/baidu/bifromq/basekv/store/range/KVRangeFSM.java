@@ -383,6 +383,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                         .thenCompose(v -> statsCollector.stop())
                         .thenCompose(v -> wal.close())
                         .thenCompose(v -> {
+                            kvRange.close();
                             metricManager.close();
                             return awaitShutdown(fsmExecutor);
                         })

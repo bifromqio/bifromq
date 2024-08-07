@@ -13,7 +13,18 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import com.baidu.bifromq.basekv.store.api.IKVReader;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionNumGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionSpaceGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCountGauge;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
+
+import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import lombok.SneakyThrows;
@@ -23,20 +34,11 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionNumGauge;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionSpaceGauge;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCountGauge;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
-
 public class TenantsStateTest extends MeterTest {
     @Mock
     private IEventCollector eventCollector;
     @Mock
-    private IKVReader reader;
+    private IKVCloseableReader reader;
     private AutoCloseable closeable;
 
     @BeforeMethod
@@ -67,9 +69,9 @@ public class TenantsStateTest extends MeterTest {
         when(reader.size(any())).thenReturn(1L);
         String tenantId = "tenantId" + System.nanoTime();
         InboxMetadata inboxMetadata = InboxMetadata.newBuilder()
-                .setInboxId("testInboxId")
-                .setIncarnation(1)
-                .build();
+            .setInboxId("testInboxId")
+            .setIncarnation(1)
+            .build();
         TenantsState tenantsState = new TenantsState(eventCollector, reader);
         tenantsState.upsert(tenantId, inboxMetadata);
         assertGaugeValue(tenantId, MqttPersistentSubCountGauge, 0);
@@ -87,13 +89,13 @@ public class TenantsStateTest extends MeterTest {
         when(reader.size(any())).thenReturn(1L);
         String tenantId = "tenantId" + System.nanoTime();
         InboxMetadata inboxMetadata = InboxMetadata.newBuilder()
-                .setInboxId("testInboxId")
-                .setIncarnation(1)
-                .build();
+            .setInboxId("testInboxId")
+            .setIncarnation(1)
+            .build();
         InboxMetadata inboxMetadata1 = InboxMetadata.newBuilder()
-                .setInboxId("testInboxId1")
-                .setIncarnation(1)
-                .build();
+            .setInboxId("testInboxId1")
+            .setIncarnation(1)
+            .build();
         TenantsState tenantsState = new TenantsState(eventCollector, reader);
         tenantsState.upsert(tenantId, inboxMetadata);
         tenantsState.upsert(tenantId, inboxMetadata1);
@@ -113,13 +115,13 @@ public class TenantsStateTest extends MeterTest {
         when(reader.size(any())).thenReturn(1L);
         String tenantId = "tenantId" + System.nanoTime();
         InboxMetadata inboxMetadata = InboxMetadata.newBuilder()
-                .setInboxId("testInboxId")
-                .setIncarnation(1)
-                .build();
+            .setInboxId("testInboxId")
+            .setIncarnation(1)
+            .build();
         InboxMetadata inboxMetadata1 = InboxMetadata.newBuilder()
-                .setInboxId("testInboxId1")
-                .setIncarnation(1)
-                .build();
+            .setInboxId("testInboxId1")
+            .setIncarnation(1)
+            .build();
         TenantsState tenantsState = new TenantsState(eventCollector, reader);
         tenantsState.upsert(tenantId, inboxMetadata);
         tenantsState.upsert(tenantId, inboxMetadata1);
@@ -128,5 +130,29 @@ public class TenantsStateTest extends MeterTest {
         assertNoGauge(tenantId, MqttPersistentSubCountGauge);
         assertNoGauge(tenantId, MqttPersistentSessionNumGauge);
         assertNoGauge(tenantId, MqttPersistentSessionSpaceGauge);
+        verify(reader, never()).close();
+    }
+
+    @Test
+    public void testClose() {
+        when(reader.size(any())).thenReturn(1L);
+        String tenantId = "tenantId" + System.nanoTime();
+        InboxMetadata inboxMetadata = InboxMetadata.newBuilder()
+            .setInboxId("testInboxId")
+            .setIncarnation(1)
+            .build();
+        InboxMetadata inboxMetadata1 = InboxMetadata.newBuilder()
+            .setInboxId("testInboxId1")
+            .setIncarnation(1)
+            .build();
+        TenantsState tenantsState = new TenantsState(eventCollector, reader);
+        tenantsState.upsert(tenantId, inboxMetadata);
+        tenantsState.upsert(tenantId, inboxMetadata1);
+
+        tenantsState.close();
+        assertNoGauge(tenantId, MqttPersistentSubCountGauge);
+        assertNoGauge(tenantId, MqttPersistentSessionNumGauge);
+        assertNoGauge(tenantId, MqttPersistentSessionSpaceGauge);
+        verify(reader).close();
     }
 }

@@ -20,9 +20,10 @@ import java.util.function.Supplier;
 
 public interface IKVRangeCoProcFactory {
     default List<IKVRangeSplitHinter> createHinters(String clusterId, String storeId, KVRangeId id,
-                                                    Supplier<IKVReader> readerProvider) {
+                                                    Supplier<IKVCloseableReader> readerProvider) {
         return Collections.emptyList();
     }
 
-    IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id, Supplier<IKVReader> readerProvider);
+    IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id,
+                                Supplier<IKVCloseableReader> readerProvider);
 }

@@ -26,6 +26,7 @@ import static java.util.Collections.singletonList;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
@@ -74,14 +75,14 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class RetainStoreCoProc implements IKVRangeCoProc {
-    private final Supplier<IKVReader> rangeReaderProvider;
+    private final Supplier<IKVCloseableReader> rangeReaderProvider;
     private final Map<String, RetainSetMetadata> metadataMap = new ConcurrentHashMap<>();
     private final String[] tags;
 
     RetainStoreCoProc(String clusterId,
                       String storeId,
                       KVRangeId id,
-                      Supplier<IKVReader> rangeReaderProvider) {
+                      Supplier<IKVCloseableReader> rangeReaderProvider) {
         this.tags = new String[] {"clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id)};
         this.rangeReaderProvider = rangeReaderProvider;
         loadMetadata();
@@ -411,18 +412,19 @@ class RetainStoreCoProc implements IKVRangeCoProc {
     }
 
     private void loadMetadata() {
-        IKVReader reader = rangeReaderProvider.get();
-        IKVIterator itr = reader.iterator();
-        for (itr.seekToFirst(); itr.isValid(); ) {
-            ByteString tenantNS = parseTenantNS(itr.key());
-            String tenantId = parseTenantId(tenantNS);
-            try {
-                RetainSetMetadata metadata = RetainSetMetadata.parseFrom(itr.value());
-                cacheMetadata(tenantId, metadata);
-            } catch (InvalidProtocolBufferException e) {
-                log.error("Unable to parse RetainSetMetadata", e);
-            } finally {
-                itr.seek(upperBound(tenantNS));
+        try (IKVCloseableReader reader = rangeReaderProvider.get()) {
+            IKVIterator itr = reader.iterator();
+            for (itr.seekToFirst(); itr.isValid(); ) {
+                ByteString tenantNS = parseTenantNS(itr.key());
+                String tenantId = parseTenantId(tenantNS);
+                try {
+                    RetainSetMetadata metadata = RetainSetMetadata.parseFrom(itr.value());
+                    cacheMetadata(tenantId, metadata);
+                } catch (InvalidProtocolBufferException e) {
+                    log.error("Unable to parse RetainSetMetadata", e);
+                } finally {
+                    itr.seek(upperBound(tenantNS));
+                }
             }
         }
     }

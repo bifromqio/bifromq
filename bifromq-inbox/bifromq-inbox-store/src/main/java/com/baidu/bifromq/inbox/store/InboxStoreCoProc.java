@@ -31,6 +31,7 @@ import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLo
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
@@ -115,14 +116,14 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     private final ISettingProvider settingProvider;
     private final IEventCollector eventCollector;
     private final TenantsState tenantStates;
-    private final Supplier<IKVReader> rangeReaderProvider;
+    private final Supplier<IKVCloseableReader> rangeReaderProvider;
 
     InboxStoreCoProc(String clusterId,
                      String storeId,
                      KVRangeId id,
                      ISettingProvider settingProvider,
                      IEventCollector eventCollector,
-                     Supplier<IKVReader> rangeReaderProvider) {
+                     Supplier<IKVCloseableReader> rangeReaderProvider) {
         this.id = id;
         initTime = HLC.INST.getPhysical();
         this.settingProvider = settingProvider;
@@ -223,7 +224,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
 
     @Override
     public void close() {
-        tenantStates.reset();
+        tenantStates.close();
     }
 
     @SneakyThrows
@@ -991,35 +992,36 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     }
 
     private void load() {
-        IKVReader reader = rangeReaderProvider.get();
-        IKVIterator itr = reader.iterator();
-        int probe = 0;
-        for (itr.seekToFirst(); itr.isValid(); ) {
-            if (isMetadataKey(itr.key())) {
-                probe = 0;
-                try {
-                    tenantStates.upsert(parseTenantId(itr.key()), InboxMetadata.parseFrom(itr.value()));
-                } catch (InvalidProtocolBufferException e) {
-                    log.error("Unexpected error", e);
-                } finally {
-                    itr.next();
-                    probe++;
-                }
-            } else {
-                if (probe < 20) {
-                    itr.next();
-                    probe++;
-                } else {
-                    if (hasInboxKeyPrefix(itr.key())) {
-                        itr.seek(inboxKeyUpperBound(parseInboxKeyPrefix(itr.key())));
-                    } else {
+        try (IKVCloseableReader reader = rangeReaderProvider.get()) {
+            IKVIterator itr = reader.iterator();
+            int probe = 0;
+            for (itr.seekToFirst(); itr.isValid(); ) {
+                if (isMetadataKey(itr.key())) {
+                    probe = 0;
+                    try {
+                        tenantStates.upsert(parseTenantId(itr.key()), InboxMetadata.parseFrom(itr.value()));
+                    } catch (InvalidProtocolBufferException e) {
+                        log.error("Unexpected error", e);
+                    } finally {
                         itr.next();
                         probe++;
                     }
+                } else {
+                    if (probe < 20) {
+                        itr.next();
+                        probe++;
+                    } else {
+                        if (hasInboxKeyPrefix(itr.key())) {
+                            itr.seek(inboxKeyUpperBound(parseInboxKeyPrefix(itr.key())));
+                        } else {
+                            itr.next();
+                            probe++;
+                        }
+                    }
                 }
             }
+            log.debug("Tenant states loaded: rangeId={}", KVRangeIdUtil.toString(id));
         }
-        log.debug("Tenant states loaded: rangeId={}", KVRangeIdUtil.toString(id));
     }
 
     private boolean hasExpired(InboxMetadata metadata, long nowTS) {

@@ -18,18 +18,16 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.inRange;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceReader;
 import com.baidu.bifromq.basekv.proto.Boundary;
-import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
-import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
 
-public class KVReader implements IKVCloseableReader {
+public class KVCheckpointReader implements IKVCheckpointReader {
     private final IKVSpaceReader kvSpace;
     private final IKVRangeReader kvRangeReader;
     private volatile IKVSpaceIterator kvSpaceIterator;
 
-    KVReader(IKVSpaceReader kvSpace, IKVRangeReader reader) {
+    KVCheckpointReader(IKVSpaceReader kvSpace, IKVRangeReader reader) {
         this.kvSpace = kvSpace;
         this.kvRangeReader = reader;
     }
@@ -58,30 +56,11 @@ public class KVReader implements IKVCloseableReader {
     }
 
     @Override
-    public IKVIterator iterator() {
-        return new KVIterator(getKvSpaceIterator());
+    public IKVCheckpointIterator iterator() {
+        return new KVCheckpointDataIterator(kvSpace.newIterator());
     }
 
     @Override
     public void refresh() {
-        getKvSpaceIterator().refresh();
-    }
-
-    private IKVSpaceIterator getKvSpaceIterator() {
-        if (kvSpaceIterator == null) {
-            synchronized (this) {
-                if (kvSpaceIterator == null) {
-                    this.kvSpaceIterator = kvSpace.newIterator();
-                }
-            }
-        }
-        return kvSpaceIterator;
-    }
-
-    @Override
-    public void close() {
-        if (kvSpaceIterator != null) {
-            kvSpaceIterator.close();
-        }
     }
 }

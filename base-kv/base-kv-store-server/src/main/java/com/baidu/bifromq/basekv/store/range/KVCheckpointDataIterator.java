@@ -13,10 +13,18 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
-public interface IKVRangeWriter<T extends IKVRangeWriter<T>> extends IKVRangeWritable<T> {
-    void done();
+import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 
-    void abort();
+class KVCheckpointDataIterator extends KVIterator implements IKVCheckpointIterator {
+    private final IKVSpaceIterator kvSpaceIterator;
 
-    int count();
+    KVCheckpointDataIterator(IKVSpaceIterator kvSpaceIterator) {
+        super(kvSpaceIterator);
+        this.kvSpaceIterator = kvSpaceIterator;
+    }
+
+    @Override
+    public void close() {
+        kvSpaceIterator.close();
+    }
 }

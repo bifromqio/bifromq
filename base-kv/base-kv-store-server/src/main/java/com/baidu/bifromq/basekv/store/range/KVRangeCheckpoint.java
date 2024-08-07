@@ -14,10 +14,8 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceReader;
-import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
-import com.baidu.bifromq.basekv.store.api.IKVReader;
 
-public class KVRangeCheckpoint extends AbstractKVRangeMetadata implements IKVRangeReader {
+public class KVRangeCheckpoint extends AbstractKVRangeMetadata implements IKVRangeCheckpointReader {
     private final IKVSpaceReader keyRangeCheckpoint;
 
     KVRangeCheckpoint(IKVSpaceReader keyRangeCheckpoint) {
@@ -26,7 +24,7 @@ public class KVRangeCheckpoint extends AbstractKVRangeMetadata implements IKVRan
     }
 
     @Override
-    public IKVReader newDataReader() {
-        return new KVReader(keyRangeCheckpoint, this);
+    public IKVCheckpointReader newDataReader() {
+        return new KVCheckpointReader(keyRangeCheckpoint, this);
     }
 }

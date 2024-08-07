@@ -19,7 +19,6 @@ import com.baidu.bifromq.basekv.proto.KVRangeMessage;
 import com.baidu.bifromq.basekv.proto.SaveSnapshotDataReply;
 import com.baidu.bifromq.basekv.proto.SaveSnapshotDataRequest;
 import com.baidu.bifromq.basekv.proto.SnapshotSyncRequest;
-import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.logger.SiftLogger;
@@ -51,7 +50,7 @@ class KVRangeDumpSession {
     private final CompletableFuture<Void> doneSignal = new CompletableFuture<>();
     private final DumpBytesRecorder recorder;
     private RateLimiter rateLimiter;
-    private IKVIterator snapshotItr;
+    private IKVCheckpointIterator snapshotDataItr;
     private volatile KVRangeMessage currentRequest;
     private volatile long lastReplyTS;
 
@@ -95,8 +94,8 @@ class KVRangeDumpSession {
                 .build());
             executor.execute(() -> doneSignal.complete(null));
         } else {
-            snapshotItr = accessor.open(request.getSnapshot()).newDataReader().iterator();
-            snapshotItr.seekToFirst();
+            snapshotDataItr = accessor.open(request.getSnapshot()).newDataReader().iterator();
+            snapshotDataItr.seekToFirst();
             Disposable disposable = messenger.receive()
                 .mapOptional(m -> {
                     if (m.hasSaveSnapshotDataReply()) {
@@ -108,7 +107,10 @@ class KVRangeDumpSession {
                     return Optional.empty();
                 })
                 .subscribe(this::handleReply);
-            doneSignal.whenComplete((v, e) -> disposable.dispose());
+            doneSignal.whenComplete((v, e) -> {
+                snapshotDataItr.close();
+                disposable.dispose();
+            });
             log.debug("Start dump session[{}] to store[{}]: rangeId={}",
                 request.getSessionId(), peerStoreId, KVRangeIdUtil.toString(rangeId));
             nextSaveRequest();
@@ -177,16 +179,16 @@ class KVRangeDumpSession {
             while (true) {
                 if (!canceled.get()) {
                     try {
-                        if (snapshotItr.isValid()) {
+                        if (snapshotDataItr.isValid()) {
                             KVPair kvPair = KVPair.newBuilder()
-                                .setKey(snapshotItr.key())
-                                .setValue(snapshotItr.value())
+                                .setKey(snapshotDataItr.key())
+                                .setValue(snapshotDataItr.value())
                                 .build();
                             reqBuilder.addKv(kvPair);
-                            int bytes = snapshotItr.key().size() + snapshotItr.value().size();
-                            snapshotItr.next();
+                            int bytes = snapshotDataItr.key().size() + snapshotDataItr.value().size();
+                            snapshotDataItr.next();
                             if (!rateLimiter.tryAcquire(bytes)) {
-                                if (snapshotItr.isValid()) {
+                                if (snapshotDataItr.isValid()) {
                                     reqBuilder.setFlag(SaveSnapshotDataRequest.Flag.More);
                                 } else {
                                     reqBuilder.setFlag(SaveSnapshotDataRequest.Flag.End);

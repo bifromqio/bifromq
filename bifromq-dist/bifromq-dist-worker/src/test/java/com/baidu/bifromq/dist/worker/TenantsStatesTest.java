@@ -17,9 +17,11 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttRouteSpaceGauge;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttSharedSubNumGauge;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.baidu.bifromq.basekv.store.api.IKVReader;
+import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import lombok.SneakyThrows;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -29,7 +31,7 @@ import org.testng.annotations.Test;
 
 public class TenantsStatesTest extends MeterTest {
     @Mock
-    private IKVReader reader;
+    private IKVCloseableReader reader;
     private AutoCloseable closeable;
 
     @BeforeMethod
@@ -85,5 +87,21 @@ public class TenantsStatesTest extends MeterTest {
         tenantsState.reset();
         assertNoGauge(tenantId, MqttRouteSpaceGauge);
         assertNoGauge(tenantId, MqttSharedSubNumGauge);
+        verify(reader, never()).close();
+    }
+
+    @Test
+    public void testClose() {
+        when(reader.size(any())).thenReturn(1L);
+        String tenantId = "tenant" + System.nanoTime();
+        TenantsState tenantsState = new TenantsState(reader);
+        tenantsState.incNormalRoutes(tenantId);
+        assertGauge(tenantId, MqttRouteSpaceGauge);
+        assertGauge(tenantId, MqttSharedSubNumGauge);
+
+        tenantsState.close();
+        assertNoGauge(tenantId, MqttRouteSpaceGauge);
+        assertNoGauge(tenantId, MqttSharedSubNumGauge);
+        verify(reader).close();
     }
 }

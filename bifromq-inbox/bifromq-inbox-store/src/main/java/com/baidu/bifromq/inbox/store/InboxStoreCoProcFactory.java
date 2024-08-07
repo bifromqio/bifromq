@@ -18,6 +18,7 @@ import static com.baidu.bifromq.inbox.util.KeyUtil.isInboxKey;
 import static com.baidu.bifromq.inbox.util.KeyUtil.parseInboxPrefix;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.api.IKVRangeSplitHinter;
@@ -48,7 +49,7 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
 
     @Override
     public List<IKVRangeSplitHinter> createHinters(String clusterId, String storeId, KVRangeId id,
-                                                   Supplier<IKVReader> rangeReaderProvider) {
+                                                   Supplier<IKVCloseableReader> rangeReaderProvider) {
         return Collections.singletonList(new MutationKVLoadBasedSplitHinter(loadEstWindow, key -> {
             if (isInboxKey(key)) {
                 return Optional.of(upperBound(parseInboxPrefix(key)));
@@ -61,9 +62,8 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
     public IKVRangeCoProc createCoProc(String clusterId,
                                        String storeId,
                                        KVRangeId id,
-                                       Supplier<IKVReader> rangeReaderProvider) {
-        return new InboxStoreCoProc(clusterId, storeId, id,
-            settingProvider, eventCollector, rangeReaderProvider);
+                                       Supplier<IKVCloseableReader> rangeReaderProvider) {
+        return new InboxStoreCoProc(clusterId, storeId, id, settingProvider, eventCollector, rangeReaderProvider);
     }
 
     public void close() {

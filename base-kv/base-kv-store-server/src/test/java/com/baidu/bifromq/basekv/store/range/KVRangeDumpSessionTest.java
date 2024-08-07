@@ -30,8 +30,6 @@ import com.baidu.bifromq.basekv.proto.SaveSnapshotDataReply;
 import com.baidu.bifromq.basekv.proto.SaveSnapshotDataRequest;
 import com.baidu.bifromq.basekv.proto.SnapshotSyncRequest;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
-import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
-import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
@@ -50,11 +48,11 @@ public class KVRangeDumpSessionTest extends MockableTest {
     @Mock
     private IKVRangeMessenger messenger;
     @Mock
-    private IKVRangeReader rangeCPReader;
+    private IKVRangeCheckpointReader rangeCPReader;
     @Mock
-    private IKVReader rangeCPDataReader;
+    private IKVCheckpointReader rangeCPDataReader;
     @Mock
-    private IKVIterator rangeCPDataItr;
+    private IKVCheckpointIterator rangeCPDataItr;
 
     @Mock
     private KVRangeDumpSession.DumpBytesRecorder dumpBytesRecorder;
@@ -171,6 +169,7 @@ public class KVRangeDumpSessionTest extends MockableTest {
             .build());
         verify(dumpBytesRecorder).record(anyInt());
         assertTrue(dumpSession.awaitDone().toCompletableFuture().isDone());
+        verify(rangeCPDataItr).close();
     }
 
     @Test
@@ -278,6 +277,7 @@ public class KVRangeDumpSessionTest extends MockableTest {
         dumpSession.tick();
         verify(messenger, times(1)).send(any());
         assertTrue(dumpSession.awaitDone().toCompletableFuture().isDone());
+        verify(rangeCPDataItr).close();
     }
 
     @Test
@@ -313,5 +313,6 @@ public class KVRangeDumpSessionTest extends MockableTest {
         dumpSession.cancel();
         verify(messenger, times(1)).send(any());
         assertTrue(dumpSession.awaitDone().toCompletableFuture().isDone());
+        verify(rangeCPDataItr).close();
     }
 }

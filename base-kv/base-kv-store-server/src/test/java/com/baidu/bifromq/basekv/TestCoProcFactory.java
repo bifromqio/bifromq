@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basekv;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
@@ -22,7 +23,7 @@ import java.util.function.Supplier;
 public class TestCoProcFactory implements IKVRangeCoProcFactory {
     @Override
     public IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id,
-                                       Supplier<IKVReader> readerProvider) {
+                                       Supplier<IKVCloseableReader> readerProvider) {
         return new TestCoProc(id, readerProvider);
     }
 }

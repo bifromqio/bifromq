@@ -18,10 +18,10 @@ import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_STATE_BY
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_VER_BYTES;
 
 import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
-import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.proto.State;
+import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
@@ -34,7 +34,7 @@ import lombok.SneakyThrows;
 public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
     @Getter
     private final ICPableKVSpace kvSpace;
-    private final ConcurrentLinkedQueue<IKVReader> sharedDataReaders = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<IKVCloseableReader> sharedDataReaders = new ConcurrentLinkedQueue<>();
 
     public KVRange(ICPableKVSpace kvSpace) {
         super(kvSpace);
@@ -78,7 +78,7 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
     }
 
     @Override
-    public IKVRangeReader open(KVRangeSnapshot checkpoint) {
+    public IKVRangeCheckpointReader open(KVRangeSnapshot checkpoint) {
         return new KVRangeCheckpoint(kvSpace.open(checkpoint.getCheckpointId()).get());
     }
 
@@ -94,11 +94,11 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
 
     @Override
     public final void returnDataReader(IKVReader borrowed) {
-        sharedDataReaders.add(borrowed);
+        sharedDataReaders.add((IKVCloseableReader) borrowed);
     }
 
     @Override
-    public IKVReader newDataReader() {
+    public IKVCloseableReader newDataReader() {
         return new KVReader(kvSpace, this);
     }
 
@@ -140,6 +140,14 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
                 return KVRange.this;
             }
         };
+    }
+
+    @Override
+    public void close() {
+        IKVCloseableReader reader;
+        while ((reader = sharedDataReaders.poll()) != null) {
+            reader.close();
+        }
     }
 
     @Override

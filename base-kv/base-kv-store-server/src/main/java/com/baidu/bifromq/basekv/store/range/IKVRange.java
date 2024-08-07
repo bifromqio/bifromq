@@ -16,6 +16,7 @@ package com.baidu.bifromq.basekv.store.range;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.proto.State;
+import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import io.reactivex.rxjava3.core.Observable;
@@ -53,11 +54,14 @@ public interface IKVRange extends IKVRangeReader {
      * @param checkpoint the descriptor
      * @return the checkpoint reader
      */
-    IKVRangeReader open(KVRangeSnapshot checkpoint);
+    IKVRangeCheckpointReader open(KVRangeSnapshot checkpoint);
 
     IKVReader borrowDataReader();
 
     void returnDataReader(IKVReader borrowed);
+
+    @Override
+    IKVCloseableReader newDataReader();
 
     /**
      * Get a writer for updating the range
@@ -75,6 +79,8 @@ public interface IKVRange extends IKVRangeReader {
     IKVRangeWriter<?> toWriter(IKVLoadRecorder recorder);
 
     IKVReseter toReseter(KVRangeSnapshot snapshot);
+
+    void close();
 
     void destroy();
 }

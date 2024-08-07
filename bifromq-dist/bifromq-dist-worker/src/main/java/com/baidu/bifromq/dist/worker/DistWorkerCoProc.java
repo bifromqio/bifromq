@@ -34,6 +34,7 @@ import static java.util.Collections.singletonMap;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
@@ -89,7 +90,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class DistWorkerCoProc implements IKVRangeCoProc {
     private final KVRangeId id;
-    private final Supplier<IKVReader> readerProvider;
+    private final Supplier<IKVCloseableReader> readerProvider;
     private final IDistClient distClient;
     private final ISubBrokerManager subBrokerManager;
     private final IMessageDeliverer deliverer;
@@ -100,7 +101,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     public DistWorkerCoProc(String clusterId,
                             String storeId,
                             KVRangeId id,
-                            Supplier<IKVReader> readerProvider,
+                            Supplier<IKVCloseableReader> readerProvider,
                             IEventCollector eventCollector,
                             IResourceThrottler resourceThrottler,
                             IDistClient distClient,
@@ -192,7 +193,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     }
 
     public void close() {
-        tenantsState.reset();
+        tenantsState.close();
         routeCache.close();
         fanoutExecutorGroup.shutdown();
     }
@@ -424,15 +425,16 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     }
 
     private void load() {
-        IKVReader reader = readerProvider.get();
-        IKVIterator itr = reader.iterator();
-        for (itr.seekToFirst(); itr.isValid(); ) {
-            String tenantId = parseTenantId(itr.key());
-            switch (getType(itr.key())) {
-                case Normal -> tenantsState.incNormalRoutes(tenantId);
-                case Group -> tenantsState.decNormalRoutes(tenantId);
+        try (IKVCloseableReader reader = readerProvider.get()) {
+            IKVIterator itr = reader.iterator();
+            for (itr.seekToFirst(); itr.isValid(); ) {
+                String tenantId = parseTenantId(itr.key());
+                switch (getType(itr.key())) {
+                    case Normal -> tenantsState.incNormalRoutes(tenantId);
+                    case Group -> tenantsState.decNormalRoutes(tenantId);
+                }
+                itr.next();
             }
-            itr.next();
         }
     }
 }
