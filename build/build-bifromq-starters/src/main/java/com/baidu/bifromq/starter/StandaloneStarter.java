@@ -98,7 +98,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private ExecutorService rpcServerExecutor;
     private ExecutorService baseKVClientExecutor;
     private ExecutorService baseKVServerExecutor;
-    private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private AuthProviderManager authProviderMgr;
     private ResourceThrottlerManager resourceThrottlerMgr;
@@ -183,10 +182,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                     TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
                     EnvProvider.INSTANCE.newThreadFactory("basekv-server-executor")), "basekv-server-executor");
         }
-
-        tickTaskExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            new ScheduledThreadPoolExecutor(config.getStateStoreConfig().getTickerThreads(),
-                EnvProvider.INSTANCE.newThreadFactory("tick-task-executor")), "tick-task-executor");
         bgTaskExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ScheduledThreadPoolExecutor(config.getStateStoreConfig().getBgWorkerThreads(),
                 EnvProvider.INSTANCE.newThreadFactory("bg-task-executor")), "bg-task-executor");
@@ -272,7 +267,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .crdtService(serverCrdtService)
             .storeClient(retainStoreClient)
             .queryExecutor(MoreExecutors.directExecutor())
-            .tickTaskExecutor(tickTaskExecutor)
+            .tickerThreads(config.getStateStoreConfig().getTickerThreads())
             .bgTaskExecutor(bgTaskExecutor)
             .loadEstimateWindow(Duration.ofSeconds(RetainStoreLoadEstimationWindowSeconds.INSTANCE.get()))
             .gcInterval(Duration.ofSeconds(config.getStateStoreConfig().getRetainStoreConfig().getGcIntervalSeconds()))
@@ -318,7 +313,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .settingProvider(settingProviderMgr)
             .eventCollector(eventCollectorMgr)
             .queryExecutor(MoreExecutors.directExecutor())
-            .tickTaskExecutor(tickTaskExecutor)
+            .tickerThreads(config.getStateStoreConfig().getTickerThreads())
             .bgTaskExecutor(bgTaskExecutor)
             .loadEstimateWindow(Duration.ofSeconds(InboxStoreLoadEstimationWindowSeconds.INSTANCE.get()))
             .gcInterval(Duration.ofSeconds(config.getStateStoreConfig().getInboxStoreConfig().getGcIntervalSeconds()))
@@ -397,7 +392,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .distClient(distClient)
             .storeClient(distWorkerClient)
             .queryExecutor(MoreExecutors.directExecutor())
-            .tickTaskExecutor(tickTaskExecutor)
+            .tickerThreads(config.getStateStoreConfig().getTickerThreads())
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(new KVRangeStoreOptions()
                 .setKvRangeOptions(new KVRangeOptions()
@@ -602,13 +597,9 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             baseKVServerExecutor.shutdownNow();
             log.debug("Shutdown baseKV server executor");
         }
-        if (tickTaskExecutor != null) {
-            tickTaskExecutor.shutdownNow();
-            log.debug("Shutdown tick task executor");
-        }
         if (bgTaskExecutor != null) {
             bgTaskExecutor.shutdownNow();
-            log.debug("Shutdown bg task executor");
+            log.debug("Shutdown Shared bg task executor");
         }
         pluginMgr.stopPlugins();
         pluginMgr.unloadPlugins();

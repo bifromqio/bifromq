@@ -148,7 +148,7 @@ public abstract class DistWorkerTest {
     protected String tenantA = "tenantA";
     protected String tenantB = "tenantB";
     private ExecutorService queryExecutor;
-    private ScheduledExecutorService tickTaskExecutor;
+    private final int tickerThreads = 2;
     private ScheduledExecutorService bgTaskExecutor;
     private Path dbRootDir;
 
@@ -170,8 +170,6 @@ public abstract class DistWorkerTest {
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
             EnvProvider.INSTANCE.newThreadFactory("query-executor"));
-        tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
-            EnvProvider.INSTANCE.newThreadFactory("tick-task-executor"));
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
             EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
 
@@ -222,7 +220,7 @@ public abstract class DistWorkerTest {
             .distClient(distClient)
             .storeClient(storeClient)
             .queryExecutor(queryExecutor)
-            .tickTaskExecutor(tickTaskExecutor)
+            .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .balanceControllerOptions(balanceControllerOptions)
             .storeOptions(options)
@@ -251,7 +249,6 @@ public abstract class DistWorkerTest {
                 log.error("Failed to delete db root dir", e);
             }
             queryExecutor.shutdown();
-            tickTaskExecutor.shutdown();
             bgTaskExecutor.shutdown();
         }).start();
         closeable.close();

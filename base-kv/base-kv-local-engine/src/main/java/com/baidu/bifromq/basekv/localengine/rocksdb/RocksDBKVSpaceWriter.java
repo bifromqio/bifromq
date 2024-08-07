@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
+import static com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters.getTimer;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.toMetaKey;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 
@@ -21,9 +22,11 @@ import com.baidu.bifromq.basekv.localengine.IKVSpaceMetadataUpdatable;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMetric;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -44,6 +47,7 @@ class RocksDBKVSpaceWriter<
     private final E engine;
     private final RocksDBKVSpaceWriterHelper helper;
     private final IWriteStatsRecorder.IRecorder writeStatsRecorder;
+    private final MetricManager metricManager;
 
 
     RocksDBKVSpaceWriter(String id,
@@ -54,9 +58,9 @@ class RocksDBKVSpaceWriter<
                          ISyncContext syncContext,
                          IWriteStatsRecorder.IRecorder writeStatsRecorder,
                          Consumer<Map<ByteString, ByteString>> afterWrite,
-                         String... tags) {
+                         String... metricTags) {
         this(id, db, cfHandle, engine, syncContext,
-            new RocksDBKVSpaceWriterHelper(db, writeOptions), writeStatsRecorder, afterWrite, tags);
+            new RocksDBKVSpaceWriterHelper(db, writeOptions), writeStatsRecorder, afterWrite, metricTags);
     }
 
     RocksDBKVSpaceWriter(String id,
@@ -67,8 +71,8 @@ class RocksDBKVSpaceWriter<
                          RocksDBKVSpaceWriterHelper writerHelper,
                          IWriteStatsRecorder.IRecorder writeStatsRecorder,
                          Consumer<Map<ByteString, ByteString>> afterWrite,
-                         String... tags) {
-        super(id, Tags.of(tags));
+                         String... metricTags) {
+        super(id, metricTags);
         this.db = db;
         this.cfHandle = cfHandle;
         this.engine = engine;
@@ -77,6 +81,7 @@ class RocksDBKVSpaceWriter<
         this.writeStatsRecorder = writeStatsRecorder;
         writerHelper.addMutators(syncContext.mutator());
         writerHelper.addAfterWriteCallback(cfHandle, afterWrite);
+        this.metricManager = new MetricManager();
     }
 
 
@@ -181,13 +186,15 @@ class RocksDBKVSpaceWriter<
 
     @Override
     public void done() {
-        try {
-            helper.done();
-            writeStatsRecorder.stop();
-        } catch (RocksDBException e) {
-            log.error("Write Batch commit failed", e);
-            throw new KVEngineException("Batch commit failed", e);
-        }
+        metricManager.batchWriteCallTimer.record(() -> {
+            try {
+                helper.done();
+                writeStatsRecorder.stop();
+            } catch (RocksDBException e) {
+                log.error("Write Batch commit failed", e);
+                throw new KVEngineException("Batch commit failed", e);
+            }
+        });
     }
 
     @Override
@@ -228,5 +235,14 @@ class RocksDBKVSpaceWriter<
     @Override
     void close() {
         // nothing to close
+    }
+
+    private class MetricManager {
+        private final Timer batchWriteCallTimer;
+
+        MetricManager() {
+            Tags tags = Tags.of(metricTags);
+            batchWriteCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "bwrite"));
+        }
     }
 }

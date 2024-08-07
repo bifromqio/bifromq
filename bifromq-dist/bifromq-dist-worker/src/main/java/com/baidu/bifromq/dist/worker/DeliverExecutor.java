@@ -55,7 +55,7 @@ public class DeliverExecutor {
         executor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
                 new LinkedTransferQueue<>(),
-                EnvProvider.INSTANCE.newThreadFactory("deliver-executor-" + id)), "deliver-executor-" + id);
+                EnvProvider.INSTANCE.newThreadFactory("deliver-executor-" + id)), Integer.toString(id), "deliver");
     }
 
     public void submit(NormalMatching route, TopicMessagePack msgPack, boolean inline) {

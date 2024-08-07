@@ -31,7 +31,7 @@ abstract class AbstractRetainStoreBuilder<T extends AbstractRetainStoreBuilder<T
     KVRangeStoreOptions storeOptions;
     KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
     Executor queryExecutor;
-    ScheduledExecutorService tickTaskExecutor;
+    int tickerThreads;
     ScheduledExecutorService bgTaskExecutor;
     Duration loadEstimateWindow = Duration.ofSeconds(5);
     Duration gcInterval = Duration.ofMinutes(60);
@@ -82,8 +82,8 @@ abstract class AbstractRetainStoreBuilder<T extends AbstractRetainStoreBuilder<T
         return thisT();
     }
 
-    public T tickTaskExecutor(ScheduledExecutorService tickTaskExecutor) {
-        this.tickTaskExecutor = tickTaskExecutor;
+    public T tickerThreads(int threads) {
+        this.tickerThreads = threads;
         return thisT();
     }
 

@@ -24,7 +24,6 @@ import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
-import io.micrometer.core.instrument.Tags;
 import java.lang.ref.Cleaner;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -62,8 +61,12 @@ class RocksDBKVSpaceSnapshot extends AbstractKVSpaceReader implements IRocksDBKV
     private final ReadOptions readOptions;
     private final Cleaner.Cleanable cleanable;
 
-    RocksDBKVSpaceSnapshot(String id, Snapshot snapshot, ColumnFamilyHandle cfHandle, RocksDB db, String... tags) {
-        super(id, Tags.of(tags));
+    RocksDBKVSpaceSnapshot(String id,
+                           Snapshot snapshot,
+                           ColumnFamilyHandle cfHandle,
+                           RocksDB db,
+                           String... metricTags) {
+        super(id, metricTags);
         this.snapshot = snapshot;
         this.cfHandle = cfHandle;
         this.db = db;

@@ -18,8 +18,10 @@ import com.baidu.bifromq.basekv.localengine.IWALableKVSpace;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters;
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMetric;
+import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -53,11 +55,12 @@ public class RocksDBWALableKVSpace
         if (!configurator.asyncWALFlush()) {
             writeOptions.setSync(configurator.fsyncWAL());
         }
-        flushExecutor = new ThreadPoolExecutor(1, 1,
-            0L, TimeUnit.MILLISECONDS,
-            new LinkedBlockingQueue<>(),
-            EnvProvider.INSTANCE.newThreadFactory("keyrange-flusher"));
-        metricMgr = new MetricManager(tags);
+        flushExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry, new ThreadPoolExecutor(1, 1,
+                0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(),
+                EnvProvider.INSTANCE.newThreadFactory("kvspace-flusher-" + id)), "flusher", "kvspace",
+            Tags.of(metricTags));
+        metricMgr = new MetricManager();
     }
 
     @Override
@@ -130,9 +133,8 @@ public class RocksDBWALableKVSpace
     private class MetricManager {
         private final Timer flushTimer;
 
-        MetricManager(String... tags) {
-            Tags metricTags = Tags.of(tags);
-            flushTimer = KVSpaceMeters.getTimer(id, KVSpaceMetric.FlushTimer, metricTags);
+        MetricManager() {
+            flushTimer = KVSpaceMeters.getTimer(id, KVSpaceMetric.FlushTimer, Tags.of(metricTags));
         }
 
         void close() {

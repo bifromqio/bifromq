@@ -22,6 +22,7 @@ import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -29,18 +30,16 @@ import org.slf4j.Logger;
 public abstract class AbstractKVSpaceReader implements IKVSpaceReader {
     protected final Logger log;
     protected final String id;
+    protected final String[] metricTags;
     private final MetricManager metricMgr;
 
-    protected AbstractKVSpaceReader(String id, Tags tags) {
+    protected AbstractKVSpaceReader(String id, String... tags) {
         this.id = id;
-        this.metricMgr = new MetricManager(tags);
-        List<String> allTags = new ArrayList<>();
-        tags.forEach(t -> {
-            allTags.add(t.getKey());
-            allTags.add(t.getValue());
-        });
+        List<String> allTags = new ArrayList<>(Arrays.asList(tags));
         allTags.add("spaceId");
         allTags.add(id);
+        this.metricTags = allTags.toArray(String[]::new);
+        this.metricMgr = new MetricManager(Tags.of(metricTags));
         this.log = SiftLogger.getLogger(getClass(), allTags.toArray(String[]::new));
     }
 

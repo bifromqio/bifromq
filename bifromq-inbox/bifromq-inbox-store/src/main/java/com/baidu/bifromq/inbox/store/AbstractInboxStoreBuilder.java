@@ -37,7 +37,7 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
     KVRangeStoreOptions storeOptions;
     KVRangeBalanceControllerOptions balanceControllerOptions;
     Executor queryExecutor;
-    ScheduledExecutorService tickTaskExecutor;
+    int tickerThreads;
     ScheduledExecutorService bgTaskExecutor;
     Duration loadEstimateWindow = Duration.ofSeconds(5);
     Duration gcInterval = Duration.ofMinutes(5);
@@ -102,8 +102,8 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
         return thisT();
     }
 
-    public T tickTaskExecutor(ScheduledExecutorService tickTaskExecutor) {
-        this.tickTaskExecutor = tickTaskExecutor;
+    public T tickerThreads(int threads) {
+        this.tickerThreads = threads;
         return thisT();
     }
 

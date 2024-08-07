@@ -20,7 +20,6 @@ import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
 import com.google.protobuf.ByteString;
-import io.micrometer.core.instrument.Tags;
 import java.io.File;
 import java.io.IOException;
 import java.lang.ref.Cleaner;
@@ -36,7 +35,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
@@ -109,8 +107,8 @@ class RocksDBKVSpaceCheckpoint extends RocksDBKVSpaceReader implements IRocksDBK
     private final ColumnFamilyHandle defaultCFHandle;
     private final Cleaner.Cleanable cleanable;
 
-    RocksDBKVSpaceCheckpoint(String id, String cpId, File cpDir, Predicate<String> isLatest, String... tags) {
-        super(id, Tags.of(tags));
+    RocksDBKVSpaceCheckpoint(String id, String cpId, File cpDir, Predicate<String> isLatest, String... metricTags) {
+        super(id, metricTags);
         this.cpId = cpId;
         try {
             defaultCFDesc = new ColumnFamilyDescriptor(DEFAULT_NS.getBytes());

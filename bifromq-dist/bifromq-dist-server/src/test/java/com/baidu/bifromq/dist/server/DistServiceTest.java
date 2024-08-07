@@ -56,7 +56,6 @@ public abstract class DistServiceTest {
     private IDistClient distClient;
     private IBaseKVStoreClient workerClient;
     private ExecutorService queryExecutor;
-    private ScheduledExecutorService tickTaskExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private ISettingProvider settingProvider = Setting::current;
     private IResourceThrottler resourceThrottler = (tenantId, type) -> true;
@@ -82,7 +81,6 @@ public abstract class DistServiceTest {
         when(subBrokerMgr.get(anyInt())).thenReturn(inboxBroker);
         when(inboxBroker.open(anyString())).thenReturn(inboxDeliverer);
         queryExecutor = Executors.newFixedThreadPool(2);
-        tickTaskExecutor = Executors.newScheduledThreadPool(2);
         bgTaskExecutor = Executors.newSingleThreadScheduledExecutor();
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
@@ -110,6 +108,7 @@ public abstract class DistServiceTest {
             .clusterId(IDistWorker.CLUSTER_NAME)
             .crdtService(clientCrdtService)
             .build();
+        int tickerThreads = 2;
         distWorker = IDistWorker
             .standaloneBuilder()
             .bootstrap(true)
@@ -121,7 +120,7 @@ public abstract class DistServiceTest {
             .distClient(distClient)
             .storeClient(workerClient)
             .queryExecutor(queryExecutor)
-            .tickTaskExecutor(tickTaskExecutor)
+            .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(kvRangeStoreOptions)
             .balanceControllerOptions(balanceControllerOptions)
@@ -154,7 +153,6 @@ public abstract class DistServiceTest {
             serverCrdtService.stop();
             agentHost.shutdown();
             queryExecutor.shutdown();
-            tickTaskExecutor.shutdown();
             bgTaskExecutor.shutdown();
         }).start();
         closeable.close();

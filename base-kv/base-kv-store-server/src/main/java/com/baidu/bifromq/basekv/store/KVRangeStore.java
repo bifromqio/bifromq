@@ -127,7 +127,7 @@ public class KVRangeStore implements IKVRangeStore {
                         KVRangeStoreOptions opts,
                         IKVRangeCoProcFactory coProcFactory,
                         @NonNull Executor queryExecutor,
-                        @NonNull ScheduledExecutorService tickExecutor,
+                        int tickerThreads,
                         @NonNull ScheduledExecutorService bgTaskExecutor) {
         this.clusterId = clusterId;
         this.coProcFactory = coProcFactory;
@@ -135,7 +135,8 @@ public class KVRangeStore implements IKVRangeStore {
         this.walStorageEngine =
             new KVRangeWALStorageEngine(clusterId, opts.getOverrideIdentity(), opts.getWalEngineConfigurator());
         id = walStorageEngine.id();
-        log = SiftLogger.getLogger(KVRangeStore.class, "clusterId", clusterId, "storeId", id);
+        String[] tags = new String[] {"clusterId", clusterId, "storeId", id};
+        log = SiftLogger.getLogger(KVRangeStore.class, tags);
         if (opts.getOverrideIdentity() != null
             && !opts.getOverrideIdentity().trim().isEmpty()
             && !opts.getOverrideIdentity().equals(id)) {
@@ -144,11 +145,15 @@ public class KVRangeStore implements IKVRangeStore {
         }
         kvRangeEngine = KVEngineFactory.createCPable(null, opts.getDataEngineConfigurator());
         this.queryExecutor = queryExecutor;
-        this.tickExecutor = tickExecutor;
         this.bgTaskExecutor = bgTaskExecutor;
+        this.tickExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+            new ScheduledThreadPoolExecutor(tickerThreads,
+                EnvProvider.INSTANCE.newThreadFactory("basekv-store-ticker-" + clusterId)),
+            "ticker", "basekv.store", Tags.of(tags));
         this.mgmtTaskExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            new ScheduledThreadPoolExecutor(1, EnvProvider.INSTANCE.newThreadFactory("kvstore-mgmt-executor")),
-            "kvstore[" + id + "]-mgmt-executor");
+            new ScheduledThreadPoolExecutor(1,
+                EnvProvider.INSTANCE.newThreadFactory("basekv-store-manager-" + clusterId)),
+            "manager", "basekv.store", Tags.of(tags));
         this.mgmtTaskRunner = new AsyncRunner(mgmtTaskExecutor);
         this.metricsManager = new MetricsManager(clusterId, id);
         storeStatsCollector =
@@ -259,6 +264,7 @@ public class KVRangeStore implements IKVRangeStore {
                 log.error("Error occurred during stopping range store", e);
             } finally {
                 messenger.close();
+                awaitShutdown(tickExecutor).join();
                 awaitShutdown(mgmtTaskExecutor).join();
                 status.set(Status.TERMINATED);
             }

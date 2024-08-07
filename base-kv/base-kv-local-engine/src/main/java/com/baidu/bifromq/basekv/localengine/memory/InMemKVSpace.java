@@ -47,7 +47,7 @@ public class InMemKVSpace<E extends InMemKVEngine<E, T>, T extends InMemKVSpace<
                            E engine,
                            Runnable onDestroy,
                            String... tags) {
-        super(id, Tags.of(tags).and("from", "kvspace"));
+        super(id, tags);
         this.id = id;
         this.engine = engine;
         this.onDestroy = onDestroy;

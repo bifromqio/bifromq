@@ -30,7 +30,7 @@ final class StandaloneInboxStore extends AbstractInboxStore<StandaloneInboxStore
             .storeOptions(builder.storeOptions)
             .agentHost(builder.agentHost)
             .queryExecutor(builder.queryExecutor)
-            .tickTaskExecutor(builder.tickTaskExecutor)
+            .tickerThreads(builder.tickerThreads)
             .bgTaskExecutor(builder.bgTaskExecutor)
             .finish()
             // build rpc server

@@ -106,7 +106,7 @@ public abstract class MQTTTest {
     private ISubBrokerManager inboxBrokerMgr;
     private PluginManager pluginMgr;
     private ExecutorService queryExecutor;
-    private ScheduledExecutorService tickTaskExecutor;
+    private int tickerThreads = 2;
     private ScheduledExecutorService bgTaskExecutor;
     private AutoCloseable closeable;
     protected String tenantId;
@@ -121,7 +121,6 @@ public abstract class MQTTTest {
         System.setProperty("distservice_topic_match_expiry_seconds", "1");
         pluginMgr = new DefaultPluginManager();
         queryExecutor = Executors.newFixedThreadPool(2);
-        tickTaskExecutor = Executors.newScheduledThreadPool(2);
         bgTaskExecutor = Executors.newSingleThreadScheduledExecutor();
 
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
@@ -176,7 +175,7 @@ public abstract class MQTTTest {
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .queryExecutor(queryExecutor)
-            .tickTaskExecutor(tickTaskExecutor)
+            .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .storeOptions(new KVRangeStoreOptions()
@@ -215,7 +214,7 @@ public abstract class MQTTTest {
             .crdtService(serverCrdtService)
             .storeClient(retainStoreKVStoreClient)
             .queryExecutor(queryExecutor)
-            .tickTaskExecutor(tickTaskExecutor)
+            .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .storeOptions(new KVRangeStoreOptions()
@@ -247,7 +246,7 @@ public abstract class MQTTTest {
             .distClient(distClient)
             .storeClient(distWorkerStoreClient)
             .queryExecutor(queryExecutor)
-            .tickTaskExecutor(tickTaskExecutor)
+            .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .storeOptions(new KVRangeStoreOptions()
@@ -381,8 +380,6 @@ public abstract class MQTTTest {
 
         log.info("Shutdown work executor");
         queryExecutor.shutdownNow();
-        log.info("Shutdown tick task executor");
-        tickTaskExecutor.shutdownNow();
         log.info("Shutdown bg task executor");
         bgTaskExecutor.shutdownNow();
         closeable.close();

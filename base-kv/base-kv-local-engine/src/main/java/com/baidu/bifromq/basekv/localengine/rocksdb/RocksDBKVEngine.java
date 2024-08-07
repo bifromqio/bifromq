@@ -18,7 +18,6 @@ import static java.util.Collections.singletonList;
 
 import com.baidu.bifromq.basekv.localengine.AbstractKVEngine;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
-import com.baidu.bifromq.logger.SiftLogger;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
@@ -44,7 +43,6 @@ import org.rocksdb.FlushOptions;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
-import org.slf4j.Logger;
 
 public abstract class RocksDBKVEngine<
     E extends RocksDBKVEngine<E, T, C>,
@@ -61,7 +59,6 @@ public abstract class RocksDBKVEngine<
     private final ColumnFamilyDescriptor defaultCFDesc;
     private final ColumnFamilyHandle defaultCFHandle;
     private final boolean isCreated;
-    private String[] metricTags;
     private MetricManager metricManager;
 
     public RocksDBKVEngine(String overrideIdentity, C configurator) {
@@ -132,7 +129,6 @@ public abstract class RocksDBKVEngine<
         log.info("RocksDBKVEngine[{}] {} at path[{}]", identity, isCreated ? "initialized" : "loaded", db.getName());
         loadExisting(tags);
         metricManager = new MetricManager(tags);
-        this.metricTags = tags;
     }
 
     @Override

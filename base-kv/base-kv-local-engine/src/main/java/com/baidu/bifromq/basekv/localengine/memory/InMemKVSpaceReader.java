@@ -17,14 +17,13 @@ import com.baidu.bifromq.basekv.localengine.AbstractKVSpaceReader;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
-import io.micrometer.core.instrument.Tags;
 import java.util.Map;
 import java.util.Optional;
 import java.util.SortedMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 public abstract class InMemKVSpaceReader extends AbstractKVSpaceReader {
-    protected InMemKVSpaceReader(String id, Tags tags) {
+    protected InMemKVSpaceReader(String id, String... tags) {
         super(id, tags);
     }
 

@@ -51,7 +51,7 @@ public class InMemKVSpaceWriter<E extends InMemKVEngine<E, T>, T extends InMemKV
                        InMemKVSpaceWriterHelper writerHelper,
                        Consumer<Boolean> afterWrite,
                        String... tags) {
-        super(id, Tags.of(tags));
+        super(id, tags);
         this.metadataMap = metadataMap;
         this.rangeData = rangeData;
         this.engine = engine;

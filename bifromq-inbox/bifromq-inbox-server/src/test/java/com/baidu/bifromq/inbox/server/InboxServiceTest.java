@@ -73,7 +73,7 @@ public abstract class InboxServiceTest {
     private IInboxStore inboxStore;
     private IInboxServer inboxServer;
     private ExecutorService queryExecutor;
-    private ScheduledExecutorService tickTaskExecutor;
+    private int tickerThreads = 2;
     private ScheduledExecutorService bgTaskExecutor;
     private AutoCloseable closeable;
 
@@ -107,7 +107,6 @@ public abstract class InboxServiceTest {
         kvRangeStoreOptions.setDataEngineConfigurator(new InMemKVEngineConfigurator());
         kvRangeStoreOptions.setWalEngineConfigurator(new InMemKVEngineConfigurator());
         queryExecutor = Executors.newFixedThreadPool(2);
-        tickTaskExecutor = Executors.newScheduledThreadPool(2);
         bgTaskExecutor = Executors.newSingleThreadScheduledExecutor();
         inboxStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
@@ -124,7 +123,7 @@ public abstract class InboxServiceTest {
             .storeOptions(kvRangeStoreOptions)
             .balanceControllerOptions(controllerOptions)
             .queryExecutor(queryExecutor)
-            .tickTaskExecutor(tickTaskExecutor)
+            .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .build();
         inboxServer = IInboxServer.standaloneBuilder()
@@ -158,7 +157,6 @@ public abstract class InboxServiceTest {
             serverCrdtService.stop();
             agentHost.shutdown();
             queryExecutor.shutdown();
-            tickTaskExecutor.shutdown();
             bgTaskExecutor.shutdown();
         }).start();
         closeable.close();

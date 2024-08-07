@@ -82,7 +82,7 @@ public class KVRangeStoreTest extends MockableTest {
     private final PublishSubject<StoreMessage> incomingStoreMessage = PublishSubject.create();
     private IKVRangeStore rangeStore;
     private ExecutorService queryExecutor;
-    private ScheduledExecutorService tickTaskExecutor;
+    private final int tickerThreads = 2;
     private ScheduledExecutorService bgTaskExecutor;
     public Path dbRootDir;
 
@@ -94,8 +94,6 @@ public class KVRangeStoreTest extends MockableTest {
         queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
             TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
             EnvProvider.INSTANCE.newThreadFactory("query-executor"));
-        tickTaskExecutor = new ScheduledThreadPoolExecutor(2,
-            EnvProvider.INSTANCE.newThreadFactory("tick-task-executor"));
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
             EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
 
@@ -112,7 +110,7 @@ public class KVRangeStoreTest extends MockableTest {
                 options,
                 new TestCoProcFactory(),
                 queryExecutor,
-                tickTaskExecutor,
+                tickerThreads,
                 bgTaskExecutor);
         IStoreMessenger messenger = new IStoreMessenger() {
             @Override
@@ -149,7 +147,6 @@ public class KVRangeStoreTest extends MockableTest {
     protected void doTeardown(Method method) {
         rangeStore.stop();
         queryExecutor.shutdownNow();
-        tickTaskExecutor.shutdownNow();
         bgTaskExecutor.shutdownNow();
         if (dbRootDir != null) {
             try {

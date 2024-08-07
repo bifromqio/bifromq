@@ -61,7 +61,6 @@ public class RocksDBCPableKVSpace
     private final AtomicReference<String> latestCheckpointId = new AtomicReference<>();
     private final Cache<String, IRocksDBKVSpaceCheckpoint> checkpoints;
     private final MetricManager metricMgr;
-    private final String[] tags;
     // keep a strong ref to latest checkpoint
     private IKVSpaceCheckpoint latestCheckpoint;
 
@@ -76,13 +75,12 @@ public class RocksDBCPableKVSpace
                                 String... tags) {
         super(id, cfDesc, cfHandle, db, configurator, engine, onDestroy, tags);
         this.engine = engine;
-        this.tags = tags;
         cpRootDir = new File(configurator.dbCheckpointRootDir(), id);
         this.checkpoint = Checkpoint.create(db);
         checkpoints = Caffeine.newBuilder().weakValues().build();
         writeOptions = new WriteOptions().setDisableWAL(true);
         Files.createDirectories(cpRootDir.getAbsoluteFile().toPath());
-        metricMgr = new MetricManager(tags);
+        metricMgr = new MetricManager();
     }
 
     @Override
@@ -139,7 +137,7 @@ public class RocksDBCPableKVSpace
             }
             checkpoint.createCheckpoint(cpDir.toString());
             latestCheckpointId.set(cpId);
-            return new RocksDBKVSpaceCheckpoint(id, cpId, cpDir, this::isLatest, tags);
+            return new RocksDBKVSpaceCheckpoint(id, cpId, cpDir, this::isLatest, metricTags);
         } catch (Throwable e) {
             throw new KVEngineException("Checkpoint key range error", e);
         }
@@ -163,7 +161,7 @@ public class RocksDBCPableKVSpace
                 log.debug("Load latest checkpoint[{}] of kvspace[{}] in engine[{}] at path[{}]",
                     cpId, id, engine.id(), cpDir);
                 latestCheckpointId.set(cpId);
-                return new RocksDBKVSpaceCheckpoint(id, cpId, cpDir, this::isLatest);
+                return new RocksDBKVSpaceCheckpoint(id, cpId, cpDir, this::isLatest, metricTags);
             } catch (Throwable e) {
                 log.warn("Failed to load latest checkpoint, checkpoint now", e);
             }
@@ -232,11 +230,11 @@ public class RocksDBCPableKVSpace
         private final Gauge checkpointGauge; // hold a strong reference
         private final Timer checkpointTimer;
 
-        MetricManager(String... tags) {
-            Tags metricTags = Tags.of(tags);
+        MetricManager() {
+            Tags tags = Tags.of(metricTags);
             checkpointGauge =
-                KVSpaceMeters.getGauge(id, KVSpaceMetric.CheckpointNumGauge, checkpoints::estimatedSize, metricTags);
-            checkpointTimer = KVSpaceMeters.getTimer(id, KVSpaceMetric.CheckpointTimer, metricTags);
+                KVSpaceMeters.getGauge(id, KVSpaceMetric.CheckpointNumGauge, checkpoints::estimatedSize, tags);
+            checkpointTimer = KVSpaceMeters.getTimer(id, KVSpaceMetric.CheckpointTimer, tags);
         }
 
         void close() {

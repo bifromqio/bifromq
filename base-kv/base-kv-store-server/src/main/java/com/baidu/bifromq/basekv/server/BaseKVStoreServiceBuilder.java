@@ -20,7 +20,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import lombok.Setter;
 import lombok.experimental.Accessors;
-import lombok.extern.slf4j.Slf4j;
 
 @Accessors(fluent = true)
 @Setter
@@ -32,7 +31,7 @@ public class BaseKVStoreServiceBuilder<P extends AbstractBaseKVStoreServerBuilde
     IKVRangeCoProcFactory coProcFactory;
     IAgentHost agentHost;
     Executor queryExecutor;
-    ScheduledExecutorService tickTaskExecutor;
+    int tickerThreads;
     ScheduledExecutorService bgTaskExecutor;
 
     BaseKVStoreServiceBuilder(String clusterId, boolean bootstrap,

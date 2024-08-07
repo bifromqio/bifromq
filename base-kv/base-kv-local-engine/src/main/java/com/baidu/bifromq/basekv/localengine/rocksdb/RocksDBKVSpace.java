@@ -31,8 +31,10 @@ import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import java.util.Collections;
@@ -79,7 +81,6 @@ abstract class RocksDBKVSpace<
     private final ISyncContext syncContext = new SyncContext();
     private final ISyncContext.IRefresher metadataRefresher = syncContext.refresher();
     private final MetricManager metricMgr;
-    private final String[] tags;
     private volatile long lastCompactAt;
     private volatile long nextCompactAt;
 
@@ -92,8 +93,7 @@ abstract class RocksDBKVSpace<
                           E engine,
                           Runnable onDestroy,
                           String... tags) {
-        super(id, Tags.of(tags));
-        this.tags = tags;
+        super(id, tags);
         this.db = db;
         this.onDestroy = onDestroy;
         this.cfDesc = cfDesc;
@@ -105,9 +105,10 @@ abstract class RocksDBKVSpace<
             configurator.compactTombstoneKeysRatio(),
             this::scheduleCompact) : NoopWriteStatsRecorder.INSTANCE;
         this.engine = engine;
-        compactionExecutor = new ThreadPoolExecutor(1, 1,
-            0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
-            EnvProvider.INSTANCE.newThreadFactory("keyrange-compactor"));
+        compactionExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry, new ThreadPoolExecutor(1, 1,
+                0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
+                EnvProvider.INSTANCE.newThreadFactory("kvspace-compactor-" + id)),
+            "compactor", "kvspace", Tags.of(metricTags));
         metricMgr = new MetricManager(tags);
     }
 
@@ -190,15 +191,13 @@ abstract class RocksDBKVSpace<
     @Override
     public IKVSpaceWriter toWriter() {
         return new RocksDBKVSpaceWriter<>(id, db, cfHandle, engine, writeOptions(), syncContext,
-            writeStats.newRecorder(),
-            this::updateMetadata, tags);
+            writeStats.newRecorder(), this::updateMetadata, metricTags);
     }
 
     //For internal use only
     IKVSpaceWriter toWriter(RocksDBKVSpaceWriterHelper helper) {
         return new RocksDBKVSpaceWriter<>(id, db, cfHandle, engine, syncContext, helper, writeStats.newRecorder(),
-            this::updateMetadata, tags
-        );
+            this::updateMetadata, metricTags);
     }
 
     void close() {

@@ -98,6 +98,7 @@ import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
@@ -207,12 +208,12 @@ public class KVRangeFSM implements IKVRangeFSM {
             new ThreadPoolExecutor(1, 1,
                 0L, TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
                 EnvProvider.INSTANCE.newThreadFactory("basekv-range-mutator")),
-            String.format("basekv-range-mutator[%s]", KVRangeIdUtil.toString(id)));
+            "mutator", "basekv.range", Tags.of(tags));
         this.mgmtExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(1, 1,
                 0L, TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
                 EnvProvider.INSTANCE.newThreadFactory("basekv-range-manager")),
-            String.format("basekv-range-manager[%s]", KVRangeIdUtil.toString(id)));
+            "manager", "basekv.range", Tags.of(tags));
         this.mgmtTaskRunner =
             new AsyncRunner("basekv.runner.rangemanager", mgmtExecutor, "rangeId", KVRangeIdUtil.toString(id));
         this.splitHinters = coProcFactory.createHinters(clusterId, hostStoreId, id, this.kvRange::newDataReader);

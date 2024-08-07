@@ -33,7 +33,7 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
     IAgentHost agentHost;
     ICRDTService crdtService;
     Executor queryExecutor;
-    ScheduledExecutorService tickTaskExecutor;
+    int tickerThreads;
     ScheduledExecutorService bgTaskExecutor;
     IEventCollector eventCollector;
     IResourceThrottler resourceThrottler;
@@ -77,8 +77,8 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
         return thisT();
     }
 
-    public T tickTaskExecutor(ScheduledExecutorService tickTaskExecutor) {
-        this.tickTaskExecutor = tickTaskExecutor;
+    public T tickerThreads(int threads) {
+        this.tickerThreads = threads;
         return thisT();
     }
 

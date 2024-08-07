@@ -65,7 +65,7 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
             builder.storeOptions,
             builder.coProcFactory,
             builder.queryExecutor,
-            builder.tickTaskExecutor,
+            builder.tickerThreads,
             builder.bgTaskExecutor);
         this.bootstrap = builder.bootstrap;
         this.clusterId = builder.clusterId;

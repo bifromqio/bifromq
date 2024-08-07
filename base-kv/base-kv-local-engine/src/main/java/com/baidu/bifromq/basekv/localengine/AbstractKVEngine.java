@@ -18,7 +18,6 @@ import com.baidu.bifromq.logger.SiftLogger;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import java.util.concurrent.atomic.AtomicReference;
-import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 
 public abstract class AbstractKVEngine<T extends IKVSpace> implements IKVEngine<T> {
@@ -28,6 +27,7 @@ public abstract class AbstractKVEngine<T extends IKVSpace> implements IKVEngine<
 
     protected final String overrideIdentity;
     protected Logger log;
+    protected String[] metricTags;
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private Gauge gauge;
 
@@ -44,6 +44,7 @@ public abstract class AbstractKVEngine<T extends IKVSpace> implements IKVEngine<
         if (state.compareAndSet(State.INIT, State.STARTING)) {
             try {
                 log = SiftLogger.getLogger(RocksDBCPableKVSpace.class, tags);
+                metricTags = tags;
                 doStart(tags);
                 state.set(State.STARTED);
                 gauge = Gauge.builder("basekv.le.ranges", this.spaces()::size)

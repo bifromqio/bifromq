@@ -15,7 +15,6 @@ package com.baidu.bifromq.basekv.localengine.memory;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceCheckpoint;
 import com.google.protobuf.ByteString;
-import io.micrometer.core.instrument.Tags;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
 
@@ -29,7 +28,7 @@ class InMemKVSpaceCheckpoint extends InMemKVSpaceReader implements IKVSpaceCheck
                                      Map<ByteString, ByteString> metadataMap,
                                      ConcurrentSkipListMap<ByteString, ByteString> rangeData,
                                      String... tags) {
-        super(id, Tags.of(tags).and("from", "cp"));
+        super(id, tags);
         this.cpId = cpId;
         this.metadataMap = metadataMap;
         this.rangeData = rangeData;

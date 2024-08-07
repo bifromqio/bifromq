@@ -30,7 +30,7 @@ final class NonStandaloneRetainStore extends AbstractRetainStore<NonStandaloneRe
             .storeOptions(builder.storeOptions)
             .agentHost(builder.agentHost)
             .queryExecutor(builder.queryExecutor)
-            .tickTaskExecutor(builder.tickTaskExecutor)
+            .tickerThreads(builder.tickerThreads)
             .bgTaskExecutor(builder.bgTaskExecutor)
             .finish()
             // attach to rpc server

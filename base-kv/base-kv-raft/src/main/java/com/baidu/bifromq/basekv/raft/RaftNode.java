@@ -314,7 +314,7 @@ public final class RaftNode implements IRaftNode {
         this.config = config.toBuilder().build();
         this.raftExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-                new LinkedTransferQueue<>(), threadFactory), "raft-executor");
+                new LinkedTransferQueue<>(), threadFactory), id, "raft", Tags.of(tags));
         stateStore.addStableListener(this::onStabilized);
     }
 

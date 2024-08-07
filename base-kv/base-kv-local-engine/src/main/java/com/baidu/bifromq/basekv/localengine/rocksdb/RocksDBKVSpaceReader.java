@@ -39,7 +39,7 @@ import org.rocksdb.Slice;
 import org.slf4j.Logger;
 
 public abstract class RocksDBKVSpaceReader extends AbstractKVSpaceReader {
-    protected RocksDBKVSpaceReader(String id, Tags tags) {
+    protected RocksDBKVSpaceReader(String id, String... tags) {
         super(id, tags);
     }
 
