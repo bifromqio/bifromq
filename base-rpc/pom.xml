@@ -19,7 +19,7 @@
     <parent>
         <artifactId>bifromq-parent</artifactId>
         <groupId>com.baidu.bifromq</groupId>
-        <version>3.2.1</version>
+        <version>3.2.2-SNAPSHOT</version>
     </parent>
 
     <artifactId>base-rpc</artifactId>
