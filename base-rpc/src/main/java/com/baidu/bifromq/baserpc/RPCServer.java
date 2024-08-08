@@ -176,7 +176,7 @@ class RPCServer implements IRPCServer {
                 inProcServer.start();
                 interProcServer.start();
                 serverRegisters.forEach((serviceName, serverRegister) -> {
-                    log.info("Start server register for service: {}", serviceName);
+                    log.debug("Start server register for service: {}", serviceName);
                     serverRegister.start(id, (InetSocketAddress) interProcServer.getListenSockets().get(0), emptySet(),
                         serviceMetadata.get(serviceName));
                 });

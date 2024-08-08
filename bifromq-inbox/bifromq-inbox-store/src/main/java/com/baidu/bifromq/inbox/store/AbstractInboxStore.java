@@ -99,7 +99,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
 
     public void stop() {
         if (status.compareAndSet(Status.STARTED, Status.STOPPING)) {
-            log.info("Shutting down inbox store");
+            log.info("Stopping InboxStore");
             jobRunner.awaitDone();
             if (gcJob != null && !gcJob.isDone()) {
                 gcJob.join();
@@ -112,7 +112,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
                 log.debug("Shutting down job executor");
                 MoreExecutors.shutdownAndAwaitTermination(jobScheduler, 5, TimeUnit.SECONDS);
             }
-            log.info("Inbox store shutdown");
+            log.info("InboxStore stopped");
             status.compareAndSet(Status.STOPPING, Status.STOPPED);
         }
     }

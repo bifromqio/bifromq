@@ -346,7 +346,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .distClient(distClient)
             .retainClient(retainClient)
             .inboxStoreClient(inboxStoreClient)
-            .bgTaskExecutor(bgTaskExecutor)
             .build();
         distWorkerClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)

@@ -30,7 +30,6 @@ abstract class AbstractInboxServerBuilder<T extends AbstractInboxServerBuilder<T
     IDistClient distClient;
     IRetainClient retainClient;
     IBaseKVStoreClient inboxStoreClient;
-    ScheduledExecutorService bgTaskExecutor;
 
     AbstractInboxServerBuilder() {
     }
@@ -68,11 +67,6 @@ abstract class AbstractInboxServerBuilder<T extends AbstractInboxServerBuilder<T
 
     public T inboxStoreClient(IBaseKVStoreClient inboxStoreClient) {
         this.inboxStoreClient = inboxStoreClient;
-        return thisT();
-    }
-
-    public T bgTaskExecutor(ScheduledExecutorService bgTaskExecutor) {
-        this.bgTaskExecutor = bgTaskExecutor;
         return thisT();
     }
 

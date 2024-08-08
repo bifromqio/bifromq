@@ -48,7 +48,7 @@ class TrafficGovernorNameResolver extends NameResolver {
 
     @Override
     public void start(Listener listener) {
-        log.info("Starting TrafficGovernorNameResolver for service[{}]", serviceUniqueName);
+        log.debug("Starting TrafficGovernorNameResolver for service[{}]", serviceUniqueName);
         disposable.add(Observable.combineLatest(trafficDirector.trafficDirective(),
                 trafficDirector.serverList(), (td, sl) -> {
                     log.debug("Service[{}] landscape update:td={}, sl={}", serviceUniqueName, td, sl);
@@ -59,7 +59,7 @@ class TrafficGovernorNameResolver extends NameResolver {
 
     @Override
     public void shutdown() {
-        log.info("Start to shutdown trafficGovernor nameResolver, service={}", serviceUniqueName);
+        log.debug("Shutting down trafficGovernor nameResolver, service={}", serviceUniqueName);
         disposable.dispose();
         trafficDirector.destroy();
     }

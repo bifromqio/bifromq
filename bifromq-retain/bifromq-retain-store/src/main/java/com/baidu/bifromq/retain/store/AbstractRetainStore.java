@@ -96,7 +96,7 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
 
     public void stop() {
         if (status.compareAndSet(Status.STARTED, Status.STOPPING)) {
-            log.info("Stopping retain store");
+            log.info("Stopping RetainStore");
             jobRunner.awaitDone();
             if (gcJob != null && !gcJob.isDone()) {
                 gcJob.join();
@@ -107,7 +107,7 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
                 log.debug("Shutting down job executor");
                 MoreExecutors.shutdownAndAwaitTermination(jobScheduler, 5, TimeUnit.SECONDS);
             }
-            log.info("Retain store shutdown");
+            log.info("RetainStore shutdown");
             status.compareAndSet(Status.STOPPING, Status.STOPPED);
         }
     }

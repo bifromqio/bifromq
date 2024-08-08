@@ -80,7 +80,7 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
 
     public void stop() {
         if (status.compareAndSet(Status.STARTED, Status.STOPPING)) {
-            log.info("Stopping dist worker");
+            log.info("Stopping DistWorker");
             jobRunner.awaitDone();
             rangeBalanceController.stop();
             storeServer().stop();
@@ -90,7 +90,7 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
                 log.debug("Stopping Job Executor");
                 MoreExecutors.shutdownAndAwaitTermination(jobScheduler, 5, TimeUnit.SECONDS);
             }
-            log.info("Dist worker stopped");
+            log.info("DistWorker stopped");
             status.compareAndSet(Status.STOPPING, Status.STOPPED);
         }
     }
