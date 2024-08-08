@@ -29,10 +29,12 @@ class TenantsState {
     private final Map<String, TenantRouteState> tenantRouteStates = new ConcurrentHashMap<>();
     private final IKVCloseableReader reader;
     private final String[] tags;
+    private transient Boundary boundary;
 
     TenantsState(IKVCloseableReader reader, String... tags) {
         this.reader = reader;
         this.tags = tags;
+        boundary = reader.boundary();
     }
 
     void incNormalRoutes(String tenantId) {
@@ -90,6 +92,7 @@ class TenantsState {
     void reset() {
         tenantRouteStates.values().forEach(TenantRouteState::destroy);
         tenantRouteStates.clear();
+        boundary = reader.boundary();
     }
 
     void close() {
@@ -100,7 +103,7 @@ class TenantsState {
     private Supplier<Number> getSpaceUsageProvider(String tenantId) {
         return () -> {
             try {
-                return reader.size(intersect(reader.boundary(), Boundary.newBuilder()
+                return reader.size(intersect(boundary, Boundary.newBuilder()
                     .setStartKey(tenantPrefix(tenantId))
                     .setEndKey(tenantUpperBound(tenantId))
                     .build()));

@@ -97,6 +97,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     private final SubscriptionCache routeCache;
     private final TenantsState tenantsState;
     private final DeliverExecutorGroup fanoutExecutorGroup;
+    private transient Boundary boundary;
 
     public DistWorkerCoProc(String clusterId,
                             String storeId,
@@ -223,7 +224,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                     touchedTopics.add(ScopedTopic.builder()
                         .tenantId(tenantId)
                         .topic(topicFilter)
-                        .boundary(reader.boundary())
+                        .boundary(boundary)
                         .build());
                 }
                 replyBuilder.putResults(scopedTopicFilter, BatchMatchReply.Result.OK);
@@ -278,7 +279,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 touchedTopics.add(ScopedTopic.builder()
                     .tenantId(parseTenantId(groupMatchRecordKey))
                     .topic(groupTopicFilter)
-                    .boundary(reader.boundary())
+                    .boundary(boundary)
                     .build());
             }
         });
@@ -314,7 +315,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                     touchedTopics.add(ScopedTopic.builder()
                         .tenantId(tenantId)
                         .topic(topicFilter)
-                        .boundary(reader.boundary())
+                        .boundary(boundary)
                         .build());
                     replyBuilder.putResults(scopedTopicFilter, BatchUnmatchReply.Result.OK);
                 } else {
@@ -362,7 +363,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                     touchedTopics.add(ScopedTopic.builder()
                         .tenantId(parseTenantId(groupMatchRecordKey))
                         .topic(groupTopicFilter)
-                        .boundary(reader.boundary())
+                        .boundary(boundary)
                         .build());
                 }
             } else {
@@ -388,11 +389,11 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         List<CompletableFuture<Map<String, Map<String, Integer>>>> distFanOutFutures = new ArrayList<>();
         for (DistPack distPack : distPackList) {
             String tenantId = distPack.getTenantId();
-            Boundary boundary = intersect(Boundary.newBuilder()
+            Boundary tenantBoundary = intersect(Boundary.newBuilder()
                 .setStartKey(matchRecordKeyPrefix(tenantId))
                 .setEndKey(tenantUpperBound(tenantId))
-                .build(), reader.boundary());
-            if (isEmptyRange(boundary)) {
+                .build(), boundary);
+            if (isEmptyRange(tenantBoundary)) {
                 continue;
             }
             for (TopicMessagePack topicMsgPack : distPack.getMsgPackList()) {
@@ -400,7 +401,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 ScopedTopic scopedTopic = ScopedTopic.builder()
                     .tenantId(tenantId)
                     .topic(topic)
-                    .boundary(reader.boundary())
+                    .boundary(boundary)
                     .build();
                 distFanOutFutures.add(routeCache.get(scopedTopic)
                     .thenApply(matchResult -> {
@@ -426,6 +427,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
 
     private void load() {
         try (IKVCloseableReader reader = readerProvider.get()) {
+            boundary = reader.boundary();
             IKVIterator itr = reader.iterator();
             for (itr.seekToFirst(); itr.isValid(); ) {
                 String tenantId = parseTenantId(itr.key());

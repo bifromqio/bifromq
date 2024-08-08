@@ -22,6 +22,7 @@ import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.google.protobuf.ByteString;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
@@ -36,11 +37,13 @@ class TenantsState {
     private final IEventCollector eventCollector;
     private final IKVCloseableReader reader;
     private final String[] tags;
+    private transient Boundary boundary;
 
     TenantsState(IEventCollector eventCollector, IKVCloseableReader reader, String... tags) {
         this.eventCollector = eventCollector;
         this.reader = reader;
         this.tags = tags;
+        boundary = reader.boundary();
     }
 
     Collection<InboxMetadata> getAll(String tenantId) {
@@ -91,6 +94,7 @@ class TenantsState {
         tenantStates.values().forEach(TenantInboxSet::removeAll);
         tenantStates.values().forEach(TenantInboxSet::destroy);
         tenantStates.clear();
+        boundary = reader.boundary();
     }
 
     void close() {
@@ -102,11 +106,12 @@ class TenantsState {
         return () -> {
             try {
                 ByteString startKey = tenantPrefix(tenantId);
-                ByteString endKey = upperBound(tenantPrefix(tenantId));
-                return reader.size(intersect(reader.boundary(), Boundary.newBuilder()
+                ByteString endKey = upperBound(startKey);
+                Boundary tenantBoundary = intersect(boundary, Boundary.newBuilder()
                     .setStartKey(startKey)
                     .setEndKey(endKey)
-                    .build()));
+                    .build());
+                return reader.size(tenantBoundary);
             } catch (Exception e) {
                 log.error("Failed to get used space for tenant:{}", tenantId, e);
                 return 0;

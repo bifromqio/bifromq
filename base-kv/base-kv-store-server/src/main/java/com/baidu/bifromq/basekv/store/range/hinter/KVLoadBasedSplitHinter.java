@@ -41,6 +41,7 @@ public abstract class KVLoadBasedSplitHinter implements IKVRangeSplitHinter {
     private final Gauge ioDensityGuage;
     private final Gauge ioLatencyNanosGauge;
     private final Gauge avgLatencyNanosGauge;
+    private volatile SplitHint latestHint = SplitHint.getDefaultInstance();
 
     public KVLoadBasedSplitHinter(Supplier<Long> nanoSource,
                                   Duration windowSize,
@@ -51,17 +52,17 @@ public abstract class KVLoadBasedSplitHinter implements IKVRangeSplitHinter {
         this.windowSizeNanos = windowSize.toNanos();
         this.toSplitKey = toSplitKey;
         ioDensityGuage = Gauge.builder("basekv.load.est.iodensity",
-                () -> estimate().getLoadOrDefault(LOAD_TYPE_IO_DENSITY, 0))
+                () -> latestHint.getLoadOrDefault(LOAD_TYPE_IO_DENSITY, 0))
             .tags(tags)
             .tags("type", type())
             .register(Metrics.globalRegistry);
         ioLatencyNanosGauge = Gauge.builder("basekv.load.est.iolatency",
-                () -> estimate().getLoadOrDefault(LOAD_TYPE_IO_LATENCY_NANOS, 0))
+                () -> latestHint.getLoadOrDefault(LOAD_TYPE_IO_LATENCY_NANOS, 0))
             .tags(tags)
             .tags("type", type())
             .register(Metrics.globalRegistry);
         avgLatencyNanosGauge = Gauge.builder("basekv.load.est.avglatency", () ->
-                estimate().getLoadOrDefault(LOAD_TYPE_AVG_LATENCY_NANOS, 0))
+                latestHint.getLoadOrDefault(LOAD_TYPE_AVG_LATENCY_NANOS, 0))
             .tags(tags)
             .tags("type", type())
             .register(Metrics.globalRegistry);
@@ -78,7 +79,8 @@ public abstract class KVLoadBasedSplitHinter implements IKVRangeSplitHinter {
         long currentSlot = getSlot();
         trackedKeySlots.headMap(currentSlot - 2).clear();
         recentLoadHints.headMap(currentSlot).clear();
-        return recentLoadHints.computeIfAbsent(currentSlot, n -> doEstimate(n - 1));
+        latestHint = recentLoadHints.computeIfAbsent(currentSlot, n -> doEstimate(n - 1));
+        return latestHint;
     }
 
     protected void onRecord(IKVLoadRecord kvLoadRecord) {
