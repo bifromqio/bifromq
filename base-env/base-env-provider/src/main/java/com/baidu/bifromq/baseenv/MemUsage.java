@@ -109,10 +109,15 @@ public class MemUsage {
     }
 
     private double calculateHeapMemoryUsage() {
-        MemoryUsage memoryUsage = memoryMXBean.getHeapMemoryUsage();
-        long usedHeapMemory = memoryUsage.getUsed();
-        long maxHeapMemory = memoryUsage.getMax();
-        return (double) usedHeapMemory / maxHeapMemory;
+        try {
+            MemoryUsage memoryUsage = memoryMXBean.getHeapMemoryUsage();
+            long usedHeapMemory = memoryUsage.getUsed();
+            long maxHeapMemory = memoryUsage.getMax();
+            return (double) usedHeapMemory / maxHeapMemory;
+        } catch (IllegalArgumentException e) {
+            // there is an unresolved issue in open jdk17: https://bugs.openjdk.org/browse/JDK-8207200
+            return 0;
+        }
     }
 
     private static double pooledDirectMemoryUsage() {
