@@ -24,6 +24,7 @@ import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.logger.SiftLogger;
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.observers.DisposableObserver;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -34,7 +35,6 @@ import org.slf4j.Logger;
 class KVRangeRestorer {
     private final Logger log;
     private final IKVRange range;
-    private final ISnapshotEnsurer snapshotEnsurer;
     private final IKVRangeMessenger messenger;
     private final IKVRangeMetricManager metricManager;
     private final Executor executor;
@@ -43,14 +43,12 @@ class KVRangeRestorer {
 
     KVRangeRestorer(KVRangeSnapshot startSnapshot,
                     IKVRange range,
-                    ISnapshotEnsurer snapshotEnsurer,
                     IKVRangeMessenger messenger,
                     IKVRangeMetricManager metricManager,
                     Executor executor,
                     int idleTimeSec,
                     String... tags) {
         this.range = range;
-        this.snapshotEnsurer = snapshotEnsurer;
         this.messenger = messenger;
         this.metricManager = metricManager;
         this.executor = executor;
@@ -74,119 +72,108 @@ class KVRangeRestorer {
                 KVRangeIdUtil.toString(range.id()), prevSession.snapshot.toByteString());
             prevSession.doneFuture.cancel(true);
         }
+        log.debug("Setup restore session: rangeId={}", KVRangeIdUtil.toString(range.id()));
         CompletableFuture<Void> onDone = session.doneFuture;
-        snapshotEnsurer.ensure(rangeSnapshot.getId(), rangeSnapshot.getVer(), rangeSnapshot.getBoundary())
-            .whenCompleteAsync((v, e) -> {
-                if (onDone.isCancelled()) {
-                    return;
-                }
-                if (e != null) {
-                    log.error("Ensured snapshot's compatibility error: rangeId={}",
-                        KVRangeIdUtil.toString(range.id()), e);
-                    onDone.completeExceptionally(e);
-                    return;
-                }
-                log.debug("Setup restore session: rangeId={}", KVRangeIdUtil.toString(range.id()));
-                try {
-                    String sessionId = UUID.randomUUID().toString();
-                    IKVReseter restorer = range.toReseter(rangeSnapshot);
-                    DisposableObserver<KVRangeMessage> observer = messenger.receive()
-                        .filter(m -> m.hasSaveSnapshotDataRequest() &&
-                            m.getSaveSnapshotDataRequest().getSessionId().equals(sessionId))
-                        .timeout(idleTimeSec, TimeUnit.SECONDS)
-                        .subscribeWith(new DisposableObserver<KVRangeMessage>() {
-                            @Override
-                            public void onNext(@NonNull KVRangeMessage m) {
-                                SaveSnapshotDataRequest request = m.getSaveSnapshotDataRequest();
-                                try {
-                                    switch (request.getFlag()) {
-                                        case More, End -> {
-                                            int bytes = 0;
-                                            for (KVPair kv : request.getKvList()) {
-                                                bytes += kv.getKey().size();
-                                                bytes += kv.getValue().size();
-                                                restorer.put(kv.getKey(), kv.getValue());
-                                            }
-                                            metricManager.reportRestore(bytes);
-                                            log.debug(
-                                                "Saved {} bytes snapshot data, send reply to {}: rangeId={}, sessionId={}",
-                                                bytes, m.getHostStoreId(), KVRangeIdUtil.toString(range.id()),
-                                                sessionId);
-                                            if (request.getFlag() == SaveSnapshotDataRequest.Flag.End) {
-                                                if (!onDone.isCancelled()) {
-                                                    restorer.done();
-                                                    dispose();
-                                                    onDone.complete(null);
-                                                    log.debug("Snapshot restored: rangeId={}, sessionId={}",
-                                                        KVRangeIdUtil.toString(range.id()), sessionId);
-                                                } else {
-                                                    restorer.abort();
-                                                    dispose();
-                                                    log.debug("Snapshot restore canceled: rangeId={}, sessionId={}",
-                                                        KVRangeIdUtil.toString(range.id()), sessionId);
-                                                }
-                                            }
-                                            messenger.send(KVRangeMessage.newBuilder()
-                                                .setRangeId(range.id())
-                                                .setHostStoreId(m.getHostStoreId())
-                                                .setSaveSnapshotDataReply(SaveSnapshotDataReply.newBuilder()
-                                                    .setReqId(request.getReqId())
-                                                    .setSessionId(request.getSessionId())
-                                                    .setResult(SaveSnapshotDataReply.Result.OK)
-                                                    .build())
-                                                .build());
-                                        }
-                                        case Error -> throw new KVRangeStoreException("Snapshot dump failed");
+        try {
+            String sessionId = UUID.randomUUID().toString();
+            IKVReseter restorer = range.toReseter(rangeSnapshot);
+            DisposableObserver<KVRangeMessage> observer = messenger.receive()
+                .filter(m -> m.hasSaveSnapshotDataRequest()
+                    && m.getSaveSnapshotDataRequest().getSessionId().equals(sessionId))
+                .timeout(idleTimeSec, TimeUnit.SECONDS)
+                .observeOn(Schedulers.from(executor))
+                .subscribeWith(new DisposableObserver<KVRangeMessage>() {
+                    @Override
+                    public void onNext(@NonNull KVRangeMessage m) {
+                        SaveSnapshotDataRequest request = m.getSaveSnapshotDataRequest();
+                        try {
+                            switch (request.getFlag()) {
+                                case More, End -> {
+                                    int bytes = 0;
+                                    for (KVPair kv : request.getKvList()) {
+                                        bytes += kv.getKey().size();
+                                        bytes += kv.getValue().size();
+                                        restorer.put(kv.getKey(), kv.getValue());
                                     }
-                                } catch (Throwable t) {
-                                    log.error("Snapshot restored failed: rangeId={}, sessionId={}",
-                                        KVRangeIdUtil.toString(range.id()), sessionId, t);
-                                    onError(t);
+                                    metricManager.reportRestore(bytes);
+                                    log.debug(
+                                        "Saved {} bytes snapshot data, send reply to {}: rangeId={}, sessionId={}",
+                                        bytes, m.getHostStoreId(), KVRangeIdUtil.toString(range.id()),
+                                        sessionId);
+                                    if (request.getFlag() == SaveSnapshotDataRequest.Flag.End) {
+                                        if (!onDone.isCancelled()) {
+                                            restorer.done();
+                                            dispose();
+                                            onDone.complete(null);
+                                            log.debug("Snapshot restored: rangeId={}, sessionId={}",
+                                                KVRangeIdUtil.toString(range.id()), sessionId);
+                                        } else {
+                                            restorer.abort();
+                                            dispose();
+                                            log.debug("Snapshot restore canceled: rangeId={}, sessionId={}",
+                                                KVRangeIdUtil.toString(range.id()), sessionId);
+                                        }
+                                    }
                                     messenger.send(KVRangeMessage.newBuilder()
                                         .setRangeId(range.id())
                                         .setHostStoreId(m.getHostStoreId())
                                         .setSaveSnapshotDataReply(SaveSnapshotDataReply.newBuilder()
                                             .setReqId(request.getReqId())
                                             .setSessionId(request.getSessionId())
-                                            .setResult(SaveSnapshotDataReply.Result.Error)
+                                            .setResult(SaveSnapshotDataReply.Result.OK)
                                             .build())
                                         .build());
                                 }
+                                case Error -> throw new KVRangeStoreException("Snapshot dump failed");
                             }
-
-                            @Override
-                            public void onError(@NonNull Throwable e) {
-                                restorer.abort();
-                                onDone.completeExceptionally(e);
-                                dispose();
-                            }
-
-                            @Override
-                            public void onComplete() {
-
-                            }
-                        });
-                    onDone.whenComplete((_v, _e) -> {
-                        if (onDone.isCancelled()) {
-                            observer.dispose();
+                        } catch (Throwable t) {
+                            log.error("Snapshot restored failed: rangeId={}, sessionId={}",
+                                KVRangeIdUtil.toString(range.id()), sessionId, t);
+                            onError(t);
+                            messenger.send(KVRangeMessage.newBuilder()
+                                .setRangeId(range.id())
+                                .setHostStoreId(m.getHostStoreId())
+                                .setSaveSnapshotDataReply(SaveSnapshotDataReply.newBuilder()
+                                    .setReqId(request.getReqId())
+                                    .setSessionId(request.getSessionId())
+                                    .setResult(SaveSnapshotDataReply.Result.Error)
+                                    .build())
+                                .build());
                         }
-                    });
-                    log.debug("Send snapshot sync request to {} {}: rangeId={}", leader,
-                        !onDone.isDone(), KVRangeIdUtil.toString(range.id()));
-                    if (!onDone.isDone()) {
-                        messenger.send(KVRangeMessage.newBuilder()
-                            .setRangeId(range.id())
-                            .setHostStoreId(leader)
-                            .setSnapshotSyncRequest(SnapshotSyncRequest.newBuilder()
-                                .setSessionId(sessionId)
-                                .setSnapshot(rangeSnapshot)
-                                .build())
-                            .build());
                     }
-                } catch (Throwable t) {
-                    log.error("Unexpected error", t);
+
+                    @Override
+                    public void onError(@NonNull Throwable e) {
+                        restorer.abort();
+                        onDone.completeExceptionally(e);
+                        dispose();
+                    }
+
+                    @Override
+                    public void onComplete() {
+
+                    }
+                });
+            onDone.whenComplete((v, e) -> {
+                if (onDone.isCancelled()) {
+                    observer.dispose();
                 }
-            }, executor);
+            });
+            log.debug("Send snapshot sync request to {} {}: rangeId={}", leader,
+                !onDone.isDone(), KVRangeIdUtil.toString(range.id()));
+            if (!onDone.isDone()) {
+                messenger.send(KVRangeMessage.newBuilder()
+                    .setRangeId(range.id())
+                    .setHostStoreId(leader)
+                    .setSnapshotSyncRequest(SnapshotSyncRequest.newBuilder()
+                        .setSessionId(sessionId)
+                        .setSnapshot(rangeSnapshot)
+                        .build())
+                    .build());
+            }
+        } catch (Throwable t) {
+            log.error("Unexpected error", t);
+        }
         return onDone;
     }
 

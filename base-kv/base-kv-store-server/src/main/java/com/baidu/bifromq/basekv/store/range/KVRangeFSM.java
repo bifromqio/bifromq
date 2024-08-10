@@ -152,7 +152,6 @@ public class KVRangeFSM implements IKVRangeFSM {
     };
     private final KVRangeId id;
     private final String hostStoreId;
-    private final ISnapshotEnsurer compatibilityEnsurer;
     private final IKVRange kvRange;
     private final IKVRangeWAL wal;
     private final IKVRangeWALSubscription walSubscription;
@@ -188,7 +187,6 @@ public class KVRangeFSM implements IKVRangeFSM {
                       String hostStoreId,
                       KVRangeId id,
                       IKVRangeCoProcFactory coProcFactory,
-                      ISnapshotEnsurer compatibilityEnsurer,
                       IKVRange kvRange,
                       IKVRangeWALStore walStore,
                       Executor queryExecutor,
@@ -199,7 +197,6 @@ public class KVRangeFSM implements IKVRangeFSM {
         this.id = id;
         this.hostStoreId = hostStoreId; // keep a local copy to decouple it from store's state
         this.kvRange = kvRange;
-        this.compatibilityEnsurer = compatibilityEnsurer;
         tags = new String[] {"clusterId", clusterId, "storeId", hostStoreId, "rangeId", KVRangeIdUtil.toString(id)};
         this.log = SiftLogger.getLogger(KVRangeFSM.class, tags);
         this.wal = new KVRangeWAL(clusterId, hostStoreId, id,
@@ -278,7 +275,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 this.messenger = messenger;
                 // start the wal
                 wal.start();
-                this.restorer = new KVRangeRestorer(wal.latestSnapshot(), kvRange, compatibilityEnsurer, messenger,
+                this.restorer = new KVRangeRestorer(wal.latestSnapshot(), kvRange, messenger,
                     metricManager, fsmExecutor, opts.getSnapshotSyncIdleTimeoutSec(), tags);
                 disposables.add(wal.peerMessages().observeOn(Schedulers.io())
                     .subscribe((messages) -> {
@@ -804,8 +801,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 if (reqVer != ver) {
                     // version not match, hint the caller
                     onDone.complete(
-                        () -> finishCommandWithError(taskId,
-                            new KVRangeException.BadVersion("Version Mismatch")));
+                        () -> finishCommandWithError(taskId, new KVRangeException.BadVersion("Version Mismatch")));
                     break;
                 }
                 if (state.getType() != Normal && state.getType() != Merged) {
@@ -954,14 +950,12 @@ public class KVRangeFSM implements IKVRangeFSM {
                 if (reqVer != ver) {
                     // version not match, hint the caller
                     onDone.complete(
-                        () -> finishCommandWithError(taskId,
-                            new KVRangeException.BadVersion("Version Mismatch")));
+                        () -> finishCommandWithError(taskId, new KVRangeException.BadVersion("Version Mismatch")));
                     break;
                 }
                 if (state.getType() != Normal) {
-                    onDone.complete(() -> finishCommandWithError(taskId,
-                        new KVRangeException.TryLater(
-                            "Split abort, range is in state:" + state.getType().name())));
+                    onDone.complete(() -> finishCommandWithError(taskId, new KVRangeException.TryLater(
+                        "Split abort, range is in state:" + state.getType().name())));
                     break;
                 }
                 // under at-least-once semantic, we need to check if the splitKey is still valid to skip
@@ -985,80 +979,62 @@ public class KVRangeFSM implements IKVRangeFSM {
                             .setTaskId(taskId)
                             .build())
                         .build();
-                    // ensure the rhs range to be created is locally compatible with other ranges except the splitting one
-                    log.debug("Check local compatibility: newRangeId={}, ver={}",
-                        KVRangeIdUtil.toString(rhsSS.getId()), rhsSS.getVer());
-                    compatibilityEnsurer.ensure(rhsSS.getId(), rhsSS.getVer(), rhsSS.getBoundary(), singleton(id))
-                        .whenCompleteAsync((v, e) -> {
-                            if (e != null) {
-                                log.warn("The rhs range is incompatible locally[taskId={}]", taskId, e);
-                                onDone.completeExceptionally(e);
-                            } else {
-                                log.debug("New range is compatible locally: newRangeId={}, ver={}",
-                                    KVRangeIdUtil.toString(rhsSS.getId()), rhsSS.getVer());
-                                rangeWriter.boundary(leftBoundary).bumpVer(true);
-                                // migrate data to right-hand keyspace which created implicitly
-                                IKVRangeMetadataUpdatable<?> rightRangeMetadataUpdateable =
-                                    rangeWriter.migrateTo(request.getNewId(), rightBoundary);
-                                rightRangeMetadataUpdateable.resetVer(rhsSS.getVer())
-                                    .boundary(rightBoundary)
-                                    .lastAppliedIndex(rhsSS.getLastAppliedIndex())
-                                    .state(rhsSS.getState());
-                                onDone.complete(() -> {
-                                    log.debug("Sending ensure request to load right KVRange[{}]",
-                                        KVRangeIdUtil.toString(request.getNewId()));
-                                    messenger.once(m -> {
-                                        if (m.hasEnsureRangeReply()) {
-                                            EnsureRangeReply reply = m.getEnsureRangeReply();
-                                            return reply.getResult() == EnsureRangeReply.Result.OK;
-                                        }
-                                        return false;
-                                    }).whenComplete((_v, _e) -> {
-                                        if (_e != null) {
-                                            log.debug("Ensure range failed[taskId={}]", taskId, _e);
-                                            finishCommandWithError(taskId, _e);
-                                        } else {
-                                            try {
+                    rangeWriter.boundary(leftBoundary).bumpVer(true);
+                    // migrate data to right-hand keyspace which created implicitly
+                    IKVRangeMetadataUpdatable<?> rightRangeMetadata =
+                        rangeWriter.migrateTo(request.getNewId(), rightBoundary);
+                    rightRangeMetadata.resetVer(rhsSS.getVer())
+                        .boundary(rightBoundary)
+                        .lastAppliedIndex(rhsSS.getLastAppliedIndex())
+                        .state(rhsSS.getState());
+                    onDone.complete(() -> {
+                        try {
+                            log.debug("Range split completed[taskId={}]", taskId);
+                            // reset hinter when boundary changed
+                            splitHinters.forEach(hinter -> hinter.reset(leftBoundary));
+                            coProc.reset(leftBoundary);
+                        } catch (Throwable t) {
+                            log.error("Failed to reset hinter or coProc", t);
+                            finishCommandWithError(taskId, t);
+                        } finally {
+                            finishCommand(taskId);
+                        }
+                        messenger.once(KVRangeMessage::hasEnsureRangeReply)
+                            .orTimeout(5, TimeUnit.SECONDS)
+                            .whenCompleteAsync((v, e) -> {
+                                if (e != null || v.getEnsureRangeReply().getResult() != EnsureRangeReply.Result.OK) {
+                                    log.error("Failed to load rhs range[taskId={}]: newRangeId={}",
+                                        taskId, request.getNewId(), e);
+                                }
+                            }, fsmExecutor);
+                        // ensure the new range is loaded in the store
+                        log.debug("Sending EnsureRequest to load right KVRange[{}]",
+                            KVRangeIdUtil.toString(request.getNewId()));
+                        messenger.send(KVRangeMessage.newBuilder()
+                            .setRangeId(rhsSS.getId())
+                            .setHostStoreId(hostStoreId)
+                            .setEnsureRange(EnsureRange.newBuilder()
+                                .setVer(rhsSS.getVer())
+                                .setBoundary(rhsSS.getBoundary())
+                                .setInitSnapshot(Snapshot.newBuilder()
+                                    .setTerm(0)
+                                    .setIndex(rhsSS.getLastAppliedIndex())
+                                    .setClusterConfig(wal.clusterConfig())
+                                    .setData(rhsSS.toByteString())
+                                    .build())
+                                .build()).build());
+                    });
 
-                                                log.debug("Range split completed[taskId={}]", taskId);
-                                                // reset hinter when boundary changed
-                                                splitHinters.forEach(hinter -> hinter.reset(leftBoundary));
-                                                coProc.reset(leftBoundary);
-                                            } catch (Throwable t) {
-                                                log.error("Failed to reset hinter and coProc", t);
-                                            } finally {
-                                                finishCommand(taskId);
-                                            }
-                                        }
-                                    });
-                                    messenger.send(KVRangeMessage.newBuilder()
-                                        .setRangeId(rhsSS.getId())
-                                        .setHostStoreId(hostStoreId)
-                                        .setEnsureRange(EnsureRange.newBuilder()
-                                            .setVer(rhsSS.getVer())
-                                            .setBoundary(rhsSS.getBoundary())
-                                            .setInitSnapshot(Snapshot.newBuilder()
-                                                .setTerm(0)
-                                                .setIndex(rhsSS.getLastAppliedIndex())
-                                                .setClusterConfig(wal.clusterConfig())
-                                                .setData(rhsSS.toByteString())
-                                                .build())
-                                            .build()).build());
-                                });
-                            }
-                        }, fsmExecutor);
                 } else {
                     onDone.complete(() -> finishCommandWithError(taskId,
                         new KVRangeException.BadRequest("Invalid split key")));
                 }
             }
             case PREPAREMERGEWITH -> {
-                PrepareMergeWith request = command.getPrepareMergeWith();
                 if (reqVer != ver) {
                     // version not match, hint the caller
-                    onDone.complete(
-                        () -> finishCommandWithError(taskId,
-                            new KVRangeException.BadVersion("Version Mismatch")));
+                    onDone.complete(() -> finishCommandWithError(taskId,
+                        new KVRangeException.BadVersion("Version Mismatch")));
                     break;
                 }
                 if (state.getType() != Normal) {
@@ -1067,10 +1043,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                     break;
                 }
 
-                CompletableFuture<KVRangeMessage> onceFuture =
-                    messenger.once(m -> m.hasPrepareMergeToReply()
-                        && m.getPrepareMergeToReply().getTaskId().equals(taskId)
-                        && m.getPrepareMergeToReply().getAccept());
+                CompletableFuture<KVRangeMessage> onceFuture = messenger.once(m -> m.hasPrepareMergeToReply()
+                    && m.getPrepareMergeToReply().getTaskId().equals(taskId)
+                    && m.getPrepareMergeToReply().getAccept());
                 onDone.whenCompleteAsync((v, e) -> {
                     if (onDone.isCancelled()) {
                         onceFuture.cancel(true);
@@ -1094,6 +1069,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                             onDone.complete(NOOP);
                         }
                     }, fsmExecutor);
+
+                PrepareMergeWith request = command.getPrepareMergeWith();
                 // broadcast
                 messenger.send(KVRangeMessage.newBuilder()
                     .setRangeId(request.getMergeeId())
@@ -1544,13 +1521,16 @@ public class KVRangeFSM implements IKVRangeFSM {
     }
 
     private void handleSnapshotSyncRequest(String follower, SnapshotSyncRequest request) {
-        log.info("Init snap-dump session for follower[{}]: sessionId={}\n{}",
-            follower, request.getSessionId(), request.getSnapshot());
+        log.info("Dumping snapshot: session={}: follower={}\n{}",
+            request.getSessionId(), follower, request.getSnapshot());
         KVRangeDumpSession session = new KVRangeDumpSession(follower, request, kvRange, messenger, fsmExecutor,
             Duration.ofSeconds(opts.getSnapshotSyncIdleTimeoutSec()),
             opts.getSnapshotSyncBytesPerSec(), metricManager::reportDump, tags);
         dumpSessions.put(request.getSessionId(), session);
-        session.awaitDone().whenComplete((v, e) -> dumpSessions.remove(request.getSessionId(), session));
+        session.awaitDone().whenComplete((v, e) -> {
+            log.info("Snapshot dump done: session={}, follower={}", request.getSessionId(), follower);
+            dumpSessions.remove(request.getSessionId(), session);
+        });
     }
 
     private void handlePrepareMergeToRequest(String peer, PrepareMergeToRequest request) {

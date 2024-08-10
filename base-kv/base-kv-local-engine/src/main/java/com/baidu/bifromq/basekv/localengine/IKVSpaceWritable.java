@@ -53,8 +53,8 @@ public interface IKVSpaceWritable<T extends IKVSpaceWritable<T>> extends IKVSpac
     T clear(Boundary boundary);
 
     /**
-     * Migrate date in given boundary to target range, and returns the metadata updater for target boundary Note. the
-     * two writers are sharing same write batch so calling done on either will finish the migration
+     * Migrate data in given boundary to target range, and returns the metadata updater for target boundary.
+     * Note. the two writers are sharing same write batch so calling done on either will finish the migration.
      *
      * @param targetRangeId the id of target range
      * @param boundary      the boundary of data to be migrated

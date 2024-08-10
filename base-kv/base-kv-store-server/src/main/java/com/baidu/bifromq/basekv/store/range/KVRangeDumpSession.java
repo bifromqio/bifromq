@@ -49,7 +49,7 @@ class KVRangeDumpSession {
     private final Duration maxIdleDuration;
     private final CompletableFuture<Void> doneSignal = new CompletableFuture<>();
     private final DumpBytesRecorder recorder;
-    private RateLimiter rateLimiter;
+    private final RateLimiter rateLimiter;
     private IKVCheckpointIterator snapshotDataItr;
     private volatile KVRangeMessage currentRequest;
     private volatile long lastReplyTS;
@@ -111,8 +111,6 @@ class KVRangeDumpSession {
                 snapshotDataItr.close();
                 disposable.dispose();
             });
-            log.debug("Start dump session[{}] to store[{}]: rangeId={}",
-                request.getSessionId(), peerStoreId, KVRangeIdUtil.toString(rangeId));
             nextSaveRequest();
         }
     }
