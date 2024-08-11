@@ -14,13 +14,11 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import com.baidu.bifromq.basekv.proto.KVPair;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeMessage;
 import com.baidu.bifromq.basekv.proto.SaveSnapshotDataReply;
 import com.baidu.bifromq.basekv.proto.SaveSnapshotDataRequest;
 import com.baidu.bifromq.basekv.proto.SnapshotSyncRequest;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
-import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.util.concurrent.RateLimiter;
 import io.reactivex.rxjava3.disposables.Disposable;
@@ -39,8 +37,7 @@ class KVRangeDumpSession {
         void record(int bytes);
     }
 
-    private final KVRangeId rangeId;
-    private final String peerStoreId;
+    private final String follower;
     private final SnapshotSyncRequest request;
     private final IKVRangeMessenger messenger;
     private final AsyncRunner runner;
@@ -54,7 +51,7 @@ class KVRangeDumpSession {
     private volatile KVRangeMessage currentRequest;
     private volatile long lastReplyTS;
 
-    KVRangeDumpSession(String peerStoreId,
+    KVRangeDumpSession(String follower,
                        SnapshotSyncRequest request,
                        IKVRange accessor,
                        IKVRangeMessenger messenger,
@@ -63,8 +60,7 @@ class KVRangeDumpSession {
                        long bandwidth,
                        DumpBytesRecorder recorder,
                        String... tags) {
-        this.rangeId = accessor.id();
-        this.peerStoreId = peerStoreId;
+        this.follower = follower;
         this.request = request;
         this.messenger = messenger;
         this.runner = new AsyncRunner("basekv.runner.sessiondump", executor);
@@ -75,7 +71,7 @@ class KVRangeDumpSession {
         if (!request.getSnapshot().hasCheckpointId()) {
             messenger.send(KVRangeMessage.newBuilder()
                 .setRangeId(request.getSnapshot().getId())
-                .setHostStoreId(peerStoreId)
+                .setHostStoreId(follower)
                 .setSaveSnapshotDataRequest(SaveSnapshotDataRequest.newBuilder()
                     .setSessionId(request.getSessionId())
                     .setFlag(SaveSnapshotDataRequest.Flag.End)
@@ -86,7 +82,7 @@ class KVRangeDumpSession {
             log.warn("No checkpoint found for snapshot: {}", request.getSnapshot());
             messenger.send(KVRangeMessage.newBuilder()
                 .setRangeId(request.getSnapshot().getId())
-                .setHostStoreId(peerStoreId)
+                .setHostStoreId(follower)
                 .setSaveSnapshotDataRequest(SaveSnapshotDataRequest.newBuilder()
                     .setSessionId(request.getSessionId())
                     .setFlag(SaveSnapshotDataRequest.Flag.Error)
@@ -125,8 +121,7 @@ class KVRangeDumpSession {
         }
         long elapseNanos = Duration.ofNanos(System.nanoTime() - lastReplyTS).toNanos();
         if (maxIdleDuration.toNanos() < elapseNanos) {
-            log.debug("Cancel the idle dump session[{}] to store[{}]: rangeId={}",
-                request.getSessionId(), peerStoreId, KVRangeIdUtil.toString(rangeId));
+            log.debug("DumpSession idle: session={}, follower={}", request.getSessionId(), follower);
             cancel();
         } else if (maxIdleDuration.toNanos() / 2 < elapseNanos && currentRequest != null) {
             runner.add(() -> {
@@ -200,15 +195,15 @@ class KVRangeDumpSession {
                             break;
                         }
                     } catch (Throwable e) {
-                        log.error("DumpSession[{}] to store[{}] error: rangeId={}",
-                            request.getSessionId(), peerStoreId, KVRangeIdUtil.toString(rangeId), e);
+                        log.error("DumpSession error: session={}, follower={}",
+                            request.getSessionId(), follower, e);
                         reqBuilder.clearKv();
                         reqBuilder.setFlag(SaveSnapshotDataRequest.Flag.Error);
                         break;
                     }
                 } else {
-                    log.debug("DumpSession[{}] to store[{}] has been canceled: rangeId={}",
-                        request.getSessionId(), peerStoreId, KVRangeIdUtil.toString(rangeId));
+                    log.debug("DumpSession has been canceled: session={}, follower={}",
+                        request.getSessionId(), follower);
                     reqBuilder.clearKv();
                     reqBuilder.setFlag(SaveSnapshotDataRequest.Flag.Error);
                     break;
@@ -216,7 +211,7 @@ class KVRangeDumpSession {
             }
             currentRequest = KVRangeMessage.newBuilder()
                 .setRangeId(request.getSnapshot().getId())
-                .setHostStoreId(peerStoreId)
+                .setHostStoreId(follower)
                 .setSaveSnapshotDataRequest(reqBuilder.build())
                 .build();
             lastReplyTS = System.nanoTime();

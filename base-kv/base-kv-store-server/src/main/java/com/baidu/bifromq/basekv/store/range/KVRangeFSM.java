@@ -118,7 +118,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -132,7 +131,7 @@ public class KVRangeFSM implements IKVRangeFSM {
     private final Logger log;
 
     /**
-     * Callback for listening the quit signal which generated as the result of config change operation
+     * Callback for listening the quit signal which generated as the result of config change operation.
      */
     public interface QuitListener {
         void onQuit(IKVRangeFSM rangeToQuit, boolean recreate);
@@ -177,11 +176,9 @@ public class KVRangeFSM implements IKVRangeFSM {
     private final CompletableFuture<Void> destroyedSignal = new CompletableFuture<>();
     private final KVRangeMetricManager metricManager;
     private final List<IKVRangeSplitHinter> splitHinters;
-    private final AtomicBoolean compacting = new AtomicBoolean();
     private final String[] tags;
     private IKVRangeMessenger messenger;
     private KVRangeRestorer restorer;
-    private volatile CompletableFuture<Void> compactionFuture = CompletableFuture.completedFuture(null);
 
     public KVRangeFSM(String clusterId,
                       String hostStoreId,
@@ -323,7 +320,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 // make sure latest snapshot exists
                 if (!kvRange.hasCheckpoint(wal.latestSnapshot())) {
                     log.debug("Latest snapshot not available, do compaction: \n{}", wal.latestSnapshot());
-                    scheduleCheckpoint();
+                    compactWAL(false);
                 }
                 switch (kvRange.state().getType()) {
                     case Purged, Merged, Removed -> quitReason.complete(kvRange.state().getType());
@@ -340,7 +337,7 @@ public class KVRangeFSM implements IKVRangeFSM {
         wal.tick();
         statsCollector.tick();
         dumpSessions.values().forEach(KVRangeDumpSession::tick);
-        checkWalSize();
+        compactWAL(true);
         estimateSplitHint();
     }
 
@@ -376,7 +373,6 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 return dumpSession.awaitDone();
                             })
                             .toArray(CompletableFuture<?>[]::new))
-                        .thenCompose(v -> compactionFuture)
                         .thenCompose(v -> restorer.awaitDone())
                         .thenCompose(v -> statsCollector.stop())
                         .thenCompose(v -> wal.close())
@@ -813,12 +809,19 @@ public class KVRangeFSM implements IKVRangeFSM {
                     "Changing Config[term={}, index={}, taskId={}, ver={}, state={}]: nextVoters={}, nextLearners={}",
                     logTerm, logIndex, taskId, ver, state, request.getVotersList(), request.getLearnersList());
                 // make a checkpoint if needed
-                CompletableFuture<Void> checkpointFuture = wal.latestSnapshot().getLastAppliedIndex() < logIndex - 1 ?
-                    scheduleCheckpoint() : CompletableFuture.completedFuture(null);
-                checkpointFuture.whenCompleteAsync((v, e) -> {
+                CompletableFuture<Void> compactWALFuture = CompletableFuture.completedFuture(null);
+                if (wal.latestSnapshot().getLastAppliedIndex() < logIndex - 1) {
+                    // cancel all on-going dump sessions
+                    dumpSessions.forEach((sessionId, session) -> {
+                        session.cancel();
+                        dumpSessions.remove(sessionId, session);
+                    });
+                    compactWALFuture = compactWAL(false);
+                }
+                compactWALFuture.whenCompleteAsync((v, e) -> {
                     if (e != null) {
-                        // checkpoint failed, re-apply the log again
-                        log.warn("Checkpoint failed[term={}, index={}, taskId={}]: ver={}, state={}",
+                        log.error(
+                            "WAL compact failed during ConfigChange[term={}, index={}, taskId={}]: ver={}, state={}",
                             logTerm, logIndex, taskId, ver, state);
                         onDone.completeExceptionally(e);
                     } else {
@@ -832,44 +835,38 @@ public class KVRangeFSM implements IKVRangeFSM {
                             ),
                             singleton(hostStoreId)
                         );
-                        newHostingStoreIds.forEach(storeId ->
-                            log.debug("Send request to ensure range hosted[taskId={}]: newHostingStoreId={}",
-                                taskId, storeId));
                         List<CompletableFuture<?>> onceFutures = newHostingStoreIds.stream()
                             .map(storeId -> messenger.once(m -> {
-                                if (m.hasEnsureRangeReply()) {
-                                    EnsureRangeReply reply = m.getEnsureRangeReply();
-                                    return reply.getResult() == EnsureRangeReply.Result.OK;
-                                }
-                                return false;
-                            })).collect(Collectors.toList());
-                        CompletableFuture.allOf(onceFutures.toArray(new CompletableFuture[] {}))
-                            .orTimeout(5, TimeUnit.SECONDS)
-                            .whenCompleteAsync((v1, e1) -> {
-                                if (e1 != null) {
-                                    log.debug("Ensure range hosted failed[taskId={}]: newHostingStoreIds={}",
-                                        taskId, newHostingStoreIds, e1);
-                                    onceFutures.forEach(f -> f.cancel(true));
-                                }
-                                wal.changeClusterConfig(taskId,
-                                        newHashSet(request.getVotersList()),
-                                        newHashSet(request.getLearnersList()))
-                                    .whenCompleteAsync((v2, e2) -> {
-                                        if (e2 != null) {
-                                            String errorMessage =
-                                                String.format("Config change aborted[taskId=%s] due to %s", taskId,
-                                                    e2.getMessage());
-                                            log.debug(errorMessage);
-                                            finishCommandWithError(taskId, new KVRangeException.TryLater(errorMessage));
-                                            wal.stepDown();
+                                        if (m.hasEnsureRangeReply()) {
+                                            EnsureRangeReply reply = m.getEnsureRangeReply();
+                                            return reply.getResult() == EnsureRangeReply.Result.OK;
                                         }
-                                        // postpone finishing command when config entry is applied
-                                    }, fsmExecutor);
-
-                            }, fsmExecutor);
+                                        return false;
+                                    })
+                                    .orTimeout(5, TimeUnit.SECONDS)
+                                    .exceptionally(t -> {
+                                        log.debug("EnsureRange failed: taskId={}, targetStoreId={}",
+                                            taskId, storeId, t);
+                                        return null;
+                                    })
+                            )
+                            .collect(Collectors.toList());
+                        CompletableFuture.allOf(onceFutures.toArray(CompletableFuture[]::new))
+                            .thenAcceptAsync(v1 -> wal.changeClusterConfig(taskId,
+                                    newHashSet(request.getVotersList()),
+                                    newHashSet(request.getLearnersList()))
+                                .whenCompleteAsync((v2, e2) -> {
+                                    if (e2 != null) {
+                                        String errorMessage = String.format("ConfigChange aborted[taskId=%s] due to %s",
+                                            taskId, e2.getMessage());
+                                        log.debug(errorMessage);
+                                        finishCommandWithError(taskId, new KVRangeException.TryLater(errorMessage));
+                                        wal.stepDown();
+                                    }
+                                    // postpone finishing command when config entry is applied
+                                }, fsmExecutor), fsmExecutor);
                         newHostingStoreIds.forEach(storeId -> {
-                            log.debug("Send range ensure request to store[taskId={}]: targetStoreId={}",
-                                taskId, storeId);
+                            log.debug("Send EnsureRequest: taskId={}, targetStoreId={}", taskId, storeId);
                             messenger.send(KVRangeMessage.newBuilder()
                                 .setRangeId(id)
                                 .setHostStoreId(storeId)
@@ -1279,7 +1276,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                         log.error("Failed to reset hinter and coProc", t);
                                     } finally {
                                         finishCommand(taskId);
-                                        scheduleCompaction();
+                                        compactWAL(false);
                                     }
                                 });
                             }
@@ -1315,7 +1312,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                             .setTaskId(taskId)
                             .build());
                     onDone.complete(() -> {
-                        scheduleCompaction();
+                        compactWAL(false);
                         // reset hinter when boundary changed
                         splitHinters.forEach(hinter -> hinter.reset(EMPTY_BOUNDARY));
                         coProc.reset(EMPTY_BOUNDARY);
@@ -1391,7 +1388,6 @@ public class KVRangeFSM implements IKVRangeFSM {
             if (isNotOpening()) {
                 return CompletableFuture.completedFuture(null);
             }
-            log.info("Restoring from snapshot \n{}", snapshot);
             CompletableFuture<KVRangeSnapshot> onInstalled = new CompletableFuture<>();
             // the restore future is cancelable
             CompletableFuture<Void> restoreFuture = restorer.restoreFrom(leader, snapshot);
@@ -1413,13 +1409,12 @@ public class KVRangeFSM implements IKVRangeFSM {
                     log.debug("Restored from snapshot error: \n{}", snapshot, e);
                     onInstalled.completeExceptionally(e);
                 } else {
-                    log.info("Restored from snapshot: \n{}", snapshot);
                     linearizer.afterLogApplied(snapshot.getLastAppliedIndex());
                     // reset the co-proc
                     coProc.reset(snapshot.getBoundary());
                     // finish all pending tasks
                     cmdFutures.keySet().forEach(taskId -> finishCommandWithError(taskId,
-                        new KVRangeException.TryLater("Snapshot installed, try again")));
+                        new KVRangeException.TryLater("Restored from snapshot, try again")));
                     onInstalled.complete(kvRange.checkpoint());
                 }
             }, fsmExecutor);
@@ -1427,60 +1422,37 @@ public class KVRangeFSM implements IKVRangeFSM {
         });
     }
 
-    private void checkWalSize() {
-        if (compactionFuture.isDone()) {
-            long lastAppliedIndex = kvRange.lastAppliedIndex();
-            KVRangeSnapshot snapshot = wal.latestSnapshot();
-            if (lastAppliedIndex - snapshot.getLastAppliedIndex() > opts.getCompactWALThreshold()) {
-                scheduleCompaction();
-            }
-        }
-    }
-
     private void estimateSplitHint() {
         splitHintsSubject.onNext(splitHinters.stream().map(IKVRangeSplitHinter::estimate).toList());
     }
 
-    private void scheduleCompaction() {
-        if (compacting.compareAndSet(false, true)) {
-            compactionFuture = mgmtTaskRunner.add(() -> {
-                if (isNotOpening() || kvRange.state().getType() == ConfigChanging) {
-                    // don't let compaction interferes with config changing process
+    private CompletableFuture<Void> compactWAL(boolean checkWALSize) {
+        return mgmtTaskRunner.add(() -> {
+            if (isNotOpening() || kvRange.state().getType() == ConfigChanging) {
+                // don't let compaction interferes with config changing process
+                return CompletableFuture.completedFuture(null);
+            }
+            KVRangeSnapshot latestSnapshot = wal.latestSnapshot();
+            if (checkWALSize) {
+                long lastAppliedIndex = kvRange.lastAppliedIndex();
+                if (lastAppliedIndex - latestSnapshot.getLastAppliedIndex() < opts.getCompactWALThreshold()) {
                     return CompletableFuture.completedFuture(null);
                 }
-                return metricManager.recordCompact(() -> {
-                    KVRangeSnapshot snapshot = kvRange.checkpoint();
-                    log.debug("Compact wal using snapshot:\n{}", snapshot);
-                    return wal.compact(snapshot).handle((v, e) -> {
+            }
+            if (!dumpSessions.isEmpty()) {
+                return CompletableFuture.completedFuture(null);
+            }
+            return metricManager.recordCompact(() -> {
+                KVRangeSnapshot snapshot = kvRange.checkpoint();
+                log.debug("Compact wal using snapshot:\n{}", snapshot);
+                return wal.compact(snapshot)
+                    .whenComplete((v, e) -> {
                         if (e != null) {
                             log.error("Wal compaction error", e);
-                        } else {
-                            dumpSessions.forEach((sessionId, session) -> {
-                                if (!session.checkpointId().equals(snapshot.getCheckpointId())) {
-                                    session.cancel();
-                                    dumpSessions.remove(sessionId, session);
-                                }
-                            });
                         }
-                        return null;
                     });
-                });
-            }).whenComplete((v, e) -> compacting.set(false));
-        }
-    }
-
-    private CompletableFuture<Void> scheduleCheckpoint() {
-        return mgmtTaskRunner.add(() -> metricManager.recordCompact(() -> {
-            KVRangeSnapshot snapshot = kvRange.checkpoint();
-            log.info("Checkpointing using snapshot:\n{}", snapshot);
-            return wal.compact(snapshot)
-                .thenAccept(v -> dumpSessions.forEach((sessionId, session) -> {
-                    if (!session.checkpointId().equals(snapshot.getCheckpointId())) {
-                        session.cancel();
-                        dumpSessions.remove(sessionId, session);
-                    }
-                }));
-        }));
+            });
+        });
     }
 
     private boolean isNotOpening() {
@@ -1513,9 +1485,9 @@ public class KVRangeFSM implements IKVRangeFSM {
     private void handleWALMessages(String peerId, List<RaftMessage> messages) {
         if (messages.stream()
             .anyMatch(msg -> msg.hasInstallSnapshotReply() && msg.getInstallSnapshotReply().getRejected())) {
-            log.debug("Snapshot rejected by peer[{}], compact now", peerId);
+            log.debug("Snapshot rejected by peer[{}], compact WAL with latest checkpoint now", peerId);
             // follower reject my snapshot, probably because it's too old, let's make a new one immediately
-            scheduleCompaction();
+            compactWAL(false);
         }
         wal.receivePeerMessages(peerId, messages);
     }
@@ -1528,7 +1500,7 @@ public class KVRangeFSM implements IKVRangeFSM {
             opts.getSnapshotSyncBytesPerSec(), metricManager::reportDump, tags);
         dumpSessions.put(request.getSessionId(), session);
         session.awaitDone().whenComplete((v, e) -> {
-            log.info("Snapshot dump done: session={}, follower={}", request.getSessionId(), follower);
+            log.info("Snapshot dumped: session={}, follower={}", request.getSessionId(), follower);
             dumpSessions.remove(request.getSessionId(), session);
         });
     }
