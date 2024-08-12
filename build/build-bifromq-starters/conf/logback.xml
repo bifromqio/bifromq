@@ -25,7 +25,7 @@
     <property name="raftLogPattern"
               value="%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [%t] --- [%F:%L] %m - [id=%X{id},term=%X{term},state=%X{state},leader=%X{leader},f=%X{first},l=%X{last}],c=%X{commit},cfg=%X{config}]%n"/>
     <property name="balancerLogPattern"
-              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [%t] --- [%F:%L] %m%n"/>
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %5p --- %m%n"/>
 
     <appender name="stdout" class="ch.qos.logback.core.ConsoleAppender">
         <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">

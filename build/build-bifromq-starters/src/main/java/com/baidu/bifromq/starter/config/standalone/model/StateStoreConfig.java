@@ -63,6 +63,8 @@ public class StateStoreConfig {
 //            balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.DistWorkerSplitBalancerFactory");
             balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.RangeLeaderBalancerFactory");
             balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.ReplicaCntBalancerFactory");
+            balanceConfig.balancers.add(
+                "com.baidu.bifromq.dist.worker.balance.UnreachableReplicaRemovalBalancerFactory");
         }
     }
 
@@ -86,6 +88,8 @@ public class StateStoreConfig {
             balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.ReplicaCntBalancerFactory");
             balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.RangeSplitBalancerFactory");
             balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.RangeLeaderBalancerFactory");
+            balanceConfig.balancers.add(
+                "com.baidu.bifromq.inbox.store.balance.UnreachableReplicaRemovalBalancerFactory");
         }
     }
 

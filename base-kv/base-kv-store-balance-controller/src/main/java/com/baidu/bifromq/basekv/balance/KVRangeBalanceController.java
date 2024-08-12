@@ -120,11 +120,11 @@ public class KVRangeBalanceController {
                 }
                 StoreBalancer balancer =
                     balancerFactoryMap.get(factoryName).newBalancer(storeClient.clusterId(), localStoreId);
-                log.info("Balancer factory[{}] enabled for store[{}]", factoryName, localStoreId);
+                log.info("Balancer factory[{}] enabled", factoryName);
                 balancers.add(balancer);
             }
             this.metricsManager = new MetricManager(localStoreId, storeClient.clusterId());
-            log.info("Balancer start");
+            log.info("BalancerController start");
             descriptorSub = this.storeClient.describe()
                 .distinctUntilChanged()
                 .subscribe(sds -> executor.execute(() -> updateStoreDescriptors(sds)));
@@ -169,7 +169,8 @@ public class KVRangeBalanceController {
                 Optional<BalanceCommand> commandOpt = fromBalancer.balance();
                 if (commandOpt.isPresent()) {
                     BalanceCommand commandToRun = commandOpt.get();
-                    log.info("Balancer[{}] run command: {}", fromBalancer.getClass().getSimpleName(), commandToRun);
+                    log.info("Balancer[{}] command run: {}", fromBalancer.getClass().getSimpleName(),
+                        commandToRun);
                     String balancerName = fromBalancer.getClass().getSimpleName();
                     String cmdName = commandToRun.getClass().getSimpleName();
                     Sample start = Timer.start();
@@ -181,8 +182,8 @@ public class KVRangeBalanceController {
                                 log.error("Should not be here, error when run command", e);
                                 metrics.cmdFailedCounter.increment();
                             } else {
-                                log.info("Balancer command[{},{}] result: {}", fromBalancer.getClass().getSimpleName(),
-                                    commandToRun, r);
+                                log.info("Balancer[{}] command result[{}]: {}",
+                                    fromBalancer.getClass().getSimpleName(), r, commandToRun);
                                 if (r) {
                                     metrics.cmdSucceedCounter.increment();
                                     start.stop(metrics.cmdRunTimer);
@@ -195,7 +196,7 @@ public class KVRangeBalanceController {
                     return;
                 }
             } catch (Throwable e) {
-                log.warn("Run balancer[{}] failed", fromBalancer.getClass().getSimpleName(), e);
+                log.warn("Failed to execute balancer[{}]", fromBalancer.getClass().getSimpleName(), e);
             }
         }
         // no command to run

@@ -104,7 +104,7 @@ class KVRangeRestorer {
                                         } else {
                                             restorer.abort();
                                             dispose();
-                                            log.debug("Snapshot restore canceled: session={}", session.id);
+                                            log.info("Snapshot restore canceled: session={}", session.id);
                                         }
                                     }
                                     messenger.send(KVRangeMessage.newBuilder()
