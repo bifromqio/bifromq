@@ -59,11 +59,15 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
         this.subscriber = subscriber;
         this.lastFetchedIdx.set(lastFetchedIndex);
         this.subscriber.onSubscribe(this);
-        disposables.add(wal.snapshotInstallTask()
+        disposables.add(wal.snapshotRestoreTask()
             .subscribe(task -> fetchRunner.add(() -> {
+                // snapshot restore work is preemptive
                 applyRunner.cancelAll();
-                applyRunner.add(installSnapshot(task.snapshot, task.leader, task.onDone))
-                    .thenAccept(snap -> fetchRunner.add(() -> {
+                applyRunner.add(restore(task))
+                    .handle((snap, e) -> fetchRunner.add(() -> {
+                        if (e != null) {
+                            return;
+                        }
                         log.debug(
                             "Snapshot installed: range={}, ver={}, state={}, checkpoint={}, lastAppliedIndex={}",
                             KVRangeIdUtil.toString(snap.getId()),
@@ -155,28 +159,25 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
         };
     }
 
-    private Supplier<CompletableFuture<KVRangeSnapshot>> installSnapshot(KVRangeSnapshot snapshot,
-                                                                         String leader,
-                                                                         CompletableFuture<KVRangeSnapshot> onDone) {
+    private Supplier<CompletableFuture<KVRangeSnapshot>> restore(IKVRangeWAL.RestoreSnapshotTask task) {
         return () -> {
-            if (onDone.isCancelled()) {
-                return CompletableFuture.completedFuture(null);
-            }
-            // start async installation
-            CompletableFuture<KVRangeSnapshot> installFuture = subscriber.install(snapshot, leader);
+            CompletableFuture<KVRangeSnapshot> onDone = new CompletableFuture<>();
+            CompletableFuture<Void> restoreTask =
+                subscriber.restore(task.snapshot, task.leader, (installed, ex) -> task.afterRestored(installed, ex)
+                    .whenComplete((v, e) -> {
+                        if (e != null) {
+                            // error from fsm or raft
+                            onDone.completeExceptionally(e);
+                        } else {
+                            // after raft applied the installed snapshot, we can continue to fetch wal
+                            onDone.complete(installed);
+                        }
+                    }));
             onDone.whenComplete((v, e) -> {
                 if (onDone.isCancelled()) {
-                    // cancel installation if possible
-                    installFuture.cancel(true);
+                    restoreTask.cancel(true);
                 }
             });
-            installFuture.whenCompleteAsync((installed, e) -> {
-                if (e != null) {
-                    onDone.completeExceptionally(e);
-                } else {
-                    onDone.complete(installed);
-                }
-            }, executor);
             return onDone;
         };
     }

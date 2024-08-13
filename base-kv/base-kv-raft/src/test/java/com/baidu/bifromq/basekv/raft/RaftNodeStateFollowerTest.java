@@ -15,7 +15,6 @@ package com.baidu.bifromq.basekv.raft;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.times;
@@ -61,6 +60,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockitoAnnotations;
+import org.mockito.stubbing.Answer;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -682,10 +682,6 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
                 .build())
             .build();
 
-        CompletableFuture<ByteString> installResult = new CompletableFuture<>();
-
-        when(snapshotInstaller.install(any(ByteString.class), anyString())).thenReturn(installResult);
-
         noInLeaseFollower.receive("newLeader", installSnapshot);
         noInLeaseFollower.receive("newLeader", RaftMessage.newBuilder()
             .setTerm(1)
@@ -711,7 +707,7 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
                 .build())
             .build());
 
-        verify(snapshotInstaller, times(1)).install(eq(fsmSnapshot), eq("newLeader"));
+        verify(snapshotInstaller, times(1)).install(eq(fsmSnapshot), eq("newLeader"), any());
     }
 
     @Test
@@ -740,14 +736,10 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
                 .build())
             .build();
 
-        CompletableFuture<ByteString> installResult = new CompletableFuture<>();
-
-        when(snapshotInstaller.install(any(ByteString.class), anyString())).thenReturn(installResult);
-
         noInLeaseFollower.receive("newLeader", installSnapshot);
         noInLeaseFollower.receive("newLeader", installSnapshot);
 
-        verify(snapshotInstaller, times(1)).install(eq(fsmSnapshot), eq("newLeader"));
+        verify(snapshotInstaller, times(1)).install(eq(fsmSnapshot), eq("newLeader"), any());
     }
 
     @Test
@@ -776,12 +768,27 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
                 .build())
             .build();
 
-        when(snapshotInstaller.install(any(ByteString.class), anyString()))
-            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Test Exception")));
+        when(onSnapshotInstalled.done(any(), any(), any())).thenAnswer(
+            (Answer<CompletableFuture<Void>>) invocation -> {
+                CompletableFuture<Void> onDone = new CompletableFuture<>();
+                noInLeaseFollower
+                    .onSnapshotRestored(invocation.getArgument(0),
+                        invocation.getArgument(1),
+                        invocation.getArgument(2),
+                        onDone);
+                return onDone;
+            });
 
         noInLeaseFollower.receive("newLeader", installSnapshot);
-        noInLeaseFollower.onSnapshotRestored(installSnapshot.getInstallSnapshot().getSnapshot().getData(), fsmSnapshot,
-            new RuntimeException("Test Exception"));
+
+        ArgumentCaptor<IRaftNode.IAfterInstalledCallback> promiseCaptor =
+            ArgumentCaptor.forClass(IRaftNode.IAfterInstalledCallback.class);
+        verify(snapshotInstaller).install(eq(fsmSnapshot), eq("newLeader"), promiseCaptor.capture());
+
+        CompletableFuture<Void> afterSnapshotRestored =
+            promiseCaptor.getValue().call(null, new RuntimeException("Test Exception"));
+
+        assertTrue(afterSnapshotRestored.isCompletedExceptionally());
 
         verify(onSnapshotInstalled).done(any(), any(), any(Throwable.class));
         ArgumentCaptor<Map<String, List<RaftMessage>>> msgCaptor = ArgumentCaptor.forClass(Map.class);
@@ -822,13 +829,27 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
                     .build())
                 .build())
             .build();
+        when(onSnapshotInstalled.done(any(), any(), any())).thenAnswer(
+            (Answer<CompletableFuture<Void>>) invocation -> {
+                CompletableFuture<Void> onDone = new CompletableFuture<>();
+                noInLeaseFollower
+                    .onSnapshotRestored(invocation.getArgument(0),
+                        invocation.getArgument(1),
+                        invocation.getArgument(2),
+                        onDone);
+                return onDone;
+            });
 
-        when(snapshotInstaller.install(any(ByteString.class), anyString())).thenReturn(
-            CompletableFuture.completedFuture(fsmSnapshot));
         noInLeaseFollower.receive("newLeader", installSnapshot);
-        noInLeaseFollower.onSnapshotRestored(installSnapshot.getInstallSnapshot().getSnapshot().getData(),
-            fsmSnapshot, null);
 
+        ArgumentCaptor<IRaftNode.IAfterInstalledCallback> promiseCaptor =
+            ArgumentCaptor.forClass(IRaftNode.IAfterInstalledCallback.class);
+        verify(snapshotInstaller).install(eq(fsmSnapshot), eq("newLeader"), promiseCaptor.capture());
+
+        CompletableFuture<Void> afterSnapshotRestored =
+            promiseCaptor.getValue().call(fsmSnapshot, null);
+
+        assertTrue(afterSnapshotRestored.isDone() && !afterSnapshotRestored.isCompletedExceptionally());
         verify(onSnapshotInstalled).done(any(), any(), isNull());
 
         ArgumentCaptor<Map<String, List<RaftMessage>>> msgCaptor = ArgumentCaptor.forClass(Map.class);
@@ -879,10 +900,27 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
             .build();
         ByteString fsmSnapshot2 = ByteString.copyFrom("snapshot2".getBytes());
 
-        when(snapshotInstaller.install(fsmSnapshot1, "newLeader"))
-            .thenReturn(CompletableFuture.completedFuture(fsmSnapshot2));
+        when(onSnapshotInstalled.done(any(), any(), any())).thenAnswer(
+            (Answer<CompletableFuture<Void>>) invocation -> {
+                CompletableFuture<Void> onDone = new CompletableFuture<>();
+                noInLeaseFollower
+                    .onSnapshotRestored(invocation.getArgument(0),
+                        invocation.getArgument(1),
+                        invocation.getArgument(2),
+                        onDone);
+                return onDone;
+            });
+
         noInLeaseFollower.receive("newLeader", installSnapshot1);
-        noInLeaseFollower.onSnapshotRestored(fsmSnapshot1, fsmSnapshot2, null);
+        ArgumentCaptor<IRaftNode.IAfterInstalledCallback> promiseCaptor =
+            ArgumentCaptor.forClass(IRaftNode.IAfterInstalledCallback.class);
+        verify(snapshotInstaller).install(eq(fsmSnapshot1), eq("newLeader"), promiseCaptor.capture());
+
+        CompletableFuture<Void> afterSnapshotRestored =
+            promiseCaptor.getValue().call(fsmSnapshot2, null);
+
+        assertTrue(afterSnapshotRestored.isDone() && !afterSnapshotRestored.isCompletedExceptionally());
+
 
         verify(onSnapshotInstalled).done(eq(fsmSnapshot1), eq(fsmSnapshot2), isNull());
 
@@ -960,10 +998,10 @@ public class RaftNodeStateFollowerTest extends RaftNodeStateTest {
                     break;
             }
         }, eventListener,
-            (appSMSnapshot, leader) -> {
+            (appSMSnapshot, leader, promise) -> {
                 assertEquals(appSMSnapshot, ByteString.copyFromUtf8("snapshot"));
                 assertEquals(leader, "newLeader");
-                return CompletableFuture.completedFuture(appSMSnapshot);
+                promise.call(appSMSnapshot, null);
             }, onSnapshotInstalled);
         stateStorage.addStableListener(noInLeaseFollower::stableTo);
         // appended entries

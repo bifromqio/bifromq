@@ -454,7 +454,6 @@ public class RaftNodeStateCandidateTest extends RaftNodeStateTest {
         raftNodeStateCandidate = new RaftNodeStateCandidate(1, 0, defaultRaftConfig, stateStorage,
             new LinkedHashMap<>(), msgSender, eventListener, snapshotInstaller, onSnapshotInstalled);
 
-        when(snapshotInstaller.install(any(ByteString.class), anyString())).thenReturn(new CompletableFuture<>());
         RaftMessage installSnapshot = RaftMessage.newBuilder()
             .setTerm(1)
             .setInstallSnapshot(InstallSnapshot.newBuilder()

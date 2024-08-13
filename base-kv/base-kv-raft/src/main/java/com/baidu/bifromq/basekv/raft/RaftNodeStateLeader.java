@@ -411,8 +411,9 @@ class RaftNodeStateLeader extends RaftNodeState {
     }
 
     @Override
-    void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex) {
+    void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex, CompletableFuture<Void> onDone) {
         // ignore in leader state
+        onDone.complete(null);
     }
 
     private RaftNodeState handleAppendEntriesReply(String fromPeer, AppendEntriesReply reply) {

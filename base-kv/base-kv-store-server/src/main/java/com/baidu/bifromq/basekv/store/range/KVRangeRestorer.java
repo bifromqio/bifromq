@@ -149,6 +149,7 @@ class KVRangeRestorer {
             onDone.whenComplete((v, e) -> {
                 if (onDone.isCancelled()) {
                     observer.dispose();
+                    restorer.abort();
                 }
             });
             log.debug("Send snapshot sync request to {} {}", leader, !onDone.isDone());

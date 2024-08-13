@@ -16,6 +16,7 @@ package com.baidu.bifromq.mqtt.handler;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3_1_1_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_5_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -23,9 +24,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
-import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.metrics.TenantMetric;
@@ -35,7 +36,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.OversizePacketDropped;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.type.ClientInfo;
-import io.netty.buffer.ByteBuf;
+import io.micrometer.core.instrument.Timer;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.mqtt.MqttMessage;
@@ -54,6 +55,8 @@ public class MQTTPacketFilterTest extends MockableTest {
     private IEventCollector eventCollector;
     @Mock
     private ITenantMeter tenantMeter;
+    @Mock
+    private Timer timer;
     private ISettingProvider settingProvider = Setting::current;
     private TenantSettings settings = new TenantSettings(tenantId, settingProvider);
     private ClientInfo mqtt3Client = ClientInfo.newBuilder()
@@ -71,6 +74,7 @@ public class MQTTPacketFilterTest extends MockableTest {
         try (MockedStatic<ITenantMeter> mockedStatic = mockStatic(ITenantMeter.class)) {
             // 模拟MyUtility.staticMethod()方法
             mockedStatic.when(() -> ITenantMeter.get(tenantId)).thenReturn(tenantMeter);
+            when(tenantMeter.timer(any())).thenReturn(timer);
             MQTTPacketFilter testFilter =
                 new MQTTPacketFilter(10, settings, mqtt3Client, eventCollector);
             EmbeddedChannel channel = new EmbeddedChannel(testFilter);
@@ -90,6 +94,7 @@ public class MQTTPacketFilterTest extends MockableTest {
     public void logEgressMetric() {
         try (MockedStatic<ITenantMeter> mockedStatic = mockStatic(ITenantMeter.class)) {
             mockedStatic.when(() -> ITenantMeter.get(tenantId)).thenReturn(tenantMeter);
+            when(tenantMeter.timer(any())).thenReturn(timer);
             MQTTPacketFilter testFilter =
                 new MQTTPacketFilter(150, settings, mqtt3Client, eventCollector);
             EmbeddedChannel channel = new EmbeddedChannel(testFilter);
@@ -109,6 +114,7 @@ public class MQTTPacketFilterTest extends MockableTest {
     public void trimReasonStringOnly() {
         try (MockedStatic<ITenantMeter> mockedStatic = mockStatic(ITenantMeter.class)) {
             mockedStatic.when(() -> ITenantMeter.get(tenantId)).thenReturn(tenantMeter);
+            when(tenantMeter.timer(any())).thenReturn(timer);
             // trim is enabled for MQTT5 client
             MQTTPacketFilter testFilter =
                 new MQTTPacketFilter(17, settings, mqtt5Client, eventCollector);
@@ -138,6 +144,7 @@ public class MQTTPacketFilterTest extends MockableTest {
     public void trimReasonStringAndUserProps() {
         try (MockedStatic<ITenantMeter> mockedStatic = mockStatic(ITenantMeter.class)) {
             mockedStatic.when(() -> ITenantMeter.get(tenantId)).thenReturn(tenantMeter);
+            when(tenantMeter.timer(any())).thenReturn(timer);
             // trim is enabled for MQTT5 client
             MQTTPacketFilter testFilter =
                 new MQTTPacketFilter(6, settings, mqtt5Client, eventCollector);
@@ -167,6 +174,7 @@ public class MQTTPacketFilterTest extends MockableTest {
     public void dropUntrimableMessage() {
         try (MockedStatic<ITenantMeter> mockedStatic = mockStatic(ITenantMeter.class)) {
             mockedStatic.when(() -> ITenantMeter.get(tenantId)).thenReturn(tenantMeter);
+            when(tenantMeter.timer(any())).thenReturn(timer);
             MQTTPacketFilter testFilter =
                 new MQTTPacketFilter(108, settings, mqtt3Client, eventCollector);
             EmbeddedChannel channel = new EmbeddedChannel(testFilter);

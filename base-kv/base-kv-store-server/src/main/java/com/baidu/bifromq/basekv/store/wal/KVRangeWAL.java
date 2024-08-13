@@ -37,7 +37,6 @@ import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.protobuf.AbstractMessageLite;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
@@ -59,7 +58,7 @@ public class KVRangeWAL implements IKVRangeWAL, IRaftNode.ISnapshotInstaller {
     private final long maxFetchBytes;
     private final PublishSubject<SnapshotRestoredEvent> snapRestoreEventPublisher = PublishSubject.create();
     private final BehaviorSubject<Long> commitIndexSubject = BehaviorSubject.create();
-    private final PublishSubject<SnapshotInstallTask> snapInstallTaskPublisher = PublishSubject.create();
+    private final PublishSubject<RestoreSnapshotTask> snapRestoreTaskPublisher = PublishSubject.create();
     private final BehaviorSubject<ElectionEvent> electionPublisher = BehaviorSubject.create();
     private final BehaviorSubject<RaftNodeStatus> statusPublisher = BehaviorSubject.create();
     private final PublishSubject<Map<String, List<RaftMessage>>> raftMessagesPublisher = PublishSubject.create();
@@ -164,7 +163,9 @@ public class KVRangeWAL implements IKVRangeWAL, IRaftNode.ISnapshotInstaller {
                     }
 
                     @Override
-                    public CompletableFuture<KVRangeSnapshot> install(KVRangeSnapshot request, String leader) {
+                    public CompletableFuture<Void> restore(KVRangeSnapshot requested, String leader,
+                                                           IAfterRestoredCallback callback) {
+                        callback.call(null, new KVRangeException("Canceled once"));
                         return CompletableFuture.failedFuture(new KVRangeException("Canceled once"));
                     }
                 }, executor, tags);
@@ -224,8 +225,8 @@ public class KVRangeWAL implements IKVRangeWAL, IRaftNode.ISnapshotInstaller {
     }
 
     @Override
-    public Observable<SnapshotInstallTask> snapshotInstallTask() {
-        return snapInstallTaskPublisher;
+    public Observable<RestoreSnapshotTask> snapshotRestoreTask() {
+        return snapRestoreTaskPublisher;
     }
 
     @Override
@@ -266,7 +267,7 @@ public class KVRangeWAL implements IKVRangeWAL, IRaftNode.ISnapshotInstaller {
         log.debug("Closing KVRangeWAL");
         raftMessagesPublisher.onComplete();
         commitIndexSubject.onComplete();
-        snapInstallTaskPublisher.onComplete();
+        snapRestoreTaskPublisher.onComplete();
         electionPublisher.onComplete();
         syncStatePublisher.onComplete();
         return raftNode.stop().whenComplete((v, e) -> log.debug("KVRangeWAL closed"));
@@ -282,10 +283,9 @@ public class KVRangeWAL implements IKVRangeWAL, IRaftNode.ISnapshotInstaller {
     }
 
     @Override
-    public CompletableFuture<ByteString> install(ByteString requested, String leader) {
-        SnapshotInstallTask task = new SnapshotInstallTask(requested, leader);
-        snapInstallTaskPublisher.onNext(task);
-        return task.onDone.thenApply(AbstractMessageLite::toByteString);
+    public void install(ByteString requested, String leader, IRaftNode.IAfterInstalledCallback callback) {
+        RestoreSnapshotTask task = new RestoreSnapshotTask(requested, leader, callback);
+        snapRestoreTaskPublisher.onNext(task);
     }
 
     void onRaftEvent(RaftEvent event) {

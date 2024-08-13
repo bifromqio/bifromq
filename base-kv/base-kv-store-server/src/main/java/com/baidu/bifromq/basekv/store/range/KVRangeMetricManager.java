@@ -232,8 +232,7 @@ class KVRangeMetricManager implements IKVRangeMetricManager {
     }
 
     @Override
-    public CompletableFuture<KVRangeSnapshot> recordSnapshotInstall(
-        Supplier<CompletableFuture<KVRangeSnapshot>> supplier) {
+    public CompletableFuture<Void> recordSnapshotInstall(Supplier<CompletableFuture<Void>> supplier) {
         return recordDuration(supplier, installSnapshotTimer);
     }
 

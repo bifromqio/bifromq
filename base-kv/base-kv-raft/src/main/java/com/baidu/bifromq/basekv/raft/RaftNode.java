@@ -284,8 +284,12 @@ public final class RaftNode implements IRaftNode {
         }
 
         @Override
-        public CompletableFuture<ByteString> install(ByteString request, String leader) {
-            return metricMgr.snapshotInstallTimer.record(() -> delegate.install(request, leader));
+        public void install(ByteString request, String leader, IAfterInstalledCallback callback) {
+            Timer.Sample start = Timer.start();
+            delegate.install(request, leader, (snapshot, ex) -> {
+                start.stop(metricMgr.snapshotInstallTimer);
+                return callback.call(snapshot, ex);
+            });
         }
     }
 
@@ -509,15 +513,8 @@ public final class RaftNode implements IRaftNode {
         };
     }
 
-    void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex) {
-        if (isStarted()) {
-            raftExecutor.execute(() -> {
-                if (!isStarted()) {
-                    return;
-                }
-                stateRef.get().onSnapshotRestored(requested, installed, ex);
-            });
-        }
+    CompletableFuture<Void> onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex) {
+        return submit(onDone -> stateRef.get().onSnapshotRestored(requested, installed, ex, onDone));
     }
 
     private void submit(Runnable task) {

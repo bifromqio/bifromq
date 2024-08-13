@@ -16,6 +16,7 @@ package com.baidu.bifromq.basekv.store.wal;
 import com.baidu.bifromq.basekv.proto.KVRangeCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
+import com.baidu.bifromq.basekv.raft.IRaftNode;
 import com.baidu.bifromq.basekv.raft.event.ElectionEvent;
 import com.baidu.bifromq.basekv.raft.event.SnapshotRestoredEvent;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
@@ -36,21 +37,27 @@ import java.util.concurrent.Executor;
 import java.util.function.Predicate;
 
 public interface IKVRangeWAL {
-    class SnapshotInstallTask {
+    class RestoreSnapshotTask {
         public final KVRangeSnapshot snapshot;
         public final String leader;
-        public final CompletableFuture<KVRangeSnapshot> onDone;
+        private final IRaftNode.IAfterInstalledCallback callback;
 
-        public SnapshotInstallTask(ByteString snapshotData, String leader) {
+        public RestoreSnapshotTask(ByteString snapshotData,
+                                   String leader,
+                                   IRaftNode.IAfterInstalledCallback callback) {
             this.leader = leader;
-            this.onDone = new CompletableFuture<>();
+            this.callback = callback;
             KVRangeSnapshot ss = null;
             try {
                 ss = KVRangeSnapshot.parseFrom(snapshotData);
             } catch (InvalidProtocolBufferException e) {
-                this.onDone.completeExceptionally(e);
+                this.callback.call(null, e);
             }
             snapshot = ss;
+        }
+
+        public CompletableFuture<Void> afterRestored(KVRangeSnapshot snapshot, Throwable ex) {
+            return callback.call(snapshot == null ? null : snapshot.toByteString(), ex);
         }
     }
 
@@ -96,7 +103,7 @@ public interface IKVRangeWAL {
 
     CompletableFuture<Void> compact(KVRangeSnapshot snapshot);
 
-    Observable<SnapshotInstallTask> snapshotInstallTask();
+    Observable<RestoreSnapshotTask> snapshotRestoreTask();
 
     Observable<Map<String, List<RaftMessage>>> peerMessages();
 

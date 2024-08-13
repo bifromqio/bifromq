@@ -27,6 +27,7 @@ import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
+import com.baidu.bifromq.basekv.raft.IRaftNode;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
@@ -54,15 +55,19 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
     private long maxSize = 1024;
     @Mock
     private IKVRangeWAL wal;
-    private PublishSubject<IKVRangeWAL.SnapshotInstallTask> snapshotSource = PublishSubject.create();
-    private BehaviorSubject<Long> commitIndexSource = BehaviorSubject.create();
     @Mock
     private IKVRangeWALSubscriber subscriber;
+    @Mock
+    private PublishSubject<IKVRangeWAL.RestoreSnapshotTask> snapshotSource;
+    private BehaviorSubject<Long> commitIndexSource;
+    private IRaftNode.IAfterInstalledCallback afterInstalled;
     private ExecutorService executor;
 
     protected void doSetup(Method method) {
         executor = Executors.newSingleThreadScheduledExecutor();
-        when(wal.snapshotInstallTask()).thenReturn(snapshotSource);
+        commitIndexSource = BehaviorSubject.create();
+        snapshotSource = PublishSubject.create();
+        when(wal.snapshotRestoreTask()).thenReturn(snapshotSource);
         when(wal.rangeId()).thenReturn(KVRangeIdUtil.generate());
     }
 
@@ -133,39 +138,6 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
 
     @SneakyThrows
     @Test
-    public void stopRetryWhenSnapshot() {
-        AtomicInteger retryCount = new AtomicInteger();
-        KVRangeSnapshot snapshot = KVRangeSnapshot.getDefaultInstance();
-        when(wal.retrieveCommitted(0, maxSize))
-            .thenAnswer((Answer<CompletableFuture<Iterator<LogEntry>>>) invocationOnMock -> {
-                retryCount.incrementAndGet();
-                return CompletableFuture.failedFuture(
-                    new IllegalArgumentException("For Testing"));
-            });
-        CountDownLatch latch = new CountDownLatch(1);
-        when(subscriber.install(any(KVRangeSnapshot.class), anyString())).thenAnswer(
-            (Answer<CompletableFuture<KVRangeSnapshot>>) invocationOnMock -> {
-                latch.countDown();
-                return CompletableFuture.completedFuture(snapshot);
-            });
-
-        KVRangeWALSubscription walSub =
-            new KVRangeWALSubscription(maxSize, wal, commitIndexSource, -1, subscriber, executor);
-        commitIndexSource.onNext(0L);
-        await().until(() -> retryCount.get() > 2);
-        snapshotSource.onNext(
-            new IKVRangeWAL.SnapshotInstallTask(snapshot.toByteString(), "leader"));
-        latch.await();
-        await().until(() -> {
-            int c = retryCount.get();
-            Thread.sleep(100);
-            return retryCount.get() == c;
-        });
-        verify(wal, atLeast(2)).retrieveCommitted(0, maxSize);
-    }
-
-    @SneakyThrows
-    @Test
     public void reapplyLog() {
         when(wal.retrieveCommitted(0, maxSize)).thenReturn(CompletableFuture.completedFuture(
             Iterators.forArray(
@@ -217,7 +189,8 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
         commitIndexSource.onNext(0L);
         latch.await();
         snapshotSource.onNext(
-            new IKVRangeWAL.SnapshotInstallTask(KVRangeSnapshot.getDefaultInstance().toByteString(), "leader"));
+            new IKVRangeWAL.RestoreSnapshotTask(KVRangeSnapshot.getDefaultInstance().toByteString(), "leader",
+                afterInstalled));
         await().until(applyLogFuture::isCancelled);
     }
 
@@ -237,7 +210,7 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
                 return CompletableFuture.failedFuture(new KVRangeException.TryLater("Try again"));
             });
         CountDownLatch latch = new CountDownLatch(1);
-        when(subscriber.install(any(KVRangeSnapshot.class), anyString()))
+        when(subscriber.restore(any(KVRangeSnapshot.class), anyString(), any()))
             .thenAnswer((Answer<CompletableFuture<KVRangeSnapshot>>) invocationOnMock -> {
                 latch.countDown();
                 return CompletableFuture.completedFuture(snapshot);
@@ -247,7 +220,7 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
         commitIndexSource.onNext(0L);
         await().until(() -> retryCount.get() > 2);
         snapshotSource.onNext(
-            new IKVRangeWAL.SnapshotInstallTask(snapshot.toByteString(), "leader"));
+            new IKVRangeWAL.RestoreSnapshotTask(snapshot.toByteString(), "leader", afterInstalled));
         latch.await();
         int c = retryCount.get();
         Thread.sleep(100);
@@ -259,7 +232,7 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
     public void cancelApplySnapshot() {
         CountDownLatch latch = new CountDownLatch(1);
         CompletableFuture<KVRangeSnapshot> applySnapshotFuture = new CompletableFuture<>();
-        when(subscriber.install(any(KVRangeSnapshot.class), eq("leader")))
+        when(subscriber.restore(any(KVRangeSnapshot.class), eq("leader"), any()))
             .thenAnswer((Answer<CompletableFuture<KVRangeSnapshot>>) invocationOnMock -> {
                 latch.countDown();
                 return applySnapshotFuture;
@@ -267,10 +240,12 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
         KVRangeWALSubscription walSub =
             new KVRangeWALSubscription(maxSize, wal, commitIndexSource, 0, subscriber, executor);
         snapshotSource.onNext(
-            new IKVRangeWAL.SnapshotInstallTask(KVRangeSnapshot.getDefaultInstance().toByteString(), "leader"));
+            new IKVRangeWAL.RestoreSnapshotTask(KVRangeSnapshot.getDefaultInstance().toByteString(), "leader",
+                afterInstalled));
         latch.await();
         snapshotSource.onNext(
-            new IKVRangeWAL.SnapshotInstallTask(KVRangeSnapshot.getDefaultInstance().toByteString(), "leader"));
+            new IKVRangeWAL.RestoreSnapshotTask(KVRangeSnapshot.getDefaultInstance().toByteString(), "leader",
+                afterInstalled));
         await().until(applySnapshotFuture::isCancelled);
     }
 
@@ -279,7 +254,7 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
     public void cancelApplySnapshotWhenStop() {
         CountDownLatch latch = new CountDownLatch(1);
         CompletableFuture<KVRangeSnapshot> applySnapshotFuture = new CompletableFuture<>();
-        when(subscriber.install(any(KVRangeSnapshot.class), anyString()))
+        when(subscriber.restore(any(KVRangeSnapshot.class), anyString(), any()))
             .thenAnswer((Answer<CompletableFuture<KVRangeSnapshot>>) invocationOnMock -> {
                 latch.countDown();
                 return applySnapshotFuture;
@@ -287,7 +262,8 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
         KVRangeWALSubscription walSub =
             new KVRangeWALSubscription(maxSize, wal, commitIndexSource, 0, subscriber, executor);
         snapshotSource.onNext(
-            new IKVRangeWAL.SnapshotInstallTask(KVRangeSnapshot.getDefaultInstance().toByteString(), "leader"));
+            new IKVRangeWAL.RestoreSnapshotTask(KVRangeSnapshot.getDefaultInstance().toByteString(), "leader",
+                afterInstalled));
         latch.await();
         walSub.stop();
         await().until(applySnapshotFuture::isCancelled);
@@ -312,9 +288,10 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
         commitIndexSource.onNext(0L);
         latch.await();
         snapshotSource.onNext(
-            new IKVRangeWAL.SnapshotInstallTask(KVRangeSnapshot.getDefaultInstance().toByteString(), "leader"));
+            new IKVRangeWAL.RestoreSnapshotTask(KVRangeSnapshot.getDefaultInstance().toByteString(), "leader",
+                afterInstalled));
         await().until(applyLogFuture1::isCancelled);
         verify(subscriber, times(1)).apply(any(LogEntry.class));
-        verify(subscriber, times(1)).install(KVRangeSnapshot.getDefaultInstance(), "leader");
+        verify(subscriber, times(1)).restore(eq(KVRangeSnapshot.getDefaultInstance()), eq("leader"), any());
     }
 }

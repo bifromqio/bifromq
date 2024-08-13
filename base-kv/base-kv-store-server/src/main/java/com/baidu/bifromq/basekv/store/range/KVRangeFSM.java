@@ -227,8 +227,10 @@ public class KVRangeFSM implements IKVRangeFSM {
                 }
 
                 @Override
-                public CompletableFuture<KVRangeSnapshot> install(KVRangeSnapshot request, String leader) {
-                    return metricManager.recordSnapshotInstall(() -> KVRangeFSM.this.install(request, leader));
+                public CompletableFuture<Void> restore(KVRangeSnapshot snapshot, String leader,
+                                                       IAfterRestoredCallback callback) {
+                    return metricManager.recordSnapshotInstall(
+                        () -> KVRangeFSM.this.restore(snapshot, leader, callback));
                 }
             }, fsmExecutor);
         quitReason.thenAccept(v -> {
@@ -1379,46 +1381,31 @@ public class KVRangeFSM implements IKVRangeFSM {
         return onDone;
     }
 
-    private CompletableFuture<KVRangeSnapshot> install(KVRangeSnapshot snapshot, String leader) {
+    private CompletableFuture<Void> restore(KVRangeSnapshot snapshot,
+                                            String leader,
+                                            IKVRangeWALSubscriber.IAfterRestoredCallback onInstalled) {
         if (isNotOpening()) {
-            return CompletableFuture.failedFuture(
+            onInstalled.call(null,
                 new KVRangeException.InternalException("Range not open:" + KVRangeIdUtil.toString(id)));
         }
         return mgmtTaskRunner.add(() -> {
             if (isNotOpening()) {
                 return CompletableFuture.completedFuture(null);
             }
-            CompletableFuture<KVRangeSnapshot> onInstalled = new CompletableFuture<>();
-            // the restore future is cancelable
-            CompletableFuture<Void> restoreFuture = restorer.restoreFrom(leader, snapshot);
-            onInstalled.whenComplete((v, e) -> {
-                if (onInstalled.isCancelled()) {
-                    // cancel restore task if possible
-                    restoreFuture.cancel(true);
-                }
-            });
-            restoreFuture.whenCompleteAsync((v, e) -> {
-                if (isNotOpening()) {
-                    if (!onInstalled.isCancelled()) {
-                        onInstalled.completeExceptionally(
-                            new KVRangeException.InternalException("KVRange has been closed"));
-                    }
-                    return;
-                }
-                if (e != null) {
+            return restorer.restoreFrom(leader, snapshot)
+                .exceptionallyCompose(e -> {
                     log.debug("Restored from snapshot error: \n{}", snapshot, e);
-                    onInstalled.completeExceptionally(e);
-                } else {
+                    return onInstalled.call(null, e);
+                })
+                .thenAccept(v -> {
                     linearizer.afterLogApplied(snapshot.getLastAppliedIndex());
                     // reset the co-proc
                     coProc.reset(snapshot.getBoundary());
                     // finish all pending tasks
                     cmdFutures.keySet().forEach(taskId -> finishCommandWithError(taskId,
                         new KVRangeException.TryLater("Restored from snapshot, try again")));
-                    onInstalled.complete(kvRange.checkpoint());
-                }
-            }, fsmExecutor);
-            return onInstalled;
+                })
+                .thenCompose(v -> onInstalled.call(kvRange.checkpoint(), null));
         });
     }
 
@@ -1448,7 +1435,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 return wal.compact(snapshot)
                     .whenComplete((v, e) -> {
                         if (e != null) {
-                            log.error("Wal compaction error", e);
+                            log.error("Failed to compact WAL due to {}: \n{}", e.getMessage(), snapshot);
                         }
                     });
             });

@@ -25,11 +25,18 @@ public interface IKVRangeWALSubscriber {
     CompletableFuture<Void> apply(LogEntry log);
 
     /**
-     * Install snapshot to kv range asynchronously and the returned snapshot will be used for WAL compaction
+     * Callback after snapshot restored.
+     */
+    interface IAfterRestoredCallback {
+        CompletableFuture<Void> call(KVRangeSnapshot snapshot, Throwable ex);
+    }
+
+    /**
+     * Install snapshot to kv range asynchronously and the returned snapshot will be used for WAL compaction.
      *
      * @param requested the snapshot requested to be installed
      * @param leader    the leader
-     * @return future for the installation
+     * @param callback  the callback to notify the result of snapshot installation
      */
-    CompletableFuture<KVRangeSnapshot> install(KVRangeSnapshot requested, String leader);
+    CompletableFuture<Void> restore(KVRangeSnapshot requested, String leader, IAfterRestoredCallback callback);
 }

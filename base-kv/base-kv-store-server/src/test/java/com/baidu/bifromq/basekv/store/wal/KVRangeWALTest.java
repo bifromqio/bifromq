@@ -14,8 +14,13 @@
 package com.baidu.bifromq.basekv.store.wal;
 
 import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNotNull;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
@@ -23,6 +28,7 @@ import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.proto.KVRangeCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
+import com.baidu.bifromq.basekv.raft.IRaftNode;
 import com.baidu.bifromq.basekv.raft.IRaftStateStore;
 import com.baidu.bifromq.basekv.raft.InMemoryStateStore;
 import com.baidu.bifromq.basekv.raft.RaftConfig;
@@ -44,13 +50,13 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.mockito.Mock;
 import org.testng.annotations.Test;
 
 @Slf4j
@@ -157,6 +163,8 @@ public class KVRangeWALTest extends MockableTest {
         }
     }
 
+    @Mock
+    private IRaftNode.IAfterInstalledCallback afterInstalled;
     private KVRangeId id = KVRangeIdUtil.generate();
 
     private String replicaId = "s1";
@@ -224,11 +232,11 @@ public class KVRangeWALTest extends MockableTest {
         KVRangeWAL wal = new KVRangeWAL("testcluster", replicaId, id, raftStateStorage, config, 1024);
         wal.start();
 
-        TestObserver<IKVRangeWAL.SnapshotInstallTask> testObserver = new TestObserver<>();
-        wal.snapshotInstallTask().subscribe(testObserver);
-        CompletableFuture<ByteString> onDone = wal.install(ByteString.EMPTY, "leader");
+        TestObserver<IKVRangeWAL.RestoreSnapshotTask> testObserver = new TestObserver<>();
+        wal.snapshotRestoreTask().subscribe(testObserver);
+        wal.install(ByteString.EMPTY, "leader", afterInstalled);
         testObserver.awaitCount(1);
-        IKVRangeWAL.SnapshotInstallTask task = testObserver.values().get(0);
+        IKVRangeWAL.RestoreSnapshotTask task = testObserver.values().get(0);
         assertEquals(task.snapshot, KVRangeSnapshot.getDefaultInstance());
         wal.close().join();
         testObserver.assertComplete();
@@ -237,13 +245,13 @@ public class KVRangeWALTest extends MockableTest {
     @SneakyThrows
     @Test
     public void snapshotTaskTest() {
-        IKVRangeWAL.SnapshotInstallTask task =
-            new IKVRangeWAL.SnapshotInstallTask(ByteString.copyFromUtf8("BadData"), "leader");
-        assertTrue(task.onDone.isCompletedExceptionally());
-
-        task = new IKVRangeWAL.SnapshotInstallTask(ByteString.empty(), "leader");
+        IKVRangeWAL.RestoreSnapshotTask task =
+            new IKVRangeWAL.RestoreSnapshotTask(ByteString.copyFromUtf8("BadData"), "leader", afterInstalled);
+        verify(afterInstalled).call(isNull(), isNotNull());
+        reset(afterInstalled);
+        task = new IKVRangeWAL.RestoreSnapshotTask(ByteString.empty(), "leader", afterInstalled);
         assertEquals(task.snapshot, KVRangeSnapshot.parseFrom(ByteString.empty()));
-        assertFalse(task.onDone.isDone());
+        verify(afterInstalled, never()).call(any(), any());
     }
 
     @Test

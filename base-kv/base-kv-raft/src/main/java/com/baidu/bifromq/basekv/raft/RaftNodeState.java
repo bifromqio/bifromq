@@ -45,11 +45,11 @@ import org.slf4j.Logger;
 
 abstract class RaftNodeState implements IRaftNodeState {
     public interface OnSnapshotInstalled {
-        void done(ByteString requested, ByteString installed, Throwable ex);
+        CompletableFuture<Void> done(ByteString requested, ByteString installed, Throwable ex);
     }
 
     /**
-     * The future of Uncommitted propose request
+     * The future of Uncommitted propose request.
      */
     protected static class ProposeTask {
         final long term;
@@ -131,7 +131,8 @@ abstract class RaftNodeState implements IRaftNodeState {
                                       Set<String> newLearners,
                                       CompletableFuture<Void> onDone);
 
-    abstract void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex);
+    abstract void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex,
+                                     CompletableFuture<Void> onDone);
 
     @Override
     public final long currentTerm() {
@@ -262,7 +263,7 @@ abstract class RaftNodeState implements IRaftNodeState {
     }
 
     protected void submitSnapshot(ByteString requested, String fromLeader) {
-        snapshotInstaller.install(requested, fromLeader).whenComplete(
+        snapshotInstaller.install(requested, fromLeader,
             (installed, ex) -> onSnapshotInstalled.done(requested, installed, ex));
     }
 

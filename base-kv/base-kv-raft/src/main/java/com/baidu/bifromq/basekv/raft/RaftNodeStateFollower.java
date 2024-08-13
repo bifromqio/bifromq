@@ -386,7 +386,7 @@ class RaftNodeStateFollower extends RaftNodeState {
     }
 
     @Override
-    void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex) {
+    void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex, CompletableFuture<Void> onDone) {
         if (currentISSRequest == null) {
             return;
         }
@@ -410,6 +410,8 @@ class RaftNodeStateFollower extends RaftNodeState {
                         .setReadIndex(iss.getReadIndex())
                         .build())
                 .build();
+            submitRaftMessages(iss.getLeaderId(), reply);
+            onDone.completeExceptionally(ex);
         } else {
             log.debug("Snapshot[index:{},term:{}] accepted by FSM", snapshot.getIndex(), snapshot.getTerm());
             try {
@@ -437,6 +439,8 @@ class RaftNodeStateFollower extends RaftNodeState {
                     entry.getValue().future.completeExceptionally(superseded());
                     it.remove();
                 }
+                submitRaftMessages(iss.getLeaderId(), reply);
+                onDone.complete(null);
             } catch (Throwable e) {
                 log.error("Failed to apply snapshot[index:{}, term:{}]", snapshot.getIndex(), snapshot.getTerm(), e);
                 reply = RaftMessage.newBuilder()
@@ -449,9 +453,10 @@ class RaftNodeStateFollower extends RaftNodeState {
                             .setReadIndex(iss.getReadIndex())
                             .build())
                     .build();
+                submitRaftMessages(iss.getLeaderId(), reply);
+                onDone.completeExceptionally(e);
             }
         }
-        submitRaftMessages(iss.getLeaderId(), reply);
     }
 
     private void handleAppendEntries(String fromLeader, AppendEntries appendEntries) {

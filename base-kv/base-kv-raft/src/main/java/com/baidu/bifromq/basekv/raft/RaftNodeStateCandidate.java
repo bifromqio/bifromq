@@ -229,7 +229,8 @@ class RaftNodeStateCandidate extends RaftNodeState {
     }
 
     @Override
-    void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex) {
+    void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex, CompletableFuture<Void> onDone) {
+        onDone.complete(null);
     }
 
     RaftNodeState campaign(boolean preVote, boolean transferLeader) {

@@ -39,35 +39,49 @@ public interface IRaftNode {
         void send(Map<String, List<RaftMessage>> messages);
     }
 
+    /**
+     * Callback that Application must invoke after snapshot installation either successfully or failed. The returned
+     * future will be fulfilled when raft finish applying the result snapshot, and is used to synchronize following work
+     * at application side after the whole installation process has finished.
+     */
+    interface IAfterInstalledCallback {
+        CompletableFuture<Void> call(ByteString snapshot, Throwable ex);
+    }
+
+    /**
+     * Application specific snapshot installer, which is responsible for restoring application's state to given
+     * snapshot.
+     */
     interface ISnapshotInstaller {
         /**
-         * Application specific async snapshot installation
+         * Application specific async snapshot installation. Application must invoke the callback to notify the raft
+         * node about the result.
          *
-         * @param request the snapshot requested to be installed
-         * @param leader  the leader who sent the installation request
-         * @return future of the installation, the value is the installed snapshot of the application
+         * @param request  the snapshot requested to be installed
+         * @param leader   the leader who sent the installation request
+         * @param callback the promise to be completed when the installation is done
          */
-        CompletableFuture<ByteString> install(ByteString request, String leader);
+        void install(ByteString request, String leader, IAfterInstalledCallback callback);
     }
 
     boolean isStarted();
 
     /**
-     * the id of local raft node
+     * the id of local raft node.
      *
-     * @return
+     * @return the if of the node
      */
     String id();
 
     /**
-     * role of the local raft node in current log term
+     * role of the local raft node in current log term.
      *
-     * @return
+     * @return the current status
      */
     RaftNodeStatus status();
 
     /**
-     * tick from external clock which driving Raft StateMachine to move forward
+     * tick from external clock which driving Raft StateMachine to move forward.
      */
     void tick();
 
@@ -75,22 +89,23 @@ public interface IRaftNode {
      * Propose a app command. The returned future is guaranteed to be completed when the corresponding log entry is
      * COMMITTED or finished with exception indicating if the proposal MAYBE dropped due to timeout or other reason.
      *
-     * @param appCommand
-     * @return
+     * @param appCommand the command to be proposed from application
+     * @return the future of the proposal
      */
     CompletableFuture<Long> propose(ByteString appCommand);
 
     /**
-     * Request an index for safely linearizable read. NOTE: The returned will be completed by raft execution thread.
+     * Request an index for safely linearized read. NOTE: The returned will be completed by raft execution thread.
      *
-     * @return
+     * @return the future of the index
      */
     CompletableFuture<Long> readIndex();
 
     /**
      * Receive raft messages from other Peers and drive local Raft StateMachine to proceed.
      *
-     * @param message
+     * @param fromPeer the peer who sent the message
+     * @param message  the message sent by the peer
      */
     void receive(String fromPeer, RaftMessage message);
 
@@ -103,9 +118,9 @@ public interface IRaftNode {
      * <br>
      * NOTE: The returned will be completed by raft execution thread.
      *
-     * @param fsmSnapshot
-     * @param compactIndex
-     * @return
+     * @param fsmSnapshot  the snapshot from application's state machine
+     * @param compactIndex the index of the log entry to be compacted
+     * @return the future of the compaction
      */
     CompletableFuture<Void> compact(ByteString fsmSnapshot, long compactIndex);
 
@@ -114,36 +129,36 @@ public interface IRaftNode {
      * STEP DOWN due to the transfer, NOT when the new leader elected. NOTE: The returned will be completed by raft
      * execution thread. Don't do make heavy work on it.
      *
-     * @param newLeader
-     * @return
+     * @param newLeader the id of the new leader
+     * @return the future of the transfer
      */
     CompletableFuture<Void> transferLeadership(String newLeader);
 
     /**
-     * Recover if lost quorum because of majority members failed
+     * Recover if lost quorum because of majority members failed.
      *
-     * @return
+     * @return the future of the recovery
      */
     CompletableFuture<Void> recover();
 
     /**
-     * Returns the latest cluster config of the raft cluster
+     * Returns the latest cluster config of the raft cluster.
      *
-     * @return
+     * @return the latest cluster config
      */
     ClusterConfig latestClusterConfig();
 
     /**
-     * If current node is leader, make it step down as a follower, which means an election is going to happen
+     * If current node is leader, make it step down as a follower, which means an election is going to happen.
      *
      * @return true if it was a leader
      */
     Boolean stepDown();
 
     /**
-     * Returns the latest snapshot in the raft node
+     * Returns the latest snapshot in the raft node.
      *
-     * @return
+     * @return the latest snapshot
      */
     ByteString latestSnapshot();
 
@@ -152,9 +167,9 @@ public interface IRaftNode {
      *
      * @param correlateId the id will be embedded in config entry, so caller could use it to associate with a real
      *                    request
-     * @param voters
-     * @param learners
-     * @return
+     * @param voters      the new set of voters
+     * @param learners    the new set of learners
+     * @return the future of the config change
      */
     CompletableFuture<Void> changeClusterConfig(String correlateId, Set<String> voters, Set<String> learners);
 
@@ -162,23 +177,23 @@ public interface IRaftNode {
      * Retrieve committed log entries from given index to current commitIndex. Note: maxSize controls max aggregated
      * size returned, so the returned may be fewer.
      *
-     * @param fromIndex
-     * @param maxSize
-     * @return
+     * @param fromIndex the start index of the log entry
+     * @param maxSize   the max size of the log entries
+     * @return the future of the log entries
      */
     CompletableFuture<Iterator<LogEntry>> retrieveCommitted(long fromIndex, long maxSize);
 
     /**
      * Start the Raft Node with necessary callbacks, this callbacks will be executed in raft's thread.
      *
-     * @param sender
-     * @param listener
-     * @param installer
+     * @param sender    the message sender
+     * @param listener  the event listener
+     * @param installer the snapshot installer
      */
     void start(IRaftMessageSender sender, IRaftEventListener listener, ISnapshotInstaller installer);
 
     /**
-     * Stop the raft node asynchronously
+     * Stop the raft node asynchronously.
      */
     CompletableFuture<Void> stop();
 }
