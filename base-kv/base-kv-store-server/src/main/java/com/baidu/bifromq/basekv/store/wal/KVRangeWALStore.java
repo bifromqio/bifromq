@@ -157,9 +157,9 @@ class KVRangeWALStore implements IKVRangeWALStore {
                     .build());
                 // truncate config entry indexes
                 for (it.seek(configEntriesKeyPrefixInfix(0));
-                     it.isValid() &&
-                         it.key().startsWith(KEY_CONFIG_ENTRY_INDEXES_BYTES) &&
-                         it.value().asReadOnlyByteBuffer().getLong() < truncateBeforeIndex;
+                     it.isValid()
+                         && it.key().startsWith(KEY_CONFIG_ENTRY_INDEXES_BYTES)
+                         && it.value().asReadOnlyByteBuffer().getLong() < truncateBeforeIndex;
                      it.next()) {
                     writer.delete(it.key());
                 }
@@ -168,6 +168,7 @@ class KVRangeWALStore implements IKVRangeWALStore {
 //                flushNotifier.notifyFlush();
             } catch (Throwable e) {
                 log.error("Unexpected error during truncating log", e);
+                throw e;
             } finally {
                 log.debug("Logs truncated before index[{}]", truncateBeforeIndex);
             }
@@ -202,6 +203,7 @@ class KVRangeWALStore implements IKVRangeWALStore {
                 // all previous index is stable after flush
             } catch (Throwable e) {
                 log.error("Log truncation failed", e);
+                throw e;
             }
         }
     }

@@ -92,7 +92,7 @@ public abstract class KVRangeStoreClusterTestTemplate extends MockableTest {
     }
 
     @Override
-    protected void doTeardown(Method method) {
+    protected void doTearDown(Method method) {
         if (cluster != null) {
             log.info("Shutting down test cluster");
             KVRangeStoreTestCluster lastCluster = this.cluster;

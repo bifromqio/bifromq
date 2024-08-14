@@ -1301,7 +1301,6 @@ public class KVRangeFSM implements IKVRangeFSM {
                                         log.error("Failed to reset hinter and coProc", t);
                                     } finally {
                                         finishCommand(taskId);
-                                        compactWAL(false);
                                     }
                                 });
                             }
@@ -1337,7 +1336,6 @@ public class KVRangeFSM implements IKVRangeFSM {
                             .setTaskId(taskId)
                             .build());
                     onDone.complete(() -> {
-                        compactWAL(false);
                         // reset hinter when boundary changed
                         splitHinters.forEach(hinter -> hinter.reset(EMPTY_BOUNDARY));
                         coProc.reset(EMPTY_BOUNDARY);
@@ -1500,12 +1498,6 @@ public class KVRangeFSM implements IKVRangeFSM {
     }
 
     private void handleWALMessages(String peerId, List<RaftMessage> messages) {
-        if (messages.stream()
-            .anyMatch(msg -> msg.hasInstallSnapshotReply() && msg.getInstallSnapshotReply().getRejected())) {
-            log.debug("Snapshot rejected by peer[{}], compact WAL with latest checkpoint now", peerId);
-            // follower reject my snapshot, probably because it's too old, let's make a new one immediately
-            compactWAL(false);
-        }
         wal.receivePeerMessages(peerId, messages);
     }
 
@@ -1515,10 +1507,14 @@ public class KVRangeFSM implements IKVRangeFSM {
         KVRangeDumpSession session = new KVRangeDumpSession(follower, request, kvRange, messenger, fsmExecutor,
             Duration.ofSeconds(opts.getSnapshotSyncIdleTimeoutSec()),
             opts.getSnapshotSyncBytesPerSec(), metricManager::reportDump, tags);
-        dumpSessions.put(request.getSessionId(), session);
-        session.awaitDone().whenComplete((v, e) -> {
-            log.info("Snapshot dumped: session={}, follower={}", request.getSessionId(), follower);
-            dumpSessions.remove(request.getSessionId(), session);
+        dumpSessions.put(session.id(), session);
+        session.awaitDone().whenComplete((result, e) -> {
+            log.info("Snapshot dumped: session={}, follower={}", session.id(), follower);
+            dumpSessions.remove(session.id(), session);
+            if (result == KVRangeDumpSession.Result.NoCheckpoint) {
+                log.info("No checkpoint found, compact WAL now");
+                compactWAL(false);
+            }
         });
     }
 

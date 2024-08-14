@@ -82,7 +82,7 @@ public class KVRangeStoreDescriptorReporterTest extends MockableTest {
     }
 
     @Override
-    protected void doTeardown(Method method) {
+    protected void doTearDown(Method method) {
         when(storeDescriptorMap.execute(any(ORMapOperation.class))).thenReturn(CompletableFuture.completedFuture(null));
         when(crdtService.stopHosting(anyString())).thenReturn(CompletableFuture.completedFuture(null));
         storeDescriptorReporter.stop();

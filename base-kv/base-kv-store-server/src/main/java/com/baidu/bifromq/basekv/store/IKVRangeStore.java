@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.store;
 
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
@@ -23,6 +24,7 @@ import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 public interface IKVRangeStore {
@@ -37,13 +39,11 @@ public interface IKVRangeStore {
     void stop();
 
     /**
-     * Bootstrap the first replica of the very first KVRange which covers full key range in current store, it's caller's
-     * responsibility to guarantee this method is invoked on exactly only ONE store node within a SINGLE base kv cluster
-     * deployment.
+     * Bootstrap a KVRange on current store.
      *
-     * @return true if bootstrap is success on current store and the 'genesis' KVRange is generated
+     * @return future true if success or false if the range is already hosted by current store
      */
-    boolean bootstrap();
+    CompletableFuture<Boolean> bootstrap(KVRangeId rangeId, Boundary boundary);
 
     boolean isHosting(KVRangeId rangeId);
 

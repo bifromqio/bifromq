@@ -71,7 +71,7 @@ public class KVRangeWALSubscriptionTest extends MockableTest {
         when(wal.rangeId()).thenReturn(KVRangeIdUtil.generate());
     }
 
-    protected void doTeardown(Method method) {
+    protected void doTearDown(Method method) {
         MoreExecutors.shutdownAndAwaitTermination(executor, Duration.ofSeconds(5));
     }
 

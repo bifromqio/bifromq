@@ -43,7 +43,7 @@ public class AsyncRunnerTest extends MockableTest {
         executor = Executors.newSingleThreadExecutor();
     }
 
-    protected void doTeardown(Method method) {
+    protected void doTearDown(Method method) {
         MoreExecutors.shutdownAndAwaitTermination(executor, 5, TimeUnit.SECONDS);
     }
 

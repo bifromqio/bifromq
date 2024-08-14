@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.server;
 
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
@@ -41,12 +42,12 @@ import com.baidu.bifromq.basekv.store.proto.RecoverRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipReply;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipRequest;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.collect.Sets;
 import io.grpc.stub.StreamObserver;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import java.time.Duration;
-import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 
 class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBase {
@@ -89,7 +90,7 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
         log.debug("Starting BaseKVStore service: bootstrap={}", bootstrap);
         kvRangeStore.start(new AgentHostStoreMessenger(agentHost, clusterId, kvRangeStore.id()));
         if (bootstrap) {
-            kvRangeStore.bootstrap();
+            kvRangeStore.bootstrap(KVRangeIdUtil.generate(), FULL_BOUNDARY);
         }
         // sync store descriptor via crdt
         disposables.add(kvRangeStore.describe().subscribe(storeDescriptorReporter::report));
@@ -107,27 +108,28 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
 
     @Override
     public void bootstrap(BootstrapRequest request, StreamObserver<BootstrapReply> responseObserver) {
-        response(tenantId -> {
-            try {
-                boolean ret = kvRangeStore.bootstrap();
-                if (ret) {
-                    return CompletableFuture.completedFuture(BootstrapReply.newBuilder()
+        response(tenantId -> kvRangeStore.bootstrap(request.getKvRangeId(), request.getBoundary())
+            .handle((success, e) -> {
+                if (e != null) {
+                    log.error("Failed to bootstrap KVRange: rangeId={}, boundary={}",
+                        KVRangeIdUtil.toString(request.getKvRangeId()), request.getBoundary(), e);
+                    return BootstrapReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setResult(BootstrapReply.Result.Error)
+                        .build();
+                }
+                if (success) {
+                    return BootstrapReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setResult(BootstrapReply.Result.Ok)
-                        .build());
+                        .build();
                 } else {
-                    return CompletableFuture.completedFuture(BootstrapReply.newBuilder()
+                    return BootstrapReply.newBuilder()
                         .setReqId(request.getReqId())
-                        .setResult(BootstrapReply.Result.NotEmpty)
-                        .build());
+                        .setResult(BootstrapReply.Result.Exists)
+                        .build();
                 }
-            } catch (IllegalStateException e) {
-                return CompletableFuture.completedFuture(BootstrapReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setResult(BootstrapReply.Result.NotRunning)
-                    .build());
-            }
-        }, responseObserver);
+            }), responseObserver);
     }
 
     @Override

@@ -18,7 +18,6 @@ import static com.baidu.bifromq.basekv.proto.State.StateType.Normal;
 import static com.baidu.bifromq.basekv.store.exception.KVRangeStoreException.rangeNotFound;
 import static com.baidu.bifromq.basekv.store.util.ExecutorServiceUtil.awaitShutdown;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.EMPTY_BOUNDARY;
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static java.util.Collections.emptyList;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
@@ -26,6 +25,7 @@ import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
 import com.baidu.bifromq.basekv.localengine.KVEngineFactory;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.EnsureRange;
 import com.baidu.bifromq.basekv.proto.EnsureRangeReply;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
@@ -268,35 +268,43 @@ public class KVRangeStore implements IKVRangeStore {
     }
 
     @Override
-    public boolean bootstrap() {
-        checkStarted();
+    public CompletableFuture<Boolean> bootstrap(KVRangeId rangeId, Boundary boundary) {
         return mgmtTaskRunner.add(() -> {
-            if (kvRangeMap.isEmpty()) {
-                // build the genesis "full" KVRange in the cluster
-                KVRangeId genesisId = KVRangeIdUtil.generate();
-                log.debug("Creating the genesis KVRange[{}]", KVRangeIdUtil.toString(genesisId));
-                assert !walStorageEngine.has(genesisId);
-                KVRangeSnapshot rangeSnapshot = KVRangeSnapshot.newBuilder()
-                    .setId(genesisId)
-                    .setVer(0)
-                    .setLastAppliedIndex(5)
-                    .setState(State.newBuilder().setType(Normal).build())
-                    .setBoundary(FULL_BOUNDARY)
-                    .build();
-                Snapshot snapshot = Snapshot.newBuilder()
-                    .setClusterConfig(ClusterConfig.newBuilder()
-                        .addVoters(id())
-                        .build())
-                    .setTerm(0)
-                    .setIndex(5)
-                    .setData(rangeSnapshot.toByteString())
-                    .build();
-                putAndOpen(createKVRangeFSM(genesisId, snapshot, rangeSnapshot));
-                updateDescriptorList();
-                return CompletableFuture.completedFuture(true);
+            if (status.get() != Status.STARTED) {
+                return CompletableFuture.failedFuture(new IllegalStateException("Store not running"));
             }
-            return CompletableFuture.completedFuture(false);
-        }).join();
+            if (kvRangeMap.containsKey(rangeId)) {
+                return CompletableFuture.completedFuture(false);
+            }
+            log.debug("Bootstrap KVRange: rangeId={}, boundary={}", KVRangeIdUtil.toString(rangeId), boundary);
+            if (kvRangeEngine.spaces().containsKey(KVRangeIdUtil.toString(rangeId))) {
+                ICPableKVSpace keyRange = kvRangeEngine.spaces().get(KVRangeIdUtil.toString(rangeId));
+                log.debug("Destroy existing KeySpace: rangeId={}", KVRangeIdUtil.toString(rangeId));
+                keyRange.destroy();
+            }
+            if (walStorageEngine.has(rangeId)) {
+                log.debug("Destroy staled WALStore: rangeId={}", KVRangeIdUtil.toString(rangeId));
+                walStorageEngine.get(rangeId).destroy();
+            }
+            KVRangeSnapshot rangeSnapshot = KVRangeSnapshot.newBuilder()
+                .setId(rangeId)
+                .setVer(0)
+                .setLastAppliedIndex(5)
+                .setState(State.newBuilder().setType(Normal).build())
+                .setBoundary(boundary)
+                .build();
+            Snapshot snapshot = Snapshot.newBuilder()
+                .setClusterConfig(ClusterConfig.newBuilder()
+                    .addVoters(id())
+                    .build())
+                .setTerm(0)
+                .setIndex(5)
+                .setData(rangeSnapshot.toByteString())
+                .build();
+            putAndOpen(createKVRangeFSM(rangeId, snapshot, rangeSnapshot));
+            updateDescriptorList();
+            return CompletableFuture.completedFuture(true);
+        });
     }
 
     @Override

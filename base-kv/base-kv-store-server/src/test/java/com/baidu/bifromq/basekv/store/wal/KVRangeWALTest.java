@@ -180,7 +180,7 @@ public class KVRangeWALTest extends MockableTest {
     }
 
     @Override
-    public void doTeardown(Method method) {
+    public void doTearDown(Method method) {
         MoreExecutors.shutdownAndAwaitTermination(ticker, 5, TimeUnit.SECONDS);
         raftStateStorage.stop();
     }

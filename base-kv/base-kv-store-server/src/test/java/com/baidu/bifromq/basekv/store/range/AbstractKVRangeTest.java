@@ -45,7 +45,7 @@ public abstract class AbstractKVRangeTest extends MockableTest {
         kvEngine.start();
     }
 
-    protected void doTeardown(Method method) {
+    protected void doTearDown(Method method) {
         kvEngine.stop();
         if (configurator != null) {
             TestUtil.deleteDir(dbRootDir.toString());

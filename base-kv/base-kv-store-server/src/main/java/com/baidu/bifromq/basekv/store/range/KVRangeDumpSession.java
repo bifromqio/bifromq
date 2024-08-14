@@ -31,6 +31,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 
 class KVRangeDumpSession {
+    enum Result {
+        OK, NoCheckpoint, Canceled, Abort, Error
+    }
+
     private final Logger log;
 
     interface DumpBytesRecorder {
@@ -44,7 +48,7 @@ class KVRangeDumpSession {
     private final AtomicInteger reqId = new AtomicInteger();
     private final AtomicBoolean canceled = new AtomicBoolean();
     private final Duration maxIdleDuration;
-    private final CompletableFuture<Void> doneSignal = new CompletableFuture<>();
+    private final CompletableFuture<Result> doneSignal = new CompletableFuture<>();
     private final DumpBytesRecorder recorder;
     private final RateLimiter rateLimiter;
     private IKVCheckpointIterator snapshotDataItr;
@@ -77,7 +81,7 @@ class KVRangeDumpSession {
                     .setFlag(SaveSnapshotDataRequest.Flag.End)
                     .build())
                 .build());
-            executor.execute(() -> doneSignal.complete(null));
+            executor.execute(() -> doneSignal.complete(Result.OK));
         } else if (!accessor.hasCheckpoint(request.getSnapshot())) {
             log.warn("No checkpoint found for snapshot: {}", request.getSnapshot());
             messenger.send(KVRangeMessage.newBuilder()
@@ -88,7 +92,7 @@ class KVRangeDumpSession {
                     .setFlag(SaveSnapshotDataRequest.Flag.Error)
                     .build())
                 .build());
-            executor.execute(() -> doneSignal.complete(null));
+            executor.execute(() -> doneSignal.complete(Result.NoCheckpoint));
         } else {
             snapshotDataItr = accessor.open(request.getSnapshot()).newDataReader().iterator();
             snapshotDataItr.seekToFirst();
@@ -109,6 +113,10 @@ class KVRangeDumpSession {
             });
             nextSaveRequest();
         }
+    }
+
+    String id() {
+        return request.getSessionId();
     }
 
     String checkpointId() {
@@ -134,11 +142,11 @@ class KVRangeDumpSession {
 
     void cancel() {
         if (canceled.compareAndSet(false, true)) {
-            runner.add(() -> doneSignal.complete(null));
+            runner.add(() -> doneSignal.complete(Result.Canceled));
         }
     }
 
-    CompletableFuture<Void> awaitDone() {
+    CompletableFuture<Result> awaitDone() {
         return doneSignal;
     }
 
@@ -155,10 +163,10 @@ class KVRangeDumpSession {
                 case OK -> {
                     switch (req.getFlag()) {
                         case More -> nextSaveRequest();
-                        case End -> runner.add(() -> doneSignal.complete(null));
+                        case End -> runner.add(() -> doneSignal.complete(Result.OK));
                     }
                 }
-                case NoSessionFound, Error -> runner.add(() -> doneSignal.complete(null));
+                case NoSessionFound, Error -> runner.add(() -> doneSignal.complete(Result.Abort));
             }
         }
     }
@@ -217,6 +225,9 @@ class KVRangeDumpSession {
             lastReplyTS = System.nanoTime();
             recorder.record(dumpBytes);
             messenger.send(currentRequest);
+            if (currentRequest.getSaveSnapshotDataRequest().getFlag() == SaveSnapshotDataRequest.Flag.Error) {
+                doneSignal.complete(Result.Error);
+            }
         });
     }
 }

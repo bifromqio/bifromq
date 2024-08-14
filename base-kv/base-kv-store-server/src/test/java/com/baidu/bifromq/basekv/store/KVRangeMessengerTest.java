@@ -44,7 +44,7 @@ public class KVRangeMessengerTest extends MockableTest {
         incomingStoreMsg = PublishSubject.create();
     }
 
-    protected void doTeardown(Method method) {
+    protected void doTearDown(Method method) {
     }
 
     @Test

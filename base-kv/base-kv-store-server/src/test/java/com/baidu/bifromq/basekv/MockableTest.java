@@ -36,11 +36,11 @@ public abstract class MockableTest {
 
     @SneakyThrows
     @AfterMethod(alwaysRun = true)
-    public final void teardown(Method method) {
+    public final void tearDown(Method method) {
         log.info("Test case[{}.{}] finished, doing teardown",
             method.getDeclaringClass().getName(), method.getName());
         try {
-            doTeardown(method);
+            doTearDown(method);
             log.info("Test case[{}.{}] teared down",
                 method.getDeclaringClass().getName(), method.getName());
         } catch (Throwable e) {
@@ -50,6 +50,6 @@ public abstract class MockableTest {
         closeable.close();
     }
 
-    protected void doTeardown(Method method) {
+    protected void doTearDown(Method method) {
     }
 }

@@ -48,7 +48,6 @@ import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.PublishSubject;
@@ -141,10 +140,10 @@ public class KVRangeStoreTest extends MockableTest {
         };
 
         rangeStore.start(messenger);
-        assertTrue(rangeStore.bootstrap());
+        assertTrue(rangeStore.bootstrap(KVRangeIdUtil.generate(), FULL_BOUNDARY).join());
     }
 
-    protected void doTeardown(Method method) {
+    protected void doTearDown(Method method) {
         rangeStore.stop();
         queryExecutor.shutdownNow();
         bgTaskExecutor.shutdownNow();
@@ -160,21 +159,6 @@ public class KVRangeStoreTest extends MockableTest {
             dbRootDir = null;
         }
         log.info("Shutdown read task executor");
-    }
-
-    @Test(groups = "integration")
-    public void testBootStrap() {
-        KVRangeDescriptor descriptor = firstRangeDescriptor();
-        KVRangeId id = descriptor.getId();
-        assertEquals(descriptor.toBuilder().clearStatistics().setHlc(0).build(), KVRangeDescriptor.newBuilder()
-            .setId(id)
-            .setVer(0)
-            .setRole(RaftNodeStatus.Leader)
-            .setState(Normal)
-            .setBoundary(FULL_BOUNDARY)
-            .setConfig(ClusterConfig.newBuilder().addVoters(rangeStore.id()).build())
-            .putSyncState(rangeStore.id(), RaftNodeSyncState.Replicating)
-            .build());
     }
 
     @Test(groups = "integration")
@@ -479,8 +463,8 @@ public class KVRangeStoreTest extends MockableTest {
             rangeDesc -> rangeDesc.getState() == Merged && rangeDesc.getRole() == RaftNodeStatus.Leader
         );
         log.info("Mergee Descriptor: {}", mergeeDesc);
-        rangeStore.changeReplicaConfig(mergeeDesc.getVer(), mergeeDesc.getId(),
-            Sets.newHashSet(mergeeDesc.getConfig().getVotersList()), emptySet()).toCompletableFuture().join();
+        rangeStore.changeReplicaConfig(mergeeDesc.getVer(), mergeeDesc.getId(), emptySet(), emptySet())
+            .toCompletableFuture().join();
         storeDescriptor = await().atMost(Duration.ofSeconds(10000)).until(() ->
             rangeStore.describe().blockingFirst(), storeDesc -> storeDesc.getRangesList().size() == 1
         );

@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.store;
 
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static java.util.Collections.emptySet;
 import static org.awaitility.Awaitility.await;
 
@@ -32,6 +33,7 @@ import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -414,7 +416,7 @@ public class KVRangeStoreTestCluster {
         }
         KVRangeStore store = initStore(options);
         if (isBootstrap) {
-            store.bootstrap();
+            store.bootstrap(KVRangeIdUtil.generate(), FULL_BOUNDARY).join();
         }
         storePathMap.put(store.id(), uuid);
         return store.id();

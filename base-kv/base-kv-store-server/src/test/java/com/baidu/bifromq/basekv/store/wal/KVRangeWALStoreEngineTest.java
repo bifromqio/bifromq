@@ -54,7 +54,7 @@ public class KVRangeWALStoreEngineTest extends MockableTest {
         engineConfigurator = RocksDBWALableKVEngineConfigurator.builder().dbRootDir(dbPath).build();
     }
 
-    protected void doTeardown(Method method) {
+    protected void doTearDown(Method method) {
         if (dbRootDir != null) {
             TestUtil.deleteDir(dbRootDir.toString());
             dbRootDir.toFile().delete();
