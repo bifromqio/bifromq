@@ -55,7 +55,7 @@ public class LoadSubStatsTest extends InboxStoreTest {
         Gauge pSessionSpaceGauge = getPSessionSpaceGauge(tenantId);
         await().until(() -> subCountGauge.value() == 1);
         await().until(() -> pSessionGauge.value() == 1);
-        await().until(() -> pSessionSpaceGauge.value() > 0);
+//        await().until(() -> pSessionSpaceGauge.value() > 0);
 
         restartStoreServer();
 

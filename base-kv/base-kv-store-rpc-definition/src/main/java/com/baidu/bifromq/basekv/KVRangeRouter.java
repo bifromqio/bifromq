@@ -18,7 +18,6 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.MIN_KEY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.inRange;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isOverlap;
 import static com.google.protobuf.ByteString.unsignedLexicographicalComparator;
-import static java.util.Collections.emptySet;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
@@ -27,15 +26,12 @@ import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.google.protobuf.ByteString;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.locks.StampedLock;
 import lombok.ToString;
@@ -47,24 +43,10 @@ public final class KVRangeRouter implements IKVRangeRouter {
     private final Comparator<ByteString> comparator = unsignedLexicographicalComparator();
     @ToString.Include
     private final NavigableMap<ByteString, KVRangeSetting> rangeTable = new TreeMap<>(comparator);
-    private final Map<String, Set<KVRangeSetting>> rangesToStoreMap = new HashMap<>();
     private final Map<KVRangeId, KVRangeSetting> rangeMap = new HashMap<>();
 
     public KVRangeRouter(String clusterId) {
         this.clusterId = clusterId;
-    }
-
-    public void reset(KVRangeStoreDescriptor storeDescriptor) {
-        final long stamp = stampedLock.writeLock();
-        try {
-            rangeTable.clear();
-            rangesToStoreMap.clear();
-            rangeMap.clear();
-            storeDescriptor.getRangesList()
-                .forEach(rangeDesc -> this.upsertWithoutLock(storeDescriptor.getId(), rangeDesc));
-        } finally {
-            stampedLock.unlockWrite(stamp);
-        }
     }
 
     public boolean upsert(KVRangeStoreDescriptor storeDescriptor) {
@@ -75,6 +57,15 @@ public final class KVRangeRouter implements IKVRangeRouter {
                 changed |= this.upsertWithoutLock(storeDescriptor.getId(), rangeDesc);
             }
             return changed;
+        } finally {
+            stampedLock.unlockWrite(stamp);
+        }
+    }
+
+    public boolean upsert(String storeId, KVRangeDescriptor descriptor) {
+        final long stamp = stampedLock.writeLock();
+        try {
+            return this.upsertWithoutLock(storeId, descriptor);
         } finally {
             stampedLock.unlockWrite(stamp);
         }
@@ -107,10 +98,10 @@ public final class KVRangeRouter implements IKVRangeRouter {
         }
     }
 
-    public Set<KVRangeSetting> findByStore(String storeId) {
+    public boolean isEmpty() {
         final long stamp = stampedLock.readLock();
         try {
-            return Collections.unmodifiableSet(rangesToStoreMap.getOrDefault(storeId, emptySet()));
+            return rangeTable.isEmpty();
         } finally {
             stampedLock.unlockRead(stamp);
         }
@@ -177,28 +168,35 @@ public final class KVRangeRouter implements IKVRangeRouter {
         if (descriptor.getBoundary().equals(EMPTY_BOUNDARY)) {
             return false;
         }
-        switch (descriptor.getState()) {
-            case Removed, Purged, Merged, MergedQuiting -> {
-                return false;
-            }
-        }
         KVRangeSetting setting = new KVRangeSetting(clusterId, storeId, descriptor);
-
         List<KVRangeSetting> overlapped = findByRangeWithoutLock(setting.boundary);
         if (overlapped.isEmpty()) {
             rangeTable.put(setting.boundary.getStartKey(), setting);
-            rangesToStoreMap.computeIfAbsent(storeId, k -> new HashSet<>()).add(setting);
             rangeMap.put(setting.id, setting);
             return true;
         } else {
-            if (overlapped.stream().allMatch(o -> o.ver <= setting.ver)) {
+            boolean shouldReplace = true;
+            for (KVRangeSetting existingSetting : overlapped) {
+                boolean isFullyOverlapping = existingSetting.boundary.equals(setting.boundary);
+                if (isFullyOverlapping) {
+                    if (existingSetting.id.getId() < setting.id.getId()) {
+                        shouldReplace = false;
+                        break;
+                    }
+                } else {
+                    if (existingSetting.ver > setting.ver) {
+                        shouldReplace = false;
+                        break;
+                    }
+                }
+            }
+
+            if (shouldReplace) {
                 overlapped.forEach(o -> {
                     rangeTable.remove(o.boundary.getStartKey());
-                    rangesToStoreMap.getOrDefault(o.leader, emptySet()).remove(o);
                     rangeMap.remove(o.id);
                 });
                 rangeTable.put(setting.boundary.getStartKey(), setting);
-                rangesToStoreMap.computeIfAbsent(setting.leader, k -> new HashSet<>()).add(setting);
                 rangeMap.put(setting.id, setting);
                 return true;
             }

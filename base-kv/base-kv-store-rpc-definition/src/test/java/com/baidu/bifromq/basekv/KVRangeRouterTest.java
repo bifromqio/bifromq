@@ -21,6 +21,7 @@ import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
+import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
@@ -202,39 +203,6 @@ public class KVRangeRouterTest {
     }
 
     @Test
-    public void testFindByStore() {
-        KVRangeRouter router = new KVRangeRouter(clusterId);
-        router.upsert(bucket__a);
-        router.upsert(bucket_a_c);
-        router.upsert(bucket_c_e);
-        router.upsert(bucket_e_);
-        assertEquals(router.findByStore(bucket__a.getId()).size(), 1);
-        assertEquals(router.findByStore(bucket_a_c.getId()).size(), 1);
-        assertEquals(router.findByStore(bucket_c_e.getId()).size(), 1);
-        assertEquals(router.findByStore(bucket_e_.getId()).size(), 1);
-        assertTrue(
-            router.findByStore(bucket__a.getId()).contains(router.findById(bucket__a.getRanges(0).getId()).get()));
-        assertTrue(
-            router.findByStore(bucket_a_c.getId()).contains(router.findById(bucket_a_c.getRanges(0).getId()).get()));
-        assertTrue(
-            router.findByStore(bucket_c_e.getId()).contains(router.findById(bucket_c_e.getRanges(0).getId()).get()));
-        assertTrue(
-            router.findByStore(bucket_e_.getId()).contains(router.findById(bucket_e_.getRanges(0).getId()).get()));
-    }
-
-    @Test
-    public void testReset() {
-        KVRangeRouter router = new KVRangeRouter(clusterId);
-        router.upsert(bucket__a);
-        router.upsert(bucket_a_c);
-        router.upsert(bucket_c_e);
-        router.upsert(bucket_e_);
-        assertTrue(router.isFullRangeCovered());
-        router.reset(bucket_full_range);
-        assertEquals(router.findByKey(copyFromUtf8("a")).get(), convert(bucket_full_range));
-    }
-
-    @Test
     public void testFullRangeCoverCheck() {
         KVRangeRouter router = new KVRangeRouter(clusterId);
         assertFalse(router.isFullRangeCovered());
@@ -246,8 +214,62 @@ public class KVRangeRouterTest {
         assertFalse(router.isFullRangeCovered());
         router.upsert(bucket_e_);
         assertTrue(router.isFullRangeCovered());
-        router.reset(bucket_full_range);
-        assertTrue(router.isFullRangeCovered());
+    }
+
+    @Test
+    public void testUpsertWithFullOverlap() {
+        KVRangeRouter router = new KVRangeRouter(clusterId);
+
+        KVRangeStoreDescriptor bucket_a_c_initial = KVRangeStoreDescriptor.newBuilder()
+            .setId("bucket_a_c_initial")
+            .addRanges(KVRangeDescriptor.newBuilder()
+                .setId(KVRangeId.newBuilder().setEpoch(1).setId(100).build())  // epoch 1, id 100
+                .setVer(1)
+                .setRole(RaftNodeStatus.Leader)
+                .setBoundary(Boundary.newBuilder()
+                    .setStartKey(copyFromUtf8("a"))
+                    .setEndKey(copyFromUtf8("c"))
+                    .build())
+                .build())
+            .build();
+
+        router.upsert(bucket_a_c_initial);
+
+        KVRangeStoreDescriptor bucket_a_c_largerId = KVRangeStoreDescriptor.newBuilder()
+            .setId("bucket_a_c_largerId")
+            .addRanges(KVRangeDescriptor.newBuilder()
+                .setId(KVRangeId.newBuilder().setEpoch(1).setId(200).build())  // epoch 1, id 200
+                .setVer(1)
+                .setRole(RaftNodeStatus.Leader)
+                .setBoundary(Boundary.newBuilder()
+                    .setStartKey(copyFromUtf8("a"))
+                    .setEndKey(copyFromUtf8("c"))
+                    .build())
+                .build())
+            .build();
+
+        router.upsert(bucket_a_c_largerId);
+
+        assertEquals(router.findByKey(copyFromUtf8("a")).get(), convert(bucket_a_c_initial));
+        assertEquals(router.findByKey(copyFromUtf8("b")).get(), convert(bucket_a_c_initial));
+
+        KVRangeStoreDescriptor bucket_a_c_smallerId = KVRangeStoreDescriptor.newBuilder()
+            .setId("bucket_a_c_smallerId")
+            .addRanges(KVRangeDescriptor.newBuilder()
+                .setId(KVRangeId.newBuilder().setEpoch(1).setId(50).build())  // epoch 1, id 50
+                .setVer(1)
+                .setRole(RaftNodeStatus.Leader)
+                .setBoundary(Boundary.newBuilder()
+                    .setStartKey(copyFromUtf8("a"))
+                    .setEndKey(copyFromUtf8("c"))
+                    .build())
+                .build())
+            .build();
+
+        router.upsert(bucket_a_c_smallerId);
+
+        assertEquals(router.findByKey(copyFromUtf8("a")).get(), convert(bucket_a_c_smallerId));
+        assertEquals(router.findByKey(copyFromUtf8("b")).get(), convert(bucket_a_c_smallerId));
     }
 
     private KVRangeSetting convert(KVRangeStoreDescriptor storeDescriptor) {

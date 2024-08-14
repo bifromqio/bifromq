@@ -30,11 +30,12 @@ import static java.util.Collections.emptyMap;
 
 import com.baidu.bifromq.basecrdt.core.api.IORMap;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.basekv.KVRangeRouter;
+import com.baidu.bifromq.basekv.KVRangeRouterManager;
 import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.RPCBluePrint;
 import com.baidu.bifromq.basekv.exception.BaseKVException;
 import com.baidu.bifromq.basekv.proto.Boundary;
+import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.store.proto.BootstrapReply;
@@ -70,7 +71,6 @@ import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.subjects.Subject;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -83,13 +83,17 @@ import java.util.stream.IntStream;
 import org.slf4j.Logger;
 
 final class BaseKVStoreClient implements IBaseKVStoreClient {
+    private record ClusterInfo(Map<String, KVRangeStoreDescriptor> storeDescriptors,
+                               Map<String, String> serverToStoreMap) {
+    }
+
     private final Logger log;
     private final String clusterId;
     private final IRPCClient rpcClient;
     private final ICRDTService crdtService;
     private final AtomicBoolean closed = new AtomicBoolean();
     private final CompositeDisposable disposables = new CompositeDisposable();
-    private final KVRangeRouter router;
+    private final KVRangeRouterManager routerManager;
     private final int queryPipelinesPerStore;
     private final IORMap storeDescriptorCRDT;
     private final MethodDescriptor<BootstrapRequest, BootstrapReply> bootstrapMethod;
@@ -102,6 +106,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     private final MethodDescriptor<KVRangeRORequest, KVRangeROReply> linearizedQueryMethod;
     private final MethodDescriptor<KVRangeRORequest, KVRangeROReply> queryMethod;
     private final Subject<Map<String, String>> storeToServerSubject = BehaviorSubject.createDefault(Maps.newHashMap());
+    private final Observable<ClusterInfo> clusterInfoObservable;
 
     // key: serverId, val: storeId
     private volatile Map<String, String> serverToStoreMap = Maps.newHashMap();
@@ -114,13 +119,10 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     // key: storeId
     private volatile Map<String, List<IQueryPipeline>> lnrQueryPplns = Maps.newHashMap();
 
-    private record ClusterInfo(Set<KVRangeStoreDescriptor> storeDescriptors, Map<String, String> serverToStoreMap) {
-    }
-
     BaseKVStoreClient(BaseKVStoreClientBuilder builder) {
         this.clusterId = builder.clusterId;
         log = SiftLogger.getLogger(BaseKVStoreClient.class, "clusterId", clusterId);
-        router = new KVRangeRouter(clusterId);
+        routerManager = new KVRangeRouterManager(clusterId);
         BluePrint bluePrint = RPCBluePrint.build(clusterId);
         this.bootstrapMethod = bluePrint.methodDesc(
             toScopedFullMethodName(clusterId, getBootstrapMethod().getFullMethodName()));
@@ -155,12 +157,21 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         Optional<IORMap> crdtOpt = crdtService.get(storeDescriptorMapCRDTURI(clusterId));
         assert crdtOpt.isPresent();
         storeDescriptorCRDT = crdtOpt.get();
-        disposables.add(Observable.combineLatest(
+        clusterInfoObservable = Observable.combineLatest(
                 storeDescriptorCRDT.inflation().map(this::currentStoreDescriptors),
                 rpcClient.serverList()
                     .map(servers -> Maps.transformValues(servers, metadata -> metadata.get(RPC_METADATA_STORE_ID))),
                 ClusterInfo::new)
-            .subscribe(this::refresh));
+            .filter(clusterInfo -> {
+                boolean complete = Sets.newHashSet(clusterInfo.serverToStoreMap.values())
+                    .equals(clusterInfo.storeDescriptors.keySet());
+                if (!complete) {
+                    log.debug("Incomplete cluster[{}] info filtered: storeDescriptors={}, serverToStoreMap={}",
+                        clusterId, clusterInfo.storeDescriptors, clusterInfo.serverToStoreMap);
+                }
+                return complete;
+            });
+        disposables.add(clusterInfoObservable.subscribe(this::refresh));
     }
 
     @Override
@@ -175,30 +186,22 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
 
     @Override
     public Observable<Set<KVRangeStoreDescriptor>> describe() {
-        return storeDescriptorCRDT.inflation().mapOptional(l -> {
-            Set<KVRangeStoreDescriptor> descriptors = Sets.newHashSet();
-            Iterator<ByteString> keyItr = Iterators.transform(storeDescriptorCRDT.keys(), IORMap.ORMapKey::key);
-            while (keyItr.hasNext()) {
-                Optional<KVRangeStoreDescriptor> descriptor = getDescriptorFromCRDT(storeDescriptorCRDT, keyItr.next());
-                descriptor.ifPresent(descriptors::add);
-            }
-            return descriptors.isEmpty() ? Optional.empty() : Optional.of(descriptors);
-        });
+        return clusterInfoObservable.map(clusterInfo -> Sets.newHashSet(clusterInfo.storeDescriptors.values()));
     }
 
     @Override
     public Optional<KVRangeSetting> findById(KVRangeId id) {
-        return router.findById(id);
+        return routerManager.findById(id);
     }
 
     @Override
     public Optional<KVRangeSetting> findByKey(ByteString key) {
-        return router.findByKey(key);
+        return routerManager.findByKey(key);
     }
 
     @Override
     public List<KVRangeSetting> findByBoundary(Boundary boundary) {
-        return router.findByBoundary(boundary);
+        return routerManager.findByBoundary(boundary);
     }
 
     @Override
@@ -407,10 +410,10 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     @Override
     public void join() {
         // wait for router covering full range
-        if (!router.isFullRangeCovered()) {
+        if (!routerManager.isFullRangeCovered()) {
             synchronized (this) {
                 try {
-                    if (!router.isFullRangeCovered()) {
+                    if (!routerManager.isFullRangeCovered()) {
                         this.wait();
                     }
                 } catch (InterruptedException e) {
@@ -442,14 +445,14 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         }
     }
 
-    private Set<KVRangeStoreDescriptor> currentStoreDescriptors(long ts) {
+    private Map<String, KVRangeStoreDescriptor> currentStoreDescriptors(long ts) {
         log.trace("StoreDescriptor CRDT updated at {}: clusterId={}\n{}", ts, clusterId, storeDescriptorCRDT);
         Iterator<ByteString> keyItr = Iterators.transform(storeDescriptorCRDT.keys(), IORMap.ORMapKey::key);
 
-        Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
+        Map<String, KVRangeStoreDescriptor> storeDescriptors = new HashMap<>();
         while (keyItr.hasNext()) {
             Optional<KVRangeStoreDescriptor> storeDescOpt = getDescriptorFromCRDT(storeDescriptorCRDT, keyItr.next());
-            storeDescOpt.ifPresent(storeDescriptors::add);
+            storeDescOpt.ifPresent(storeDesc -> storeDescriptors.put(storeDesc.getId(), storeDesc));
         }
         return storeDescriptors;
     }
@@ -462,10 +465,10 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
             refreshQueryPipelines(storeToServerMap);
         }
         if (rangeRouteUpdated || storeRouteUpdated) {
-            refreshMutPipelines(storeToServerMap);
+            refreshMutPipelines(storeToServerMap, clusterInfo.storeDescriptors);
         }
         if (rangeRouteUpdated) {
-            if (router.isFullRangeCovered()) {
+            if (routerManager.isFullRangeCovered()) {
                 synchronized (this) {
                     this.notifyAll();
                 }
@@ -475,8 +478,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
 
     private boolean refreshRangeRoute(ClusterInfo clusterInfo) {
         boolean changed = false;
-        for (KVRangeStoreDescriptor storeDesc : clusterInfo.storeDescriptors) {
-            changed |= router.upsert(storeDesc);
+        for (Map.Entry<String, KVRangeStoreDescriptor> entry : clusterInfo.storeDescriptors.entrySet()) {
+            changed |= routerManager.upsert(entry.getValue());
         }
         return changed;
     }
@@ -494,14 +497,15 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         return true;
     }
 
-    private void refreshMutPipelines(Map<String, String> newStoreToServerMap) {
+    private void refreshMutPipelines(Map<String, String> newStoreToServerMap,
+                                     Map<String, KVRangeStoreDescriptor> storeDescriptorMap) {
         Map<String, Map<KVRangeId, IMutationPipeline>> nextMutPplns = Maps.newHashMap(mutPplns);
         nextMutPplns.forEach((k, v) -> nextMutPplns.put(k, Maps.newHashMap(v)));
         Set<String> oldStoreIds = Sets.newHashSet(mutPplns.keySet());
 
         for (String existingStoreId : Sets.intersection(newStoreToServerMap.keySet(), oldStoreIds)) {
-            Set<KVRangeId> newRangeIds = router.findByStore(existingStoreId).stream()
-                .map(setting -> setting.id).collect(Collectors.toSet());
+            Set<KVRangeId> newRangeIds = storeDescriptorMap.get(existingStoreId).getRangesList().stream()
+                .map(KVRangeDescriptor::getId).collect(Collectors.toSet());
             Set<KVRangeId> oldRangeIds = Sets.newHashSet(nextMutPplns.get(existingStoreId).keySet());
             for (KVRangeId newRangeId : Sets.difference(newRangeIds, oldRangeIds)) {
                 nextMutPplns.get(existingStoreId)
@@ -514,8 +518,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         for (String newStoreId : Sets.difference(newStoreToServerMap.keySet(), oldStoreIds)) {
             Map<KVRangeId, IMutationPipeline> rangeExecPplns =
                 nextMutPplns.computeIfAbsent(newStoreId, k -> new HashMap<>());
-            for (KVRangeSetting setting : router.findByStore(newStoreId)) {
-                rangeExecPplns.put(setting.id, new MutPipeline(newStoreToServerMap.get(newStoreId)));
+            for (KVRangeDescriptor rangeDesc : storeDescriptorMap.get(newStoreId).getRangesList()) {
+                rangeExecPplns.put(rangeDesc.getId(), new MutPipeline(newStoreToServerMap.get(newStoreId)));
             }
         }
 
