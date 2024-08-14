@@ -34,6 +34,7 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isSplittable;
 import static com.google.common.collect.Sets.difference;
 import static com.google.common.collect.Sets.newHashSet;
 import static com.google.common.collect.Sets.union;
+import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
@@ -172,7 +173,7 @@ public class KVRangeFSM implements IKVRangeFSM {
     private final AtomicReference<Lifecycle> lifecycle = new AtomicReference<>(Lifecycle.Init);
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final CompletableFuture<Void> closeSignal = new CompletableFuture<>();
-    private final CompletableFuture<State.StateType> quitReason = new CompletableFuture<>();
+    private final CompletableFuture<Void> quitSignal = new CompletableFuture<>();
     private final CompletableFuture<Void> destroyedSignal = new CompletableFuture<>();
     private final KVRangeMetricManager metricManager;
     private final List<IKVRangeSplitHinter> splitHinters;
@@ -233,7 +234,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                         () -> KVRangeFSM.this.restore(snapshot, leader, callback));
                 }
             }, fsmExecutor);
-        quitReason.thenAccept(v -> {
+        quitSignal.thenAccept(v -> {
             // check if the range needs to be recreated after quit, this situation happens there are series configchange causing the replica
             // be removed and added-back again, but the log apply progress is fall behind.
             ClusterConfig config = wal.clusterConfig();
@@ -325,7 +326,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                     compactWAL(false);
                 }
                 switch (kvRange.state().getType()) {
-                    case Purged, Merged, Removed -> quitReason.complete(kvRange.state().getType());
+                    case Purged, Merged, Removed -> quitSignal.complete(null);
                 }
             }
         });
@@ -696,35 +697,28 @@ public class KVRangeFSM implements IKVRangeFSM {
                 String taskId = state.getTaskId();
                 rangeWriter.bumpVer(false);
                 if (taskId.equals(config.getCorrelateId())) {
-                    // request config change success
-                    // request config applied
-                    if (config.getNextVotersCount() == 0 && config.getNextLearnersCount() == 0) {
-                        // if the config entry is resulted from user request, and removed from replica set,
-                        // put it to the state of Removed
-                        boolean remove = !members.contains(hostStoreId);
-                        if (remove) {
-                            log.debug("Replica removed[newConfig={}]", config);
-                            rangeWriter.state(State.newBuilder()
-                                .setType(Purged)
-                                .setTaskId(taskId)
-                                .build());
-                            onDone.complete(() -> {
-                                clusterConfigSubject.onNext(config);
-                                quitReason.complete(Purged);
-                                finishCommand(taskId);
-                            });
-                        } else {
-                            rangeWriter.state(State.newBuilder()
-                                .setType(Normal)
-                                .setTaskId(taskId)
-                                .build());
-                            onDone.complete(() -> {
-                                clusterConfigSubject.onNext(config);
-                                finishCommand(taskId);
-                            });
-                        }
+                    // request config change success, requested config applied
+                    boolean remove = !members.contains(hostStoreId);
+                    if (remove) {
+                        log.debug("Replica removed[newConfig={}]", config);
+                        rangeWriter.state(State.newBuilder()
+                            .setType(Removed)
+                            .setTaskId(taskId)
+                            .build());
+                        onDone.complete(() -> {
+                            clusterConfigSubject.onNext(config);
+                            quitSignal.complete(null);
+                            finishCommand(taskId);
+                        });
                     } else {
-                        onDone.complete(() -> clusterConfigSubject.onNext(config));
+                        rangeWriter.state(State.newBuilder()
+                            .setType(Normal)
+                            .setTaskId(taskId)
+                            .build());
+                        onDone.complete(() -> {
+                            clusterConfigSubject.onNext(config);
+                            finishCommand(taskId);
+                        });
                     }
                 } else {
                     // request config change failed, the config entry is appended due to leader reelection
@@ -736,7 +730,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                             .build());
                         onDone.complete(() -> {
                             clusterConfigSubject.onNext(config);
-                            quitReason.complete(Removed);
+                            quitSignal.complete(null);
                         });
                     } else {
                         rangeWriter.state(State.newBuilder()
@@ -750,8 +744,7 @@ public class KVRangeFSM implements IKVRangeFSM {
             }
             case MergedQuiting -> {
                 String taskId = state.getTaskId();
-                // has been removed from config or the only member in the config
-                boolean remove = !members.contains(hostStoreId) || singleton(hostStoreId).containsAll(members);
+                boolean remove = !members.contains(hostStoreId);
                 if (remove) {
                     rangeWriter.state(State.newBuilder()
                         .setType(Removed)
@@ -768,8 +761,19 @@ public class KVRangeFSM implements IKVRangeFSM {
                     clusterConfigSubject.onNext(config);
                     finishCommand(taskId);
                     if (remove) {
-                        quitReason.complete(Removed);
+                        quitSignal.complete(null);
                     }
+                });
+            }
+            case Purged -> {
+                String taskId = state.getTaskId();
+                rangeWriter.state(State.newBuilder()
+                    .setType(Removed)
+                    .setTaskId(taskId)
+                    .build());
+                onDone.complete(() -> {
+                    finishCommand(taskId);
+                    quitSignal.complete(null);
                 });
             }
             default ->
@@ -827,16 +831,22 @@ public class KVRangeFSM implements IKVRangeFSM {
                             logTerm, logIndex, taskId, ver, state);
                         onDone.completeExceptionally(e);
                     } else {
+                        ClusterConfig currentConfig = wal.clusterConfig();
+                        boolean toBePurged = isGracefulQuit(currentConfig, request);
                         // notify new voters and learners host store to ensure the range exist
                         Set<String> newHostingStoreIds = difference(
                             difference(
                                 union(newHashSet(request.getVotersList()),
                                     newHashSet(request.getLearnersList())),
-                                union(newHashSet(wal.clusterConfig().getVotersList()),
-                                    newHashSet(wal.clusterConfig().getLearnersList()))
+                                union(newHashSet(currentConfig.getVotersList()),
+                                    newHashSet(currentConfig.getLearnersList()))
                             ),
                             singleton(hostStoreId)
                         );
+                        Set<String> nextVoters = toBePurged
+                            ? newHashSet(currentConfig.getVotersList()) : newHashSet(request.getVotersList());
+                        Set<String> nextLearners = toBePurged
+                            ? emptySet() : newHashSet(request.getLearnersList());
                         List<CompletableFuture<?>> onceFutures = newHostingStoreIds.stream()
                             .map(storeId -> messenger.once(m -> {
                                         if (m.hasEnsureRangeReply()) {
@@ -854,13 +864,12 @@ public class KVRangeFSM implements IKVRangeFSM {
                             )
                             .collect(Collectors.toList());
                         CompletableFuture.allOf(onceFutures.toArray(CompletableFuture[]::new))
-                            .thenAcceptAsync(v1 -> wal.changeClusterConfig(taskId,
-                                    newHashSet(request.getVotersList()),
-                                    newHashSet(request.getLearnersList()))
+                            .thenAcceptAsync(v1 -> wal.changeClusterConfig(taskId, nextVoters, nextLearners)
                                 .whenCompleteAsync((v2, e2) -> {
                                     if (e2 != null) {
-                                        String errorMessage = String.format("ConfigChange aborted[taskId=%s] due to %s",
-                                            taskId, e2.getMessage());
+                                        String errorMessage =
+                                            String.format("ConfigChange aborted[taskId=%s] due to %s",
+                                                taskId, e2.getMessage());
                                         log.debug(errorMessage);
                                         finishCommandWithError(taskId, new KVRangeException.TryLater(errorMessage));
                                         wal.stepDown();
@@ -892,16 +901,30 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 .build());
                         });
                         if (state.getType() == Normal) {
-                            // only transit to ConfigChanging from Normal
-                            rangeWriter.state(State.newBuilder()
-                                .setType(ConfigChanging)
-                                .setTaskId(taskId)
-                                .build());
+                            if (toBePurged) {
+                                rangeWriter.state(State.newBuilder()
+                                    .setType(Purged)
+                                    .setTaskId(taskId)
+                                    .build());
+                            } else {
+                                // only transit to ConfigChanging from Normal
+                                rangeWriter.state(State.newBuilder()
+                                    .setType(ConfigChanging)
+                                    .setTaskId(taskId)
+                                    .build());
+                            }
                         } else if (state.getType() == Merged) {
-                            rangeWriter.state(State.newBuilder()
-                                .setType(MergedQuiting)
-                                .setTaskId(taskId)
-                                .build());
+                            if (toBePurged) {
+                                rangeWriter.state(State.newBuilder()
+                                    .setType(Purged)
+                                    .setTaskId(taskId)
+                                    .build());
+                            } else {
+                                rangeWriter.state(State.newBuilder()
+                                    .setType(MergedQuiting)
+                                    .setTaskId(taskId)
+                                    .build());
+                            }
                         }
                         rangeWriter.bumpVer(false);
                         onDone.complete(NOOP);
@@ -1379,6 +1402,13 @@ public class KVRangeFSM implements IKVRangeFSM {
             }
         }
         return onDone;
+    }
+
+    private boolean isGracefulQuit(ClusterConfig currentConfig, ChangeConfig nextConfig) {
+        return Set.of(hostStoreId).containsAll(currentConfig.getVotersList())
+            && currentConfig.getLearnersCount() == 0
+            && nextConfig.getVotersCount() == 0
+            && nextConfig.getLearnersCount() == 0;
     }
 
     private CompletableFuture<Void> restore(KVRangeSnapshot snapshot,

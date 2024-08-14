@@ -17,13 +17,17 @@ import static com.baidu.bifromq.basekv.proto.State.StateType.Merged;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compare;
 import static com.google.protobuf.ByteString.copyFromUtf8;
+import static java.util.Collections.emptySet;
 import static org.awaitility.Awaitility.await;
 
 import com.baidu.bifromq.basekv.annotation.Cluster;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.google.common.collect.Sets;
 import java.time.Duration;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -86,8 +90,8 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
                 mergee.get().id)
             .toCompletableFuture().join();
 
-        KVRangeConfig setting = cluster.awaitAllKVRangeReady(merger.get().id, 3, 40);
-        log.info("Merged settings {}", setting);
+        KVRangeConfig mergerSetting = cluster.awaitAllKVRangeReady(merger.get().id, 6, 40);
+        log.info("Merged settings {}", mergerSetting);
         await().atMost(Duration.ofSeconds(400)).until(() -> {
             for (String storeId : cluster.allStoreIds()) {
                 KVRangeDescriptor mergeeDesc = cluster.getKVRange(storeId, mergee.get().id);
@@ -97,9 +101,27 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
             }
             return true;
         });
-        log.info("Merge done");
-        // TODO: simulate graceful quit
+        log.info("Merge done, and quit all mergee replicas");
+        KVRangeConfig mergeeSetting = cluster.awaitAllKVRangeReady(mergee.get().id, 6, 40);
+        cluster.changeReplicaConfig(mergeeSetting.leader,
+                mergeeSetting.ver,
+                mergeeSetting.id,
+                Set.of(mergeeSetting.leader),
+                emptySet())
+            .toCompletableFuture().join();
+        ClusterConfig clusterConfig = mergeeSetting.clusterConfig;
+        Set<String> removedMergees = Sets.newHashSet(clusterConfig.getVotersList());
+        removedMergees.remove(mergeeSetting.leader);
+        await().until(
+            () -> removedMergees.stream().noneMatch(storeId -> cluster.isHosting(storeId, mergee.get().id)));
 
+        log.info("Quit last mergee replica");
+        String lastStore = mergeeSetting.leader;
+        mergeeSetting = cluster.awaitKVRangeReady(lastStore, mergee.get().id, 9);
+        cluster.changeReplicaConfig(lastStore, mergeeSetting.ver, mergee.get().id, emptySet(), emptySet())
+            .toCompletableFuture().join();
+        await().until(() -> !cluster.isHosting(lastStore, mergee.get().id));
+        log.info("Test done");
     }
 
     @Test(groups = "integration")

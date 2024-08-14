@@ -172,6 +172,14 @@ public class KVRangeStoreTestCluster {
         });
     }
 
+    public KVRangeConfig awaitKVRangeReady(String storeId, KVRangeId kvRangeId, long atLeastVer) {
+        await().atMost(Duration.ofSeconds(10)).until(() -> {
+            KVRangeConfig kvRangeSetting = rangeConfigMap.get(kvRangeId);
+            return hasKVRange(storeId, kvRangeId) && kvRangeSetting != null && kvRangeSetting.ver >= atLeastVer;
+        });
+        return rangeConfigMap.get(kvRangeId);
+    }
+
     public KVRangeConfig awaitAllKVRangeReady(KVRangeId kvRangeId, long atLeastVer, long timeoutInSeconds) {
         await().atMost(Duration.ofSeconds(timeoutInSeconds)).until(() -> {
             boolean allReady = true;
@@ -485,10 +493,11 @@ public class KVRangeStoreTestCluster {
     private void handleStoreDescriptor(KVRangeStoreDescriptor storeDescriptor) {
         storeDescriptorMap.put(storeDescriptor.getId(), storeDescriptor);
         storeDescriptor.getRangesList().forEach(rangeDescriptor -> {
-            if (rangeDescriptor.getRole() == RaftNodeStatus.Leader &&
-                rangeDescriptor.getState() == State.StateType.Normal &&
-                rangeDescriptor.getConfig().getNextVotersCount() == 0 &&
-                rangeDescriptor.getConfig().getNextLearnersCount() == 0) {
+            if (rangeDescriptor.getRole() == RaftNodeStatus.Leader
+                && (rangeDescriptor.getState() == State.StateType.Normal
+                || rangeDescriptor.getState() == State.StateType.Merged)
+                && rangeDescriptor.getConfig().getNextVotersCount() == 0
+                && rangeDescriptor.getConfig().getNextLearnersCount() == 0) {
                 KVRangeConfig settings = new KVRangeConfig(CLUSTER, storeDescriptor.getId(), rangeDescriptor);
                 rangeConfigMap.compute(rangeDescriptor.getId(), (id, oldSettings) -> {
                     if (oldSettings != null) {
