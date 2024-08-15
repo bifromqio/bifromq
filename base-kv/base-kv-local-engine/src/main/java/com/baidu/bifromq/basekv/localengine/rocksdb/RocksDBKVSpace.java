@@ -194,12 +194,6 @@ abstract class RocksDBKVSpace<
             writeStats.newRecorder(), this::updateMetadata, metricTags);
     }
 
-    //For internal use only
-    IKVSpaceWriter toWriter(RocksDBKVSpaceWriterHelper helper) {
-        return new RocksDBKVSpaceWriter<>(id, db, cfHandle, engine, syncContext, helper, writeStats.newRecorder(),
-            this::updateMetadata, metricTags);
-    }
-
     void close() {
         if (state.compareAndSet(State.Opening, State.Closing)) {
             try {

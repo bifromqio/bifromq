@@ -259,9 +259,10 @@ public abstract class AbstractKVEngineTest extends MockableTest {
         ByteString value = ByteString.copyFromUtf8("value");
         IKVSpace keyRange = engine.createIfMissing(rangeId);
         keyRange.toWriter()
-            .metadata(key, value)
             .put(key, value)
-            .delete(key).done();
+            .delete(key)
+            .metadata(key, value)
+            .done();
         assertFalse(keyRange.exist(key));
 
         IKVSpaceWriter rangeWriter = keyRange.toWriter();
@@ -309,11 +310,11 @@ public abstract class AbstractKVEngineTest extends MockableTest {
             .put(key1, value1)
             .put(key2, value2)
             .done();
-        IKVSpaceWriter leftRangeWriter = leftRange.toWriter();
-        leftRangeWriter
-            .migrateTo(rightRangeId, Boundary.newBuilder().setStartKey(splitKey).build())
-            .metadata(metaKey, metaVal);
-        leftRangeWriter.done();
+        IKVSpaceWriter leftSpaceWriter = leftRange.toWriter();
+        IKVSpaceMetadataWriter rightSpaceMetadataWriter = leftSpaceWriter
+            .migrateTo(rightRangeId, Boundary.newBuilder().setStartKey(splitKey).build()).metadata(metaKey, metaVal);
+        leftSpaceWriter.done();
+        rightSpaceMetadataWriter.done();
 
         IKVSpace rightRange = engine.createIfMissing(rightRangeId);
 
@@ -349,13 +350,14 @@ public abstract class AbstractKVEngineTest extends MockableTest {
             .done();
         assertTrue(rightRange.exist(key2));
 
-        IKVSpaceWriter leftRangeWriter = leftRange.toWriter();
-        leftRangeWriter
+        IKVSpaceWriter leftSpaceWriter = leftRange.toWriter();
+        IKVSpaceMetadataWriter rightSpaceMetadataWriter = leftSpaceWriter
             .migrateFrom(rightRangeId, Boundary.newBuilder().setStartKey(splitKey).build())
             .metadata(metaKey, metaVal);
-        leftRangeWriter
+        leftSpaceWriter
             .metadata(metaKey, metaVal)
             .done();
+        rightSpaceMetadataWriter.done();
 
         assertTrue(leftRange.metadata(metaKey).isPresent());
         assertTrue(rightRange.metadata(metaKey).isPresent());

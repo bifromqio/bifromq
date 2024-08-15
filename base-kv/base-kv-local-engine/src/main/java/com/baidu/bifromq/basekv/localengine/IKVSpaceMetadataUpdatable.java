@@ -15,9 +15,14 @@ package com.baidu.bifromq.basekv.localengine;
 
 import com.google.protobuf.ByteString;
 
+/**
+ * Interface for updating space metadata.
+ *
+ * @param <T> the type of the updater
+ */
 public interface IKVSpaceMetadataUpdatable<T extends IKVSpaceMetadataUpdatable<T>> extends IKVSpaceMetadata {
     /**
-     * Update metadata in key-value pair
+     * Update metadata in key-value pair.
      *
      * @param metaKey   the key of the metadata
      * @param metaValue the value of the metadata

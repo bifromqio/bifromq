@@ -21,7 +21,6 @@ import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVSpaceDescriptor;
 import com.baidu.bifromq.basekv.localengine.SyncContext;
 import com.google.protobuf.ByteString;
-import io.micrometer.core.instrument.Tags;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import java.util.Collections;
@@ -96,15 +95,6 @@ public class InMemKVSpace<E extends InMemKVEngine<E, T>, T extends InMemKVSpace<
     @Override
     public IKVSpaceWriter toWriter() {
         return new InMemKVSpaceWriter<>(id, metadataMap, rangeData, engine, syncContext,
-            metadataUpdated -> {
-                if (metadataUpdated) {
-                    this.loadMetadata();
-                }
-            });
-    }
-
-    IKVSpaceWriter toWriter(InMemKVSpaceWriterHelper helper) {
-        return new InMemKVSpaceWriter<>(id, metadataMap, rangeData, engine, syncContext, helper,
             metadataUpdated -> {
                 if (metadataUpdated) {
                     this.loadMetadata();

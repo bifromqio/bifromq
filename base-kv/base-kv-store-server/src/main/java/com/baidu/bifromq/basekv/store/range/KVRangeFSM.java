@@ -1003,12 +1003,12 @@ public class KVRangeFSM implements IKVRangeFSM {
                         .build();
                     rangeWriter.boundary(leftBoundary).bumpVer(true);
                     // migrate data to right-hand keyspace which created implicitly
-                    IKVRangeMetadataUpdatable<?> rightRangeMetadata =
-                        rangeWriter.migrateTo(request.getNewId(), rightBoundary);
-                    rightRangeMetadata.resetVer(rhsSS.getVer())
+                    rangeWriter.migrateTo(request.getNewId(), rightBoundary)
+                        .resetVer(rhsSS.getVer())
                         .boundary(rightBoundary)
                         .lastAppliedIndex(rhsSS.getLastAppliedIndex())
-                        .state(rhsSS.getState());
+                        .state(rhsSS.getState())
+                        .done();
                     onDone.complete(() -> {
                         try {
                             log.debug("Range split completed[taskId={}]", taskId);
@@ -1269,13 +1269,14 @@ public class KVRangeFSM implements IKVRangeFSM {
                     long newVer = Math.max(ver, request.getMergeeVer()) + 2;
                     // make sure the version is odd
                     Boundary mergedBoundary = combine(boundary, request.getBoundary());
-                    rangeWriter.resetVer(VerUtil.bump(newVer, true))
+                    IKVRangeMetadataWriter<?> rightRangeWriter = rangeWriter.resetVer(VerUtil.bump(newVer, true))
                         .boundary(mergedBoundary)
                         .state(State.newBuilder()
                             .setType(Normal)
                             .setTaskId(taskId)
                             .build())
                         .migrateFrom(request.getMergeeId(), request.getBoundary());
+                    rightRangeWriter.done();
                     CompletableFuture<KVRangeMessage> onceFuture = messenger.once(m ->
                         m.hasMergeDoneReply() && m.getMergeDoneReply().getTaskId().equals(taskId));
                     // cancel the future

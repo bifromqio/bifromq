@@ -14,17 +14,15 @@
 package com.baidu.bifromq.basekv.localengine.memory;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
-import com.baidu.bifromq.basekv.localengine.IKVSpaceMetadataUpdatable;
+import com.baidu.bifromq.basekv.localengine.IKVSpaceMetadataWriter;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
-import io.micrometer.core.instrument.Tags;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Consumer;
-import lombok.extern.slf4j.Slf4j;
 
 public class InMemKVSpaceWriter<E extends InMemKVEngine<E, T>, T extends InMemKVSpace<E, T>> extends InMemKVSpaceReader
     implements IKVSpaceWriter {
@@ -43,14 +41,14 @@ public class InMemKVSpaceWriter<E extends InMemKVEngine<E, T>, T extends InMemKV
         this(id, metadataMap, rangeData, engine, syncContext, new InMemKVSpaceWriterHelper(), afterWrite, tags);
     }
 
-    InMemKVSpaceWriter(String id,
-                       Map<ByteString, ByteString> metadataMap,
-                       ConcurrentSkipListMap<ByteString, ByteString> rangeData,
-                       E engine,
-                       ISyncContext syncContext,
-                       InMemKVSpaceWriterHelper writerHelper,
-                       Consumer<Boolean> afterWrite,
-                       String... tags) {
+    private InMemKVSpaceWriter(String id,
+                               Map<ByteString, ByteString> metadataMap,
+                               ConcurrentSkipListMap<ByteString, ByteString> rangeData,
+                               E engine,
+                               ISyncContext syncContext,
+                               InMemKVSpaceWriterHelper writerHelper,
+                               Consumer<Boolean> afterWrite,
+                               String... tags) {
         super(id, tags);
         this.metadataMap = metadataMap;
         this.rangeData = rangeData;
@@ -98,41 +96,39 @@ public class InMemKVSpaceWriter<E extends InMemKVEngine<E, T>, T extends InMemKV
     }
 
     @Override
-    public IKVSpaceMetadataUpdatable<?> migrateTo(String targetRangeId, Boundary boundary) {
-        InMemKVSpace toKeyRange = (InMemKVSpace) engine.createIfMissing(targetRangeId);
+    public IKVSpaceMetadataWriter migrateTo(String targetSpaceId, Boundary boundary) {
         try {
+            InMemKVSpace<?, ?> targetKVSpace = engine.createIfMissing(targetSpaceId);
+            IKVSpaceWriter targetKVSpaceWriter = targetKVSpace.toWriter();
             // move data
             try (IKVSpaceIterator itr = newIterator(boundary)) {
                 for (itr.seekToFirst(); itr.isValid(); itr.next()) {
-                    helper.put(toKeyRange.id(), itr.key(), itr.value());
+                    targetKVSpaceWriter.put(itr.key(), itr.value());
                 }
             }
             // clear moved data in left range
             helper.clear(id, boundary);
-            return toKeyRange.toWriter(helper);
+            return targetKVSpaceWriter;
         } catch (Throwable e) {
             throw new KVEngineException("Delete range in batch failed", e);
         }
     }
 
     @Override
-    public IKVSpaceMetadataUpdatable<?> migrateFrom(String fromRangeId, Boundary boundary) {
-        InMemKVSpace fromKeyRange = (InMemKVSpace) engine.createIfMissing(fromRangeId);
-        helper.addMutators(fromKeyRange.id,
-            fromKeyRange.metadataMap(),
-            fromKeyRange.rangeData(),
-            fromKeyRange.syncContext().mutator());
+    public IKVSpaceMetadataWriter migrateFrom(String fromSpaceId, Boundary boundary) {
 
         try {
+            InMemKVSpace<?, ?> sourceKVSpace = engine.createIfMissing(fromSpaceId);
+            IKVSpaceWriter sourceKVSpaceWriter = sourceKVSpace.toWriter();
             // move data
-            try (IKVSpaceIterator itr = fromKeyRange.newIterator(boundary)) {
+            try (IKVSpaceIterator itr = sourceKVSpace.newIterator(boundary)) {
                 for (itr.seekToFirst(); itr.isValid(); itr.next()) {
                     helper.put(id, itr.key(), itr.value());
                 }
             }
             // clear moved data in right range
-            helper.clear(fromKeyRange.id(), boundary);
-            return fromKeyRange.toWriter(helper);
+            sourceKVSpaceWriter.clear(boundary);
+            return sourceKVSpaceWriter;
         } catch (Throwable e) {
             throw new KVEngineException("Delete range in batch failed", e);
         }

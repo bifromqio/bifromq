@@ -16,9 +16,14 @@ package com.baidu.bifromq.basekv.localengine;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 
-public interface IKVSpaceWritable<T extends IKVSpaceWritable<T>> extends IKVSpaceMetadataUpdatable<T> {
+/**
+ * The interface for update kv space.
+ *
+ * @param <T> the type of the updater
+ */
+public interface IKVSpaceDataUpdatable<T extends IKVSpaceDataUpdatable<T>> extends IKVSpaceReader {
     /**
-     * Insert a key-value pair in to the range
+     * Insert a key-value pair in to the range.
      *
      * @param key   the key to insert
      * @param value the value
@@ -26,7 +31,7 @@ public interface IKVSpaceWritable<T extends IKVSpaceWritable<T>> extends IKVSpac
     T insert(ByteString key, ByteString value);
 
     /**
-     * Put a key-value pair in to the range
+     * Put a key-value pair in to the range.
      *
      * @param key   the key to put
      * @param value the value
@@ -34,33 +39,32 @@ public interface IKVSpaceWritable<T extends IKVSpaceWritable<T>> extends IKVSpac
     T put(ByteString key, ByteString value);
 
     /**
-     * Delete a key from the range
+     * Delete a key from the range.
      *
      * @param key the key to delete
      */
     T delete(ByteString key);
 
     /**
-     * Clear all data in the range
+     * Clear all data in the range.
      */
     T clear();
 
     /**
-     * Clear a boundary of key-value pairs in the range
+     * Clear a boundary of key-value pairs in the range.
      *
      * @param boundary the boundary
      */
     T clear(Boundary boundary);
 
     /**
-     * Migrate data in given boundary to target range, and returns the metadata updater for target boundary.
-     * Note. the two writers are sharing same write batch so calling done on either will finish the migration.
+     * Migrate data in given boundary to target space, and returns the metadata updater for target boundary.
      *
-     * @param targetRangeId the id of target range
+     * @param targetSpaceId the id of target range
      * @param boundary      the boundary of data to be migrated
      * @return the metadata updater of target boundary
      */
-    IKVSpaceMetadataUpdatable<?> migrateTo(String targetRangeId, Boundary boundary);
+    IKVSpaceMetadataWriter migrateTo(String targetSpaceId, Boundary boundary);
 
-    IKVSpaceMetadataUpdatable<?> migrateFrom(String fromRangeId, Boundary boundary);
+    IKVSpaceMetadataWriter migrateFrom(String fromSpaceId, Boundary boundary);
 }

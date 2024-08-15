@@ -14,17 +14,34 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceMetadataUpdatable;
+import com.baidu.bifromq.basekv.localengine.IKVSpaceMetadataWriter;
 
-public class KVRangeMetadataUpdatable extends AbstractKVRangeMetadataUpdatable<KVRangeMetadataUpdatable> {
-    private final IKVSpaceMetadataUpdatable<?> keyRangeMetadataUpdateable;
+public class KVRangeMetadataWriter extends AbstractKVRangeMetadataUpdatable<KVRangeMetadataWriter>
+    implements IKVRangeMetadataWriter<KVRangeMetadataWriter> {
+    private final IKVSpaceMetadataWriter keyRangeMetadataWriter;
 
-    KVRangeMetadataUpdatable(IKVSpaceMetadataUpdatable<?> keyRangeMetadataUpdateable) {
-        super(keyRangeMetadataUpdateable);
-        this.keyRangeMetadataUpdateable = keyRangeMetadataUpdateable;
+    KVRangeMetadataWriter(IKVSpaceMetadataWriter keyRangeMetadataWriter) {
+        super(keyRangeMetadataWriter);
+        this.keyRangeMetadataWriter = keyRangeMetadataWriter;
     }
 
     @Override
     protected IKVSpaceMetadataUpdatable<?> keyRangeWriter() {
-        return keyRangeMetadataUpdateable;
+        return keyRangeMetadataWriter;
+    }
+
+    @Override
+    public void done() {
+        keyRangeMetadataWriter.done();
+    }
+
+    @Override
+    public void abort() {
+        keyRangeMetadataWriter.abort();
+    }
+
+    @Override
+    public int count() {
+        return keyRangeMetadataWriter.count();
     }
 }

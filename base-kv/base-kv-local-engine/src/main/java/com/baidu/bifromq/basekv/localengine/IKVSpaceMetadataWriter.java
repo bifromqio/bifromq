@@ -14,8 +14,7 @@
 package com.baidu.bifromq.basekv.localengine;
 
 /**
- * A writer for update range state, only when done method is called the changes are persisted and visible.
+ * The writer for saving space metadata.
  */
-public interface IKVSpaceWriter
-    extends IKVSpaceMetadataWriter, IKVSpaceDataUpdatable<IKVSpaceWriter>, IKVSpaceWriteable {
+public interface IKVSpaceMetadataWriter extends IKVSpaceMetadataUpdatable<IKVSpaceMetadataWriter>, IKVSpaceWriteable {
 }

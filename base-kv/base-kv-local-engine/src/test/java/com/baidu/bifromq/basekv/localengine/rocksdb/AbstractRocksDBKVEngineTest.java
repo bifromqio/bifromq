@@ -61,7 +61,7 @@ public abstract class AbstractRocksDBKVEngineTest extends AbstractKVEngineTest {
         ByteString key = ByteString.copyFromUtf8("key");
         ByteString value = ByteString.copyFromUtf8("value");
         IKVSpace keyRange = engine.createIfMissing(rangeId);
-        keyRange.toWriter().metadata(metaKey, metaValue).put(key, value).done();
+        keyRange.toWriter().put(key, value).metadata(metaKey, metaValue).done();
         assertTrue(keyRange.metadata(metaKey).isPresent());
         assertTrue(keyRange.metadata().blockingFirst().containsKey(metaKey));
         assertTrue(keyRange.exist(key));

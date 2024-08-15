@@ -18,9 +18,9 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 
 public interface IKVRangeWritable<T extends IKVRangeWritable<T>> extends IKVRangeMetadataUpdatable<T> {
-    IKVRangeMetadataUpdatable<?> migrateTo(KVRangeId targetRangeId, Boundary boundary);
+    IKVRangeMetadataWriter<?> migrateTo(KVRangeId targetRangeId, Boundary boundary);
 
-    IKVRangeMetadataUpdatable<?> migrateFrom(KVRangeId fromRangeId, Boundary boundary);
+    IKVRangeMetadataWriter<?> migrateFrom(KVRangeId fromRangeId, Boundary boundary);
 
     IKVWriter kvWriter();
 }

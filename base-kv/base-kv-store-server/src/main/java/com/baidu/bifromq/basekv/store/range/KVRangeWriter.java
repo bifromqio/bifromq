@@ -16,7 +16,6 @@ package com.baidu.bifromq.basekv.store.range;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 
@@ -35,13 +34,13 @@ public class KVRangeWriter extends AbstractKVRangeMetadataUpdatable<KVRangeWrite
     }
 
     @Override
-    public IKVRangeMetadataUpdatable<?> migrateTo(KVRangeId targetRangeId, Boundary boundary) {
-        return new KVRangeMetadataUpdatable(spaceWriter.migrateTo(KVRangeIdUtil.toString(targetRangeId), boundary));
+    public IKVRangeMetadataWriter<?> migrateTo(KVRangeId targetRangeId, Boundary boundary) {
+        return new KVRangeMetadataWriter(spaceWriter.migrateTo(KVRangeIdUtil.toString(targetRangeId), boundary));
     }
 
     @Override
-    public IKVRangeMetadataUpdatable<?> migrateFrom(KVRangeId fromRangeId, Boundary boundary) {
-        return new KVRangeMetadataUpdatable(spaceWriter.migrateFrom(KVRangeIdUtil.toString(fromRangeId), boundary));
+    public IKVRangeMetadataWriter<?> migrateFrom(KVRangeId fromRangeId, Boundary boundary) {
+        return new KVRangeMetadataWriter(spaceWriter.migrateFrom(KVRangeIdUtil.toString(fromRangeId), boundary));
     }
 
     @Override

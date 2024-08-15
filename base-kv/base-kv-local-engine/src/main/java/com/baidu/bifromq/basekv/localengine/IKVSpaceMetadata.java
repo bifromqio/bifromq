@@ -17,12 +17,37 @@ import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
 
+/**
+ * Interface for accessing space metadata.
+ */
 public interface IKVSpaceMetadata {
+    /**
+     * Get the id of the space.
+     *
+     * @return the id of the space
+     */
     String id();
 
+    /**
+     * Get the metadata in key-value pair.
+     *
+     * @param metaKey the key of the metadata
+     * @return the value of the metadata
+     */
     Optional<ByteString> metadata(ByteString metaKey);
 
+    /**
+     * Get the size of the space.
+     *
+     * @return the size of the space
+     */
     long size();
 
+    /**
+     * Get the size of the space in the specified boundary.
+     *
+     * @param boundary the boundary
+     * @return the size of the space in the specified boundary
+     */
     long size(Boundary boundary);
 }
