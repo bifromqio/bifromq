@@ -18,7 +18,7 @@ import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import java.nio.file.Paths;
 import lombok.SneakyThrows;
 
-public class RocksDBWALableKVEngineTest extends AbstractRocksDBKVEngine2Test {
+public class RocksDBWALableKVEngineTest extends AbstractRocksDBKVEngineTest {
     protected RocksDBWALableKVEngineConfigurator configurator;
 
     @SneakyThrows

@@ -115,6 +115,28 @@ public class RocksDBCPableKVSpace
     }
 
     @Override
+    protected void doDestroy() {
+        super.doDestroy();
+        try {
+            Files.walkFileTree(cpRootDir.toPath(), new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    Files.delete(file);
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                    Files.delete(dir);
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException e) {
+            log.error("Failed to delete checkpoint root dir: {}", cpRootDir, e);
+        }
+    }
+
+    @Override
     protected void doLoad() {
         loadLatestCheckpoint();
         super.doLoad();

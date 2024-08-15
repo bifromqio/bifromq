@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.SneakyThrows;
 import org.testng.annotations.Test;
 
-public abstract class AbstractRocksDBKVEngine2Test extends AbstractKVEngineTest {
+public abstract class AbstractRocksDBKVEngineTest extends AbstractKVEngineTest {
     protected Path dbRootDir;
 
     @SneakyThrows

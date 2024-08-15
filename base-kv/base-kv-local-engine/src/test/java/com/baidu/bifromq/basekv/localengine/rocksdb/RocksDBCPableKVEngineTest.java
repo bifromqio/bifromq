@@ -13,20 +13,27 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+
 import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
 import com.baidu.bifromq.basekv.localengine.IKVEngine;
+import com.baidu.bifromq.basekv.localengine.IKVSpace;
+import io.reactivex.rxjava3.disposables.Disposable;
+import java.io.File;
 import java.nio.file.Paths;
 import lombok.SneakyThrows;
+import org.testng.annotations.Test;
 
-public class RocksDBCPableKVEngineTest extends AbstractRocksDBKVEngine2Test {
+public class RocksDBCPableKVEngineTest extends AbstractRocksDBKVEngineTest {
+    private final String DB_NAME = "testDB";
+    private final String DB_CHECKPOINT_DIR = "testDB_cp";
     private RocksDBCPableKVEngineConfigurator configurator;
 
     @SneakyThrows
     @Override
     protected void beforeStart() {
         super.beforeStart();
-        String DB_NAME = "testDB";
-        String DB_CHECKPOINT_DIR = "testDB_cp";
         configurator = RocksDBCPableKVEngineConfigurator.builder()
             .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME).toString())
             .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR).toString())
@@ -37,5 +44,21 @@ public class RocksDBCPableKVEngineTest extends AbstractRocksDBKVEngine2Test {
     @Override
     protected IKVEngine<? extends ICPableKVSpace> newEngine() {
         return new RocksDBCPableKVEngine(null, configurator);
+    }
+
+    @Test
+    public void removeCheckpointFileWhenDestroy() {
+        String rangeId = "test_range1";
+        File cpDir = Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR, rangeId).toFile();
+        IKVSpace range = engine.createIfMissing(rangeId);
+        assertTrue(engine.spaces().containsKey(rangeId));
+        assertTrue(cpDir.exists());
+        Disposable disposable = range.metadata().subscribe();
+
+        range.destroy();
+        assertFalse(cpDir.exists());
+        assertTrue(disposable.isDisposed());
+        assertTrue(engine.spaces().isEmpty());
+        assertFalse(engine.spaces().containsKey(rangeId));
     }
 }

@@ -178,7 +178,7 @@ abstract class RocksDBKVSpace<
                 synchronized (compacting) {
                     db.dropColumnFamily(cfHandle);
                 }
-                doClose();
+                doDestroy();
             } catch (RocksDBException e) {
                 throw new KVEngineException("Destroy KVRange error", e);
             } finally {
@@ -222,6 +222,10 @@ abstract class RocksDBKVSpace<
             db.destroyColumnFamilyHandle(cfHandle);
         }
         metadataSubject.onComplete();
+    }
+
+    protected void doDestroy() {
+        doClose();
     }
 
     @Override
