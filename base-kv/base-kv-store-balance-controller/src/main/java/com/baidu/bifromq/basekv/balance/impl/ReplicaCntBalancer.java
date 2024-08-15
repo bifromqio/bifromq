@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.basekv.balance.impl;
 
+import static com.baidu.bifromq.basekv.balance.DescriptorUtil.getLeastEpoch;
+
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
@@ -28,7 +30,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
 
 public class ReplicaCntBalancer extends StoreBalancer {
     private final int voterCount;
@@ -43,7 +44,7 @@ public class ReplicaCntBalancer extends StoreBalancer {
 
     @Override
     public void update(Set<KVRangeStoreDescriptor> storeDescriptors) {
-        this.latestStoreDescriptors = storeDescriptors;
+        this.latestStoreDescriptors = getLeastEpoch(storeDescriptors);
     }
 
     @Override

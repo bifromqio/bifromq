@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.basekv.balance.impl;
 
+import static com.baidu.bifromq.basekv.balance.DescriptorUtil.getLeastEpoch;
+
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
@@ -32,7 +34,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
 
 public class RangeLeaderBalancer extends StoreBalancer {
     private volatile Set<KVRangeStoreDescriptor> latestStoreDescriptors = Collections.emptySet();
@@ -43,7 +44,7 @@ public class RangeLeaderBalancer extends StoreBalancer {
 
     @Override
     public void update(Set<KVRangeStoreDescriptor> storeDescriptors) {
-        latestStoreDescriptors = storeDescriptors;
+        latestStoreDescriptors = getLeastEpoch(storeDescriptors);
     }
 
     @Override
@@ -146,7 +147,7 @@ public class RangeLeaderBalancer extends StoreBalancer {
             }
         }
         if (localStoreDesc == null) {
-            log.warn("There is no storeDescriptor for local store: {}", localStoreId);
+            log.debug("There is no storeDescriptor for local store: {}", localStoreId);
             return Collections.emptyList();
         }
         return localStoreDesc.getRangesList()

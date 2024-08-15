@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.dist.worker.balance;
 
+import static com.baidu.bifromq.basekv.balance.DescriptorUtil.getLeastEpoch;
 import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter.LOAD_TYPE_IO_DENSITY;
 import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter.LOAD_TYPE_IO_LATENCY_NANOS;
 
@@ -32,7 +33,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
 
 class DistWorkerSplitBalancer extends StoreBalancer {
     private static final double DEFAULT_CPU_USAGE_LIMIT = 0.8;
@@ -62,7 +62,7 @@ class DistWorkerSplitBalancer extends StoreBalancer {
 
     @Override
     public void update(Set<KVRangeStoreDescriptor> storeDescriptors) {
-        latestStoreDescriptors = storeDescriptors;
+        latestStoreDescriptors = getLeastEpoch(storeDescriptors);
     }
 
     @Override

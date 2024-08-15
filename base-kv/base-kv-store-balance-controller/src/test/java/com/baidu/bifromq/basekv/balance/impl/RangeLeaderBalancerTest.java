@@ -55,8 +55,9 @@ public class RangeLeaderBalancerTest {
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1", "store2");
         List<String> learners = Lists.newArrayList();
         List<List<KVRangeDescriptor>> allRangeDescriptors = new ArrayList<>();
+        KVRangeId id = KVRangeIdUtil.generate();
         for (int i = 0; i < 4; i++) {
-            KVRangeId id = KVRangeIdUtil.generate();
+            id = KVRangeIdUtil.next(id);
             List<KVRangeDescriptor> rangeDescriptors =
                 DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(voters), Sets.newHashSet(learners));
             allRangeDescriptors.add(rangeDescriptors);
@@ -96,8 +97,9 @@ public class RangeLeaderBalancerTest {
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1", "store2");
         List<String> learners = Lists.newArrayList();
         List<List<KVRangeDescriptor>> allRangeDescriptors = new ArrayList<>();
+        KVRangeId id = KVRangeIdUtil.generate();
         for (int i = 0; i < 5; i++) {
-            KVRangeId id = KVRangeIdUtil.generate();
+            id = KVRangeIdUtil.next(id);
             List<KVRangeDescriptor> rangeDescriptors =
                 DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(voters), Sets.newHashSet(learners));
             allRangeDescriptors.add(rangeDescriptors);
@@ -122,8 +124,9 @@ public class RangeLeaderBalancerTest {
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1", "store2");
         List<String> learners = Lists.newArrayList();
         List<List<KVRangeDescriptor>> allRangeDescriptors = new ArrayList<>();
+        KVRangeId id = KVRangeIdUtil.generate();
         for (int i = 0; i < 5; i++) {
-            KVRangeId id = KVRangeIdUtil.generate();
+            id = KVRangeIdUtil.next(id);
             List<KVRangeDescriptor> rangeDescriptors =
                 DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(voters), Sets.newHashSet(learners));
             allRangeDescriptors.add(rangeDescriptors);
@@ -151,8 +154,9 @@ public class RangeLeaderBalancerTest {
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID);
         List<String> learners = Lists.newArrayList();
         List<List<KVRangeDescriptor>> allRangeDescriptors = new ArrayList<>();
+        KVRangeId id = KVRangeIdUtil.generate();
         for (int i = 0; i < 2; i++) {
-            KVRangeId id = KVRangeIdUtil.generate();
+            id = KVRangeIdUtil.next(id);
             List<KVRangeDescriptor> rangeDescriptors =
                 DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(voters), Sets.newHashSet(learners));
             allRangeDescriptors.add(rangeDescriptors);
@@ -182,8 +186,9 @@ public class RangeLeaderBalancerTest {
         List<String> learners = Lists.newArrayList("store1");
         List<List<KVRangeDescriptor>> allRangeDescriptors = new ArrayList<>();
         // two ranges
+        KVRangeId id = KVRangeIdUtil.generate();
         for (int i = 0; i < 2; i++) {
-            KVRangeId id = KVRangeIdUtil.generate();
+            id = KVRangeIdUtil.next(id);
             List<KVRangeDescriptor> rangeDescriptors =
                 DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(voters), Sets.newHashSet(learners));
             allRangeDescriptors.add(rangeDescriptors);
@@ -217,8 +222,9 @@ public class RangeLeaderBalancerTest {
         List<String> learners = Lists.newArrayList("store4");
         List<List<KVRangeDescriptor>> allRangeDescriptors = new ArrayList<>();
         // two ranges
+        KVRangeId id = KVRangeIdUtil.generate();
         for (int i = 0; i < 2; i++) {
-            KVRangeId id = KVRangeIdUtil.generate();
+            id = KVRangeIdUtil.next(id);
             List<KVRangeDescriptor> rangeDescriptors =
                 DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(voters), Sets.newHashSet(learners));
             allRangeDescriptors.add(rangeDescriptors);

@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.basekv.balance.impl;
 
+import static com.baidu.bifromq.basekv.balance.DescriptorUtil.getLeastEpoch;
+
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.SplitCommand;
@@ -71,7 +73,7 @@ public class RangeSplitBalancer extends StoreBalancer {
 
     @Override
     public void update(Set<KVRangeStoreDescriptor> storeDescriptors) {
-        latestStoreDescriptors = storeDescriptors;
+        latestStoreDescriptors = getLeastEpoch(storeDescriptors);
     }
 
     @Override
