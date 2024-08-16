@@ -44,10 +44,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import org.rocksdb.Checkpoint;
-import org.rocksdb.ColumnFamilyDescriptor;
-import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.FlushOptions;
-import org.rocksdb.RocksDB;
 import org.rocksdb.WriteOptions;
 
 public class RocksDBCPableKVSpace
@@ -66,14 +63,11 @@ public class RocksDBCPableKVSpace
 
     @SneakyThrows
     public RocksDBCPableKVSpace(String id,
-                                ColumnFamilyDescriptor cfDesc,
-                                ColumnFamilyHandle cfHandle,
-                                RocksDB db,
                                 RocksDBCPableKVEngineConfigurator configurator,
                                 RocksDBCPableKVEngine engine,
                                 Runnable onDestroy,
                                 String... tags) {
-        super(id, cfDesc, cfHandle, db, configurator, engine, onDestroy, tags);
+        super(id, configurator, engine, onDestroy, tags);
         this.engine = engine;
         cpRootDir = new File(configurator.dbCheckpointRootDir(), id);
         this.checkpoint = Checkpoint.create(db);
@@ -107,6 +101,12 @@ public class RocksDBCPableKVSpace
 
     @Override
     protected void doClose() {
+        log.debug("Flush RocksDBCPableKVSpace[{}] before closing", id);
+        try (FlushOptions flushOptions = new FlushOptions().setWaitForFlush(true)) {
+            db.flush(flushOptions);
+        } catch (Throwable e) {
+            log.error("Flush RocksDBCPableKVSpace[{}] error", id, e);
+        }
         metricMgr.close();
         checkpoints.asMap().forEach((cpId, cp) -> cp.close());
         checkpoint.close();
@@ -118,19 +118,7 @@ public class RocksDBCPableKVSpace
     protected void doDestroy() {
         super.doDestroy();
         try {
-            Files.walkFileTree(cpRootDir.toPath(), new SimpleFileVisitor<>() {
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                    Files.delete(file);
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                    Files.delete(dir);
-                    return FileVisitResult.CONTINUE;
-                }
-            });
+            deleteDir(cpRootDir.toPath());
         } catch (IOException e) {
             log.error("Failed to delete checkpoint root dir: {}", cpRootDir, e);
         }

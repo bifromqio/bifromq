@@ -29,14 +29,12 @@ import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
-import io.micrometer.core.instrument.Tags;
 import java.util.Optional;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.Range;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.Slice;
-import org.slf4j.Logger;
 
 public abstract class RocksDBKVSpaceReader extends AbstractKVSpaceReader {
     protected RocksDBKVSpaceReader(String id, String... tags) {

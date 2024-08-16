@@ -13,10 +13,6 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
-import org.rocksdb.ColumnFamilyDescriptor;
-import org.rocksdb.ColumnFamilyHandle;
-import org.rocksdb.RocksDB;
-
 public class RocksDBWALableKVEngine
     extends RocksDBKVEngine<RocksDBWALableKVEngine, RocksDBWALableKVSpace, RocksDBWALableKVEngineConfigurator> {
     private final RocksDBWALableKVEngineConfigurator configurator;
@@ -27,9 +23,10 @@ public class RocksDBWALableKVEngine
     }
 
     @Override
-    protected RocksDBWALableKVSpace buildKVSpace(String spaceId, ColumnFamilyDescriptor cfDesc,
-                                                 ColumnFamilyHandle cfHandle, RocksDB db, Runnable onDestroy,
+    protected RocksDBWALableKVSpace buildKVSpace(String spaceId,
+                                                 RocksDBWALableKVEngineConfigurator configurator,
+                                                 Runnable onDestroy,
                                                  String... tags) {
-        return new RocksDBWALableKVSpace(spaceId, cfDesc, cfHandle, db, configurator, this, onDestroy, tags);
+        return new RocksDBWALableKVSpace(spaceId, configurator, this, onDestroy, tags);
     }
 }

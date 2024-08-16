@@ -13,11 +13,9 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.util.Collections.singletonList;
-
 import com.baidu.bifromq.basekv.localengine.AbstractKVEngine;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
+import com.google.common.base.Strings;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
@@ -27,22 +25,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Stream;
-import org.rocksdb.ColumnFamilyDescriptor;
-import org.rocksdb.ColumnFamilyHandle;
-import org.rocksdb.DBOptions;
-import org.rocksdb.FlushOptions;
-import org.rocksdb.Options;
-import org.rocksdb.RocksDB;
-import org.rocksdb.RocksDBException;
 
 public abstract class RocksDBKVEngine<
     E extends RocksDBKVEngine<E, T, C>,
@@ -50,53 +38,22 @@ public abstract class RocksDBKVEngine<
     C extends RocksDBKVEngineConfigurator<C>
     > extends AbstractKVEngine<T> {
     private final File dbRootDir;
-    private final DBOptions dbOptions;
     private final C configurator;
-    private final Map<ColumnFamilyDescriptor, ColumnFamilyHandle> existingColumnFamilies = new HashMap<>();
     private final ConcurrentMap<String, T> kvSpaceMap = new ConcurrentHashMap<>();
     private final String identity;
-    private final RocksDB db;
-    private final ColumnFamilyDescriptor defaultCFDesc;
-    private final ColumnFamilyHandle defaultCFHandle;
-    private final boolean isCreated;
+    private final boolean isCreate;
     private MetricManager metricManager;
 
     public RocksDBKVEngine(String overrideIdentity, C configurator) {
         super(overrideIdentity);
         this.configurator = configurator;
-        dbOptions = configurator.dbOptions();
         dbRootDir = new File(configurator.dbRootDir());
-        try (Options options = new Options()) {
+        try {
             Files.createDirectories(dbRootDir.getAbsoluteFile().toPath());
-            isCreated = isEmpty(dbRootDir.toPath());
-            if (isCreated) {
-                defaultCFDesc = new ColumnFamilyDescriptor(DEFAULT_NS.getBytes());
-                List<ColumnFamilyDescriptor> cfDescs = singletonList(defaultCFDesc);
-                List<ColumnFamilyHandle> cfHandles = new ArrayList<>();
-                db = RocksDB.open(dbOptions, dbRootDir.getAbsolutePath(), cfDescs, cfHandles);
-                assert cfHandles.size() == 1;
-                defaultCFHandle = cfHandles.get(0);
-            } else {
-                List<ColumnFamilyDescriptor> cfDescs = RocksDB.listColumnFamilies(options, dbRootDir.getAbsolutePath())
-                    .stream()
-                    .map(nameBytes -> new ColumnFamilyDescriptor(nameBytes,
-                        configurator.cfOptions(new String(nameBytes, UTF_8))))
-                    .toList();
-                List<ColumnFamilyHandle> cfHandles = new ArrayList<>();
-                db = RocksDB.open(dbOptions, dbRootDir.getAbsolutePath(), cfDescs, cfHandles);
-                assert Arrays.equals(cfDescs.get(0).getName(), DEFAULT_NS.getBytes(UTF_8));
-                assert cfDescs.size() == cfHandles.size();
-                defaultCFDesc = cfDescs.get(0);
-                defaultCFHandle = cfHandles.get(0);
-                for (int i = 1; i < cfDescs.size(); i++) {
-                    ColumnFamilyDescriptor cfDesc = cfDescs.get(i);
-                    ColumnFamilyHandle cfHandle = cfHandles.get(i);
-                    existingColumnFamilies.put(cfDesc, cfHandle);
-                }
-            }
-            identity = loadIdentity(isCreated);
+            isCreate = isEmpty(dbRootDir.toPath());
+            identity = loadIdentity(isCreate);
         } catch (Throwable e) {
-            throw new KVEngineException("Failed to initialize RocksDB", e);
+            throw new KVEngineException("Failed to initialize RocksDBKVEngine", e);
         }
     }
 
@@ -104,29 +61,15 @@ public abstract class RocksDBKVEngine<
     public T createIfMissing(String spaceId) {
         assertStarted();
         return kvSpaceMap.computeIfAbsent(spaceId,
-            k -> {
-                try {
-                    ColumnFamilyDescriptor cfDesc =
-                        new ColumnFamilyDescriptor(spaceId.getBytes(UTF_8), configurator.cfOptions(spaceId));
-                    ColumnFamilyHandle cfHandle = db.createColumnFamily(cfDesc);
-                    return buildKVSpace(spaceId, cfDesc, cfHandle, db, () -> kvSpaceMap.remove(spaceId),
-                        metricTags).open();
-                } catch (RocksDBException e) {
-                    throw new KVEngineException("Create key range error", e);
-                }
-            });
+            k -> buildKVSpace(spaceId, configurator, () -> kvSpaceMap.remove(spaceId), metricTags).open());
     }
 
-    protected abstract T buildKVSpace(String spaceId,
-                                      ColumnFamilyDescriptor cfDesc,
-                                      ColumnFamilyHandle cfHandle,
-                                      RocksDB db,
-                                      Runnable onDestroy,
-                                      String... tags);
+    protected abstract T buildKVSpace(String spaceId, C configurator, Runnable onDestroy, String... tags);
 
     @Override
     protected void doStart(String... tags) {
-        log.info("RocksDBKVEngine[{}] {} at path[{}]", identity, isCreated ? "initialized" : "loaded", db.getName());
+        log.info("RocksDBKVEngine[{}] {} at path[{}]",
+            identity, isCreate ? "initialized" : "loaded", dbRootDir.getName());
         loadExisting(tags);
         metricManager = new MetricManager(tags);
     }
@@ -146,23 +89,7 @@ public abstract class RocksDBKVEngine<
     protected void doStop() {
         log.info("Stopping RocksDBKVEngine[{}]", identity);
         metricManager.close();
-        log.debug("Flush RocksDBKVEngine[{}] before closing", identity);
-        try (FlushOptions flushOptions = new FlushOptions().setWaitForFlush(true)) {
-            db.flush(flushOptions);
-        } catch (Throwable e) {
-            log.error("Flush RocksDBKVEngine[{}] error", identity, e);
-        }
-
         kvSpaceMap.values().forEach(RocksDBKVSpace::close);
-        db.destroyColumnFamilyHandle(defaultCFHandle);
-        defaultCFDesc.getOptions().close();
-        try {
-            db.syncWal();
-        } catch (RocksDBException e) {
-            log.error("SyncWAL RocksDBKVEngine[{}] error", identity, e);
-        }
-        db.close();
-        dbOptions.close();
     }
 
     @Override
@@ -171,28 +98,26 @@ public abstract class RocksDBKVEngine<
     }
 
     private void loadExisting(String... metricTags) {
-        existingColumnFamilies.forEach((cfDesc, cfHandle) -> {
-            String rangeId = new String(cfDesc.getName());
-            kvSpaceMap.put(rangeId,
-                buildKVSpace(rangeId, cfDesc, cfHandle, db, () -> kvSpaceMap.remove(rangeId), metricTags).open());
-        });
-        existingColumnFamilies.clear();
+        try (Stream<Path> paths = Files.list(Paths.get(dbRootDir.getAbsolutePath()))) {
+            paths.filter(Files::isDirectory)
+                .map(Path::getFileName)
+                .map(Path::toString)
+                .forEach(keySpaceId -> kvSpaceMap.put(keySpaceId,
+                    buildKVSpace(keySpaceId, configurator, () -> kvSpaceMap.remove(keySpaceId), metricTags).open()));
+        } catch (Throwable e) {
+            log.error("Failed to load existing key spaces", e);
+        }
     }
 
-    private String loadIdentity(boolean isCreation) {
+    private String loadIdentity(boolean create) {
         try {
-            Path overrideIdentityFilePath = Paths.get(dbRootDir.getAbsolutePath(), "OVERRIDEIDENTITY");
-            if (isCreation && (overrideIdentity != null && !overrideIdentity.trim().isEmpty())) {
-                Files.writeString(overrideIdentityFilePath, overrideIdentity, StandardOpenOption.CREATE);
+            Path identityFilePath = Paths.get(dbRootDir.getAbsolutePath(), "IDENTITY");
+            if (create) {
+                String identity =
+                    Strings.isNullOrEmpty(overrideIdentity) ? UUID.randomUUID().toString() : overrideIdentity.trim();
+                Files.writeString(identityFilePath, identity, StandardOpenOption.CREATE);
             }
-            if (overrideIdentityFilePath.toFile().exists()) {
-                List<String> lines = Files.readAllLines(overrideIdentityFilePath);
-                if (!lines.isEmpty()) {
-                    return lines.get(0);
-                }
-            }
-            List<String> lines = Files.readAllLines(Paths.get(dbRootDir.getAbsolutePath(), "IDENTITY"));
-            return lines.get(0);
+            return Files.readAllLines(identityFilePath).get(0);
         } catch (IndexOutOfBoundsException | IOException e) {
             throw new KVEngineException("Failed to read IDENTITY file", e);
         }

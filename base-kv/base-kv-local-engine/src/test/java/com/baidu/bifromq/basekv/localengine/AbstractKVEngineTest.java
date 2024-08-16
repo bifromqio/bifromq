@@ -99,7 +99,7 @@ public abstract class AbstractKVEngineTest extends MockableTest {
     }
 
     @Test
-    public void keyRangeDestroy() {
+    public void kvSpaceDestroy() {
         String rangeId = "test_range1";
         IKVSpace range = engine.createIfMissing(rangeId);
         assertTrue(engine.spaces().containsKey(rangeId));
@@ -111,7 +111,7 @@ public abstract class AbstractKVEngineTest extends MockableTest {
     }
 
     @Test
-    public void keyRangeDestroyAndCreate() {
+    public void kvSpaceDestroyAndCreate() {
         String rangeId = "test_range1";
         ByteString key = ByteString.copyFromUtf8("key");
         ByteString value = ByteString.copyFromUtf8("value");

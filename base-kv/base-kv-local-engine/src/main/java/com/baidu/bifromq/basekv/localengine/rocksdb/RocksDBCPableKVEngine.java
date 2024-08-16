@@ -19,12 +19,10 @@ import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
 import java.io.File;
 import java.nio.file.Files;
-import org.rocksdb.ColumnFamilyDescriptor;
-import org.rocksdb.ColumnFamilyHandle;
-import org.rocksdb.RocksDB;
 
 public class RocksDBCPableKVEngine
-    extends RocksDBKVEngine<RocksDBCPableKVEngine, RocksDBCPableKVSpace, RocksDBCPableKVEngineConfigurator> {
+    extends
+    RocksDBKVEngine<RocksDBCPableKVEngine, RocksDBCPableKVSpace, RocksDBCPableKVEngineConfigurator> {
     private final File cpRootDir;
     private final RocksDBCPableKVEngineConfigurator configurator;
     private MetricManager metricManager;
@@ -37,18 +35,16 @@ public class RocksDBCPableKVEngine
         try {
             Files.createDirectories(cpRootDir.getAbsoluteFile().toPath());
         } catch (Throwable e) {
-            throw new KVEngineException("Failed to initialize RocksDB", e);
+            throw new KVEngineException("Failed to create checkpoint root folder", e);
         }
     }
 
     @Override
     protected RocksDBCPableKVSpace buildKVSpace(String spaceId,
-                                                ColumnFamilyDescriptor cfDesc,
-                                                ColumnFamilyHandle cfHandle,
-                                                RocksDB db,
+                                                RocksDBCPableKVEngineConfigurator configurator,
                                                 Runnable onDestroy,
                                                 String... tags) {
-        return new RocksDBCPableKVSpace(spaceId, cfDesc, cfHandle, db, configurator, this, onDestroy, tags);
+        return new RocksDBCPableKVSpace(spaceId, configurator, this, onDestroy, tags);
     }
 
     @Override

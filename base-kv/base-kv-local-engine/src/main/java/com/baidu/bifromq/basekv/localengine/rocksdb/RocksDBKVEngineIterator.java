@@ -15,7 +15,6 @@ package com.baidu.bifromq.basekv.localengine.rocksdb;
 
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
 import java.lang.ref.Cleaner;
-import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;

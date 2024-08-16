@@ -41,7 +41,6 @@ import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.proto.StoreMessage;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
-import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;

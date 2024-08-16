@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
-import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVSpace;
 import com.baidu.bifromq.logger.SiftLogger;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
@@ -43,7 +42,7 @@ public abstract class AbstractKVEngine<T extends IKVSpace> implements IKVEngine<
     public void start(String... tags) {
         if (state.compareAndSet(State.INIT, State.STARTING)) {
             try {
-                log = SiftLogger.getLogger(RocksDBCPableKVSpace.class, tags);
+                log = SiftLogger.getLogger(this.getClass(), tags);
                 metricTags = tags;
                 doStart(tags);
                 state.set(State.STARTED);

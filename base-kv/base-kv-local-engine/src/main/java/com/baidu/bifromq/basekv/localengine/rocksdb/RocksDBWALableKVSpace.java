@@ -12,7 +12,6 @@
  */
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
-
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.localengine.IWALableKVSpace;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
@@ -29,9 +28,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import org.rocksdb.ColumnFamilyDescriptor;
-import org.rocksdb.ColumnFamilyHandle;
-import org.rocksdb.RocksDB;
 import org.rocksdb.WriteOptions;
 
 public class RocksDBWALableKVSpace
@@ -43,13 +39,12 @@ public class RocksDBWALableKVSpace
     private final ExecutorService flushExecutor;
     private final MetricManager metricMgr;
 
-    public RocksDBWALableKVSpace(String id, ColumnFamilyDescriptor cfDesc,
-                                 ColumnFamilyHandle cfHandle, RocksDB db,
+    public RocksDBWALableKVSpace(String id,
                                  RocksDBWALableKVEngineConfigurator configurator,
                                  RocksDBWALableKVEngine engine,
                                  Runnable onDestroy,
                                  String... tags) {
-        super(id, cfDesc, cfHandle, db, configurator, engine, onDestroy, tags);
+        super(id, configurator, engine, onDestroy, tags);
         this.configurator = configurator;
         writeOptions = new WriteOptions().setDisableWAL(false);
         if (!configurator.asyncWALFlush()) {

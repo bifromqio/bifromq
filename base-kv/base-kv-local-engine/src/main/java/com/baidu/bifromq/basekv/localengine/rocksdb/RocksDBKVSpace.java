@@ -13,10 +13,12 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
+import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.META_SECTION_END;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.META_SECTION_START;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.fromMetaKey;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
+import static java.util.Collections.singletonList;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.localengine.IKVSpace;
@@ -37,8 +39,17 @@ import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
@@ -52,6 +63,7 @@ import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.CompactRangeOptions;
+import org.rocksdb.DBOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteOptions;
@@ -68,10 +80,10 @@ abstract class RocksDBKVSpace<
     }
 
     private final AtomicReference<State> state = new AtomicReference<>(State.Init);
-    protected final RocksDB db;
+    private final File keySpaceDBDir;
+    private final DBOptions dbOptions;
     private final C configurator;
     private final ColumnFamilyDescriptor cfDesc;
-    protected final ColumnFamilyHandle cfHandle;
     private final IWriteStatsRecorder writeStats;
     private final ExecutorService compactionExecutor;
     private final E engine;
@@ -81,23 +93,19 @@ abstract class RocksDBKVSpace<
     private final ISyncContext syncContext = new SyncContext();
     private final ISyncContext.IRefresher metadataRefresher = syncContext.refresher();
     private final MetricManager metricMgr;
+    protected final RocksDB db;
+    protected final ColumnFamilyHandle cfHandle;
     private volatile long lastCompactAt;
     private volatile long nextCompactAt;
 
     @SneakyThrows
     public RocksDBKVSpace(String id,
-                          ColumnFamilyDescriptor cfDesc,
-                          ColumnFamilyHandle cfHandle,
-                          RocksDB db,
                           C configurator,
                           E engine,
                           Runnable onDestroy,
                           String... tags) {
         super(id, tags);
-        this.db = db;
         this.onDestroy = onDestroy;
-        this.cfDesc = cfDesc;
-        this.cfHandle = cfHandle;
         this.configurator = configurator;
         this.writeStats = configurator.heuristicCompaction() ? new RocksDBKVSpaceCompactionTrigger(id,
             configurator.compactMinTombstoneKeys(),
@@ -109,6 +117,19 @@ abstract class RocksDBKVSpace<
                 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
                 EnvProvider.INSTANCE.newThreadFactory("kvspace-compactor-" + id)),
             "compactor", "kvspace", Tags.of(metricTags));
+        dbOptions = configurator.dbOptions();
+        keySpaceDBDir = new File(configurator.dbRootDir(), id);
+        try {
+            Files.createDirectories(keySpaceDBDir.getAbsoluteFile().toPath());
+            cfDesc = new ColumnFamilyDescriptor(DEFAULT_NS.getBytes(), configurator.cfOptions(DEFAULT_NS));
+            List<ColumnFamilyDescriptor> cfDescs = singletonList(cfDesc);
+            List<ColumnFamilyHandle> cfHandles = new ArrayList<>();
+            db = RocksDB.open(dbOptions, keySpaceDBDir.getAbsolutePath(), cfDescs, cfHandles);
+            assert cfHandles.size() == 1;
+            cfHandle = cfHandles.get(0);
+        } catch (Throwable e) {
+            throw new KVEngineException("Failed to initialize RocksDBKVSpace", e);
+        }
         metricMgr = new MetricManager(tags);
     }
 
@@ -175,11 +196,8 @@ abstract class RocksDBKVSpace<
     public void destroy() {
         if (state.compareAndSet(State.Opening, State.Destroying)) {
             try {
-                synchronized (compacting) {
-                    db.dropColumnFamily(cfHandle);
-                }
                 doDestroy();
-            } catch (RocksDBException e) {
+            } catch (Throwable e) {
                 throw new KVEngineException("Destroy KVRange error", e);
             } finally {
                 onDestroy.run();
@@ -211,15 +229,27 @@ abstract class RocksDBKVSpace<
     protected void doClose() {
         log.debug("Close key range[{}]", id);
         metricMgr.close();
-        cfDesc.getOptions().close();
         synchronized (compacting) {
             db.destroyColumnFamilyHandle(cfHandle);
         }
+        cfDesc.getOptions().close();
+        try {
+            db.syncWal();
+        } catch (RocksDBException e) {
+            log.error("SyncWAL RocksDBKVSpace[{}] error", id, e);
+        }
+        db.close();
+        dbOptions.close();
         metadataSubject.onComplete();
     }
 
     protected void doDestroy() {
         doClose();
+        try {
+            deleteDir(keySpaceDBDir.toPath());
+        } catch (IOException e) {
+            log.error("Failed to delete key range dir: {}", keySpaceDBDir, e);
+        }
     }
 
     @Override
@@ -235,6 +265,22 @@ abstract class RocksDBKVSpace<
     @Override
     protected ISyncContext.IRefresher newRefresher() {
         return syncContext.refresher();
+    }
+
+    protected static void deleteDir(Path path) throws IOException {
+        Files.walkFileTree(path, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Files.delete(file);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                Files.delete(dir);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     private void scheduleCompact() {

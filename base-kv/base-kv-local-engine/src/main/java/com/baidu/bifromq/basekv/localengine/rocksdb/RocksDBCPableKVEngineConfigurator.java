@@ -14,7 +14,6 @@
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
 import com.baidu.bifromq.basekv.localengine.ICPableKVEngineConfigurator;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Accessors;
