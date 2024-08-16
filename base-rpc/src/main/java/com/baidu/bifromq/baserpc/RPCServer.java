@@ -31,7 +31,7 @@ import io.grpc.ServerCallExecutorSupplier;
 import io.grpc.ServerInterceptors;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
-import io.grpc.netty.InProcServerBuilder;
+import io.grpc.inprocess.InProcServerBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;

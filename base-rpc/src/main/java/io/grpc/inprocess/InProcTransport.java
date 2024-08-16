@@ -1,17 +1,20 @@
 /*
- * Copyright (c) 2023. The BifroMQ Authors. All Rights Reserved.
+ * Copyright 2015 The gRPC Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *    http://www.apache.org/licenses/LICENSE-2.0
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an "AS IS" BASIS,
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and limitations under the License.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-package io.grpc.netty;
+package io.grpc.inprocess;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
@@ -46,6 +49,7 @@ import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.InUseStateAggregator;
 import io.grpc.internal.InsightBuilder;
+import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.NoopClientStream;
 import io.grpc.internal.ObjectPool;
 import io.grpc.internal.ServerListener;
@@ -74,8 +78,9 @@ import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
+// Rename to InProcTransport to avoid conflict with InProcessTransport in the same package
 @ThreadSafe
-final class InProcTransport implements ServerTransport, ConnectionClientTransport {
+public final class InProcTransport implements ServerTransport, ConnectionClientTransport {
     private static final Logger log = Logger.getLogger(InProcTransport.class.getName());
 
     private final InternalLogId logId;
@@ -90,7 +95,7 @@ final class InProcTransport implements ServerTransport, ConnectionClientTranspor
     private ScheduledExecutorService serverScheduler;
     private ServerTransportListener serverTransportListener;
     private Attributes serverStreamAttributes;
-    private Listener clientTransportListener;
+    private ManagedClientTransport.Listener clientTransportListener;
     @GuardedBy("this")
     private boolean shutdown;
     @GuardedBy("this")
@@ -102,7 +107,7 @@ final class InProcTransport implements ServerTransport, ConnectionClientTranspor
         new IdentityHashMap<InProcessStream, Boolean>());
     @GuardedBy("this")
     private List<ServerStreamTracer.Factory> serverStreamTracerFactories;
-    private final Attributes attributes;
+    private Attributes attributes;
 
     private Thread.UncaughtExceptionHandler uncaughtExceptionHandler =
         new Thread.UncaughtExceptionHandler() {
@@ -133,7 +138,6 @@ final class InProcTransport implements ServerTransport, ConnectionClientTranspor
     private InProcTransport(SocketAddress address, int maxInboundMetadataSize, String authority,
                             String userAgent, Attributes eagAttrs,
                             Optional<ServerListener> optionalServerListener, boolean includeCauseWithStatus) {
-        assert address instanceof InProcSocketAddress;
         this.address = address;
         this.clientMaxInboundMetadataSize = maxInboundMetadataSize;
         this.authority = authority;
@@ -162,7 +166,7 @@ final class InProcTransport implements ServerTransport, ConnectionClientTranspor
         Attributes eagAttrs, ObjectPool<ScheduledExecutorService> serverSchedulerPool,
         List<ServerStreamTracer.Factory> serverStreamTracerFactories,
         ServerListener serverListener, boolean includeCauseWithStatus) {
-        this(new InProcSocketAddress(name), maxInboundMetadataSize, authority, userAgent, eagAttrs,
+        this(new InProcessSocketAddress(name), maxInboundMetadataSize, authority, userAgent, eagAttrs,
             Optional.of(serverListener), includeCauseWithStatus);
         this.serverMaxInboundMetadataSize = maxInboundMetadataSize;
         this.serverSchedulerPool = serverSchedulerPool;
@@ -171,7 +175,7 @@ final class InProcTransport implements ServerTransport, ConnectionClientTranspor
 
     @CheckReturnValue
     @Override
-    public synchronized Runnable start(Listener listener) {
+    public synchronized Runnable start(ManagedClientTransport.Listener listener) {
         this.clientTransportListener = listener;
         if (optionalServerListener.isPresent()) {
             serverScheduler = serverSchedulerPool.getObject();
@@ -200,20 +204,14 @@ final class InProcTransport implements ServerTransport, ConnectionClientTranspor
                 }
             };
         }
-        return new Runnable() {
-            @Override
-            @SuppressWarnings("deprecation")
-            public void run() {
-                synchronized (InProcTransport.this) {
-                    Attributes serverTransportAttrs = Attributes.newBuilder()
-                        .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, address)
-                        .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, address)
-                        .build();
-                    serverStreamAttributes = serverTransportListener.transportReady(serverTransportAttrs);
-                    clientTransportListener.transportReady();
-                }
-            }
-        };
+        Attributes serverTransportAttrs = Attributes.newBuilder()
+            .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, address)
+            .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, address)
+            .build();
+        serverStreamAttributes = serverTransportListener.transportReady(serverTransportAttrs);
+        attributes = clientTransportListener.filterTransport(attributes);
+        clientTransportListener.transportReady();
+        return null;
     }
 
     @Override
@@ -545,7 +543,7 @@ final class InProcTransport implements ServerTransport, ConnectionClientTranspor
             }
 
             @Override
-            public void writeHeaders(Metadata headers) {
+            public void writeHeaders(Metadata headers, boolean flush) {
                 if (clientMaxInboundMetadataSize != Integer.MAX_VALUE) {
                     int metadataSize = metadataSize(headers);
                     if (metadataSize > clientMaxInboundMetadataSize) {
@@ -569,7 +567,7 @@ final class InProcTransport implements ServerTransport, ConnectionClientTranspor
                         return;
                     }
 
-                    clientStream.statsTraceCtx.clientInboundHeaders();
+                    clientStream.statsTraceCtx.clientInboundHeaders(headers);
                     syncContext.executeLater(() -> clientStreamListener.headersRead(headers));
                 }
                 syncContext.drain();
@@ -689,7 +687,7 @@ final class InProcTransport implements ServerTransport, ConnectionClientTranspor
 
             @Override
             public String getAuthority() {
-                return InProcTransport.InProcessStream.this.authority;
+                return InProcessStream.this.authority;
             }
 
             @Override
@@ -700,6 +698,11 @@ final class InProcTransport implements ServerTransport, ConnectionClientTranspor
             @Override
             public int streamId() {
                 return -1;
+            }
+
+            @Override
+            public void setOnReadyThreshold(int numBytes) {
+                // noop
             }
         }
 
@@ -875,7 +878,7 @@ final class InProcTransport implements ServerTransport, ConnectionClientTranspor
 
             @Override
             public void setAuthority(String string) {
-                InProcTransport.InProcessStream.this.authority = string;
+                InProcessStream.this.authority = string;
             }
 
             @Override

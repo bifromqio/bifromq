@@ -17,7 +17,7 @@ import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import io.grpc.netty.InProcSocketAddress;
+import io.grpc.inprocess.InProcSocketAddress;
 import java.net.InetSocketAddress;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;

@@ -18,7 +18,7 @@ import static com.baidu.bifromq.baserpc.RPCContext.GPID;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baserpc.proto.RPCServer;
 import com.google.common.collect.Sets;
-import io.grpc.netty.InProcSocketAddress;
+import io.grpc.inprocess.InProcSocketAddress;
 import io.reactivex.rxjava3.core.Observable;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;

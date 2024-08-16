@@ -34,8 +34,8 @@
             <artifactId>protobuf-java</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.netflix.concurrency-limits</groupId>
-            <artifactId>concurrency-limits-core</artifactId>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
         </dependency>
         <dependency>
             <groupId>io.micrometer</groupId>
