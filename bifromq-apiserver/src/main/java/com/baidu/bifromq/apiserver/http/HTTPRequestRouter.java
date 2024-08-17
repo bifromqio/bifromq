@@ -29,6 +29,7 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.google.common.base.Strings;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFutureListener;
@@ -43,7 +44,6 @@ import io.netty.handler.codec.http.HttpServerUpgradeHandler;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 
 @Slf4j
 public class HTTPRequestRouter extends SimpleChannelInboundHandler<FullHttpRequest> {
@@ -74,14 +74,14 @@ public class HTTPRequestRouter extends SimpleChannelInboundHandler<FullHttpReque
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest req) {
         String tenantId = getHeader(HEADER_TENANT_ID, req, false);
-        if (StringUtils.isEmpty(tenantId)) {
+        if (Strings.isNullOrEmpty(tenantId)) {
             FullHttpResponse response =
                 new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.BAD_REQUEST, EMPTY_BUFFER);
             response.headers().set(CONTENT_TYPE, "text/plain; charset=UTF-8");
             response.headers().setInt(CONTENT_LENGTH, response.content().readableBytes());
             doResponse(ctx, req, response);
         } else {
-            Integer maxUserPayloadBytes =  settingProvider.provide(Setting.MaxUserPayloadBytes, tenantId);
+            Integer maxUserPayloadBytes = settingProvider.provide(Setting.MaxUserPayloadBytes, tenantId);
             if (HttpUtil.getContentLength(req, -1) > maxUserPayloadBytes) {
                 ctx.writeAndFlush(TOO_LARGE_CLOSE.retainedDuplicate()).addListener(ChannelFutureListener.CLOSE);
                 return;

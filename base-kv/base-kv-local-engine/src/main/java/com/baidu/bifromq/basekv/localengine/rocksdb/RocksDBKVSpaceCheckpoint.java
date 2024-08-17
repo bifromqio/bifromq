@@ -85,7 +85,6 @@ class RocksDBKVSpaceCheckpoint extends RocksDBKVSpaceReader implements IRocksDBK
             cfDesc = new ColumnFamilyDescriptor(DEFAULT_NS.getBytes());
             cfDesc.getOptions().setTableFormatConfig(new BlockBasedTableConfig()
                 .setNoBlockCache(true)
-                .setBlockCacheCompressed(null)
                 .setBlockCache(null));
             dbOptions = new DBOptions();
 

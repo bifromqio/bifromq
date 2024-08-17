@@ -85,7 +85,6 @@
     <properties>
         <apache.commons.cli.version>1.5.0</apache.commons.cli.version>
         <apache.commons.collections.version>4.4</apache.commons.collections.version>
-        <apache.commons.lang.version>3.12.0</apache.commons.lang.version>
         <caffeine.version>3.1.8</caffeine.version>
         <grpc.version>1.66.0</grpc.version>
         <guava.version>33.2.1-jre</guava.version>
@@ -99,7 +98,7 @@
         <pf4j.version>3.12.0</pf4j.version>
         <protobuf-java.version>3.25.3</protobuf-java.version>
         <reflections.verion>0.10.2</reflections.verion>
-        <rocksdb.version>7.10.2</rocksdb.version>
+        <rocksdb.version>9.4.0</rocksdb.version>
         <rxjava3.version>3.1.9</rxjava3.version>
         <slf4j.version>2.0.16</slf4j.version>
         <swagger.version>2.2.22</swagger.version>
@@ -487,11 +486,6 @@
                 <groupId>commons-cli</groupId>
                 <artifactId>commons-cli</artifactId>
                 <version>${apache.commons.cli.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.commons</groupId>
-                <artifactId>commons-lang3</artifactId>
-                <version>${apache.commons.lang.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.commons</groupId>

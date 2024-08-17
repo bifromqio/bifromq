@@ -18,6 +18,8 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
+import org.rocksdb.DBOptions;
+import org.rocksdb.DBOptionsInterface;
 
 @Accessors(chain = true, fluent = true)
 @Getter
@@ -26,4 +28,10 @@ import lombok.experimental.SuperBuilder;
 public final class RocksDBCPableKVEngineConfigurator
     extends RocksDBKVEngineConfigurator<RocksDBCPableKVEngineConfigurator> implements ICPableKVEngineConfigurator {
     private String dbCheckpointRootDir;
+
+    @Override
+    protected void configDBOptions(DBOptionsInterface<DBOptions> targetOption) {
+        super.configDBOptions(targetOption);
+        targetOption.setRecycleLogFileNum(0);
+    }
 }
