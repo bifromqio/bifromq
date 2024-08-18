@@ -36,6 +36,7 @@ public class KVRangeOptions {
     private int maxWALFatchBatchSize = 5 * 1024 * 1024; // 5MB
     private int snapshotSyncIdleTimeoutSec = 30;
     private int statsCollectIntervalSec = 5;
+    private int zombieTimeoutSec = 300;
     private RaftConfig walRaftConfig = new RaftConfig()
         .setPreVote(true)
         .setInstallSnapshotTimeoutTick(300)

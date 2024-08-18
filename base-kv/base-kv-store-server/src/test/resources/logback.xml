@@ -19,8 +19,7 @@
         </encoder>
     </appender>
 
-    <logger name="raft.logger" level="info"/>
-    <logger name="com.baidu.bifromq.basekv.store" level="debug"/>
+    <logger name="com.baidu.bifromq.basekv" level="debug"/>
 
     <root level="INFO">
         <appender-ref ref="STDOUT"/>

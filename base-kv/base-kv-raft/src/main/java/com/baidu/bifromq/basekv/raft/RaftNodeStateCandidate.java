@@ -127,10 +127,6 @@ class RaftNodeStateCandidate extends RaftNodeState {
 
     @Override
     RaftNodeState receive(String fromPeer, RaftMessage message) {
-        if (isTerminated) {
-            log.trace("Ignore message[{}] from {} since node is terminated", message, fromPeer);
-            return this;
-        }
         log.trace("Receive[{}] from {}", message, fromPeer);
         RaftNodeState nextState = this;
         if (message.getTerm() > currentTerm()) {

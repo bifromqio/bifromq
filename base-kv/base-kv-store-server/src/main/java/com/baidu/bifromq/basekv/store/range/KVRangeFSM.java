@@ -72,6 +72,7 @@ import com.baidu.bifromq.basekv.proto.WALRaftMessages;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.RaftMessage;
+import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import com.baidu.bifromq.basekv.store.api.IKVLoadRecord;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
@@ -178,6 +179,7 @@ public class KVRangeFSM implements IKVRangeFSM {
     private final KVRangeMetricManager metricManager;
     private final List<IKVRangeSplitHinter> splitHinters;
     private final String[] tags;
+    private volatile long zombieAt = -1;
     private IKVRangeMessenger messenger;
     private KVRangeRestorer restorer;
 
@@ -315,6 +317,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                         })
                     .subscribe(descriptorSubject::onNext));
                 disposables.add(messenger.receive().subscribe(this::handleMessage));
+                disposables.add(descriptorSubject.subscribe(this::detectZombieState));
                 clusterConfigSubject.onNext(wal.clusterConfig());
                 lifecycle.set(Open);
                 metricManager.reportLastAppliedIndex(kvRange.lastAppliedIndex());
@@ -341,6 +344,7 @@ public class KVRangeFSM implements IKVRangeFSM {
         statsCollector.tick();
         dumpSessions.values().forEach(KVRangeDumpSession::tick);
         compactWAL(true);
+        checkZombieState();
         estimateSplitHint();
     }
 
@@ -1469,6 +1473,35 @@ public class KVRangeFSM implements IKVRangeFSM {
                     });
             });
         });
+    }
+
+    private void detectZombieState(KVRangeDescriptor descriptor) {
+        ClusterConfig config = descriptor.getConfig();
+        Set<String> members = new HashSet<>(config.getVotersList());
+        members.addAll(config.getLearnersList());
+        members.addAll(config.getNextVotersList());
+        members.addAll(config.getNextLearnersList());
+        if (zombieAt < 0) {
+            if (descriptor.getRole() == RaftNodeStatus.Candidate
+                && !members.isEmpty()
+                && !members.contains(hostStoreId)) {
+                zombieAt = HLC.INST.getPhysical();
+            }
+        } else {
+            if (descriptor.getRole() != RaftNodeStatus.Candidate
+                || members.isEmpty()
+                || members.contains(hostStoreId)) {
+                zombieAt = -1;
+            }
+        }
+    }
+
+    private void checkZombieState() {
+        if (zombieAt > 0
+            && Duration.ofMillis(HLC.INST.getPhysical() - zombieAt).toSeconds() > opts.getZombieTimeoutSec()) {
+            log.info("Zombie state detected, send quit signal.");
+            quitSignal.complete(null);
+        }
     }
 
     private boolean isNotOpening() {

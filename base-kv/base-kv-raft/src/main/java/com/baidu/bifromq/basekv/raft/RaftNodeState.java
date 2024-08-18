@@ -72,7 +72,6 @@ abstract class RaftNodeState implements IRaftNodeState {
     protected final LinkedHashMap<Long, ProposeTask> uncommittedProposals;
     protected final int maxUncommittedProposals;
     protected final String[] tags;
-    protected final boolean isTerminated;
     protected volatile long commitIndex;
 
     public RaftNodeState(
@@ -99,7 +98,6 @@ abstract class RaftNodeState implements IRaftNodeState {
         this.listener = listener;
         this.snapshotInstaller = installer;
         this.onSnapshotInstalled = onSnapshotInstalled;
-        this.isTerminated = isTerminated();
         if (currentTerm > currentTerm()) {
             this.stateStorage.saveTerm(currentTerm);
         }
@@ -217,18 +215,6 @@ abstract class RaftNodeState implements IRaftNodeState {
         all.addAll(clusterConfig.getNextVotersList());
         all.remove(stateStorage.local());
         return all;
-    }
-
-    private boolean isTerminated() {
-        ClusterConfig clusterConfig = stateStorage.latestClusterConfig();
-        Set<String> all = (new HashSet<>(clusterConfig.getVotersList()));
-        all.addAll(clusterConfig.getLearnersList());
-        all.addAll(clusterConfig.getNextVotersList());
-        all.addAll(clusterConfig.getNextLearnersList());
-        // if the local peer is not in the non-empty cluster config, it's terminated
-        // we treat empty cluster config as a special case, it's not terminated
-        // in termination case, the local peer should not be able to receive and respond any message
-        return !all.isEmpty() && !all.contains(id);
     }
 
     protected boolean promotable() {
