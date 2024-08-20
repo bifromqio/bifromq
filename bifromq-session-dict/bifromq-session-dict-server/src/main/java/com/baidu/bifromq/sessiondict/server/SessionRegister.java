@@ -50,7 +50,10 @@ class SessionRegister extends AckStream<Session, Quit> implements ISessionRegist
                     owner.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""));
                 if (session.getKeep()) {
                     try {
-                        boolean kicked = kick(tenantId, clientKey, owner);
+                        KickResult kickResult = doKick(tenantId, clientKey, owner);
+                        if (kickResult == KickResult.IGNORED_SELF_KICK) {
+                            return;
+                        }
                         registeredSession.compute(tenantId, (t, m) -> {
                             if (m == null) {
                                 m = new HashMap<>();
@@ -58,10 +61,7 @@ class SessionRegister extends AckStream<Session, Quit> implements ISessionRegist
                             m.put(clientKey, session.getOwner());
                             return m;
                         });
-                        if (!kicked) {
-                            // if not kicked locally
-                            listener.on(owner, true, this);
-                        }
+                        listener.on(owner, true, this);
                     } catch (Throwable e) {
                         log.debug("Failed to kick", e);
                     }
@@ -87,26 +87,41 @@ class SessionRegister extends AckStream<Session, Quit> implements ISessionRegist
 
     @Override
     public boolean kick(String tenantId, ClientKey clientKey, ClientInfo kicker) {
-        AtomicReference<ClientInfo> found = new AtomicReference<>();
+        return doKick(tenantId, clientKey, kicker) == KickResult.KICKED;
+    }
+
+    private enum KickResult {
+        KICKED, NOT_FOUND, IGNORED_SELF_KICK
+    }
+
+    private KickResult doKick(String tenantId, ClientKey clientKey, ClientInfo kicker) {
+        AtomicReference<KickResult> result = new AtomicReference<>(KickResult.NOT_FOUND);
+        AtomicReference<ClientInfo> toKick = new AtomicReference<>();
         registeredSession.computeIfPresent(tenantId, (k, v) -> {
-            if (v.containsKey(clientKey) && !v.get(clientKey).equals(kicker)) {
-                found.set(v.remove(clientKey));
+            if (v.containsKey(clientKey)) {
+                if (!v.get(clientKey).equals(kicker)) {
+                    toKick.set(v.remove(clientKey));
+                    result.set(KickResult.KICKED);
+                } else {
+                    result.set(KickResult.IGNORED_SELF_KICK);
+                }
+            } else {
+                result.set(KickResult.NOT_FOUND);
             }
             if (v.isEmpty()) {
                 v = null;
             }
             return v;
         });
-        if (found.get() != null) {
+        if (toKick.get() != null) {
             send(Quit.newBuilder()
                 .setReqId(System.nanoTime())
-                .setOwner(found.get())
+                .setOwner(toKick.get())
                 .setKiller(kicker)
                 .build());
-            regListener.on(found.get(), false, this);
-            return true;
+            regListener.on(toKick.get(), false, this);
         }
-        return false;
+        return result.get();
     }
 
     @Override

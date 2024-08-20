@@ -18,7 +18,10 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.testng.Assert.assertEquals;
@@ -159,19 +162,47 @@ public class SessionRegisterTest {
                 .setOwner(owner)
                 .setKeep(true)
                 .build());
+            verify(listener, times(1)).on(eq(owner), eq(true), eq(register));
+            reset(listener);
             register.onNext(Session.newBuilder()
                 .setReqId(System.nanoTime())
                 .setOwner(owner2)
                 .setKeep(true)
                 .build());
+            ArgumentCaptor<ClientInfo> ownerCaptor = ArgumentCaptor.forClass(ClientInfo.class);
+            ArgumentCaptor<Boolean> regFlagCaptor = ArgumentCaptor.forClass(Boolean.class);
+            verify(listener, times(2)).on(ownerCaptor.capture(), regFlagCaptor.capture(), eq(register));
+            assertEquals(ownerCaptor.getAllValues().get(0), owner);
+            assertEquals(ownerCaptor.getAllValues().get(1), owner2);
+            assertFalse(regFlagCaptor.getAllValues().get(0));
+            assertTrue(regFlagCaptor.getAllValues().get(1));
+
             ArgumentCaptor<Quit> quitCaptor = ArgumentCaptor.forClass(Quit.class);
             verify(responseObserver).onNext(quitCaptor.capture());
             Quit quit = quitCaptor.getValue();
             assertEquals(quit.getOwner(), owner);
             assertEquals(quit.getKiller(), owner2);
+        });
+    }
 
-            // won't trigger second reg
-            verify(listener, times(1)).on(any(), eq(false), any());
+    @Test
+    public void ignoreSelfLocalKick() {
+        test(() -> {
+            SessionRegister register = new SessionRegister(listener, responseObserver);
+            register.onNext(Session.newBuilder()
+                .setReqId(System.nanoTime())
+                .setOwner(owner)
+                .setKeep(true)
+                .build());
+            verify(listener, times(1)).on(eq(owner), eq(true), eq(register));
+            reset(listener);
+            register.onNext(Session.newBuilder()
+                .setReqId(System.nanoTime())
+                .setOwner(owner)
+                .setKeep(true)
+                .build());
+            verify(listener, never()).on(any(), anyBoolean(), any());
+            verify(responseObserver, never()).onNext(any());
         });
     }
 
@@ -184,10 +215,12 @@ public class SessionRegisterTest {
                 .setOwner(owner)
                 .setKeep(true)
                 .build());
-            register.kick(tenantId, new ISessionRegister.ClientKey(userId, clientId), killer);
+            verify(listener).on(eq(owner), eq(true), eq(register));
+            reset(listener);
+            assertTrue(register.kick(tenantId, new ISessionRegister.ClientKey(userId, clientId), killer));
             ArgumentCaptor<Quit> quitCaptor = ArgumentCaptor.forClass(Quit.class);
             verify(responseObserver).onNext(quitCaptor.capture());
-            verify(listener).on(owner, false, register);
+            verify(listener).on(eq(owner), eq(false), eq(register));
             Quit quit = quitCaptor.getValue();
             assertEquals(quit.getOwner(), owner);
             assertEquals(quit.getKiller(), killer);
@@ -203,7 +236,7 @@ public class SessionRegisterTest {
                 .setOwner(owner)
                 .setKeep(true)
                 .build());
-            register.kick(tenantId, new ISessionRegister.ClientKey(userId, "FakeClientId"), killer);
+            assertFalse(register.kick(tenantId, new ISessionRegister.ClientKey(userId, "FakeClientId"), killer));
             verify(responseObserver, times(0)).onNext(any());
         });
     }
@@ -217,13 +250,12 @@ public class SessionRegisterTest {
                 .setOwner(owner)
                 .setKeep(true)
                 .build());
-            register.kick(tenantId,
+            assertFalse(register.kick(tenantId,
                 new ISessionRegister.ClientKey(userId, owner.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, clientId)),
-                owner);
+                owner));
             verify(responseObserver, times(0)).onNext(any());
         });
     }
-
 
     private void test(Runnable runnable) {
         Context ctx = Context.ROOT
