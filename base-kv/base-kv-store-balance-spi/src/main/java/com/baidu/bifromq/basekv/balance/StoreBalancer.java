@@ -42,6 +42,6 @@ public abstract class StoreBalancer {
 
     public abstract void update(Set<KVRangeStoreDescriptor> storeDescriptors);
 
-    public abstract Optional<BalanceCommand> balance();
+    public abstract Optional<? extends BalanceCommand> balance();
 
 }

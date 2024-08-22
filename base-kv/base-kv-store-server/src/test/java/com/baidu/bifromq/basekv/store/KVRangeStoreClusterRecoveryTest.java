@@ -16,18 +16,35 @@ package com.baidu.bifromq.basekv.store;
 import static com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus.Candidate;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.annotation.Cluster;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-
+import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import java.time.Duration;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
 @Slf4j
 public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemplate {
+
+    @Cluster(initNodes = 2)
+    @Test(groups = "integration")
+    public void recoverNonExist() {
+        KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
+        KVRangeConfig rangeSetting = cluster.awaitAllKVRangeReady(genesisKVRangeId, 2, 40);
+        String leader = rangeSetting.leader;
+        try {
+            cluster.recover(leader, KVRangeIdUtil.generate()).toCompletableFuture().join();
+            fail();
+        } catch (Exception e) {
+            log.info("Recover non-exist range failed");
+            assertTrue(e.getCause() instanceof KVRangeStoreException.KVRangeNotFoundException);
+        }
+    }
 
     @Cluster(initNodes = 2)
     @Test(groups = "integration")
@@ -44,14 +61,13 @@ public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemp
             return s != null && cluster.getKVRange(leader, genesisKVRangeId).getRole() == Candidate;
         });
 
-        cluster.recover(leader).toCompletableFuture().join();
+        cluster.recover(leader, genesisKVRangeId).toCompletableFuture().join();
         await().until(() -> {
             KVRangeConfig s = cluster.kvRangeSetting(genesisKVRangeId);
             return s != null && followStores(s).isEmpty() && s.leader.equals(leader);
         });
     }
 
-    @Cluster(initNodes = 3)
     @Test(groups = "integration")
     public void recoveryFromThreeToOne() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
@@ -68,7 +84,7 @@ public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemp
             return s != null && cluster.getKVRange(leader, genesisKVRangeId).getRole() == Candidate;
         });
 
-        cluster.recover(leader).toCompletableFuture().join();
+        cluster.recover(leader, genesisKVRangeId).toCompletableFuture().join();
         await().until(() -> {
             KVRangeConfig s = cluster.kvRangeSetting(genesisKVRangeId);
             return s != null && followStores(s).isEmpty() && s.leader.equals(leader);

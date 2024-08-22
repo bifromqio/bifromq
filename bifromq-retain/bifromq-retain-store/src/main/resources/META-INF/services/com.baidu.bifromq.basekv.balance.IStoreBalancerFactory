@@ -18,3 +18,4 @@ com.baidu.bifromq.retain.store.balance.RangeLeaderBalancerFactory
 com.baidu.bifromq.retain.store.balance.RangeSplitBalancerFactory
 com.baidu.bifromq.retain.store.balance.UnreachableReplicaRemovalBalancerFactory
 com.baidu.bifromq.retain.store.balance.RedundantReplicaRemovalBalancerFactory
+com.baidu.bifromq.retain.store.balance.RangeBootstrapBalancerFactory

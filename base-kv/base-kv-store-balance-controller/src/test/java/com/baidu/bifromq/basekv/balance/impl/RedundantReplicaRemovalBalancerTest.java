@@ -17,7 +17,6 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
@@ -70,7 +69,7 @@ public class RedundantReplicaRemovalBalancerTest {
 
         balancer.update(storeDescriptors);
 
-        Optional<BalanceCommand> command = balancer.balance();
+        Optional<ChangeConfigCommand> command = balancer.balance();
         assertFalse(command.isPresent());
     }
 
@@ -119,11 +118,9 @@ public class RedundantReplicaRemovalBalancerTest {
 
         balancer.update(storeDescriptors);
 
-        Optional<BalanceCommand> command = balancer.balance();
+        Optional<ChangeConfigCommand> command = balancer.balance();
         assertTrue(command.isPresent(), "A balance command should be generated for redundant replicas.");
-        BalanceCommand balanceCommand = command.get();
-        assertTrue(balanceCommand instanceof ChangeConfigCommand);
-        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) balanceCommand;
+        ChangeConfigCommand changeConfigCommand = command.get();
 
         assertEquals(changeConfigCommand.getToStore(), localStoreId);
         assertEquals(changeConfigCommand.getKvRangeId(), kvRangeId2);
@@ -175,7 +172,7 @@ public class RedundantReplicaRemovalBalancerTest {
 
         balancer.update(storeDescriptors);
 
-        Optional<BalanceCommand> command = balancer.balance();
+        Optional<ChangeConfigCommand> command = balancer.balance();
         assertFalse(command.isPresent());
     }
 }

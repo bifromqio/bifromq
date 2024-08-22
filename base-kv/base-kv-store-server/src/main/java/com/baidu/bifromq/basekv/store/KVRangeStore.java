@@ -313,19 +313,15 @@ public class KVRangeStore implements IKVRangeStore {
     }
 
     @Override
-    public CompletionStage<Void> recover() {
+    public CompletionStage<Void> recover(KVRangeId rangeId) {
         checkStarted();
-        metricsManager.runningRecoverNum.increment();
-        return mgmtTaskRunner.add(() -> CompletableFuture.allOf(kvRangeMap.values().stream()
-                .map(kvRange -> kvRange.recover().handle((v, e) -> {
-                    if (e != null) {
-                        log.warn("KVRange[{}] recover failed for some reason",
-                            KVRangeIdUtil.toString(kvRange.id()), e);
-                    }
-                    return null;
-                }).toCompletableFuture())
-                .toArray(CompletableFuture[]::new)))
-            .whenComplete((v, e) -> metricsManager.runningRecoverNum.decrement());
+        IKVRangeFSM kvRange = kvRangeMap.get(rangeId);
+        if (kvRange != null) {
+            metricsManager.runningRecoverNum.increment();
+            return kvRange.recover()
+                .whenComplete((v, e) -> metricsManager.runningRecoverNum.decrement());
+        }
+        return CompletableFuture.failedFuture(rangeNotFound());
     }
 
     @Override

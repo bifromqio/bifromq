@@ -29,6 +29,8 @@ import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
+import java.util.ArrayList;
+import java.util.List;
 import org.testng.annotations.Test;
 
 public class BoundaryUtilTest {
@@ -321,6 +323,131 @@ public class BoundaryUtilTest {
         boundaries = split(boundary(null, "b"), copyFromUtf8("a"));
         assertEquals(boundaries[0], boundary(null, "a"));
         assertEquals(boundaries[1], boundary("a", "b"));
+    }
+
+    @Test
+    public void findGapsNoGaps() {
+        // Test with no gaps
+        List<Boundary> boundaries = new ArrayList<>();
+        boundaries.add(Boundary.newBuilder().setEndKey(ByteString.copyFromUtf8("b")).build());
+        boundaries.add(Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("b")).build());
+        List<Boundary> gaps = BoundaryUtil.findGaps(boundaries);
+        assertTrue(gaps.isEmpty());
+    }
+
+    @Test
+    public void findGapsWithGapInBetween() {
+        // Test with a gap in between boundaries
+        List<Boundary> boundaries = new ArrayList<>();
+        boundaries.add(
+            Boundary.newBuilder().setEndKey(ByteString.copyFromUtf8("b")).build()); // Left-open boundary ending at "b"
+        boundaries.add(Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("c"))
+            .build()); // Right-open boundary starting at "c"
+
+        List<Boundary> gaps = BoundaryUtil.findGaps(boundaries);
+
+        assertEquals(1, gaps.size());
+        Boundary gap = gaps.get(0);
+        assertEquals(ByteString.copyFromUtf8("b"), gap.getStartKey());
+        assertEquals(ByteString.copyFromUtf8("c"), gap.getEndKey());
+    }
+
+    @Test
+    public void findGapsWithLeftOpen() {
+        // Test with an initial gap before the first boundary
+        List<Boundary> boundaries = new ArrayList<>();
+        boundaries.add(Boundary.newBuilder()
+            .setStartKey(ByteString.copyFromUtf8("b"))
+            .build()); // Boundary starting at "b"
+
+        List<Boundary> gaps = BoundaryUtil.findGaps(boundaries);
+        assertEquals(1, gaps.size());
+        Boundary gap = gaps.get(0);
+        assertFalse(gap.hasStartKey());
+        assertEquals(ByteString.copyFromUtf8("b"), gap.getEndKey());
+    }
+
+    @Test
+    public void findGapsWithRightOpen() {
+        // Test with a gap after the last boundary
+        List<Boundary> boundaries = new ArrayList<>();
+        boundaries.add(Boundary.newBuilder()
+            .setEndKey(ByteString.copyFromUtf8("b"))
+            .build()); // Boundary ending at "b"
+
+        List<Boundary> gaps = BoundaryUtil.findGaps(boundaries);
+
+        assertEquals(1, gaps.size());
+        Boundary gap = gaps.get(0);
+        assertEquals(ByteString.copyFromUtf8("b"), gap.getStartKey());
+        assertFalse(gap.hasEndKey());
+    }
+
+    @Test
+    public void findGapsWithFullBoundary() {
+        // Test with FullBoundary
+        List<Boundary> boundaries = new ArrayList<>();
+        boundaries.add(FULL_BOUNDARY); // Full boundary
+        boundaries.add(Boundary.newBuilder()
+            .setStartKey(ByteString.copyFromUtf8("a"))
+            .setEndKey(ByteString.copyFromUtf8("b"))
+            .build());
+
+        List<Boundary> gaps = BoundaryUtil.findGaps(boundaries);
+        assertTrue(gaps.isEmpty());
+    }
+
+
+    @Test
+    public void findGaps() {
+        // Test with a gap after the last boundary
+        List<Boundary> boundaries = new ArrayList<>();
+        boundaries.add(Boundary.newBuilder()
+            .setStartKey(ByteString.copyFromUtf8("a"))
+            .setEndKey(ByteString.copyFromUtf8("b"))
+            .build());
+
+        List<Boundary> gaps = BoundaryUtil.findGaps(boundaries);
+        assertEquals(2, gaps.size());
+        Boundary gap = gaps.get(0);
+        assertEquals(ByteString.copyFromUtf8("a"), gap.getEndKey());
+        assertFalse(gap.hasStartKey());
+
+        gap = gaps.get(1);
+        assertEquals(ByteString.copyFromUtf8("b"), gap.getStartKey());
+        assertFalse(gap.hasEndKey());
+    }
+
+    @Test
+    public void findGapsWithComplexBoundaries() {
+        // Test with complex boundaries including open boundaries and non-adjacent intervals
+        List<Boundary> boundaries = new ArrayList<>();
+        boundaries.add(Boundary.newBuilder()
+            .setEndKey(ByteString.copyFromUtf8("b"))
+            .build()); // (null, b)
+        boundaries.add(Boundary.newBuilder()
+            .setStartKey(ByteString.copyFromUtf8("a"))
+            .setEndKey(ByteString.copyFromUtf8("c"))
+            .build()); // [a, c)
+        boundaries.add(Boundary.newBuilder()
+            .setStartKey(ByteString.copyFromUtf8("d"))
+            .setEndKey(ByteString.copyFromUtf8("y"))
+            .build()); // [d, y)
+        boundaries.add(Boundary.newBuilder()
+            .setStartKey(ByteString.copyFromUtf8("z"))
+            .build()); // [z, null)
+
+        List<Boundary> gaps = BoundaryUtil.findGaps(boundaries);
+
+        assertEquals(2, gaps.size());
+
+        Boundary gap1 = gaps.get(0);
+        assertEquals(ByteString.copyFromUtf8("c"), gap1.getStartKey());
+        assertEquals(ByteString.copyFromUtf8("d"), gap1.getEndKey());
+
+        Boundary gap2 = gaps.get(1);
+        assertEquals(ByteString.copyFromUtf8("y"), gap2.getStartKey());
+        assertEquals(ByteString.copyFromUtf8("z"), gap2.getEndKey());
     }
 
     private Boundary boundary(String startKey, String endKey) {

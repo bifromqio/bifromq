@@ -18,5 +18,6 @@ public enum CommandType {
     RECOVERY,
     SPLIT,
     MERGE,
-    TRANSFER_LEADERSHIP
+    TRANSFER_LEADERSHIP,
+    BOOTSRTAP
 }

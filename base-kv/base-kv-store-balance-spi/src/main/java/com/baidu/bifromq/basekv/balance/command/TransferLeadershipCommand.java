@@ -21,7 +21,7 @@ import lombok.experimental.SuperBuilder;
 @Getter
 @Setter
 @SuperBuilder
-public class TransferLeadershipCommand extends BalanceCommand {
+public class TransferLeadershipCommand extends RangeCommand {
 
     private String newLeaderStore;
 

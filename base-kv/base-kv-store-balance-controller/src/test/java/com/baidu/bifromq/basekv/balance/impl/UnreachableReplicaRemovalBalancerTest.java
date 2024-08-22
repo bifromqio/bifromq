@@ -19,7 +19,6 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -66,7 +65,7 @@ public class UnreachableReplicaRemovalBalancerTest {
 
         balancer.update(Set.of(storeDescriptor));
 
-        Optional<BalanceCommand> commandOpt = balancer.balance();
+        Optional<ChangeConfigCommand> commandOpt = balancer.balance();
         assertTrue(commandOpt.isEmpty());
     }
 
@@ -88,18 +87,16 @@ public class UnreachableReplicaRemovalBalancerTest {
         // Simulate time passing to make the replica unhealthy
         when(mockTimeSource.get()).thenReturn(System.currentTimeMillis() + 16000);
 
-        Optional<BalanceCommand> commandOpt = balancer.balance();
+        Optional<ChangeConfigCommand> commandOpt = balancer.balance();
         assertTrue(commandOpt.isPresent());
 
-        BalanceCommand command = commandOpt.get();
-        assertTrue(command instanceof ChangeConfigCommand);
-        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) command;
+        ChangeConfigCommand command = commandOpt.get();
 
         // Verify that the unhealthy replica is scheduled for removal
-        assertEquals(localStoreId, changeConfigCommand.getToStore());
-        assertEquals(rangeId, changeConfigCommand.getKvRangeId());
-        assertEquals(5, changeConfigCommand.getExpectedVer());
-        assertFalse(changeConfigCommand.getVoters().contains(peerStoreId));
+        assertEquals(localStoreId, command.getToStore());
+        assertEquals(rangeId, command.getKvRangeId());
+        assertEquals(5, command.getExpectedVer());
+        assertFalse(command.getVoters().contains(peerStoreId));
     }
 
     @Test
@@ -120,18 +117,16 @@ public class UnreachableReplicaRemovalBalancerTest {
         // Simulate time passing to make the replica unhealthy
         when(mockTimeSource.get()).thenReturn(System.currentTimeMillis() + 16000);
 
-        Optional<BalanceCommand> commandOpt = balancer.balance();
+        Optional<ChangeConfigCommand> commandOpt = balancer.balance();
         assertTrue(commandOpt.isPresent());
 
-        BalanceCommand command = commandOpt.get();
-        assertTrue(command instanceof ChangeConfigCommand);
-        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) command;
+        ChangeConfigCommand command = commandOpt.get();
 
         // Verify that the unhealthy replica is scheduled for removal
-        assertEquals(localStoreId, changeConfigCommand.getToStore());
-        assertEquals(rangeId, changeConfigCommand.getKvRangeId());
-        assertEquals(5, changeConfigCommand.getExpectedVer());
-        assertFalse(changeConfigCommand.getLearners().contains(peerStoreId));
+        assertEquals(localStoreId, command.getToStore());
+        assertEquals(rangeId, command.getKvRangeId());
+        assertEquals(5, command.getExpectedVer());
+        assertFalse(command.getLearners().contains(peerStoreId));
     }
 
 
@@ -161,7 +156,7 @@ public class UnreachableReplicaRemovalBalancerTest {
 
         balancer.update(Set.of(updatedDescriptor, peerStoreDescriptor));
 
-        Optional<BalanceCommand> commandOpt = balancer.balance();
+        Optional<ChangeConfigCommand> commandOpt = balancer.balance();
         assertTrue(commandOpt.isEmpty());
     }
 
@@ -192,7 +187,7 @@ public class UnreachableReplicaRemovalBalancerTest {
         balancer.update(Set.of(updatedDescriptor, peerStoreDescriptor));
         when(mockTimeSource.get()).thenReturn(System.currentTimeMillis() + 16000);
 
-        Optional<BalanceCommand> commandOpt = balancer.balance();
+        Optional<ChangeConfigCommand> commandOpt = balancer.balance();
         assertTrue(commandOpt.isEmpty());
     }
 
@@ -223,7 +218,7 @@ public class UnreachableReplicaRemovalBalancerTest {
 
         when(mockTimeSource.get()).thenReturn(System.currentTimeMillis() + 32000);
 
-        Optional<BalanceCommand> commandOpt = balancer.balance();
+        Optional<ChangeConfigCommand> commandOpt = balancer.balance();
         assertTrue(commandOpt.isEmpty());
     }
 

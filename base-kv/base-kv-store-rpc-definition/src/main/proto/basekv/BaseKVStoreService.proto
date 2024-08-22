@@ -41,11 +41,14 @@ message BootstrapReply{
 
 message RecoverRequest{
   uint64 reqId = 1;
+  basekv.KVRangeId kvRangeId = 2;
 }
 
 message RecoverReply{
   enum Result {
     Ok = 0;
+    NotFound = 1;
+    Error = 2;
   }
   uint64 reqId = 1;
   Result result = 2;

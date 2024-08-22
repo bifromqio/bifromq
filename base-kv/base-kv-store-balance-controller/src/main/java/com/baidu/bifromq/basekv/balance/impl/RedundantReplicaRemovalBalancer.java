@@ -16,7 +16,6 @@ package com.baidu.bifromq.basekv.balance.impl;
 import static com.baidu.bifromq.basekv.balance.DescriptorUtil.organizeByEpoch;
 
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
-import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
@@ -49,7 +48,7 @@ public class RedundantReplicaRemovalBalancer extends StoreBalancer {
     }
 
     @Override
-    public Optional<BalanceCommand> balance() {
+    public Optional<ChangeConfigCommand> balance() {
         if (latest.size() < 2) {
             return Optional.empty();
         }

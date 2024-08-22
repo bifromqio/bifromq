@@ -11,24 +11,19 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.balance.command;
+package com.baidu.bifromq.retain.store.balance;
 
-import lombok.Getter;
-import lombok.Setter;
-import lombok.experimental.SuperBuilder;
+import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
+import com.baidu.bifromq.basekv.balance.StoreBalancer;
+import com.baidu.bifromq.basekv.balance.impl.RangeBootstrapBalancer;
+import com.baidu.bifromq.sysprops.props.RetainStoreRecoveryWaitTimeMillis;
+import java.time.Duration;
 
-@Getter
-@Setter
-@SuperBuilder
-public class RecoveryCommand extends BalanceCommand {
-
-    @Override
-    public CommandType type() {
-        return CommandType.RECOVERY;
-    }
+public class RangeBootstrapBalancerFactory implements IStoreBalancerFactory {
 
     @Override
-    public String toString() {
-        return String.format("RecoveryCommand{toStore=%s}", getToStore());
+    public StoreBalancer newBalancer(String clusterId, String localStoreId) {
+        return new RangeBootstrapBalancer(clusterId, localStoreId,
+            Duration.ofMillis(RetainStoreRecoveryWaitTimeMillis.INSTANCE.get()));
     }
 }

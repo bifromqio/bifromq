@@ -205,14 +205,13 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     }
 
     @Override
-    public CompletableFuture<BootstrapReply> bootstrap(String storeId) {
+    public CompletableFuture<BootstrapReply> bootstrap(String storeId, BootstrapRequest request) {
         String serverId = storeToServerMap.get(storeId);
         if (serverId == null) {
             return CompletableFuture.failedFuture(
                 new ServerNotFoundException("BaseKVStore Server not available for storeId: " + storeId));
         }
-        return rpcClient.invoke("", serverId,
-            BootstrapRequest.newBuilder().setReqId(System.nanoTime()).build(), bootstrapMethod);
+        return rpcClient.invoke("", serverId, request, bootstrapMethod);
     }
 
     @Override

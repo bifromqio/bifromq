@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.balance.impl;
 
-import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.RecoveryCommand;
 import com.baidu.bifromq.basekv.balance.utils.DescriptorUtils;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
@@ -42,7 +41,7 @@ public class RecoveryBalancerTest {
 
     @Test
     public void balanceWithoutUpdate() {
-        Optional<BalanceCommand> balance = balancer.balance();
+        Optional<RecoveryCommand> balance = balancer.balance();
         Assert.assertTrue(balance.isEmpty());
     }
 
@@ -61,9 +60,9 @@ public class RecoveryBalancerTest {
             .addRanges(rangeDescriptors.get(0).toBuilder().setRole(RaftNodeStatus.Candidate).setVer(3).build())
             .build();
         balancer.update(Sets.newHashSet(storeDescriptor1, storeDescriptor2));
-        Optional<BalanceCommand> commandOptional = balancer.balance();
+        Optional<RecoveryCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isPresent());
-        RecoveryCommand recoveryCommand = (RecoveryCommand) commandOptional.get();
+        RecoveryCommand recoveryCommand = commandOptional.get();
         Assert.assertEquals("store2", recoveryCommand.getToStore());
     }
 
@@ -85,9 +84,9 @@ public class RecoveryBalancerTest {
         // store2 dead temporarily
         balancer.update(Sets.newHashSet(storeDescriptor1));
 
-        Optional<BalanceCommand> commandOptional = balancer.balance();
+        Optional<RecoveryCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isPresent());
-        RecoveryCommand recoveryCommand = (RecoveryCommand) commandOptional.get();
+        RecoveryCommand recoveryCommand = commandOptional.get();
         Assert.assertEquals(LOCAL_STORE_ID, recoveryCommand.getToStore());
     }
 
@@ -111,7 +110,7 @@ public class RecoveryBalancerTest {
             .build();
 
         balancer.update(Sets.newHashSet(storeDescriptor1, storeDescriptor2, storeDescriptor3));
-        Optional<BalanceCommand> commandOptional = balancer.balance();
+        Optional<RecoveryCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isEmpty());
     }
 

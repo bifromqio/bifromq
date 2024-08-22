@@ -18,7 +18,6 @@ import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter
 import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter.LOAD_TYPE_IO_LATENCY_NANOS;
 
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
-import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.SplitCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
@@ -66,7 +65,7 @@ class DistWorkerSplitBalancer extends StoreBalancer {
     }
 
     @Override
-    public Optional<BalanceCommand> balance() {
+    public Optional<SplitCommand> balance() {
         KVRangeStoreDescriptor localStoreDesc = null;
         for (KVRangeStoreDescriptor d : latestStoreDescriptors) {
             if (d.getId().equals(localStoreId)) {
@@ -84,14 +83,14 @@ class DistWorkerSplitBalancer extends StoreBalancer {
                 cpuUsage, localStoreId);
             return Optional.empty();
         }
-        Optional<BalanceCommand> fanoutBalanceCmd = balanceFanout(localStoreDesc);
+        Optional<SplitCommand> fanoutBalanceCmd = balanceFanout(localStoreDesc);
         if (fanoutBalanceCmd.isPresent()) {
             return fanoutBalanceCmd;
         }
         return balanceMutationLoad(localStoreDesc);
     }
 
-    private Optional<BalanceCommand> balanceFanout(KVRangeStoreDescriptor localStoreDesc) {
+    private Optional<SplitCommand> balanceFanout(KVRangeStoreDescriptor localStoreDesc) {
         List<KVRangeDescriptor> localLeaderRangeDescriptors = localStoreDesc.getRangesList()
             .stream()
             .filter(d -> d.getRole() == RaftNodeStatus.Leader)
@@ -131,7 +130,7 @@ class DistWorkerSplitBalancer extends StoreBalancer {
         return Optional.empty();
     }
 
-    private Optional<BalanceCommand> balanceMutationLoad(KVRangeStoreDescriptor localStoreDesc) {
+    private Optional<SplitCommand> balanceMutationLoad(KVRangeStoreDescriptor localStoreDesc) {
         List<KVRangeDescriptor> localLeaderRangeDescriptors = localStoreDesc.getRangesList()
             .stream()
             .filter(d -> d.getRole() == RaftNodeStatus.Leader)

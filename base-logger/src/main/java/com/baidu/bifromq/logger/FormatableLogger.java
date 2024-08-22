@@ -596,16 +596,19 @@ public class FormatableLogger implements Logger {
     }
 
     private Object[] stringify(Object... arguments) {
-        Object[] strings = new Object[arguments.length];
+        Object[] args = new Object[arguments.length];
         for (int i = 0; i < arguments.length; i++) {
             Object obj = arguments[i];
-            strings[i] = stringify(obj);
+            args[i] = stringify(obj);
         }
-        return strings;
+        return args;
     }
 
     @SuppressWarnings("unchecked")
-    private <T> String stringify(T obj) {
+    private <T> Object stringify(T obj) {
+        if (obj instanceof Throwable) {
+            return obj;
+        }
         if (obj instanceof Stringifiable) {
             return ((Stringifiable) obj).stringify();
         } else {

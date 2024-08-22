@@ -20,7 +20,6 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.SplitCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -80,7 +79,7 @@ public class RangeSplitBalancerTest {
         );
         RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "local", HintType, 10, 0.8, 5, 20);
         balancer.update(descriptors);
-        Optional<BalanceCommand> command = balancer.balance();
+        Optional<SplitCommand> command = balancer.balance();
         assertTrue(command.isPresent());
         assertEquals(command.get().getKvRangeId(), rangeId);
         assertEquals(command.get().getToStore(), "local");
@@ -110,7 +109,7 @@ public class RangeSplitBalancerTest {
         );
         RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "local", HintType);
         balancer.update(descriptors);
-        Optional<BalanceCommand> command = balancer.balance();
+        Optional<SplitCommand> command = balancer.balance();
         assertFalse(command.isPresent());
     }
 
@@ -137,7 +136,7 @@ public class RangeSplitBalancerTest {
         );
         RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "local", HintType, 1, 0.8, 5, 20);
         balancer.update(descriptors);
-        Optional<BalanceCommand> command = balancer.balance();
+        Optional<SplitCommand> command = balancer.balance();
         assertFalse(command.isPresent());
     }
 }

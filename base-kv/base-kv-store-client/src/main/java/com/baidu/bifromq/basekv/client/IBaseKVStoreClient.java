@@ -14,8 +14,10 @@
 package com.baidu.bifromq.basekv.client;
 
 import com.baidu.bifromq.basekv.IKVRangeRouter;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.store.proto.BootstrapReply;
+import com.baidu.bifromq.basekv.store.proto.BootstrapRequest;
 import com.baidu.bifromq.basekv.store.proto.ChangeReplicaConfigReply;
 import com.baidu.bifromq.basekv.store.proto.ChangeReplicaConfigRequest;
 import com.baidu.bifromq.basekv.store.proto.KVRangeMergeReply;
@@ -44,7 +46,7 @@ public interface IBaseKVStoreClient extends IKVRangeRouter, IConnectable {
 
     Observable<Set<KVRangeStoreDescriptor>> describe();
 
-    CompletableFuture<BootstrapReply> bootstrap(String storeId);
+    CompletableFuture<BootstrapReply> bootstrap(String storeId, BootstrapRequest request);
 
     CompletableFuture<RecoverReply> recover(String storeId, RecoverRequest request);
 

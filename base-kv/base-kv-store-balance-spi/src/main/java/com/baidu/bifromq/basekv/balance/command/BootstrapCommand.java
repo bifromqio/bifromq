@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023. The BifroMQ Authors. All Rights Reserved.
+ * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.basekv.balance.command;
 
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
@@ -22,19 +22,17 @@ import lombok.experimental.SuperBuilder;
 @Getter
 @Setter
 @SuperBuilder
-public class ChangeConfigCommand extends RangeCommand {
-
-    private Set<String> voters;
-    private Set<String> learners;
+public class BootstrapCommand extends BalanceCommand {
+    private Boundary boundary;
 
     @Override
     public CommandType type() {
-        return CommandType.CHANGE_CONFIG;
+        return CommandType.BOOTSRTAP;
     }
 
     @Override
     public String toString() {
-        return String.format("ChangeConfigCommand{toStore=%s, kvRangeId=%s, expectedVer=%d, voters=%s, learner=%s}",
-            getToStore(), KVRangeIdUtil.toString(getKvRangeId()), getExpectedVer(), voters, learners);
+        return String.format("BootstrapCommand{toStore=%s, kvRangeId=%s, bootstrap=%s}",
+            getToStore(), KVRangeIdUtil.toString(getKvRangeId()), boundary);
     }
 }

@@ -22,7 +22,7 @@ import lombok.experimental.SuperBuilder;
 @Getter
 @Setter
 @SuperBuilder
-public class MergeCommand extends BalanceCommand {
+public class MergeCommand extends RangeCommand {
 
     private KVRangeId mergeeId;
 

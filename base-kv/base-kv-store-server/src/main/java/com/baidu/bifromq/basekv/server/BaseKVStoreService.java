@@ -24,6 +24,7 @@ import com.baidu.bifromq.basekv.store.KVRangeStoreDescriptorReporter;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException.BadRequest;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException.BadVersion;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException.TryLater;
+import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
 import com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc;
 import com.baidu.bifromq.basekv.store.proto.BootstrapReply;
 import com.baidu.bifromq.basekv.store.proto.BootstrapRequest;
@@ -134,7 +135,16 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
 
     @Override
     public void recover(RecoverRequest request, StreamObserver<RecoverReply> responseObserver) {
-        response(tenantId -> kvRangeStore.recover()
+        response(tenantId -> kvRangeStore.recover(request.getKvRangeId())
+            .thenApply(result -> RecoverReply.newBuilder()
+                .setReqId(request.getReqId())
+                .setResult(RecoverReply.Result.Ok)
+                .build())
+            .exceptionally(e -> RecoverReply.newBuilder()
+                .setReqId(request.getReqId())
+                .setResult(e instanceof KVRangeStoreException
+                    ? RecoverReply.Result.NotFound : RecoverReply.Result.Error)
+                .build())
             .handle((v, e) -> RecoverReply.newBuilder().setReqId(request.getReqId()).build()), responseObserver);
     }
 

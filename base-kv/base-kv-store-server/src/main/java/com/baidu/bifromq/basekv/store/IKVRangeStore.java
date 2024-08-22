@@ -48,11 +48,11 @@ public interface IKVRangeStore {
     boolean isHosting(KVRangeId rangeId);
 
     /**
-     * Recover unwritable ranges hosted in current store
+     * Recover lost-quorum ranges hosted in current store.
      *
      * @return
      */
-    CompletionStage<Void> recover();
+    CompletionStage<Void> recover(KVRangeId rangeId);
 
     Observable<KVRangeStoreDescriptor> describe();
 

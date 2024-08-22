@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.balance.impl;
 
-import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.balance.utils.DescriptorUtils;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
@@ -42,7 +41,7 @@ public class ReplicaCntBalancerTest {
     @Test
     public void balanceWithoutUpdate() {
         balancer = new ReplicaCntBalancer(CLUSTER_ID, LOCAL_STORE_ID, 3, 3);
-        Optional<BalanceCommand> balance = balancer.balance();
+        Optional<ChangeConfigCommand> balance = balancer.balance();
         Assert.assertTrue(balance.isEmpty());
     }
 
@@ -57,7 +56,7 @@ public class ReplicaCntBalancerTest {
             .addRanges(rangeDescriptors.get(0))
             .build();
         balancer.update(Sets.newHashSet(storeDescriptor1));
-        Optional<BalanceCommand> commandOptional = balancer.balance();
+        Optional<ChangeConfigCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isEmpty());
     }
 
@@ -78,9 +77,9 @@ public class ReplicaCntBalancerTest {
             .build();
         // two store with one voter
         balancer.update(Sets.newHashSet(storeDescriptor1, storeDescriptor2));
-        Optional<BalanceCommand> commandOptional = balancer.balance();
+        Optional<ChangeConfigCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isPresent());
-        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) commandOptional.get();
+        ChangeConfigCommand changeConfigCommand = commandOptional.get();
         Assert.assertEquals(2, changeConfigCommand.getVoters().size());
         Assert.assertEquals(0, changeConfigCommand.getLearners().size());
 
@@ -110,9 +109,9 @@ public class ReplicaCntBalancerTest {
             .build();
         // two store with one voter
         balancer.update(Sets.newHashSet(storeDescriptor1, storeDescriptor2));
-        Optional<BalanceCommand> commandOptional = balancer.balance();
+        Optional<ChangeConfigCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isPresent());
-        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) commandOptional.get();
+        ChangeConfigCommand changeConfigCommand = commandOptional.get();
         Assert.assertEquals(2, changeConfigCommand.getVoters().size());
         Assert.assertEquals(0, changeConfigCommand.getLearners().size());
 
@@ -143,9 +142,9 @@ public class ReplicaCntBalancerTest {
             .build());
         // three store with one voter
         balancer.update(storeDescriptors);
-        Optional<BalanceCommand> commandOptional = balancer.balance();
+        Optional<ChangeConfigCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isPresent());
-        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) commandOptional.get();
+        ChangeConfigCommand changeConfigCommand = commandOptional.get();
         Assert.assertEquals(3, changeConfigCommand.getVoters().size());
         Assert.assertEquals(0, changeConfigCommand.getLearners().size());
 
@@ -176,9 +175,9 @@ public class ReplicaCntBalancerTest {
             .build());
         // four store, config with three voters and no learner
         balancer.update(storeDescriptors);
-        Optional<BalanceCommand> commandOptional = balancer.balance();
+        Optional<ChangeConfigCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isPresent());
-        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) commandOptional.get();
+        ChangeConfigCommand changeConfigCommand = commandOptional.get();
         Assert.assertEquals(3, changeConfigCommand.getVoters().size());
         Assert.assertEquals(1, changeConfigCommand.getLearners().size());
 
@@ -220,9 +219,9 @@ public class ReplicaCntBalancerTest {
             .build());
         // four store, config with three voters and no learner
         balancer.update(storeDescriptors);
-        Optional<BalanceCommand> commandOptional = balancer.balance();
+        Optional<ChangeConfigCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isPresent());
-        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) commandOptional.get();
+        ChangeConfigCommand changeConfigCommand = commandOptional.get();
         Assert.assertEquals(3, changeConfigCommand.getVoters().size());
         Assert.assertEquals(0, changeConfigCommand.getLearners().size());
 
@@ -272,9 +271,9 @@ public class ReplicaCntBalancerTest {
             .build());
         // four store, config with three voters and no learner
         balancer.update(storeDescriptors);
-        Optional<BalanceCommand> commandOptional = balancer.balance();
+        Optional<ChangeConfigCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isPresent());
-        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) commandOptional.get();
+        ChangeConfigCommand changeConfigCommand = commandOptional.get();
         Assert.assertEquals(3, changeConfigCommand.getVoters().size());
         Assert.assertEquals(1, changeConfigCommand.getLearners().size());
 
@@ -324,9 +323,9 @@ public class ReplicaCntBalancerTest {
             .build());
         // four store, config with three voters and no learner
         balancer.update(storeDescriptors);
-        Optional<BalanceCommand> commandOptional = balancer.balance();
+        Optional<ChangeConfigCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isPresent());
-        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) commandOptional.get();
+        ChangeConfigCommand changeConfigCommand = commandOptional.get();
         Assert.assertEquals(3, changeConfigCommand.getVoters().size());
         Assert.assertEquals(2, changeConfigCommand.getLearners().size());
 
@@ -355,15 +354,15 @@ public class ReplicaCntBalancerTest {
         }
         // 5 store with 2 voters and 3 learners
         balancer.update(storeDescriptors);
-        Optional<BalanceCommand> commandOptional = balancer.balance();
+        Optional<ChangeConfigCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isPresent());
-        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) commandOptional.get();
+        ChangeConfigCommand changeConfigCommand = commandOptional.get();
         Assert.assertEquals(3, changeConfigCommand.getVoters().size());
         Assert.assertEquals(2, changeConfigCommand.getLearners().size());
     }
 
     @Test
-    public void rangeWithThreeVAndTwoAliveAndOneStoreSpare() throws InterruptedException {
+    public void rangeWithThreeVAndTwoAliveAndOneStoreSpare() {
         balancer = new ReplicaCntBalancer(CLUSTER_ID, LOCAL_STORE_ID, 3, 3);
         KVRangeId id = KVRangeIdUtil.generate();
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1", "store2");
@@ -384,9 +383,9 @@ public class ReplicaCntBalancerTest {
         }
         storeDescriptors.remove(storeDescriptors.size() - 1);
         balancer.update(Sets.newHashSet(storeDescriptors));
-        Optional<BalanceCommand> commandOptional = balancer.balance();
+        Optional<ChangeConfigCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isPresent());
-        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) commandOptional.get();
+        ChangeConfigCommand changeConfigCommand = commandOptional.get();
         Assert.assertEquals(3, changeConfigCommand.getVoters().size());
         Assert.assertEquals(0, changeConfigCommand.getLearners().size());
 
@@ -424,9 +423,9 @@ public class ReplicaCntBalancerTest {
         storeDescriptors.remove("store2");
         storeDescriptors.remove("store5");
         balancer.update(Sets.newHashSet(storeDescriptors.values()));
-        Optional<BalanceCommand> commandOptional = balancer.balance();
+        Optional<ChangeConfigCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isPresent());
-        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) commandOptional.get();
+        ChangeConfigCommand changeConfigCommand = commandOptional.get();
         Assert.assertEquals(3, changeConfigCommand.getVoters().size());
         Assert.assertEquals(3, changeConfigCommand.getLearners().size());
 

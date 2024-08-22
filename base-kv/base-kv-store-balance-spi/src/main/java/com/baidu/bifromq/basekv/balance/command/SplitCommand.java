@@ -22,7 +22,7 @@ import lombok.experimental.SuperBuilder;
 @Getter
 @Setter
 @SuperBuilder
-public class SplitCommand extends BalanceCommand {
+public class SplitCommand extends RangeCommand {
 
     private ByteString splitKey;
 

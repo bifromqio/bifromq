@@ -22,11 +22,8 @@ import lombok.experimental.SuperBuilder;
 @Setter
 @SuperBuilder
 public abstract class BalanceCommand {
-
     private String toStore;
-    private Long expectedVer;
     private KVRangeId kvRangeId;
 
     public abstract CommandType type();
-
 }

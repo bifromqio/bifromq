@@ -120,9 +120,9 @@ public class KVRangeStoreTestCluster {
         return rangeStoreMap.get(storeId).isHosting(rangeId);
     }
 
-    public CompletionStage<Void> recover(String storeId) {
+    public CompletionStage<Void> recover(String storeId, KVRangeId rangeId) {
         checkStore(storeId);
-        return rangeStoreMap.get(storeId).recover();
+        return rangeStoreMap.get(storeId).recover(rangeId);
     }
 
     public String bootstrapStore() {

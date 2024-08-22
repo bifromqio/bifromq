@@ -17,7 +17,6 @@ import static com.baidu.bifromq.basekv.proto.State.StateType.Normal;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
-import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -132,7 +131,7 @@ public final class UnreachableReplicaRemovalBalancer extends StoreBalancer {
     }
 
     @Override
-    public Optional<BalanceCommand> balance() {
+    public Optional<ChangeConfigCommand> balance() {
         long currentTime = millisSource.get();
         Map<String, Map<KVRangeId, KVRangeDescriptor>> storeDescriptors = latestDescriptorMap;
         for (KVRangeId rangeId : replicaSuspicionTimeMap.keySet()) {

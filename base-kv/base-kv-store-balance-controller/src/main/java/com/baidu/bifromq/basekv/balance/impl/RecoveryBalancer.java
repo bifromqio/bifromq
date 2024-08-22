@@ -14,7 +14,6 @@
 package com.baidu.bifromq.basekv.balance.impl;
 
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
-import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.RecoveryCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -67,12 +66,11 @@ public class RecoveryBalancer extends StoreBalancer {
     }
 
     @Override
-    public Optional<BalanceCommand> balance() {
-        Optional<BalanceCommand> commandOptional = recoverNoLeaderRange();
-        return commandOptional;
+    public Optional<RecoveryCommand> balance() {
+        return recoverNoLeaderRange();
     }
 
-    private Optional<BalanceCommand> recoverNoLeaderRange() {
+    private Optional<RecoveryCommand> recoverNoLeaderRange() {
         Set<KVRangeStoreDescriptor> allSds = Sets.newHashSet(latestStoreDescriptors);
         Map<String, KVRangeStoreDescriptor> deadSds = deadStoreCache.asMap();
         allSds.addAll(deadSds.values());

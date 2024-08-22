@@ -17,14 +17,18 @@ import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehookloader.BaseHookLoader;
 import com.baidu.bifromq.basekv.balance.KVRangeBalanceController.MetricManager.CommandMetrics;
 import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
+import com.baidu.bifromq.basekv.balance.command.BootstrapCommand;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.balance.command.MergeCommand;
+import com.baidu.bifromq.basekv.balance.command.RangeCommand;
+import com.baidu.bifromq.basekv.balance.command.RecoveryCommand;
 import com.baidu.bifromq.basekv.balance.command.SplitCommand;
 import com.baidu.bifromq.basekv.balance.command.TransferLeadershipCommand;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
+import com.baidu.bifromq.basekv.store.proto.BootstrapRequest;
 import com.baidu.bifromq.basekv.store.proto.ChangeReplicaConfigReply;
 import com.baidu.bifromq.basekv.store.proto.ChangeReplicaConfigRequest;
 import com.baidu.bifromq.basekv.store.proto.KVRangeMergeReply;
@@ -166,7 +170,7 @@ public class KVRangeBalanceController {
         metricsManager.scheduleCount.increment();
         for (StoreBalancer fromBalancer : balancers) {
             try {
-                Optional<BalanceCommand> commandOpt = fromBalancer.balance();
+                Optional<? extends BalanceCommand> commandOpt = fromBalancer.balance();
                 if (commandOpt.isPresent()) {
                     BalanceCommand commandToRun = commandOpt.get();
                     log.info("Balancer[{}] command run: {}", fromBalancer.getClass().getSimpleName(),
@@ -204,21 +208,25 @@ public class KVRangeBalanceController {
     }
 
     private CompletableFuture<Boolean> runCommand(BalanceCommand command) {
-        if (command.getExpectedVer() != null) {
-            Long prevCMDVer = historyCommandCache.getIfPresent(command.getKvRangeId());
-            if (prevCMDVer != null && prevCMDVer >= command.getExpectedVer()) {
-                log.warn("Command version is duplicated with prev one: {}", command);
-                return CompletableFuture.completedFuture(false);
+        if (command instanceof RangeCommand rangeCommand) {
+            if (rangeCommand.getExpectedVer() != null) {
+                Long prevCMDVer = historyCommandCache.getIfPresent(rangeCommand.getKvRangeId());
+                if (prevCMDVer != null && prevCMDVer >= rangeCommand.getExpectedVer()) {
+                    log.warn("Command version is duplicated with prev one: {}", rangeCommand);
+                    return CompletableFuture.completedFuture(false);
+                }
             }
         }
         return switch (command.type()) {
             case CHANGE_CONFIG -> {
+                assert command instanceof ChangeConfigCommand;
+                ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) command;
                 ChangeReplicaConfigRequest changeConfigRequest = ChangeReplicaConfigRequest.newBuilder()
                     .setReqId(System.nanoTime())
-                    .setKvRangeId(command.getKvRangeId())
-                    .setVer(command.getExpectedVer())
-                    .addAllNewVoters(((ChangeConfigCommand) command).getVoters())
-                    .addAllNewLearners(((ChangeConfigCommand) command).getLearners())
+                    .setKvRangeId(changeConfigCommand.getKvRangeId())
+                    .setVer(changeConfigCommand.getExpectedVer())
+                    .addAllNewVoters(changeConfigCommand.getVoters())
+                    .addAllNewLearners(changeConfigCommand.getLearners())
                     .build();
                 yield handleStoreReplyCode(command,
                     storeClient.changeReplicaConfig(command.getToStore(), changeConfigRequest)
@@ -226,46 +234,71 @@ public class KVRangeBalanceController {
                 );
             }
             case MERGE -> {
+                assert command instanceof MergeCommand;
+                MergeCommand mergeCommand = (MergeCommand) command;
                 KVRangeMergeRequest rangeMergeRequest = KVRangeMergeRequest.newBuilder()
                     .setReqId(System.nanoTime())
-                    .setVer(command.getExpectedVer())
-                    .setMergerId(command.getKvRangeId())
-                    .setMergeeId(((MergeCommand) command).getMergeeId())
+                    .setVer(mergeCommand.getExpectedVer())
+                    .setMergerId(mergeCommand.getKvRangeId())
+                    .setMergeeId(mergeCommand.getMergeeId())
                     .build();
                 yield handleStoreReplyCode(command,
                     storeClient.mergeRanges(command.getToStore(), rangeMergeRequest)
                         .thenApply(KVRangeMergeReply::getCode));
             }
             case SPLIT -> {
+                assert command instanceof SplitCommand;
+                SplitCommand splitCommand = (SplitCommand) command;
                 KVRangeSplitRequest kvRangeSplitRequest = KVRangeSplitRequest.newBuilder()
                     .setReqId(System.nanoTime())
-                    .setKvRangeId(command.getKvRangeId())
-                    .setVer(command.getExpectedVer())
-                    .setSplitKey(((SplitCommand) command).getSplitKey())
+                    .setKvRangeId(splitCommand.getKvRangeId())
+                    .setVer(splitCommand.getExpectedVer())
+                    .setSplitKey(splitCommand.getSplitKey())
                     .build();
                 yield handleStoreReplyCode(command,
                     storeClient.splitRange(command.getToStore(), kvRangeSplitRequest)
                         .thenApply(KVRangeSplitReply::getCode));
             }
             case TRANSFER_LEADERSHIP -> {
+                assert command instanceof TransferLeadershipCommand;
+                TransferLeadershipCommand transferLeadershipCommand = (TransferLeadershipCommand) command;
                 TransferLeadershipRequest transferLeadershipRequest = TransferLeadershipRequest.newBuilder()
                     .setReqId(System.nanoTime())
-                    .setKvRangeId(command.getKvRangeId())
-                    .setVer(command.getExpectedVer())
-                    .setNewLeaderStore(((TransferLeadershipCommand) command).getNewLeaderStore())
+                    .setKvRangeId(transferLeadershipCommand.getKvRangeId())
+                    .setVer(transferLeadershipCommand.getExpectedVer())
+                    .setNewLeaderStore(transferLeadershipCommand.getNewLeaderStore())
                     .build();
                 yield handleStoreReplyCode(command,
                     storeClient.transferLeadership(command.getToStore(), transferLeadershipRequest)
                         .thenApply(TransferLeadershipReply::getCode));
             }
             case RECOVERY -> {
+                assert command instanceof RecoveryCommand;
+                RecoveryCommand recoveryCommand = (RecoveryCommand) command;
                 RecoverRequest recoverRequest = RecoverRequest.newBuilder()
                     .setReqId(System.nanoTime())
+                    .setKvRangeId(recoveryCommand.getKvRangeId())
                     .build();
                 yield storeClient.recover(command.getToStore(), recoverRequest)
                     .handle((r, e) -> {
                         if (e != null) {
                             log.error("Unexpected error when recover, req: {}", recoverRequest, e);
+                        }
+                        return true;
+                    });
+            }
+            case BOOTSRTAP -> {
+                assert command instanceof BootstrapCommand;
+                BootstrapCommand bootstrapCommand = (BootstrapCommand) command;
+                BootstrapRequest bootstrapRequest = BootstrapRequest.newBuilder()
+                    .setReqId(System.nanoTime())
+                    .setKvRangeId(bootstrapCommand.getKvRangeId())
+                    .setBoundary(bootstrapCommand.getBoundary())
+                    .build();
+                yield storeClient.bootstrap(command.getToStore(), bootstrapRequest)
+                    .handle((r, e) -> {
+                        if (e != null) {
+                            log.error("Unexpected error when bootstrap: {}", command, e);
                         }
                         return true;
                     });
@@ -284,9 +317,8 @@ public class KVRangeBalanceController {
             }
             switch (code) {
                 case Ok -> {
-                    switch (command.type()) {
-                        case CHANGE_CONFIG, SPLIT, MERGE ->
-                            historyCommandCache.put(command.getKvRangeId(), command.getExpectedVer());
+                    if (command instanceof RangeCommand rangeCommand) {
+                        historyCommandCache.put(rangeCommand.getKvRangeId(), rangeCommand.getExpectedVer());
                     }
                     onDone.complete(true);
                 }
@@ -341,7 +373,7 @@ public class KVRangeBalanceController {
             private CommandMetrics(Tags tags) {
                 cmdSucceedCounter = Counter.builder("basekv.balance.cmd.succeed")
                     .tags(tags)
-                    .register(io.micrometer.core.instrument.Metrics.globalRegistry);
+                    .register(Metrics.globalRegistry);
                 cmdFailedCounter = Counter.builder("basekv.balance.cmd.failed")
                     .tags(tags)
                     .register(Metrics.globalRegistry);
