@@ -55,7 +55,7 @@ public class RangeBootstrapBalancerTest {
 
 
     @Test
-    public void testBalanceWithTrigger() {
+    public void balanceWithTrigger() {
         // Test when balance should trigger a bootstrap command
         KVRangeStoreDescriptor storeDescriptor = KVRangeStoreDescriptor.newBuilder()
             .setId(localStoreId)

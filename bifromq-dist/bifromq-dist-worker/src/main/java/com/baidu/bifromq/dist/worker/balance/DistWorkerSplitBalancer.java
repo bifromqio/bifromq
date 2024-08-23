@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.dist.worker.balance;
 
-import static com.baidu.bifromq.basekv.balance.DescriptorUtil.getLeastEpoch;
 import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter.LOAD_TYPE_IO_DENSITY;
 import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter.LOAD_TYPE_IO_LATENCY_NANOS;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
 
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.command.SplitCommand;
@@ -25,6 +25,7 @@ import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.baidu.bifromq.basekv.store.range.hinter.MutationKVLoadBasedSplitHinter;
+import com.baidu.bifromq.basekv.utils.DescriptorUtil;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.dist.worker.hinter.FanoutSplitHinter;
 import com.google.common.base.Preconditions;
@@ -61,7 +62,11 @@ class DistWorkerSplitBalancer extends StoreBalancer {
 
     @Override
     public void update(Set<KVRangeStoreDescriptor> storeDescriptors) {
-        latestStoreDescriptors = getLeastEpoch(storeDescriptors);
+        Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(storeDescriptors);
+        if (effectiveEpoch.isEmpty()) {
+            return;
+        }
+        latestStoreDescriptors = effectiveEpoch.get().storeDescriptors();
     }
 
     @Override
@@ -153,8 +158,9 @@ class DistWorkerSplitBalancer extends StoreBalancer {
                 .findFirst();
             assert splitHintOpt.isPresent();
             SplitHint splitHint = splitHintOpt.get();
-            if (splitHint.getLoadOrDefault(LOAD_TYPE_IO_LATENCY_NANOS, 0) < ioNanosLimitPerRange &&
-                splitHint.getLoadOrDefault(LOAD_TYPE_IO_DENSITY, 0) > maxIODensityPerRange && splitHint.hasSplitKey()) {
+            if (splitHint.getLoadOrDefault(LOAD_TYPE_IO_LATENCY_NANOS, 0) < ioNanosLimitPerRange
+                && splitHint.getLoadOrDefault(LOAD_TYPE_IO_DENSITY, 0) > maxIODensityPerRange
+                && splitHint.hasSplitKey()) {
                 log.debug("Split range[{}] in store[{}]: key={}",
                     KVRangeIdUtil.toString(leaderRangeDescriptor.getId()),
                     localStoreId, splitHint.getSplitKey());

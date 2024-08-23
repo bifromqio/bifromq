@@ -18,7 +18,7 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
 import static com.baidu.bifromq.inbox.util.MessageUtil.buildGCRequest;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
+import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;

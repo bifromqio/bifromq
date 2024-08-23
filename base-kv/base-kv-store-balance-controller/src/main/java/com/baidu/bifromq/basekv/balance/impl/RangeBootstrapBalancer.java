@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.basekv.balance.impl;
 
-import static com.baidu.bifromq.basekv.balance.DescriptorUtil.getLeastEpoch;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
@@ -22,9 +22,9 @@ import com.baidu.bifromq.basekv.balance.command.BootstrapCommand;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
+import com.baidu.bifromq.basekv.utils.DescriptorUtil;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
@@ -41,7 +41,6 @@ public class RangeBootstrapBalancer extends StoreBalancer {
 
     private final Supplier<Long> millisSource;
     private final long suspicionDurationMillis;
-    private volatile Set<KVRangeStoreDescriptor> latest = Collections.emptySet();
     private AtomicReference<BootstrapTrigger> bootstrapTrigger = new AtomicReference<>();
 
     /**
@@ -86,8 +85,8 @@ public class RangeBootstrapBalancer extends StoreBalancer {
 
     @Override
     public void update(Set<KVRangeStoreDescriptor> storeDescriptors) {
-        latest = getLeastEpoch(storeDescriptors);
-        if (latest.isEmpty()) {
+        Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(storeDescriptors);
+        if (effectiveEpoch.isEmpty()) {
             if (bootstrapTrigger.get() == null) {
                 KVRangeId rangeId = KVRangeIdUtil.generate();
                 log.debug("No epoch found, schedule bootstrap command to create first full boundary range: {}",

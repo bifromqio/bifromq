@@ -11,7 +11,9 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv;
+package com.baidu.bifromq.basekv.client;
+
+import static com.baidu.bifromq.basekv.InProcStores.getInProcStores;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
@@ -23,9 +25,7 @@ import com.google.common.collect.Sets;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
@@ -33,18 +33,6 @@ import lombok.ToString;
 @EqualsAndHashCode
 @ToString
 public class KVRangeSetting {
-    private static final Map<String, Set<String>> IN_PROC_STORES = new ConcurrentHashMap<>();
-
-    public static void regInProcStore(String clusterId, String storeId) {
-        IN_PROC_STORES.compute(clusterId, (k, v) -> {
-            if (v == null) {
-                v = new HashSet<>();
-            }
-            v.add(storeId);
-            return v;
-        });
-    }
-
     private final String clusterId;
     public final KVRangeId id;
     public final long ver;
@@ -75,17 +63,17 @@ public class KVRangeSetting {
         for (String v : allVoters) {
             if (desc.getSyncStateMap().get(v) == RaftNodeSyncState.Replicating) {
                 voters.add(v);
-                if (IN_PROC_STORES.getOrDefault(clusterId, Collections.emptySet()).contains(v)) {
+                if (getInProcStores(clusterId).contains(v)) {
                     inProcVoters.add(v);
                 }
                 if (!v.equals(leaderStoreId)) {
                     followers.add(v);
-                    if (IN_PROC_STORES.getOrDefault(clusterId, Collections.emptySet()).contains(v)) {
+                    if (getInProcStores(clusterId).contains(v)) {
                         inProcFollowers.add(v);
                     }
                 }
                 allReplicas.add(v);
-                if (IN_PROC_STORES.getOrDefault(clusterId, Collections.emptySet()).contains(v)) {
+                if (getInProcStores(clusterId).contains(v)) {
                     inProcReplicas.add(v);
                 }
             }
@@ -96,7 +84,7 @@ public class KVRangeSetting {
         for (String v : allLearners) {
             if (desc.getSyncStateMap().get(v) == RaftNodeSyncState.Replicating) {
                 allReplicas.add(v);
-                if (IN_PROC_STORES.getOrDefault(clusterId, Collections.emptySet()).contains(v)) {
+                if (getInProcStores(clusterId).contains(v)) {
                     inProcReplicas.add(v);
                 }
             }
@@ -117,7 +105,7 @@ public class KVRangeSetting {
     }
 
     public String randomVoters() {
-        if (IN_PROC_STORES.getOrDefault(clusterId, Collections.emptySet()).contains(leader)) {
+        if (getInProcStores(clusterId).contains(leader)) {
             return leader;
         } else if (!inProcVoters.isEmpty()) {
             return inProcVoters.get(ThreadLocalRandom.current().nextInt(inProcVoters.size()));

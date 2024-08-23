@@ -24,7 +24,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.basekv.KVRangeSetting;
+import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;

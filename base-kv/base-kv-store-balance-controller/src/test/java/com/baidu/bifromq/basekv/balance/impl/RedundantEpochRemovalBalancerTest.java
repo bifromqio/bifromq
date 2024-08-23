@@ -32,19 +32,19 @@ import java.util.Set;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-public class RedundantReplicaRemovalBalancerTest {
+public class RedundantEpochRemovalBalancerTest {
 
-    private RedundantReplicaRemovalBalancer balancer;
+    private RedundantEpochRemovalBalancer balancer;
     private String clusterId = "testCluster";
     private String localStoreId = "localStore";
 
     @BeforeMethod
     public void setUp() {
-        balancer = new RedundantReplicaRemovalBalancer(clusterId, localStoreId);
+        balancer = new RedundantEpochRemovalBalancer(clusterId, localStoreId);
     }
 
     @Test
-    public void testNoRedundantReplicasSingleEpoch() {
+    public void noRedundantEpoch() {
         KVRangeId kvRangeId = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
         KVRangeDescriptor kvRangeDescriptor = KVRangeDescriptor.newBuilder()
             .setId(kvRangeId)
@@ -74,7 +74,7 @@ public class RedundantReplicaRemovalBalancerTest {
     }
 
     @Test
-    public void testRedundantReplicaRemoval() {
+    public void removeRangeInRedundantEpoch() {
         KVRangeId kvRangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
         KVRangeDescriptor kvRangeDescriptor1 = KVRangeDescriptor.newBuilder()
             .setId(kvRangeId1)
@@ -129,7 +129,7 @@ public class RedundantReplicaRemovalBalancerTest {
     }
 
     @Test
-    public void testNoRedundantReplicasMultipleEpochs() {
+    public void noLocalLeaderRangeInRedundantEpoch() {
         KVRangeId kvRangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
         KVRangeDescriptor kvRangeDescriptor1 = KVRangeDescriptor.newBuilder()
             .setId(kvRangeId1)

@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.basekv.client;
 
-import com.baidu.bifromq.basekv.IKVRangeRouter;
-import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.store.proto.BootstrapReply;
 import com.baidu.bifromq.basekv.store.proto.BootstrapRequest;

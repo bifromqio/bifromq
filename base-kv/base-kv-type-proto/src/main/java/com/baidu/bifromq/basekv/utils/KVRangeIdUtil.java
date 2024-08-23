@@ -27,8 +27,12 @@ public final class KVRangeIdUtil {
     }
 
     public static KVRangeId next(KVRangeId from) {
+        return next(from.getEpoch());
+    }
+
+    public static KVRangeId next(long epoch) {
         return KVRangeId.newBuilder()
-            .setEpoch(from.getEpoch()) // under same epoch
+            .setEpoch(epoch) // under same epoch
             .setId(HLC.INST.get())
             .build();
     }

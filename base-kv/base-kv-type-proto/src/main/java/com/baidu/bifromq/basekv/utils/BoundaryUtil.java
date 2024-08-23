@@ -18,8 +18,6 @@ import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.UnsafeByteOperations;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 
 public class BoundaryUtil {
@@ -27,65 +25,35 @@ public class BoundaryUtil {
     public static final Boundary EMPTY_BOUNDARY = Boundary.newBuilder().setEndKey(MIN_KEY).build();
     public static final Boundary FULL_BOUNDARY = Boundary.getDefaultInstance();
 
-    public static List<Boundary> findGaps(List<Boundary> boundaries) {
-        // Sort boundaries based on their start keys
-        boundaries.sort((b1, b2) -> {
-            // Compare startKey first
-            ByteString startKey1 = startKey(b1);
-            ByteString startKey2 = startKey(b2);
+    public static int compare(Boundary b1, Boundary b2) {
+        int startComparison = compareStartKey(startKey(b1), startKey(b2));
+        return startComparison != 0 ? startComparison : compareEndKeys(endKey(b1), endKey(b2));
+    }
 
-            if (startKey1 == null && startKey2 == null) {
-                return 0; // both are open on the left
-            }
-            if (startKey1 == null) {
-                return -1; // open on the left is less than any specific startKey
-            }
-            if (startKey2 == null) {
-                return 1; // any specific startKey is greater than open on the left
-            }
-
-            return compare(startKey1, startKey2);
-        });
-
-        List<Boundary> gaps = new ArrayList<>();
-
-        // Track the current coverage of the key space
-        ByteString currentEndKey = null;
-
-        for (Boundary boundary : boundaries) {
-            ByteString startKey = startKey(boundary);
-            ByteString endKey = endKey(boundary);
-
-            // If currentEndKey is null, this is the first range
-            if (currentEndKey == null) {
-                if (boundary.equals(FULL_BOUNDARY)) {
-                    break;
-                }
-                // check for a gap at the beginning
-                if (!isStartOpen(boundary)) {
-                    gaps.add(Boundary.newBuilder().setEndKey(startKey).build());
-                }
-            } else {
-                // Check if there is a gap between the current endKey and the next startKey
-                if (compare(currentEndKey, startKey) < 0) {
-                    gaps.add(Boundary.newBuilder().setStartKey(currentEndKey).setEndKey(startKey).build());
-                }
-            }
-
-            // Update the currentEndKey
-            currentEndKey = endKey;
-            if (currentEndKey == null) {
-                // If the range is open on the right
-                break;
-            }
+    public static int compareStartKey(ByteString key1, ByteString key2) {
+        if (key1 == null && key2 == null) {
+            return 0;
         }
-
-        // After processing all boundaries, check if there is a gap at the end
-        if (currentEndKey != null) {
-            gaps.add(Boundary.newBuilder().setStartKey(currentEndKey).build());
+        if (key1 == null) {
+            return -1;
         }
+        if (key2 == null) {
+            return 1;
+        }
+        return compare(key1, key2);
+    }
 
-        return gaps;
+    public static int compareEndKeys(ByteString key1, ByteString key2) {
+        if (key1 == null && key2 == null) {
+            return 0;
+        }
+        if (key1 == null) {
+            return 1;
+        }
+        if (key2 == null) {
+            return -1;
+        }
+        return compare(key1, key2);
     }
 
     public static boolean isValid(ByteString start, ByteString end) {
@@ -355,6 +323,4 @@ public class BoundaryUtil {
     public static boolean isClose(Boundary boundary) {
         return boundary.hasStartKey() && boundary.hasEndKey();
     }
-
-
 }

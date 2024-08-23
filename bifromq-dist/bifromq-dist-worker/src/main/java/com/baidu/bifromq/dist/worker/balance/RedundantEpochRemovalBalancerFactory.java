@@ -11,18 +11,16 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv;
+package com.baidu.bifromq.dist.worker.balance;
 
-import com.baidu.bifromq.basekv.proto.Boundary;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.google.protobuf.ByteString;
-import java.util.List;
-import java.util.Optional;
+import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
+import com.baidu.bifromq.basekv.balance.StoreBalancer;
+import com.baidu.bifromq.basekv.balance.impl.RedundantEpochRemovalBalancer;
 
-public interface IKVRangeRouter {
-    Optional<KVRangeSetting> findById(KVRangeId id);
+public class RedundantEpochRemovalBalancerFactory implements IStoreBalancerFactory {
 
-    Optional<KVRangeSetting> findByKey(ByteString key);
-
-    List<KVRangeSetting> findByBoundary(Boundary boundary);
+    @Override
+    public StoreBalancer newBalancer(String clusterId, String localStoreId) {
+        return new RedundantEpochRemovalBalancer(clusterId, localStoreId);
+    }
 }

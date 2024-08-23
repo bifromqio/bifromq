@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.balance.impl;
 
-import static com.baidu.bifromq.basekv.balance.DescriptorUtil.getLeastEpoch;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
 
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
@@ -21,6 +21,7 @@ import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.proto.State.StateType;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
+import com.baidu.bifromq.basekv.utils.DescriptorUtil;
 import com.google.common.collect.Sets;
 import java.util.Collections;
 import java.util.Comparator;
@@ -43,7 +44,11 @@ public class ReplicaCntBalancer extends StoreBalancer {
 
     @Override
     public void update(Set<KVRangeStoreDescriptor> storeDescriptors) {
-        this.latestStoreDescriptors = getLeastEpoch(storeDescriptors);
+        Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(storeDescriptors);
+        if (effectiveEpoch.isEmpty()) {
+            return;
+        }
+        latestStoreDescriptors = effectiveEpoch.get().storeDescriptors();
     }
 
     @Override

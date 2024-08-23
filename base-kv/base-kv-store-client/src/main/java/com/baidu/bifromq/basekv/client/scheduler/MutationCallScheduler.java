@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.client.scheduler;
 
-import com.baidu.bifromq.basekv.KVRangeSetting;
+import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.google.protobuf.ByteString;

@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.store;
 
-import static com.baidu.bifromq.basekv.KVRangeSetting.regInProcStore;
+import static com.baidu.bifromq.basekv.InProcStores.regInProcStore;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Normal;
 import static com.baidu.bifromq.basekv.store.exception.KVRangeStoreException.rangeNotFound;
 import static com.baidu.bifromq.basekv.store.util.ExecutorServiceUtil.awaitShutdown;

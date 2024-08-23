@@ -11,8 +11,9 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv;
+package com.baidu.bifromq.basekv.client;
 
+import static com.baidu.bifromq.basekv.InProcStores.regInProcStore;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
@@ -34,7 +35,7 @@ public class KVRangeSettingTest {
 
     @Test
     public void preferInProc() {
-        KVRangeSetting.regInProcStore(clusterId, localVoter);
+        regInProcStore(clusterId, localVoter);
         KVRangeSetting setting = new KVRangeSetting(clusterId, remoteVoter1, KVRangeDescriptor.newBuilder()
             .setId(KVRangeIdUtil.generate())
             .setRole(RaftNodeStatus.Leader)

@@ -65,7 +65,8 @@ public class StateStoreConfig {
             balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.ReplicaCntBalancerFactory");
             balanceConfig.balancers.add(
                 "com.baidu.bifromq.dist.worker.balance.UnreachableReplicaRemovalBalancerFactory");
-            balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.RedundantReplicaRemovalBalancerFactory");
+            balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.RangeBootstrapBalancerFactory");
+            balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.RedundantEpochRemovalBalancerFactory");
         }
     }
 
@@ -91,8 +92,8 @@ public class StateStoreConfig {
             balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.RangeLeaderBalancerFactory");
             balanceConfig.balancers.add(
                 "com.baidu.bifromq.inbox.store.balance.UnreachableReplicaRemovalBalancerFactory");
-            balanceConfig.balancers.add(
-                "com.baidu.bifromq.inbox.store.balance.RedundantReplicaRemovalBalancerFactory");
+            balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.RangeBootstrapBalancerFactory");
+            balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.RedundantEpochRemovalBalancerFactory");
         }
     }
 
@@ -116,8 +117,8 @@ public class StateStoreConfig {
             balanceConfig.balancers.add("com.baidu.bifromq.retain.store.balance.ReplicaCntBalancerFactory");
             balanceConfig.balancers.add(
                 "com.baidu.bifromq.retain.store.balance.UnreachableReplicaRemovalBalancerFactory");
-            balanceConfig.balancers.add(
-                "com.baidu.bifromq.retain.store.balance.RedundantReplicaRemovalBalancerFactory");
+            balanceConfig.balancers.add("com.baidu.bifromq.retain.store.balance.RangeBootstrapBalancerFactory");
+            balanceConfig.balancers.add("com.baidu.bifromq.retain.store.balance.RedundantEpochRemovalBalancerFactory");
         }
     }
 }

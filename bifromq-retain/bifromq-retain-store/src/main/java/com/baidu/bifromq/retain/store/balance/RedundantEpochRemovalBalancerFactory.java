@@ -11,16 +11,16 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.inbox.store.balance;
+package com.baidu.bifromq.retain.store.balance;
 
 import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
-import com.baidu.bifromq.basekv.balance.impl.RedundantReplicaRemovalBalancer;
+import com.baidu.bifromq.basekv.balance.impl.RedundantEpochRemovalBalancer;
 
-public class RedundantReplicaRemovalBalancerFactory implements IStoreBalancerFactory {
+public class RedundantEpochRemovalBalancerFactory implements IStoreBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {
-        return new RedundantReplicaRemovalBalancer(clusterId, localStoreId);
+        return new RedundantEpochRemovalBalancer(clusterId, localStoreId);
     }
 }

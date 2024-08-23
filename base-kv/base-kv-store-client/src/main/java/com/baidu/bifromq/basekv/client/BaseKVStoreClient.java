@@ -26,12 +26,11 @@ import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getQue
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getRecoverMethod;
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getSplitMethod;
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getTransferLeadershipMethod;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static java.util.Collections.emptyMap;
 
 import com.baidu.bifromq.basecrdt.core.api.IORMap;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.basekv.KVRangeRouterManager;
-import com.baidu.bifromq.basekv.KVRangeSetting;
 import com.baidu.bifromq.basekv.RPCBluePrint;
 import com.baidu.bifromq.basekv.exception.BaseKVException;
 import com.baidu.bifromq.basekv.proto.Boundary;
@@ -93,7 +92,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     private final ICRDTService crdtService;
     private final AtomicBoolean closed = new AtomicBoolean();
     private final CompositeDisposable disposables = new CompositeDisposable();
-    private final KVRangeRouterManager routerManager;
+    private final KVRangeRouter rangeRouter;
     private final int queryPipelinesPerStore;
     private final IORMap storeDescriptorCRDT;
     private final MethodDescriptor<BootstrapRequest, BootstrapReply> bootstrapMethod;
@@ -122,7 +121,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     BaseKVStoreClient(BaseKVStoreClientBuilder builder) {
         this.clusterId = builder.clusterId;
         log = SiftLogger.getLogger(BaseKVStoreClient.class, "clusterId", clusterId);
-        routerManager = new KVRangeRouterManager(clusterId);
+        rangeRouter = new KVRangeRouter(clusterId);
         BluePrint bluePrint = RPCBluePrint.build(clusterId);
         this.bootstrapMethod = bluePrint.methodDesc(
             toScopedFullMethodName(clusterId, getBootstrapMethod().getFullMethodName()));
@@ -190,18 +189,13 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     }
 
     @Override
-    public Optional<KVRangeSetting> findById(KVRangeId id) {
-        return routerManager.findById(id);
-    }
-
-    @Override
     public Optional<KVRangeSetting> findByKey(ByteString key) {
-        return routerManager.findByKey(key);
+        return rangeRouter.findByKey(key);
     }
 
     @Override
     public List<KVRangeSetting> findByBoundary(Boundary boundary) {
-        return routerManager.findByBoundary(boundary);
+        return rangeRouter.findByBoundary(boundary);
     }
 
     @Override
@@ -409,10 +403,10 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     @Override
     public void join() {
         // wait for router covering full range
-        if (!routerManager.isFullRangeCovered()) {
+        if (!rangeRouter.isFullRangeCovered()) {
             synchronized (this) {
                 try {
-                    if (!routerManager.isFullRangeCovered()) {
+                    if (!rangeRouter.isFullRangeCovered()) {
                         this.wait();
                     }
                 } catch (InterruptedException e) {
@@ -467,7 +461,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
             refreshMutPipelines(storeToServerMap, clusterInfo.storeDescriptors);
         }
         if (rangeRouteUpdated) {
-            if (routerManager.isFullRangeCovered()) {
+            if (rangeRouter.isFullRangeCovered()) {
                 synchronized (this) {
                     this.notifyAll();
                 }
@@ -476,11 +470,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     }
 
     private boolean refreshRangeRoute(ClusterInfo clusterInfo) {
-        boolean changed = false;
-        for (Map.Entry<String, KVRangeStoreDescriptor> entry : clusterInfo.storeDescriptors.entrySet()) {
-            changed |= routerManager.upsert(entry.getValue());
-        }
-        return changed;
+        return rangeRouter.reset(Sets.newHashSet(clusterInfo.storeDescriptors.values()));
     }
 
     private boolean refreshStoreRoute(ClusterInfo clusterInfo) {
@@ -501,7 +491,6 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         Map<String, Map<KVRangeId, IMutationPipeline>> nextMutPplns = Maps.newHashMap(mutPplns);
         nextMutPplns.forEach((k, v) -> nextMutPplns.put(k, Maps.newHashMap(v)));
         Set<String> oldStoreIds = Sets.newHashSet(mutPplns.keySet());
-
         for (String existingStoreId : Sets.intersection(newStoreToServerMap.keySet(), oldStoreIds)) {
             Set<KVRangeId> newRangeIds = storeDescriptorMap.get(existingStoreId).getRangesList().stream()
                 .map(KVRangeDescriptor::getId).collect(Collectors.toSet());
@@ -514,11 +503,16 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                 nextMutPplns.get(existingStoreId).remove(deadRangeId).close();
             }
         }
+        Set<KVRangeId> effectiveKVRangeIds = rangeRouter.findByBoundary(FULL_BOUNDARY).stream()
+            .map(m -> m.id).collect(Collectors.toSet());
         for (String newStoreId : Sets.difference(newStoreToServerMap.keySet(), oldStoreIds)) {
             Map<KVRangeId, IMutationPipeline> rangeExecPplns =
                 nextMutPplns.computeIfAbsent(newStoreId, k -> new HashMap<>());
             for (KVRangeDescriptor rangeDesc : storeDescriptorMap.get(newStoreId).getRangesList()) {
-                rangeExecPplns.put(rangeDesc.getId(), new MutPipeline(newStoreToServerMap.get(newStoreId)));
+                if (effectiveKVRangeIds.contains(rangeDesc.getId())) {
+                    // only create mutation pipelines for effective ranges
+                    rangeExecPplns.put(rangeDesc.getId(), new MutPipeline(newStoreToServerMap.get(newStoreId)));
+                }
             }
         }
 

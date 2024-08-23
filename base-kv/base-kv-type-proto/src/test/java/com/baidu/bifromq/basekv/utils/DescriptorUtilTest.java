@@ -11,10 +11,10 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.balance;
+package com.baidu.bifromq.basekv.utils;
 
-import static com.baidu.bifromq.basekv.balance.DescriptorUtil.getLeastEpoch;
-import static com.baidu.bifromq.basekv.balance.DescriptorUtil.organizeByEpoch;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.organizeByEpoch;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
@@ -213,7 +213,7 @@ public class DescriptorUtilTest {
         storeDescriptors.add(storeDescriptor1);
 
         // Execute the method
-        NavigableMap<Long, Set<KVRangeStoreDescriptor>> result = DescriptorUtil.organizeByEpoch(storeDescriptors);
+        NavigableMap<Long, Set<KVRangeStoreDescriptor>> result = organizeByEpoch(storeDescriptors);
 
         // Validate the result
         assertEquals(result.size(), 2);
@@ -267,7 +267,7 @@ public class DescriptorUtilTest {
         storeDescriptors.add(storeDescriptor2);
 
         // Execute the method
-        NavigableMap<Long, Set<KVRangeStoreDescriptor>> result = DescriptorUtil.organizeByEpoch(storeDescriptors);
+        NavigableMap<Long, Set<KVRangeStoreDescriptor>> result = organizeByEpoch(storeDescriptors);
 
         // Validate the result
         assertEquals(result.size(), 1); // Should contain two epochs
@@ -307,14 +307,14 @@ public class DescriptorUtilTest {
         storeDescriptors.add(storeDescriptor2);
 
         // Execute the method
-        NavigableMap<Long, Set<KVRangeStoreDescriptor>> result = DescriptorUtil.organizeByEpoch(storeDescriptors);
+        NavigableMap<Long, Set<KVRangeStoreDescriptor>> result = organizeByEpoch(storeDescriptors);
 
         // Validate the result
         assertTrue(result.isEmpty()); // Should be empty since no epochs or ranges are present
     }
 
     @Test
-    public void testGetLeastEpochSingleEpoch() {
+    public void testGetEffectiveEpochSingleEpoch() {
         // Prepare data with a single epoch
         KVRangeId kvRangeId = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
         KVRangeDescriptor kvRangeDescriptor = KVRangeDescriptor.newBuilder()
@@ -336,7 +336,7 @@ public class DescriptorUtilTest {
         storeDescriptors.add(storeDescriptor);
 
         // Execute the method
-        Set<KVRangeStoreDescriptor> result = getLeastEpoch(storeDescriptors);
+        Set<KVRangeStoreDescriptor> result = getEffectiveEpoch(storeDescriptors).get().storeDescriptors();
 
         // Validate the result
         assertEquals(result.size(), 1);
@@ -344,7 +344,7 @@ public class DescriptorUtilTest {
     }
 
     @Test
-    public void testGetLeastEpochMultipleEpochs() {
+    public void testGetEffectiveEpochMultipleEpochs() {
         // Prepare data with multiple epochs
         KVRangeId kvRangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
         KVRangeDescriptor kvRangeDescriptor1 = KVRangeDescriptor.newBuilder()
@@ -383,7 +383,7 @@ public class DescriptorUtilTest {
         storeDescriptors.add(storeDescriptor2);
 
         // Execute the method
-        Set<KVRangeStoreDescriptor> result = getLeastEpoch(storeDescriptors);
+        Set<KVRangeStoreDescriptor> result = getEffectiveEpoch(storeDescriptors).get().storeDescriptors();
 
         // Validate the result
         assertEquals(result.size(), 2);
@@ -391,19 +391,16 @@ public class DescriptorUtilTest {
     }
 
     @Test
-    public void testGetLeastEpochEmptySet() {
+    public void testGetEffectiveEpochEmptySet() {
         // Prepare an empty set of store descriptors
         Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
 
-        // Execute the method
-        Set<KVRangeStoreDescriptor> result = getLeastEpoch(storeDescriptors);
-
         // Validate the result
-        assertTrue(result.isEmpty());
+        assertTrue(getEffectiveEpoch(storeDescriptors).isEmpty());
     }
 
     @Test
-    public void testGetLeastEpochMultipleRangesSameStoreDifferentEpochs() {
+    public void testGetEffectiveEpochMultipleRangesSameStoreDifferentEpochs() {
         // Prepare data with multiple ranges in the same store but different epochs
         KVRangeId kvRangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
         KVRangeDescriptor kvRangeDescriptor1 = KVRangeDescriptor.newBuilder()
@@ -435,7 +432,7 @@ public class DescriptorUtilTest {
         storeDescriptors.add(storeDescriptor);
 
         // Execute the method
-        Set<KVRangeStoreDescriptor> result = getLeastEpoch(storeDescriptors);
+        Set<KVRangeStoreDescriptor> result = getEffectiveEpoch(storeDescriptors).get().storeDescriptors();
 
         // Validate the result
         assertEquals(result.size(), 1);

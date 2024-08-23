@@ -11,16 +11,15 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.worker.balance;
+package com.baidu.bifromq.basekv.client;
 
-import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
-import com.baidu.bifromq.basekv.balance.StoreBalancer;
-import com.baidu.bifromq.basekv.balance.impl.RedundantReplicaRemovalBalancer;
+import com.baidu.bifromq.basekv.proto.Boundary;
+import com.google.protobuf.ByteString;
+import java.util.List;
+import java.util.Optional;
 
-public class RedundantReplicaRemovalBalancerFactory implements IStoreBalancerFactory {
+public interface IKVRangeRouter {
+    Optional<KVRangeSetting> findByKey(ByteString key);
 
-    @Override
-    public StoreBalancer newBalancer(String clusterId, String localStoreId) {
-        return new RedundantReplicaRemovalBalancer(clusterId, localStoreId);
-    }
+    List<KVRangeSetting> findByBoundary(Boundary boundary);
 }

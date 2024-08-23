@@ -11,10 +11,11 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.balance;
+package com.baidu.bifromq.basekv.utils;
 
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
+import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -58,17 +59,40 @@ public class DescriptorUtil {
         return epochMap;
     }
 
+    public record EffectiveEpoch(long epoch, Set<KVRangeStoreDescriptor> storeDescriptors) {
+    }
+
     /**
      * Get the storeDescriptors with the least epoch.
      *
      * @param storeDescriptors storeDescriptors
      * @return storeDescriptors with the least epoch
      */
-    public static Set<KVRangeStoreDescriptor> getLeastEpoch(Set<KVRangeStoreDescriptor> storeDescriptors) {
+    public static Optional<EffectiveEpoch> getEffectiveEpoch(Set<KVRangeStoreDescriptor> storeDescriptors) {
         NavigableMap<Long, Set<KVRangeStoreDescriptor>> storeDescriptorsByEpoch = organizeByEpoch(storeDescriptors);
         if (storeDescriptorsByEpoch.isEmpty()) {
-            return new HashSet<>();
+            return Optional.empty();
         }
-        return storeDescriptorsByEpoch.firstEntry().getValue();
+        return Optional.of(
+            new EffectiveEpoch(storeDescriptorsByEpoch.firstKey(), storeDescriptorsByEpoch.firstEntry().getValue()));
+    }
+
+    /**
+     * Get the leader rangeDescriptors, and organize them by storeId.
+     *
+     * @param storeDescriptors storeDescriptors of a epoch
+     * @return leader rangeDescriptors organized by storeId
+     */
+    public static Map<String, Set<KVRangeDescriptor>> filterLeaderRanges(Set<KVRangeStoreDescriptor> storeDescriptors) {
+        Map<String, Set<KVRangeDescriptor>> leaderRangesByStoreId = new HashMap<>();
+        for (KVRangeStoreDescriptor storeDescriptor : storeDescriptors) {
+            for (KVRangeDescriptor rangeDescriptor : storeDescriptor.getRangesList()) {
+                if (rangeDescriptor.getRole() == RaftNodeStatus.Leader) {
+                    leaderRangesByStoreId.computeIfAbsent(storeDescriptor.getId(), k -> new HashSet<>())
+                        .add(rangeDescriptor);
+                }
+            }
+        }
+        return leaderRangesByStoreId;
     }
 }
