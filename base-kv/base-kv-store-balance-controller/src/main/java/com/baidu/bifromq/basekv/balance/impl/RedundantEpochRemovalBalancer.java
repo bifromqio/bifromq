@@ -27,7 +27,15 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * The balancer is used to remove redundant range which is in higher epoch from the store.
+ * The RedundantEpochRemovalBalancer is a specialized StoreBalancer designed to manage and remove redundant replicas
+ * associated with higher epochs in a distributed key-value store. This balancer is primarily focused on ensuring that
+ * only the necessary replicas from the OLDEST epoch remain active, while redundant replicas generated during bootstrap
+ * or startup are removed.
+ *
+ * <p><b>WARNING:</b> This balancer treats the oldest epoch as the valid epoch. If a node with an older epoch is
+ * introduced into a working cluster, it may lead to the removal of replicas from nodes that were previously functioning
+ * correctly. This behavior can potentially disrupt the stability of the cluster and should be handled with
+ * caution.</p>
  */
 public class RedundantEpochRemovalBalancer extends StoreBalancer {
     private volatile NavigableMap<Long, Set<KVRangeStoreDescriptor>> latest = Collections.emptyNavigableMap();

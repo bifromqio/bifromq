@@ -22,6 +22,7 @@ import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
+import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.google.protobuf.ByteString;
 import java.util.HashSet;
 import java.util.Map;
@@ -32,7 +33,7 @@ import org.testng.annotations.Test;
 public class DescriptorUtilTest {
 
     @Test
-    public void testOrganizeByEpochSingleEpoch() {
+    public void organizeByEpochSingleEpoch() {
         // Prepare data with a single epoch
         KVRangeId kvRangeId = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
         KVRangeDescriptor kvRangeDescriptor = KVRangeDescriptor.newBuilder()
@@ -68,7 +69,7 @@ public class DescriptorUtilTest {
     }
 
     @Test
-    public void testOrganizeByEpochMultipleEpochs() {
+    public void organizeByEpochMultipleEpochs() {
         // Prepare data with multiple epochs
         KVRangeId kvRangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
         KVRangeDescriptor kvRangeDescriptor1 = KVRangeDescriptor.newBuilder()
@@ -124,7 +125,7 @@ public class DescriptorUtilTest {
     }
 
     @Test
-    public void testOrganizeByEpochMultipleRangesSameStoreDifferentEpochs() {
+    public void organizeByEpochMultipleRangesSameStoreDifferentEpochs() {
         // Prepare data with multiple ranges in the same store but different epochs
         KVRangeId kvRangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
         KVRangeDescriptor kvRangeDescriptor1 = KVRangeDescriptor.newBuilder()
@@ -181,7 +182,7 @@ public class DescriptorUtilTest {
     }
 
     @Test
-    public void testOrganizeByEpochWithMissingEpoch() {
+    public void organizeByEpochWithMissingEpoch() {
         // Prepare data with multiple epochs and some missing epochs
         KVRangeId kvRangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
         KVRangeDescriptor kvRangeDescriptor1 = KVRangeDescriptor.newBuilder()
@@ -238,7 +239,7 @@ public class DescriptorUtilTest {
     }
 
     @Test
-    public void testOrganizeByEpochWithEmptyKVRangeDescriptorInEpoch() {
+    public void organizeByEpochWithEmptyKVRangeDescriptorInEpoch() {
         // Prepare data with multiple epochs, but some epoch lacks KVRangeDescriptor
         KVRangeId kvRangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
         KVRangeDescriptor kvRangeDescriptor1 = KVRangeDescriptor.newBuilder()
@@ -288,7 +289,7 @@ public class DescriptorUtilTest {
     }
 
     @Test
-    public void testOrganizeByEpochAllEmptyEpochs() {
+    public void organizeByEpochAllEmptyEpochs() {
         // Prepare data with stores having no ranges but different epochs
         KVRangeStoreDescriptor storeDescriptor1 = KVRangeStoreDescriptor.newBuilder()
             .setId("store1")
@@ -314,7 +315,7 @@ public class DescriptorUtilTest {
     }
 
     @Test
-    public void testGetEffectiveEpochSingleEpoch() {
+    public void getEffectiveEpochSingleEpoch() {
         // Prepare data with a single epoch
         KVRangeId kvRangeId = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
         KVRangeDescriptor kvRangeDescriptor = KVRangeDescriptor.newBuilder()
@@ -344,7 +345,7 @@ public class DescriptorUtilTest {
     }
 
     @Test
-    public void testGetEffectiveEpochMultipleEpochs() {
+    public void getEffectiveEpochMultipleEpochs() {
         // Prepare data with multiple epochs
         KVRangeId kvRangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
         KVRangeDescriptor kvRangeDescriptor1 = KVRangeDescriptor.newBuilder()
@@ -391,7 +392,7 @@ public class DescriptorUtilTest {
     }
 
     @Test
-    public void testGetEffectiveEpochEmptySet() {
+    public void getEffectiveEpochEmptySet() {
         // Prepare an empty set of store descriptors
         Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
 
@@ -400,7 +401,7 @@ public class DescriptorUtilTest {
     }
 
     @Test
-    public void testGetEffectiveEpochMultipleRangesSameStoreDifferentEpochs() {
+    public void getEffectiveEpochMultipleRangesSameStoreDifferentEpochs() {
         // Prepare data with multiple ranges in the same store but different epochs
         KVRangeId kvRangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
         KVRangeDescriptor kvRangeDescriptor1 = KVRangeDescriptor.newBuilder()
@@ -440,5 +441,127 @@ public class DescriptorUtilTest {
         assertEquals(resultDescriptor.getRangesCount(), 1);
         assertEquals(resultDescriptor.getRanges(0).getId().getEpoch(), 1L);
         assertEquals(resultDescriptor.getRanges(0).getId(), kvRangeId1);
+    }
+
+    @Test
+    public void toLeaderRangesWithLeaders() {
+        KVRangeId rangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
+        KVRangeDescriptor rangeDescriptor1 = KVRangeDescriptor.newBuilder()
+            .setId(rangeId1)
+            .setRole(RaftNodeStatus.Leader)
+            .setBoundary(Boundary.newBuilder()
+                .setStartKey(ByteString.copyFromUtf8("a"))
+                .setEndKey(ByteString.copyFromUtf8("m"))
+                .build())
+            .build();
+
+        KVRangeId rangeId2 = KVRangeId.newBuilder().setEpoch(1).setId(2).build();
+        KVRangeDescriptor rangeDescriptor2 = KVRangeDescriptor.newBuilder()
+            .setId(rangeId2)
+            .setRole(RaftNodeStatus.Leader)
+            .setBoundary(Boundary.newBuilder()
+                .setStartKey(ByteString.copyFromUtf8("n"))
+                .setEndKey(ByteString.copyFromUtf8("z"))
+                .build())
+            .build();
+
+        KVRangeStoreDescriptor storeDescriptor1 = KVRangeStoreDescriptor.newBuilder()
+            .setId("store1")
+            .addRanges(rangeDescriptor1)
+            .addRanges(rangeDescriptor2)
+            .build();
+
+        Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
+        storeDescriptors.add(storeDescriptor1);
+
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> leaderRanges = DescriptorUtil.toLeaderRanges(storeDescriptors);
+
+        assertEquals(leaderRanges.size(), 1);
+        assertTrue(leaderRanges.containsKey("store1"));
+        assertEquals(leaderRanges.get("store1").size(), 2);
+        assertEquals(leaderRanges.get("store1").get(rangeId1), rangeDescriptor1);
+        assertEquals(leaderRanges.get("store1").get(rangeId2), rangeDescriptor2);
+    }
+
+    @Test
+    public void toLeaderRangesWithNoLeaders() {
+        KVRangeId rangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
+        KVRangeDescriptor rangeDescriptor1 = KVRangeDescriptor.newBuilder()
+            .setId(rangeId1)
+            .setRole(RaftNodeStatus.Follower)
+            .setBoundary(Boundary.newBuilder()
+                .setStartKey(ByteString.copyFromUtf8("a"))
+                .setEndKey(ByteString.copyFromUtf8("m"))
+                .build())
+            .build();
+
+        KVRangeStoreDescriptor storeDescriptor1 = KVRangeStoreDescriptor.newBuilder()
+            .setId("store1")
+            .addRanges(rangeDescriptor1)
+            .build();
+
+        Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
+        storeDescriptors.add(storeDescriptor1);
+
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> leaderRanges = DescriptorUtil.toLeaderRanges(storeDescriptors);
+
+        assertEquals(leaderRanges.size(), 1);
+        assertTrue(leaderRanges.containsKey("store1"));
+        assertEquals(leaderRanges.get("store1").size(), 0);
+    }
+
+    @Test
+    public void toLeaderRangesWithMultipleStores() {
+        KVRangeId rangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
+        KVRangeDescriptor rangeDescriptor1 = KVRangeDescriptor.newBuilder()
+            .setId(rangeId1)
+            .setRole(RaftNodeStatus.Leader)
+            .setBoundary(Boundary.newBuilder()
+                .setStartKey(ByteString.copyFromUtf8("a"))
+                .setEndKey(ByteString.copyFromUtf8("m"))
+                .build())
+            .build();
+
+        KVRangeId rangeId2 = KVRangeId.newBuilder().setEpoch(1).setId(2).build();
+        KVRangeDescriptor rangeDescriptor2 = KVRangeDescriptor.newBuilder()
+            .setId(rangeId2)
+            .setRole(RaftNodeStatus.Follower)
+            .setBoundary(Boundary.newBuilder()
+                .setStartKey(ByteString.copyFromUtf8("n"))
+                .setEndKey(ByteString.copyFromUtf8("z"))
+                .build())
+            .build();
+
+        KVRangeStoreDescriptor storeDescriptor1 = KVRangeStoreDescriptor.newBuilder()
+            .setId("store1")
+            .addRanges(rangeDescriptor1)
+            .build();
+
+        KVRangeStoreDescriptor storeDescriptor2 = KVRangeStoreDescriptor.newBuilder()
+            .setId("store2")
+            .addRanges(rangeDescriptor2)
+            .build();
+
+        Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
+        storeDescriptors.add(storeDescriptor1);
+        storeDescriptors.add(storeDescriptor2);
+
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> leaderRanges = DescriptorUtil.toLeaderRanges(storeDescriptors);
+
+        assertEquals(leaderRanges.size(), 2);
+        assertTrue(leaderRanges.containsKey("store1"));
+        assertTrue(leaderRanges.containsKey("store2"));
+        assertEquals(leaderRanges.get("store1").size(), 1);
+        assertEquals(leaderRanges.get("store2").size(), 0);
+        assertEquals(leaderRanges.get("store1").get(rangeId1), rangeDescriptor1);
+    }
+
+    @Test
+    public void toLeaderRangesEmptyStoreDescriptors() {
+        Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
+
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> leaderRanges = DescriptorUtil.toLeaderRanges(storeDescriptors);
+
+        assertTrue(leaderRanges.isEmpty());
     }
 }

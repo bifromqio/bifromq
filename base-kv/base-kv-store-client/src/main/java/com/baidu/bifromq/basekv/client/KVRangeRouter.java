@@ -15,11 +15,12 @@ package com.baidu.bifromq.basekv.client;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compareEndKeys;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.endKey;
-import static com.baidu.bifromq.basekv.utils.DescriptorUtil.filterLeaderRanges;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.toLeaderRanges;
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
+import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.basekv.utils.DescriptorUtil;
@@ -54,7 +55,8 @@ public class KVRangeRouter implements IKVRangeRouter {
         if (effectiveEpoch.isEmpty()) {
             return false;
         }
-        Map<String, Set<KVRangeDescriptor>> leaderRanges = filterLeaderRanges(effectiveEpoch.get().storeDescriptors());
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> leaderRanges =
+            toLeaderRanges(effectiveEpoch.get().storeDescriptors());
         KeySpaceDAG dag = new KeySpaceDAG(leaderRanges);
         NavigableMap<Boundary, KVRangeSetting> router = Maps.transformValues(dag.getEffectiveFullCoveredRoute(),
             leaderRange -> new KVRangeSetting(clusterId, leaderRange.storeId(), leaderRange.descriptor()));

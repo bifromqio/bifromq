@@ -20,19 +20,16 @@ import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.google.protobuf.ByteString;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.Set;
 import org.testng.annotations.Test;
 
 public class KeySpaceDAGTest {
     @Test
     public void getEffectiveFullCoveredRoute() {
-        Map<String, Set<KVRangeDescriptor>> rangeDescriptorsByStoreId;
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> rangeDescriptorsByStoreId;
         rangeDescriptorsByStoreId = new HashMap<>();
 
         // Create KVRangeDescriptors that cover the entire key space
@@ -74,7 +71,13 @@ public class KeySpaceDAGTest {
                 .build())
             .build();
 
-        Set<KVRangeDescriptor> store1 = new HashSet<>(Arrays.asList(range1, range2, range3, range4, range5));
+        Map<KVRangeId, KVRangeDescriptor> store1 = new HashMap<>() {{
+            put(range1.getId(), range1);
+            put(range2.getId(), range2);
+            put(range3.getId(), range3);
+            put(range4.getId(), range4);
+            put(range5.getId(), range5);
+        }};
 
         rangeDescriptorsByStoreId.put("store1", store1);
 
@@ -113,7 +116,7 @@ public class KeySpaceDAGTest {
 
     @Test
     public void overlappingKeySpace() {
-        Map<String, Set<KVRangeDescriptor>> rangeDescriptorsByStoreId = new HashMap<>();
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> rangeDescriptorsByStoreId = new HashMap<>();
 
         KVRangeDescriptor range1 = KVRangeDescriptor.newBuilder()
             .setId(KVRangeId.newBuilder().setId(1).setEpoch(1).build())
@@ -154,8 +157,13 @@ public class KeySpaceDAGTest {
                 .build())
             .build();
 
-        Set<KVRangeDescriptor> store1 = new HashSet<>(Arrays.asList(range1, range2, range3, range4, range5));
-
+        Map<KVRangeId, KVRangeDescriptor> store1 = new HashMap<>() {{
+            put(range1.getId(), range1);
+            put(range2.getId(), range2);
+            put(range3.getId(), range3);
+            put(range4.getId(), range4);
+            put(range5.getId(), range5);
+        }};
         rangeDescriptorsByStoreId.put("store1", store1);
 
         KeySpaceDAG dag = new KeySpaceDAG(rangeDescriptorsByStoreId);
@@ -189,7 +197,7 @@ public class KeySpaceDAGTest {
 
     @Test
     public void differentStoreId() {
-        Map<String, Set<KVRangeDescriptor>> rangeDescriptorsByStoreId = new HashMap<>();
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> rangeDescriptorsByStoreId = new HashMap<>();
 
         KVRangeDescriptor range1 = KVRangeDescriptor.newBuilder()
             .setId(KVRangeId.newBuilder().setId(1).setEpoch(1).build())
@@ -228,8 +236,15 @@ public class KeySpaceDAGTest {
                 .build())
             .build();
 
-        Set<KVRangeDescriptor> store1 = new HashSet<>(Arrays.asList(range1, range2, range3, range5Store1));
-        Set<KVRangeDescriptor> store2 = new HashSet<>(Arrays.asList(range4Store2));
+        Map<KVRangeId, KVRangeDescriptor> store1 = new HashMap<>() {{
+            put(range1.getId(), range1);
+            put(range2.getId(), range2);
+            put(range3.getId(), range3);
+            put(range5Store1.getId(), range5Store1);
+        }};
+        Map<KVRangeId, KVRangeDescriptor> store2 = new HashMap<>() {{
+            put(range4Store2.getId(), range4Store2);
+        }};
 
         rangeDescriptorsByStoreId.put("store1", store1);
         rangeDescriptorsByStoreId.put("store2", store2);
@@ -265,7 +280,7 @@ public class KeySpaceDAGTest {
 
     @Test
     public void keySpaceWithGaps() {
-        Map<String, Set<KVRangeDescriptor>> rangeDescriptorsByStoreId = new HashMap<>();
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> rangeDescriptorsByStoreId = new HashMap<>();
 
         KVRangeDescriptor range1 = KVRangeDescriptor.newBuilder()
             .setId(KVRangeId.newBuilder().setId(1).setEpoch(1).build())
@@ -288,9 +303,13 @@ public class KeySpaceDAGTest {
                 .setStartKey(ByteString.copyFromUtf8("c")) // [“c”, null)
                 .build())
             .build();
-        Set<KVRangeDescriptor> store1 = new HashSet<>(Arrays.asList(range1, range2, range3));
+        Map<KVRangeId, KVRangeDescriptor> ranges = new HashMap<>() {{
+            put(range1.getId(), range1);
+            put(range2.getId(), range2);
+            put(range3.getId(), range3);
+        }};
 
-        rangeDescriptorsByStoreId.put("store1", store1);
+        rangeDescriptorsByStoreId.put("store1", ranges);
 
         KeySpaceDAG dag = new KeySpaceDAG(rangeDescriptorsByStoreId);
 
@@ -324,8 +343,13 @@ public class KeySpaceDAGTest {
                 .build())
             .build();
 
-        Set<KVRangeDescriptor> ranges = new HashSet<>(Arrays.asList(range1, range2, range3));
-        Map<String, Set<KVRangeDescriptor>> storeMap = new HashMap<>();
+        Map<KVRangeId, KVRangeDescriptor> ranges = new HashMap<>() {{
+            put(range1.getId(), range1);
+            put(range2.getId(), range2);
+            put(range3.getId(), range3);
+        }};
+
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> storeMap = new HashMap<>();
         storeMap.put("store1", ranges);
 
         KeySpaceDAG dag = new KeySpaceDAG(storeMap);
@@ -360,8 +384,12 @@ public class KeySpaceDAGTest {
                 .build())
             .build();
 
-        Set<KVRangeDescriptor> ranges = new HashSet<>(Arrays.asList(range1, range2, range3));
-        Map<String, Set<KVRangeDescriptor>> storeMap = new HashMap<>();
+        Map<KVRangeId, KVRangeDescriptor> ranges = new HashMap<>() {{
+            put(range1.getId(), range1);
+            put(range2.getId(), range2);
+            put(range3.getId(), range3);
+        }};
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> storeMap = new HashMap<>();
         storeMap.put("store1", ranges);
 
         KeySpaceDAG dag = new KeySpaceDAG(storeMap);
@@ -410,8 +438,12 @@ public class KeySpaceDAGTest {
                 .build())
             .build();
 
-        Set<KVRangeDescriptor> ranges = new HashSet<>(Arrays.asList(range1, range2, range3));
-        Map<String, Set<KVRangeDescriptor>> storeMap = new HashMap<>();
+        Map<KVRangeId, KVRangeDescriptor> ranges = new HashMap<>() {{
+            put(range1.getId(), range1);
+            put(range2.getId(), range2);
+            put(range3.getId(), range3);
+        }};
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> storeMap = new HashMap<>();
         storeMap.put("store1", ranges);
 
         KeySpaceDAG dag = new KeySpaceDAG(storeMap);

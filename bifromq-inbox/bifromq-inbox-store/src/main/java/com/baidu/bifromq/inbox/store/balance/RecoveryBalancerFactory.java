@@ -19,6 +19,10 @@ import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.RecoveryBalancer;
 import com.baidu.bifromq.sysprops.props.InboxStoreRecoveryWaitTimeMillis;
 
+/**
+ * RecoveryBalancerFactory is deprecated.
+ */
+@Deprecated(since = "3.3.0", forRemoval = true)
 public class RecoveryBalancerFactory implements IStoreBalancerFactory {
 
     @Override

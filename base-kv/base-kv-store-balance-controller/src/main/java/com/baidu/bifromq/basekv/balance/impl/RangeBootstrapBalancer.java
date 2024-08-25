@@ -32,7 +32,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
- * The balancer is used to bootstrap KVRange to ensure the key space is complete.
+ * RangeBootstrapBalancer is a specialized StoreBalancer designed to handle the bootstrap process of creating the
+ * initial key-value range in a distributed storage system. This balancer is responsible for initiating the creation of
+ * the first full boundary range when no existing epochs are found in the cluster.
  */
 public class RangeBootstrapBalancer extends StoreBalancer {
     private record BootstrapTrigger(KVRangeId id, Boundary boundary, long triggerTime) {
@@ -41,7 +43,7 @@ public class RangeBootstrapBalancer extends StoreBalancer {
 
     private final Supplier<Long> millisSource;
     private final long suspicionDurationMillis;
-    private AtomicReference<BootstrapTrigger> bootstrapTrigger = new AtomicReference<>();
+    private final AtomicReference<BootstrapTrigger> bootstrapTrigger = new AtomicReference<>();
 
     /**
      * Constructor of StoreBalancer.

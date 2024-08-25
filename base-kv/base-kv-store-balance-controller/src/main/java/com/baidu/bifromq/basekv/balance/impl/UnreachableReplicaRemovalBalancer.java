@@ -36,8 +36,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 /**
- * The task of the balancer is keep the unreachable replica out of voter or learner set. The unreachable replica is
- * defined as the replica that has been in probing status for a certain duration, and also it's missing in peer store.
+ * The UnreachableReplicaRemovalBalancer is a specialized balancer responsible for managing and removing unreachable
+ * replicas from a distributed key-value store. An unreachable replica is defined as a replica that has been in a
+ * "probing" state for a specified duration and is no longer present in its hosting store.
  */
 public final class UnreachableReplicaRemovalBalancer extends StoreBalancer {
     private final Supplier<Long> millisSource;
@@ -94,33 +95,28 @@ public final class UnreachableReplicaRemovalBalancer extends StoreBalancer {
         // Track the current leaders
         Set<KVRangeId> currentLeaders = new HashSet<>();
 
-        for (String storeId : descriptorMap.keySet()) {
-            if (!storeId.equals(localStoreId)) {
-                continue;
-            }
-            for (Map.Entry<KVRangeId, KVRangeDescriptor> rangeEntry : descriptorMap.get(storeId).entrySet()) {
-                KVRangeId rangeId = rangeEntry.getKey();
-                KVRangeDescriptor rangeDescriptor = rangeEntry.getValue();
-                if (rangeDescriptor.getRole() == RaftNodeStatus.Leader) {
-                    currentLeaders.add(rangeId);
+        for (Map.Entry<KVRangeId, KVRangeDescriptor> rangeEntry : descriptorMap.get(localStoreId).entrySet()) {
+            KVRangeId rangeId = rangeEntry.getKey();
+            KVRangeDescriptor rangeDescriptor = rangeEntry.getValue();
+            if (rangeDescriptor.getRole() == RaftNodeStatus.Leader) {
+                currentLeaders.add(rangeId);
 
-                    Map<String, Long> probingReplicas =
-                        replicaSuspicionTimeMap.computeIfAbsent(rangeId, k -> new ConcurrentHashMap<>());
-                    Set<String> currentReplicas = rangeDescriptor.getSyncStateMap().keySet();
+                Map<String, Long> probingReplicas =
+                    replicaSuspicionTimeMap.computeIfAbsent(rangeId, k -> new ConcurrentHashMap<>());
+                Set<String> currentReplicas = rangeDescriptor.getSyncStateMap().keySet();
 
-                    // Remove replicas from the map if they no longer exist in the current SyncState
-                    probingReplicas.keySet().removeIf(replicaId -> !currentReplicas.contains(replicaId));
+                // Remove replicas from the map if they no longer exist in the current SyncState
+                probingReplicas.keySet().removeIf(replicaId -> !currentReplicas.contains(replicaId));
 
-                    // Update or add replicas that are in probing status
-                    for (Map.Entry<String, RaftNodeSyncState> entry : rangeDescriptor.getSyncStateMap().entrySet()) {
-                        String replicaId = entry.getKey();
-                        RaftNodeSyncState syncState = entry.getValue();
+                // Update or add replicas that are in probing status
+                for (Map.Entry<String, RaftNodeSyncState> entry : rangeDescriptor.getSyncStateMap().entrySet()) {
+                    String replicaId = entry.getKey();
+                    RaftNodeSyncState syncState = entry.getValue();
 
-                        if (syncState.equals(RaftNodeSyncState.Probing)) {
-                            probingReplicas.putIfAbsent(replicaId, millisSource.get());
-                        } else {
-                            probingReplicas.remove(replicaId);
-                        }
+                    if (syncState.equals(RaftNodeSyncState.Probing)) {
+                        probingReplicas.putIfAbsent(replicaId, millisSource.get());
+                    } else {
+                        probingReplicas.remove(replicaId);
                     }
                 }
             }

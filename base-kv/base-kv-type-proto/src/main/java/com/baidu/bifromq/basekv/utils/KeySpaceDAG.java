@@ -23,7 +23,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
@@ -42,11 +41,13 @@ public class KeySpaceDAG {
         new TreeMap<>((node1, node2) -> BoundaryUtil.compareStartKey(node1.key, node2.key));
 
 
-    public KeySpaceDAG(Map<String, Set<KVRangeDescriptor>> rangeDescriptorsByStoreId) {
-        for (Map.Entry<String, Set<KVRangeDescriptor>> entry : rangeDescriptorsByStoreId.entrySet()) {
+    public KeySpaceDAG(Map<String, Map<KVRangeId, KVRangeDescriptor>> rangeDescriptorsByStoreId) {
+        for (Map.Entry<String, Map<KVRangeId, KVRangeDescriptor>> entry : rangeDescriptorsByStoreId.entrySet()) {
             String storeId = entry.getKey();
-            Set<KVRangeDescriptor> rangeDescriptors = entry.getValue();
-            for (KVRangeDescriptor rangeDescriptor : rangeDescriptors) {
+            Map<KVRangeId, KVRangeDescriptor> rangeDescriptors = entry.getValue();
+            for (Map.Entry<KVRangeId, KVRangeDescriptor> rangeEntry : rangeDescriptors.entrySet()) {
+                KVRangeId rangeId = rangeEntry.getKey();
+                KVRangeDescriptor rangeDescriptor = rangeEntry.getValue();
                 Boundary boundary = rangeDescriptor.getBoundary();
                 Node start = boundary.hasStartKey() ? new Node(boundary.getStartKey()) : OPEN_START_KEY;
                 Node end = boundary.hasEndKey() ? new Node(boundary.getEndKey()) : OPEN_END_KEY;
@@ -54,7 +55,7 @@ public class KeySpaceDAG {
                     .computeIfAbsent(end,
                         k -> new TreeMap<>(Comparator.comparingLong((EdgeKey id) -> id.rangeId.getId())
                             .thenComparing(id -> id.storeId)))
-                    .put(new EdgeKey(storeId, rangeDescriptor.getId()), rangeDescriptor);
+                    .put(new EdgeKey(storeId, rangeId), rangeDescriptor);
             }
         }
     }
@@ -153,5 +154,4 @@ public class KeySpaceDAG {
         }
         return boundaryBuilder.build();
     }
-
 }

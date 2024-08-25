@@ -33,6 +33,10 @@ import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+/**
+ * RecoveryBalancer is deprecated.
+ */
+@Deprecated(since = "3.3.0", forRemoval = true)
 public class RecoveryBalancer extends StoreBalancer {
 
     private final Cache<String, KVRangeStoreDescriptor> deadStoreCache;

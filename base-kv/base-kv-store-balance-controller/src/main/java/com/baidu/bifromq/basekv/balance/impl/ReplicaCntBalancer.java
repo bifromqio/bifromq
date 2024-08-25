@@ -14,27 +14,45 @@
 package com.baidu.bifromq.basekv.balance.impl;
 
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.toLeaderRanges;
+import static java.util.Collections.emptySet;
 
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
+import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
-import com.baidu.bifromq.basekv.proto.State.StateType;
-import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.baidu.bifromq.basekv.utils.DescriptorUtil;
+import com.baidu.bifromq.basekv.utils.KeySpaceDAG;
 import com.google.common.collect.Sets;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * ReplicaCntBalancer is a load balancer designed to manage the number of replicas across distributed storage nodes. Its
+ * primary responsibility is to ensure that each storage node (Store) maintains the expected number of replicas of
+ * effective ranges, including both Voter and Learner replicas.
+ *
+ * <p>Main functionalities:</p>
+ *
+ * <ul>
+ *   <li><b>voterCount</b>: The expected number of Voter replicas on each store.</li>
+ *   <li><b>learnerCount</b>: The expected number of Learner replicas. If set to -1, there is no limit on Learner replicas.</li>
+ * </ul>
+ */
 public class ReplicaCntBalancer extends StoreBalancer {
     private final int voterCount;
     private final int learnerCount; // -1 represent no limit
-    private volatile Set<KVRangeStoreDescriptor> latestStoreDescriptors = new HashSet<>();
+    private volatile Set<KVRangeStoreDescriptor> effectiveEpoch = emptySet();
 
     public ReplicaCntBalancer(String clusterId, String localStoreId, int voterCount, int learnerCount) {
         super(clusterId, localStoreId);
@@ -48,39 +66,39 @@ public class ReplicaCntBalancer extends StoreBalancer {
         if (effectiveEpoch.isEmpty()) {
             return;
         }
-        latestStoreDescriptors = effectiveEpoch.get().storeDescriptors();
+        this.effectiveEpoch = effectiveEpoch.get().storeDescriptors();
     }
 
     @Override
     public Optional<ChangeConfigCommand> balance() {
-        KVRangeStoreDescriptor localStoreDesc = null;
-        for (KVRangeStoreDescriptor d : latestStoreDescriptors) {
-            if (d.getId().equals(localStoreId)) {
-                localStoreDesc = d;
-                break;
-            }
-        }
-        if (localStoreDesc == null) {
-            log.debug("There is no storeDescriptor for local store: {}", localStoreId);
+        Set<KVRangeStoreDescriptor> current = effectiveEpoch;
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> allLeaderRangesByStoreId = toLeaderRanges(current);
+        KeySpaceDAG keySpaceDAG = new KeySpaceDAG(allLeaderRangesByStoreId);
+        NavigableMap<Boundary, KeySpaceDAG.LeaderRange> effectiveRoute = keySpaceDAG.getEffectiveFullCoveredRoute();
+        if (effectiveRoute.isEmpty()) {
+            // only operate on the leader range in effectiveRoute
             return Optional.empty();
         }
-        List<KVRangeDescriptor> localLeaderRangeDescriptors = localStoreDesc.getRangesList()
-            .stream()
-            .filter(d -> d.getRole() == RaftNodeStatus.Leader)
-            .filter(d -> d.getState() == StateType.Normal)
-            .collect(Collectors.toList());
+        Map<String, Set<KVRangeId>> effectiveLeaderRangesByStoreId = new HashMap<>();
+        for (KeySpaceDAG.LeaderRange leaderRange : effectiveRoute.values()) {
+            effectiveLeaderRangesByStoreId.computeIfAbsent(leaderRange.storeId(), k -> new HashSet<>())
+                .add(leaderRange.descriptor().getId());
+        }
+        Set<KVRangeId> localEffectiveLeaderRangeIds =
+            effectiveLeaderRangesByStoreId.getOrDefault(localStoreId, Collections.emptySet());
+
         // No leader range in localStore
-        if (localLeaderRangeDescriptors.isEmpty()) {
+        if (localEffectiveLeaderRangeIds.isEmpty()) {
             return Optional.empty();
         }
-        Collections.shuffle(localLeaderRangeDescriptors);
         // Sort store list by storeLoad for adding or removing replica
-        List<String> sortedAliveStore = latestStoreDescriptors.stream()
+        List<String> sortedAliveStore = current.stream()
             .sorted(Comparator.comparingDouble(this::calStoreLoad))
             .map(KVRangeStoreDescriptor::getId)
             .collect(Collectors.toList());
-
-        for (KVRangeDescriptor rangeDescriptor : localLeaderRangeDescriptors) {
+        Map<KVRangeId, KVRangeDescriptor> allLeaderRanges = allLeaderRangesByStoreId.get(localStoreId);
+        for (KVRangeId rangeId : localEffectiveLeaderRangeIds) {
+            KVRangeDescriptor rangeDescriptor = allLeaderRanges.get(rangeId);
             Set<String> votersInConfig = Sets.newHashSet(rangeDescriptor.getConfig().getVotersList());
             Set<String> learnersInConfig = Sets.newHashSet(rangeDescriptor.getConfig().getLearnersList());
             Set<String> newVoters = getNewVoters(sortedAliveStore, votersInConfig);
@@ -115,6 +133,7 @@ public class ReplicaCntBalancer extends StoreBalancer {
 
     private Set<String> addLearners(List<String> sortedCandidateStores, Set<String> voters, Set<String> oldLearners) {
         if (learnerCount < 0) {
+            // if learnerCount < 0, no limit
             return sortedCandidateStores.stream()
                 .filter(s -> !voters.contains(s))
                 .collect(Collectors.toSet());
@@ -134,7 +153,7 @@ public class ReplicaCntBalancer extends StoreBalancer {
             }
             return newLearners;
         } else {
-            return Sets.newHashSet();
+            return emptySet();
         }
     }
 

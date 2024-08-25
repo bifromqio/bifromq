@@ -14,10 +14,10 @@
 package com.baidu.bifromq.basekv.utils;
 
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
+import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
@@ -79,17 +79,21 @@ public class DescriptorUtil {
 
     /**
      * Get the leader rangeDescriptors, and organize them by storeId.
+     * <br>
+     * NOTE. The returned map contains all storeIds in storeDescriptors, even if there is no leader range in the store.
      *
-     * @param storeDescriptors storeDescriptors of a epoch
+     * @param storeDescriptors storeDescriptors of an epoch
      * @return leader rangeDescriptors organized by storeId
      */
-    public static Map<String, Set<KVRangeDescriptor>> filterLeaderRanges(Set<KVRangeStoreDescriptor> storeDescriptors) {
-        Map<String, Set<KVRangeDescriptor>> leaderRangesByStoreId = new HashMap<>();
+    public static Map<String, Map<KVRangeId, KVRangeDescriptor>> toLeaderRanges(
+        Set<KVRangeStoreDescriptor> storeDescriptors) {
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> leaderRangesByStoreId = new HashMap<>();
         for (KVRangeStoreDescriptor storeDescriptor : storeDescriptors) {
+            Map<KVRangeId, KVRangeDescriptor> leaderRangeMap = new HashMap<>();
+            leaderRangesByStoreId.put(storeDescriptor.getId(), leaderRangeMap);
             for (KVRangeDescriptor rangeDescriptor : storeDescriptor.getRangesList()) {
                 if (rangeDescriptor.getRole() == RaftNodeStatus.Leader) {
-                    leaderRangesByStoreId.computeIfAbsent(storeDescriptor.getId(), k -> new HashSet<>())
-                        .add(rangeDescriptor);
+                    leaderRangeMap.put(rangeDescriptor.getId(), rangeDescriptor);
                 }
             }
         }
