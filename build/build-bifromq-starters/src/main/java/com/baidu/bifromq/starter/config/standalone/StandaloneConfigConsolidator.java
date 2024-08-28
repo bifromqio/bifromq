@@ -29,7 +29,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class StandaloneConfigConsolidator {
-    private static final String BIND_ADDR = "BIND_ADDR";
 
     public static void consolidate(StandaloneConfig config) {
         consolidateClusterConfig(config);
@@ -145,10 +144,6 @@ public class StandaloneConfigConsolidator {
         if (!"0.0.0.0".equals(host)) {
             return host;
         }
-        host = System.getProperty(BIND_ADDR, System.getenv(BIND_ADDR));
-        if (!Strings.isNullOrEmpty(host)) {
-            return host;
-        }
         host = config.getRpcServerConfig().getHost();
         if (!Strings.isNullOrEmpty(host)) {
             return host;
@@ -163,8 +158,9 @@ public class StandaloneConfigConsolidator {
             Enumeration<InetAddress> inetAddresses = networkInterface.getInetAddresses();
             while (inetAddresses.hasMoreElements()) {
                 InetAddress inetAddress = inetAddresses.nextElement();
-                if (!inetAddress.isLoopbackAddress() && !inetAddress.isLinkLocalAddress() &&
-                    inetAddress.isSiteLocalAddress()) {
+                if (!inetAddress.isLoopbackAddress()
+                    && !inetAddress.isLinkLocalAddress()
+                    && inetAddress.isSiteLocalAddress()) {
                     return inetAddress.getHostAddress();
                 }
             }

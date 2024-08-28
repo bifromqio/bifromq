@@ -59,8 +59,7 @@ public class Constants {
         Status.UNAVAILABLE.withDescription("server is unreachable now");
 
     public static Throwable toConcreteException(Throwable throwable) {
-        if (throwable instanceof StatusRuntimeException) {
-            StatusRuntimeException statusRuntimeException = (StatusRuntimeException) throwable;
+        if (throwable instanceof StatusRuntimeException statusRuntimeException) {
             if (statusRuntimeException.getStatus().equals(TRANSIENT_FAILURE)) {
                 return new TransientFailureException(throwable);
             }

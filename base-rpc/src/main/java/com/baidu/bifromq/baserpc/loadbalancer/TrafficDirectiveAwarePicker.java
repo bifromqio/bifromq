@@ -242,7 +242,7 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
             WeightedServerSelector selector = matcher.match(tenantId);
             String designatedServerId = pickSubchannelArgs.getHeaders().get(Constants.DESIRED_SERVER_META_KEY);
             if (selector.contains(designatedServerId)) {
-                trace("Direct pick sub-channel by serverId:{}", designatedServerId);
+                log.trace("Direct pick sub-channel by serverId:{}", designatedServerId);
                 if (collectSelection) {
                     RPCContext.SELECTED_SERVER_ID_CTX_KEY.get().setServerId(designatedServerId);
                 }
@@ -270,7 +270,7 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
             if (selection.isEmpty()) {
                 return LoadBalancer.PickResult.withDrop(Constants.SERVICE_UNAVAILABLE);
             }
-            trace("Picked subchannel:{} for tenant:{}", selection.get(), tenantId);
+            log.trace("Picked subchannel:{} for tenant:{}", selection.get(), tenantId);
             if (collectSelection) {
                 RPCContext.SELECTED_SERVER_ID_CTX_KEY.get().setServerId(selection.get().getKey());
             }
@@ -312,11 +312,5 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
         WeightedServerSelector selector = currentMatcher.get().match(tenantId);
         Optional<Map.Entry<String, Integer>> selection = selector.random();
         return selection.map(Map.Entry::getKey);
-    }
-
-    private void trace(String msg, Object... args) {
-        if (log.isTraceEnabled()) {
-            log.trace(msg, args);
-        }
     }
 }

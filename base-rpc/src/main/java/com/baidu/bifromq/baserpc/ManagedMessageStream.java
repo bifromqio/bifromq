@@ -28,6 +28,7 @@ import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.ClientResponseObserver;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import java.util.Map;
@@ -61,6 +62,7 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
     private final MethodDescriptor<AckT, MsgT> methodDescriptor;
     private final BluePrint bluePrint;
     private final CompositeDisposable disposables = new CompositeDisposable();
+    private final AtomicReference<Disposable> timerTaskDisposable = new AtomicReference<>();
     private final BehaviorSubject<Long> signal = BehaviorSubject.createDefault(System.nanoTime());
     private final RPCClient.ChannelHolder channelHolder;
     private final CallOptions callOptions;
@@ -237,6 +239,10 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
     public void close() {
         state.set(State.Closed);
         ackSendingBuffers.clear();
+        Disposable timerDisposable = timerTaskDisposable.get();
+        if (timerDisposable != null) {
+            timerDisposable.dispose();
+        }
         signal.onComplete();
         disposables.dispose();
         msgSubject.onComplete();
@@ -276,11 +282,14 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
     }
 
     private void scheduleSignal(long delay, TimeUnit timeUnit) {
-        disposables.add(Observable.timer(delay, timeUnit).subscribe(t -> {
+        Disposable disposable = timerTaskDisposable.getAndSet(Observable.timer(delay, timeUnit).subscribe(t -> {
             if (!isClosed()) {
                 signal.onNext(System.nanoTime());
             }
         }));
+        if (disposable != null) {
+            disposable.dispose();
+        }
     }
 
     private void scheduleSignal() {

@@ -32,6 +32,7 @@ import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.ClientResponseObserver;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import java.util.Map;
@@ -65,6 +66,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
     private final MethodDescriptor<ReqT, RespT> methodDescriptor;
     private final BluePrint bluePrint;
     private final CompositeDisposable disposables = new CompositeDisposable();
+    private final AtomicReference<Disposable> timerTaskDisposable = new AtomicReference<>();
     private final BehaviorSubject<Long> signal = BehaviorSubject.createDefault(System.nanoTime());
     private final RPCClient.ChannelHolder channelHolder;
     private final CallOptions callOptions;
@@ -247,7 +249,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
         switch (state.get()) {
             case Normal -> {
                 int currentCount = taskCount.get();
-                trace("ReqPipeline@{} of {} queue request: queueSize={},req={}",
+                log.trace("ReqPipeline@{} of {} queue request: queueSize={},req={}",
                     this.hashCode(), methodDescriptor.getBareMethodName(), currentCount, req);
                 preflightTaskQueue.offer(newRequest);
                 sendUntilStreamNotReadyOrNoTask();
@@ -256,7 +258,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
             }
             case ServiceUnavailable -> {
                 int currentCount = taskCount.get();
-                trace("ReqPipeline@{} of {} queue request: queueSize={},req={}",
+                log.trace("ReqPipeline@{} of {} queue request: queueSize={},req={}",
                     this.hashCode(), methodDescriptor.getBareMethodName(), currentCount, req);
                 preflightTaskQueue.offer(newRequest);
                 if (semantic.mode() == BluePrint.BalanceMode.DDBalanced) {
@@ -266,7 +268,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                 }
             }
             case Closed -> {
-                trace("ReqPipeline@{} of {} drop request due to already close: req={}",
+                log.trace("ReqPipeline@{} of {} drop request due to already close: req={}",
                     this.hashCode(), methodDescriptor.getBareMethodName(), req);
                 // pipeline has already closed, finish it with close reason
                 newRequest.finish(new RequestRejectedException("Pipeline has closed"));
@@ -278,6 +280,10 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
     @Override
     public void close() {
         state.set(State.Closed);
+        Disposable timerDisposable = timerTaskDisposable.get();
+        if (timerDisposable != null) {
+            timerDisposable.dispose();
+        }
         // stop signal
         signal.onComplete();
         // stop react to lb changes
@@ -303,7 +309,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
             case WCHBalanced -> ctx = ctx.withValue(RPCContext.WCH_HASH_KEY_CTX_KEY, wchKey);
         }
         ctx.run(() -> {
-            trace("ReqPipeline@{} creating request stream", hashCode());
+            log.trace("ReqPipeline@{} creating request stream", hashCode());
             ResponseObserver observer = new ResponseObserver();
             ClientCallStreamObserver<ReqT> reqStream = (ClientCallStreamObserver<ReqT>)
                 asyncBidiStreamingCall(channelHolder.channel()
@@ -327,11 +333,14 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
     private void scheduleSignal(long delay, TimeUnit timeUnit) {
         log.debug("ReqPipeline@{} of {} schedule targeting in {} ms",
             this.hashCode(), methodDescriptor.getBareMethodName(), delay);
-        disposables.add(Observable.timer(delay, timeUnit).subscribe(t -> {
+        Disposable prevDisposable = timerTaskDisposable.getAndSet(Observable.timer(delay, timeUnit).subscribe(t -> {
             if (!isClosed() && !signal.hasComplete()) {
                 signal.onNext(System.nanoTime());
             }
         }));
+        if (prevDisposable != null) {
+            prevDisposable.dispose();
+        }
     }
 
     private void scheduleSignal() {
@@ -385,13 +394,13 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
 
     private synchronized void abortFlightRequests(Throwable cause) {
         if (inflightTaskQueue.isEmpty() && state.get() == State.Normal) {
-            trace("No in-flight request to abort");
+            log.trace("No in-flight request to abort");
         } else {
-            trace("Abort flight requests: count={}", taskCount.get());
+            log.trace("Abort flight requests: count={}", taskCount.get());
             while (true) {
                 Optional<RequestTask<ReqT, RespT>> requestTask = prepareForAbort();
                 if (requestTask.isPresent()) {
-                    trace("Abort request: {}", requestTask.get().request);
+                    log.trace("Abort request: {}", requestTask.get().request);
                     requestTask.get().finish(cause);
                 } else {
                     break;
@@ -414,7 +423,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
 
         public void finish(Throwable throwable) {
             if (future.completeExceptionally(throwable)) {
-                trace("ReqPipeline@{} of {} request finished with error: req={}, error={}",
+                log.trace("ReqPipeline@{} of {} request finished with error: req={}, error={}",
                     ManagedRequestPipeline.this.hashCode(),
                     methodDescriptor.getBareMethodName(),
                     request, throwable.getMessage());
@@ -431,17 +440,11 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
             long finishTime = System.nanoTime() - enqueueTS;
             meter.timer(RPCMetric.PipelineReqLatency).record(finishTime, TimeUnit.NANOSECONDS);
             if (future.complete(resp)) {
-                trace("ReqPipeline@{} of {} request finished: req={}, resp={}, flights={}",
+                log.trace("ReqPipeline@{} of {} request finished: req={}, resp={}, flights={}",
                     ManagedRequestPipeline.this.hashCode(),
                     methodDescriptor.getBareMethodName(), request, resp, taskCount.get());
             }
             meter.recordCount(RPCMetric.PipelineReqCompleteCount);
-        }
-    }
-
-    private void trace(String msg, Object... args) {
-        if (log.isTraceEnabled()) {
-            log.trace(msg, args);
         }
     }
 
