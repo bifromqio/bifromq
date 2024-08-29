@@ -16,8 +16,8 @@ description:
 
 - The version of BifroMQ being used (Note: Unless otherwise stated, the BifroMQ team only supports the latest major
   version. Please try to reproduce the issue with the latest version)
-- Detailed deployment configuration
-- Hardware specifications and operating system environment
+- Detailed deployment configuration **without custom plugins**
+- Hardware specifications, OS and Networking setup
 - Any publicly available test tools or programs used to reproduce the issue
 - Step-by-step instructions to replicate the problem
 
@@ -26,8 +26,8 @@ OR
 2. All relevant data or environmental details that can aid in diagnosing the issue, made publicly accessible (e.g., via
    public file sharing or accessible links). This may include but is not limited to:
 
-- Debug-level logs
-- All contents of the data directory for BifroMQ
+- All files under `logs` folder with **Debug-Level** output (mandatory)
+- All contents of the `data` directory for BifroMQ（mandatory if your issue related to persistent workflow）
 - The content of configuration files and other relevant information
 - Any other pertinent details
 
@@ -36,7 +36,7 @@ problem identification and are unlikely to receive a response from the team.**
 
 If you cannot meet either of these requirements, please contact [email](mailto:hello@bifromq.io) for paid consulting
 services.
-Alternatively, we encourage you to submit a Pull Request with an Issue Fix to become an
+Alternatively, we encourage you to help troubleshooting and submit a Pull Request with an Issue Fix to become an
 external [contributor](https://github.com/bifromqio/bifromq/blob/main/CLA.md) to BifroMQ.
 
 ## ⚠️ *重要提示：提交问题前请仔细阅读*
@@ -46,8 +46,8 @@ external [contributor](https://github.com/bifromqio/bifromq/blob/main/CLA.md) to
 1. 完整且可稳定复现问题的详细步骤，包括：
 
 - 使用的 BifroMQ 版本（注意：除非特别声明，BifroMQ 团队仅对最新的主要版本提供支持。请尝试使用最新版本复现该问题）
-- 详细的部署配置
-- 硬件规格和操作系统环境
+- 详细的不包含**自定义插件**的部署配置
+- 硬件规格和操作系统环境，网络环境
 - 用于复现问题的公开可用的测试工具或程序
 - 逐步复现问题的操作说明
 
@@ -55,14 +55,14 @@ external [contributor](https://github.com/bifromqio/bifromq/blob/main/CLA.md) to
 
 2. 有助于诊断问题的所有相关数据或环境细节，以公开可访问的方式提供（例如，通过公共文件共享或可访问的链接）。这可能包括但不限于：
 
-- 调试级别的日志
-- 完整的BifroMQ `data` 目录的内容
+- **调试**级别下的`logs`目录下的全部日志（必须）
+- 完整的BifroMQ `data` 目录的内容（必须，如果问题设计持久化相关的负载）
 - 配置文件内容和其他相关信息
 - 其他任何相关的重要信息
 
 **仅描述现象而不提供上述两项中任意一项的问题报告，通常无法为问题定位提供足够有价值的信息，因此可能不会得到团队的响应。**
 
-如果您无法满足这两项要求中的任何一项，请联系[邮箱](mailto:hello@bifromq.io) 获取付费咨询服务。另外，我们也鼓励您提交解决问题的
+如果您无法满足这两项要求中的任何一项，请联系[邮箱](mailto:hello@bifromq.io) 获取付费咨询服务。另外，我们也鼓励您能帮助定位问题，提交解决问题的
 Pull Request，成为 BifroMQ 的[外部贡献者](https://github.com/bifromqio/bifromq/blob/main/CLA.md)。
 
 ### **Describe the bug**
