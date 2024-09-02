@@ -15,6 +15,9 @@ package com.baidu.bifromq.dist.util;
 
 
 import static com.baidu.bifromq.dist.util.TopicUtil.findNext;
+import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
+import static com.baidu.bifromq.util.TopicConst.SINGLE_WILDCARD;
+import static com.baidu.bifromq.util.TopicConst.SYS_PREFIX;
 
 import java.util.List;
 import java.util.Optional;
@@ -35,16 +38,16 @@ public class TopicMatcher {
             String topicLevel = topicLevels.get(i);
             String filterLevel = filterLevels.get(i);
             switch (filterLevel) {
-                case "#":
-                    if (i == 0 && topicLevel.startsWith("$")) {
+                case MULTI_WILDCARD:
+                    if (i == 0 && topicLevel.startsWith(SYS_PREFIX)) {
                         // system topic not matched by first #
                         break out;
                     }
                     hasMatched++;
                     matched = true;
                     break out;
-                case "+":
-                    if (i == 0 && topicLevel.startsWith("$")) {
+                case SINGLE_WILDCARD:
+                    if (i == 0 && topicLevel.startsWith(SYS_PREFIX)) {
                         // system topic not matched by first +
                         break out;
                     }
@@ -57,7 +60,8 @@ public class TopicMatcher {
                             break out;
                         }
                         // if filter has one more level and its "#"
-                        if (topicLevels.size() + 1 == filterLevels.size() && filterLevels.get(i + 1).equals("#")) {
+                        if (topicLevels.size() + 1 == filterLevels.size()
+                            && filterLevels.get(i + 1).equals(MULTI_WILDCARD)) {
                             matched = true;
                             break out;
                         }
@@ -74,7 +78,8 @@ public class TopicMatcher {
                                 break out;
                             }
                             // if filter has one more level and its "#"
-                            if (topicLevels.size() + 1 == filterLevels.size() && filterLevels.get(i + 1).equals("#")) {
+                            if (topicLevels.size() + 1 == filterLevels.size()
+                                && filterLevels.get(i + 1).equals(MULTI_WILDCARD)) {
                                 matched = true;
                                 break out;
                             }

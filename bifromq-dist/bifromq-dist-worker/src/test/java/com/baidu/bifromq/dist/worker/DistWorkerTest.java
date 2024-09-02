@@ -33,9 +33,9 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
-import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBWALableKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
@@ -56,10 +56,10 @@ import com.baidu.bifromq.dist.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistPack;
+import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.TenantOption;
-import com.baidu.bifromq.dist.util.MessageUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
@@ -338,7 +338,9 @@ public abstract class DistWorkerTest {
             .setOrderKey(orderKey)
             .build();
         ROCoProcInput input = ROCoProcInput.newBuilder()
-            .setDistService(MessageUtil.buildBatchDistRequest(request))
+            .setDistService(DistServiceROCoProcInput.newBuilder()
+                .setBatchDist(request)
+                .build())
             .build();
         KVRangeROReply reply = storeClient.query(s.leader, KVRangeRORequest.newBuilder()
             .setReqId(reqId)

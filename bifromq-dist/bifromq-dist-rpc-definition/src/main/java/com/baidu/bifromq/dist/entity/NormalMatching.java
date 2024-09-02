@@ -14,8 +14,8 @@
 package com.baidu.bifromq.dist.entity;
 
 
-import static com.baidu.bifromq.dist.util.TopicUtil.NUL;
 import static com.baidu.bifromq.dist.util.TopicUtil.unescape;
+import static com.baidu.bifromq.util.TopicConst.NUL;
 
 import com.baidu.bifromq.type.MatchInfo;
 import com.google.common.base.Strings;
@@ -23,8 +23,10 @@ import com.google.protobuf.ByteString;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 @EqualsAndHashCode(callSuper = true)
+@ToString
 public class NormalMatching extends Matching {
     public final String scopedInboxId;
     private final String originalTopicFilter;

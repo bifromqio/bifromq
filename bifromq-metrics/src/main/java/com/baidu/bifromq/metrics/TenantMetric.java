@@ -65,6 +65,8 @@ public enum TenantMetric {
     MqttTransientSubCountGauge("mqtt.tsub.num.gauge", Meter.Type.GAUGE),
     MqttPersistentSubCountGauge("mqtt.psub.num.gauge", Meter.Type.GAUGE),
 
+    MqttRouteCacheSize("mqtt.route.cache.size.gauge", Meter.Type.GAUGE),
+    MqttRouteCacheMissCount("mqtt.route.cache.miss.count", Meter.Type.COUNTER),
     // retain related
     MqttIngressRetainBytes("mqtt.ingress.retain.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
     MqttRetainedBytes("mqtt.retained.bytes", Meter.Type.DISTRIBUTION_SUMMARY),

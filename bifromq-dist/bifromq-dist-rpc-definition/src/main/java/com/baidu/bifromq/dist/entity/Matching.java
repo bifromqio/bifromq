@@ -13,12 +13,14 @@
 
 package com.baidu.bifromq.dist.entity;
 
-import static com.baidu.bifromq.dist.util.TopicUtil.NUL;
+import static com.baidu.bifromq.util.TopicConst.NUL_CHAR;
 
 import com.google.protobuf.ByteString;
 import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 @EqualsAndHashCode
+@ToString
 public abstract class Matching {
     public enum Type {
         Normal, Group
@@ -34,9 +36,9 @@ public abstract class Matching {
     protected Matching(ByteString matchRecordKey) {
         this.key = matchRecordKey;
         String matchRecordKeyStr = matchRecordKey.toStringUtf8();
-        int firstSplit = matchRecordKeyStr.indexOf(NUL);
+        int firstSplit = matchRecordKeyStr.indexOf(NUL_CHAR);
         tenantId = matchRecordKeyStr.substring(0, firstSplit);
-        int lastSplit = matchRecordKeyStr.lastIndexOf(NUL);
+        int lastSplit = matchRecordKeyStr.lastIndexOf(NUL_CHAR);
         escapedTopicFilter = matchRecordKeyStr.substring(firstSplit + 2, lastSplit);
     }
 

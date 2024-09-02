@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023. The BifroMQ Authors. All Rights Reserved.
+ * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -11,16 +11,19 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.util;
+package com.baidu.bifromq.dist.worker.index;
 
-import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
-import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
+public class MainNode<V> {
+    final CNode<V> cNode;
+    final TNode tNode;
 
-public class MessageUtil {
+    MainNode(CNode<V> cNode) {
+        this.cNode = cNode;
+        this.tNode = null;
+    }
 
-    public static DistServiceROCoProcInput buildBatchDistRequest(BatchDistRequest request) {
-        return DistServiceROCoProcInput.newBuilder()
-            .setBatchDist(request)
-            .build();
+    MainNode(TNode tNode) {
+        this.cNode = null;
+        this.tNode = tNode;
     }
 }

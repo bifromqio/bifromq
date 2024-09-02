@@ -13,7 +13,8 @@
 
 package com.baidu.bifromq.dist.util;
 
-import static com.baidu.bifromq.dist.util.TopicUtil.SYS_PREFIX;
+import static com.baidu.bifromq.util.TopicConst.DELIMITER;
+import static com.baidu.bifromq.util.TopicConst.SYS_PREFIX;
 
 import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
@@ -36,8 +37,8 @@ public class TestUtil {
         if (ThreadLocalRandom.current().nextFloat() > 0.5) {
             topicLevels[0] = SYS_PREFIX + topicLevels[0];// make
         }
-        String topic = String.join("/", topicLevels);
-        return ThreadLocalRandom.current().nextFloat() > 0.5 ? "/" + topic : topic;
+        String topic = String.join(DELIMITER, topicLevels);
+        return ThreadLocalRandom.current().nextFloat() > 0.5 ? DELIMITER + topic : topic;
     }
 
     public static String randomTopicFilter(int maxLevel) {
@@ -46,7 +47,7 @@ public class TestUtil {
         for (int i = 0; i < levels; i++) {
             filterLevels[i] = RandomTopicName.nextString(8, true, i < levels - 1);
         }
-        return String.join("/", filterLevels);
+        return String.join(DELIMITER, filterLevels);
     }
 
     private static class RandomTopicName {

@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.dist.util;
 
-import static com.baidu.bifromq.dist.util.TopicUtil.NUL;
 import static com.baidu.bifromq.dist.util.TopicUtil.fastJoin;
+import static com.baidu.bifromq.util.TopicConst.NUL;
 
 import com.google.common.collect.AbstractIterator;
 import java.util.Iterator;

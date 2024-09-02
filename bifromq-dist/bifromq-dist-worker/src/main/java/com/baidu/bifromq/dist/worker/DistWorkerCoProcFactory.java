@@ -46,7 +46,6 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     private final IDistClient distClient;
     private final IEventCollector eventCollector;
     private final IResourceThrottler resourceThrottler;
-    private final ISubBrokerManager subBrokerManager;
     private final IMessageDeliverer deliverer;
     private final ExecutorService matchExecutor;
     private final Duration loadEstWindow;
@@ -60,7 +59,6 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
         this.distClient = distClient;
         this.eventCollector = eventCollector;
         this.resourceThrottler = resourceThrottler;
-        this.subBrokerManager = subBrokerManager;
         this.loadEstWindow = loadEstimateWindow;
         deliverer = new MessageDeliverer(subBrokerManager);
 
@@ -92,7 +90,7 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     public IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id,
                                        Supplier<IKVCloseableReader> rangeReaderProvider) {
         return new DistWorkerCoProc(clusterId, storeId, id, rangeReaderProvider, eventCollector, resourceThrottler,
-            distClient, subBrokerManager, deliverer, matchExecutor);
+            distClient, deliverer, matchExecutor);
     }
 
     public void close() {

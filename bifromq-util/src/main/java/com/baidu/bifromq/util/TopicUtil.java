@@ -13,13 +13,16 @@
 
 package com.baidu.bifromq.util;
 
+import static com.baidu.bifromq.util.TopicConst.DELIMITER_CHAR;
+import static com.baidu.bifromq.util.TopicConst.MULTIPLE_WILDCARD_CHAR;
+import static com.baidu.bifromq.util.TopicConst.NUL_CHAR;
+import static com.baidu.bifromq.util.TopicConst.ORDERED_SHARE;
+import static com.baidu.bifromq.util.TopicConst.SINGLE_WILDCARD_CHAR;
+import static com.baidu.bifromq.util.TopicConst.UNORDERED_SHARE;
+
 public class TopicUtil {
-    private static final String UNORDERED_SHARE = "$share/";
-    private static final String ORDERED_SHARE = "$oshare/";
-    public static final char TOPIC_SEPARATOR = '/';
-    public static final char NULL = '\u0000';
-    public static final char SINGLE_WILDCARD = '+';
-    public static final char MULTIPLE_WILDCARD = '#';
+    private static final String PREFIX_UNORDERED_SHARE = UNORDERED_SHARE + DELIMITER_CHAR;
+    private static final String PREFIX_ORDERED_SHARE = ORDERED_SHARE + DELIMITER_CHAR;
 
     public static boolean isValidTopic(String topic, int maxLevelLength, int maxLevel, int maxLength) {
         assert maxLength <= 65535 && maxLevelLength <= maxLength;
@@ -27,13 +30,13 @@ public class TopicUtil {
             // [MQTT-4.7.3-1]
             return false;
         }
-        if (topic.startsWith(ORDERED_SHARE) || topic.startsWith(UNORDERED_SHARE)) {
+        if (topic.startsWith(PREFIX_ORDERED_SHARE) || topic.startsWith(PREFIX_UNORDERED_SHARE)) {
             return false;
         }
         int topicLevelLength = 0;
         int level = 1;
         for (int i = 0; i < topic.length(); i++) {
-            if (topic.charAt(i) == TOPIC_SEPARATOR) {
+            if (topic.charAt(i) == DELIMITER_CHAR) {
                 if (++level > maxLevel) {
                     return false;
                 }
@@ -43,7 +46,7 @@ public class TopicUtil {
                 topicLevelLength = 0;
             } else {
                 char c = topic.charAt(i);
-                if (c == NULL || c == SINGLE_WILDCARD || c == MULTIPLE_WILDCARD) {
+                if (c == NUL_CHAR || c == SINGLE_WILDCARD_CHAR || c == MULTIPLE_WILDCARD_CHAR) {
                     // [MQTT-4.7.3-2] and [MQTT-4.7.1-1]
                     return false;
                 }
@@ -55,11 +58,11 @@ public class TopicUtil {
 
     public static boolean isValidTopicFilter(String topicFilter, int maxLevelLength, int maxLevel, int maxLength) {
         // TODO: could be optimized further by building a FSM
-        if (topicFilter.startsWith(UNORDERED_SHARE)) {
-            maxLength += UNORDERED_SHARE.length();
+        if (topicFilter.startsWith(PREFIX_UNORDERED_SHARE)) {
+            maxLength += PREFIX_UNORDERED_SHARE.length();
         }
-        if (topicFilter.startsWith(ORDERED_SHARE)) {
-            maxLength += ORDERED_SHARE.length();
+        if (topicFilter.startsWith(PREFIX_ORDERED_SHARE)) {
+            maxLength += PREFIX_ORDERED_SHARE.length();
         }
         assert maxLength <= 65535 && maxLevelLength <= maxLength;
         if (topicFilter.isEmpty() || topicFilter.length() > maxLength) {
@@ -68,14 +71,14 @@ public class TopicUtil {
         }
         int i = 0;
         int topicLevelLength = 0;
-        if (topicFilter.startsWith(ORDERED_SHARE) || topicFilter.startsWith(UNORDERED_SHARE)) {
+        if (topicFilter.startsWith(PREFIX_ORDERED_SHARE) || topicFilter.startsWith(PREFIX_UNORDERED_SHARE)) {
             // validate share name
-            for (i = topicFilter.indexOf(TOPIC_SEPARATOR) + 1; i < topicFilter.length(); i++) {
+            for (i = topicFilter.indexOf(DELIMITER_CHAR) + 1; i < topicFilter.length(); i++) {
                 char c = topicFilter.charAt(i);
-                if (c == TOPIC_SEPARATOR) {
+                if (c == DELIMITER_CHAR) {
                     break;
                 }
-                if (c == MULTIPLE_WILDCARD || c == SINGLE_WILDCARD || c == NULL) {
+                if (c == MULTIPLE_WILDCARD_CHAR || c == SINGLE_WILDCARD_CHAR || c == NUL_CHAR) {
                     // [MQTT-4.8.2-2]
                     return false;
                 }
@@ -96,7 +99,7 @@ public class TopicUtil {
         int startIdx = i;
         int level = 1;
         for (; i < topicFilter.length(); i++) {
-            if (topicFilter.charAt(i) == TOPIC_SEPARATOR) {
+            if (topicFilter.charAt(i) == DELIMITER_CHAR) {
                 if (++level > maxLevel) {
                     return false;
                 }
@@ -106,30 +109,30 @@ public class TopicUtil {
                 topicLevelLength = 0;
             } else {
                 char c = topicFilter.charAt(i);
-                if (c == NULL) {
+                if (c == NUL_CHAR) {
                     // [MQTT-4.7.3-2]
                     return false;
                 }
-                if (c == MULTIPLE_WILDCARD) {
+                if (c == MULTIPLE_WILDCARD_CHAR) {
                     if (i != topicFilter.length() - 1) {
                         return false;
                     }
-                    if (i != startIdx && topicFilter.charAt(i - 1) != TOPIC_SEPARATOR) {
+                    if (i != startIdx && topicFilter.charAt(i - 1) != DELIMITER_CHAR) {
                         return false;
                     }
                 }
-                if (c == SINGLE_WILDCARD) {
+                if (c == SINGLE_WILDCARD_CHAR) {
                     if (i == startIdx) {
-                        if (i != topicFilter.length() - 1 && topicFilter.charAt(i + 1) != TOPIC_SEPARATOR) {
+                        if (i != topicFilter.length() - 1 && topicFilter.charAt(i + 1) != DELIMITER_CHAR) {
                             return false;
                         }
                     } else if (i == topicFilter.length() - 1) {
-                        if (topicFilter.charAt(i - 1) != TOPIC_SEPARATOR) {
+                        if (topicFilter.charAt(i - 1) != DELIMITER_CHAR) {
                             return false;
                         }
                     } else {
-                        if (topicFilter.charAt(i - 1) != TOPIC_SEPARATOR
-                            || topicFilter.charAt(i + 1) != TOPIC_SEPARATOR) {
+                        if (topicFilter.charAt(i - 1) != DELIMITER_CHAR
+                            || topicFilter.charAt(i + 1) != DELIMITER_CHAR) {
                             return false;
                         }
                     }
@@ -145,11 +148,11 @@ public class TopicUtil {
     }
 
     public static boolean isWildcardTopicFilter(String topicFilter) {
-        return topicFilter.indexOf(SINGLE_WILDCARD) >= 0 || topicFilter.indexOf(MULTIPLE_WILDCARD) >= 0;
+        return topicFilter.indexOf(SINGLE_WILDCARD_CHAR) >= 0 || topicFilter.indexOf(MULTIPLE_WILDCARD_CHAR) >= 0;
     }
 
     public static boolean isSharedSubscription(String topicFilter) {
-        return topicFilter.startsWith(ORDERED_SHARE) || topicFilter.startsWith(UNORDERED_SHARE);
+        return topicFilter.startsWith(PREFIX_ORDERED_SHARE) || topicFilter.startsWith(PREFIX_UNORDERED_SHARE);
     }
 
     public static String parseTopicFilter(String topicFilter) {
@@ -157,9 +160,9 @@ public class TopicUtil {
         if (isSharedSubscription(topicFilter)) {
             // validate share name
             int i;
-            for (i = topicFilter.indexOf(TOPIC_SEPARATOR) + 1; i < topicFilter.length(); i++) {
+            for (i = topicFilter.indexOf(DELIMITER_CHAR) + 1; i < topicFilter.length(); i++) {
                 char c = topicFilter.charAt(i);
-                if (c == TOPIC_SEPARATOR) {
+                if (c == DELIMITER_CHAR) {
                     break;
                 }
             }

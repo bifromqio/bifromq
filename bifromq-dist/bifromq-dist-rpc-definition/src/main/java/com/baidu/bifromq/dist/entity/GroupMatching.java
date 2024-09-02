@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.dist.entity;
 
-import static com.baidu.bifromq.dist.util.TopicUtil.ORDERED_SHARE;
-import static com.baidu.bifromq.dist.util.TopicUtil.TOPIC_SEPARATOR;
-import static com.baidu.bifromq.dist.util.TopicUtil.UNORDERED_SHARE;
+import static com.baidu.bifromq.util.TopicConst.DELIMITER_CHAR;
+import static com.baidu.bifromq.util.TopicConst.ORDERED_SHARE;
+import static com.baidu.bifromq.util.TopicConst.UNORDERED_SHARE;
 import static com.baidu.bifromq.dist.util.TopicUtil.unescape;
 
 import com.google.common.collect.Sets;
@@ -24,8 +24,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 @EqualsAndHashCode(callSuper = true)
+@ToString
 public class GroupMatching extends Matching {
     @EqualsAndHashCode.Exclude
     public final String group;
@@ -34,20 +36,20 @@ public class GroupMatching extends Matching {
     @EqualsAndHashCode.Exclude
     public final List<NormalMatching> receiverList;
 
-    public final List<String> receiverIds;
+    public final Set<String> receiverIds;
     private final String origTopicFilter;
 
     GroupMatching(ByteString key, String group, boolean ordered, List<String> scopedReceiverIds) {
         super(key);
         this.group = group;
         this.ordered = ordered;
-        this.receiverIds = scopedReceiverIds;
+        this.receiverIds = Sets.newHashSet(scopedReceiverIds);
         if (ordered) {
             origTopicFilter =
-                ORDERED_SHARE + TOPIC_SEPARATOR + group + TOPIC_SEPARATOR + unescape(escapedTopicFilter);
+                ORDERED_SHARE + DELIMITER_CHAR + group + DELIMITER_CHAR + unescape(escapedTopicFilter);
         } else {
             origTopicFilter =
-                UNORDERED_SHARE + TOPIC_SEPARATOR + group + TOPIC_SEPARATOR + unescape(escapedTopicFilter);
+                UNORDERED_SHARE + DELIMITER_CHAR + group + DELIMITER_CHAR + unescape(escapedTopicFilter);
         }
         this.receiverList = Sets.newLinkedHashSet(scopedReceiverIds).stream()
             .map(receiverId -> new NormalMatching(key, origTopicFilter, receiverId))
@@ -62,5 +64,24 @@ public class GroupMatching extends Matching {
     @Override
     public String originalTopicFilter() {
         return origTopicFilter;
+    }
+
+    public void addAll(Set<String> scopedReceiverIds) {
+        scopedReceiverIds.forEach(receiverId -> {
+            if (!receiverIds.contains(receiverId)) {
+                receiverIds.add(receiverId);
+                receiverList.add(new NormalMatching(key, origTopicFilter, receiverId));
+            }
+        });
+    }
+
+    public void removeAll(Set<String> scopedReceiverIds) {
+        receiverIds.removeIf(receiverId -> {
+            if (scopedReceiverIds.contains(receiverId)) {
+                receiverList.removeIf(receiver -> receiver.scopedInboxId.equals(receiverId));
+                return true;
+            }
+            return false;
+        });
     }
 }

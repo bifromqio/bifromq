@@ -14,6 +14,7 @@
 package com.baidu.bifromq.dist.util;
 
 import static com.baidu.bifromq.dist.util.TopicUtil.fastJoin;
+import static com.baidu.bifromq.util.TopicConst.DELIMITER;
 import static java.util.Collections.singleton;
 
 import com.baidu.bifromq.type.TopicMessage;
@@ -30,7 +31,7 @@ public interface TopicTrieIterator {
             TrieNode lastTopicLevel = current.getLast();
             if (lastTopicLevel.isLastTopicLevel()) {
                 TrieNode first = current.removeFirst();
-                iterator.next(fastJoin("/", current, TrieNode::levelName), lastTopicLevel.messages());
+                iterator.next(fastJoin(DELIMITER, current, TrieNode::levelName), lastTopicLevel.messages());
                 current.addFirst(first);
             }
             List<TrieNode> children = lastTopicLevel.children();

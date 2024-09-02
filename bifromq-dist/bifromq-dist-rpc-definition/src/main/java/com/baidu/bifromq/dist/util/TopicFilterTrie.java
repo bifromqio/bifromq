@@ -13,8 +13,10 @@
 
 package com.baidu.bifromq.dist.util;
 
-import static com.baidu.bifromq.dist.util.TopicUtil.NUL;
-import static com.baidu.bifromq.dist.util.TopicUtil.SYS_PREFIX;
+import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
+import static com.baidu.bifromq.util.TopicConst.NUL;
+import static com.baidu.bifromq.util.TopicConst.SINGLE_WILDCARD;
+import static com.baidu.bifromq.util.TopicConst.SYS_PREFIX;
 import static com.google.common.collect.Lists.newLinkedList;
 import static java.util.Collections.emptyIterator;
 import static java.util.Collections.emptyList;
@@ -91,7 +93,7 @@ public abstract class TopicFilterTrie {
 
         @Override
         String levelName() {
-            return "#";
+            return MULTI_WILDCARD;
         }
 
         @Override
@@ -335,11 +337,11 @@ public abstract class TopicFilterTrie {
                 assert current().isPresent();
                 TrieNode node = current().get();
                 switch (node.levelName()) {
-                    case "#": {
+                    case MULTI_WILDCARD: {
                         filterTrie = TopicFilterTrie.TopicFilterTrieMultiLevel.INSTANCE;
                         break;
                     }
-                    case "+": {
+                    case SINGLE_WILDCARD: {
                         // merge children's children
                         LinkedList<List<TrieNode>> grandChildren = newLinkedList();
                         boolean isMatchTopic = false;
@@ -356,7 +358,7 @@ public abstract class TopicFilterTrie {
                                 }
                             }
                         }
-                        filterTrie = new TopicFilterTrie.TopicFilterTrieMergedLevel("+", grandChildren,
+                        filterTrie = new TopicFilterTrie.TopicFilterTrieMergedLevel(SINGLE_WILDCARD, grandChildren,
                             startMatching && isMatchTopic);
                         break;
                     }

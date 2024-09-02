@@ -43,6 +43,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
@@ -97,16 +98,15 @@ class DeliverExecutorGroup {
         orderedSharedMatching.invalidateAll();
     }
 
-    public void submit(List<Matching> matchedRoutes, TopicMessagePack msgPack) {
+    public void submit(String tenantId, Set<Matching> matchedRoutes, TopicMessagePack msgPack) {
         int msgPackSize = SizeUtil.estSizeOf(msgPack);
         if (matchedRoutes.size() == 1) {
-            Matching matching = matchedRoutes.get(0);
+            Matching matching = matchedRoutes.iterator().next();
             prepareSend(matching, msgPack, true);
             if (isSendToInbox(matching)) {
                 ITenantMeter.get(matching.tenantId).recordSummary(MqttPersistentFanOutBytes, msgPackSize);
             }
         } else if (matchedRoutes.size() > 1) {
-            String tenantId = matchedRoutes.get(0).tenantId;
             boolean inline = matchedRoutes.size() > inlineFanOutThreshold;
             boolean hasTFanOutBandwidth =
                 resourceThrottler.hasResource(tenantId, TenantResourceType.TotalTransientFanOutBytesPerSeconds);
@@ -155,8 +155,8 @@ class DeliverExecutorGroup {
         return matching.type() == Matching.Type.Normal && ((NormalMatching) matching).subBrokerId == 1;
     }
 
-    public void invalidate(ScopedTopic scopedTopic) {
-        orderedSharedMatching.invalidate(new OrderedSharedMatchingKey(scopedTopic.tenantId, escape(scopedTopic.topic)));
+    public void invalidate(String tenantId, String topicFilter) {
+        orderedSharedMatching.invalidate(new OrderedSharedMatchingKey(tenantId, escape(topicFilter)));
     }
 
     private void prepareSend(Matching matching, TopicMessagePack msgPack, boolean inline) {

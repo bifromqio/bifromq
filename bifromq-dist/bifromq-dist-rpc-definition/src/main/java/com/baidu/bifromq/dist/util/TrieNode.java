@@ -13,6 +13,10 @@
 
 package com.baidu.bifromq.dist.util;
 
+import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
+import static com.baidu.bifromq.util.TopicConst.NUL;
+import static com.baidu.bifromq.util.TopicConst.SINGLE_WILDCARD;
+
 import com.baidu.bifromq.type.TopicMessage;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -24,8 +28,8 @@ import java.util.List;
 import java.util.Map;
 
 public class TrieNode {
-    public static final TrieNode MULTI = new TrieNode("#");
-    public static final TrieNode SINGLE = new TrieNode("+");
+    public static final TrieNode MULTI = new TrieNode(MULTI_WILDCARD);
+    public static final TrieNode SINGLE = new TrieNode(SINGLE_WILDCARD);
     private final String levelName;
     private final Map<String, TrieNode> childMap = new HashMap<>();
     private boolean isLastTopicLevel;
@@ -33,7 +37,7 @@ public class TrieNode {
     private List<TrieNode> sortedChildList;
 
     public TrieNode() {
-        this(TopicUtil.NUL);
+        this(NUL);
     }
 
     public TrieNode(String levelName) {
@@ -57,7 +61,7 @@ public class TrieNode {
         return isLastTopicLevel;
     }
 
-    public Iterable messages() {
+    public Iterable<TopicMessage> messages() {
         return messages;
     }
 

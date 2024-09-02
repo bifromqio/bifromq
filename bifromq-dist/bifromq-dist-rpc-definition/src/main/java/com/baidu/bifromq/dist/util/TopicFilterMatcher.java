@@ -13,7 +13,12 @@
 
 package com.baidu.bifromq.dist.util;
 
+import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
+import static com.baidu.bifromq.util.TopicConst.NUL;
+import static com.baidu.bifromq.util.TopicConst.SINGLE_WILDCARD;
+
 import com.baidu.bifromq.type.TopicMessage;
+import com.baidu.bifromq.util.TopicConst;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -52,8 +57,8 @@ public class TopicFilterMatcher {
             }
         }
         switch (filterName) {
-            case "#":
-                if (matchingLevel == 1 && node.levelName().startsWith(TopicUtil.SYS_PREFIX)) {
+            case MULTI_WILDCARD:
+                if (matchingLevel == 1 && node.levelName().startsWith(TopicConst.SYS_PREFIX)) {
                     // system topic should not be matched by first "#". [MQTT-4.7.2-1]
                     break;
                 }
@@ -72,8 +77,8 @@ public class TopicFilterMatcher {
                 filterLevels.set(matchingLevel, "#");
                 filterLevels.remove(matchingLevel + 1);
                 break;
-            case "+":
-                if (matchingLevel == 1 && node.levelName().startsWith(TopicUtil.SYS_PREFIX)) {
+            case SINGLE_WILDCARD:
+                if (matchingLevel == 1 && node.levelName().startsWith(TopicConst.SYS_PREFIX)) {
                     // system topic should not be matched by first "+". [MQTT-4.7.2-1]
                     break;
                 }
@@ -125,7 +130,7 @@ public class TopicFilterMatcher {
 
     private static List<String> parse(String escapedTopicFilter) {
         List<String> topicLevels = new ArrayList<>();
-        topicLevels.add(TopicUtil.NUL); // always starts with NUL
+        topicLevels.add(NUL); // always starts with NUL
         char splitter = '\u0000';
         StringBuilder tl = new StringBuilder();
         for (int i = 0; i < escapedTopicFilter.length(); i++) {

@@ -13,6 +13,15 @@
 
 package com.baidu.bifromq.dist.util;
 
+import static com.baidu.bifromq.util.TopicConst.DELIMITER;
+import static com.baidu.bifromq.util.TopicConst.DELIMITER_CHAR;
+import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
+import static com.baidu.bifromq.util.TopicConst.NUL;
+import static com.baidu.bifromq.util.TopicConst.NUL_CHAR;
+import static com.baidu.bifromq.util.TopicConst.ORDERED_SHARE;
+import static com.baidu.bifromq.util.TopicConst.SINGLE_WILDCARD;
+import static com.baidu.bifromq.util.TopicConst.SYS_PREFIX;
+import static com.baidu.bifromq.util.TopicConst.UNORDERED_SHARE;
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Lists.newLinkedList;
 import static java.util.Collections.singleton;
@@ -30,13 +39,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class TopicUtil {
-    public static final String NUL = String.valueOf('\u0000');
-    public static final String SYS_PREFIX = "$";
-    public static final char TOPIC_SEPARATOR = '/';
-    public static final String UNORDERED_SHARE = "$share";
-    public static final String ORDERED_SHARE = "$oshare";
-
-
     public static List<String> expand(String topic) {
         List<String> topicLevels = parse(topic, false);
         List<String> topicFilters = newArrayList();
@@ -51,20 +53,21 @@ public class TopicUtil {
         while (!toVisit.isEmpty()) {
             LinkedList<String> currentFilterLevels = toVisit.pollFirst();
             switch (currentFilterLevels.getLast()) {
-                case "#":
+                case MULTI_WILDCARD:
                     topicFilters.add(fastJoin(NUL, currentFilterLevels));
                     break;
-                case "+":
+                case SINGLE_WILDCARD:
                 default:
                     if (currentFilterLevels.size() == topicLevels.size()) {
                         String tf = fastJoin(NUL, currentFilterLevels);
                         topicFilters.add(tf);
                         if (!currentFilterLevels.getLast().isEmpty()) {
                             // "#" also matches parent level if current level name is not empty string
-                            topicFilters.add(fastJoin(NUL, List.of(tf, "#")));
+                            topicFilters.add(fastJoin(NUL, List.of(tf, MULTI_WILDCARD)));
                         }
                     } else {
-                        toFilters(topicLevels.get(currentFilterLevels.size())).descendingIterator()
+                        toFilters(topicLevels.get(currentFilterLevels.size()))
+                            .descendingIterator()
                             .forEachRemaining(f -> {
                                 currentFilterLevels.descendingIterator().forEachRemaining(f::addFirst);
                                 toVisit.addFirst(f);
@@ -83,10 +86,10 @@ public class TopicUtil {
             LinkedList<TrieNode> currentFilterLevels = toVisit.pollFirst();
             TrieNode lastFilter = currentFilterLevels.getLast();
             switch (lastFilter.levelName()) {
-                case "#":
+                case MULTI_WILDCARD:
                     topicFilters.add(fastJoin(NUL, currentFilterLevels, TrieNode::levelName));
                     break;
-                case "+":
+                case SINGLE_WILDCARD:
                 default:
                     TrieNode lastFilterLevel = currentFilterLevels.getLast();
                     if (lastFilterLevel.isLastTopicLevel()) {
@@ -119,7 +122,7 @@ public class TopicUtil {
         while (!toVisit.isEmpty()) {
             LinkedList<String> currentFilterLevels = toVisit.pollFirst();
             switch (currentFilterLevels.getLast()) {
-                case "#": {
+                case MULTI_WILDCARD: {
                     String current = fastJoin(NUL, currentFilterLevels);
                     if (escapedTopicFilter.compareTo(current) < 0) {
                         nextFilter = current;
@@ -136,7 +139,7 @@ public class TopicUtil {
                     }
                     break;
                 }
-                case "+":
+                case SINGLE_WILDCARD:
                 default: {
                     if (currentFilterLevels.size() == topicLevels.size()) {
                         String current = fastJoin(NUL, currentFilterLevels);
@@ -144,7 +147,7 @@ public class TopicUtil {
                             nextFilter = current;
                             break out;
                         }
-                        current = fastJoin(NUL, List.of(current, "#"));
+                        current = fastJoin(NUL, List.of(current, MULTI_WILDCARD));
                         if (escapedTopicFilter.compareTo(current) < 0) {
                             nextFilter = current;
                             break out;
@@ -173,8 +176,8 @@ public class TopicUtil {
 
     private static LinkedList<LinkedList<TrieNode>> genFilters(TrieNode node) {
         LinkedList<LinkedList<TrieNode>> filters = newLinkedList();
-        if (node.levelName().equals(NUL) &&
-            node.children().stream().allMatch(child -> child.levelName().startsWith(SYS_PREFIX))) {
+        if (node.levelName().equals(NUL)
+            && node.children().stream().allMatch(child -> child.levelName().startsWith(SYS_PREFIX))) {
             // SYS topics are not matched by # and +
             if (!node.children().isEmpty()) {
                 node.children().forEach(c -> filters.add(newLinkedList(singleton(c))));
@@ -184,7 +187,7 @@ public class TopicUtil {
                 // # and + matches all non SYS topics
                 TrieNode singleLevelFilter = merge(node.children().stream()
                     .filter(child -> !node.levelName().equals(NUL) || !child.levelName().startsWith(SYS_PREFIX))
-                    .map(child -> child.duplicate("+")).collect(Collectors.toList()))
+                    .map(child -> child.duplicate(SINGLE_WILDCARD)).collect(Collectors.toList()))
                     .iterator().next();
                 merge(Iterables.concat(newArrayList(singleLevelFilter, TrieNode.MULTI), node.children()))
                     .forEach(n -> filters.add(newLinkedList(singleton(n))));
@@ -221,17 +224,17 @@ public class TopicUtil {
 
     private static LinkedList<LinkedList<String>> toFilters(String topicLevel) {
         LinkedList<LinkedList<String>> filters = newLinkedList();
-        if ("#".compareTo(topicLevel) > 0) {
+        if (MULTI_WILDCARD.compareTo(topicLevel) > 0) {
             filters.add(newLinkedList(singleton(topicLevel)));
-            filters.add(newLinkedList(singleton("#")));
-            filters.add(newLinkedList(singleton("+")));
-        } else if ("+".compareTo(topicLevel) > 0) {
-            filters.add(newLinkedList(singleton("#")));
+            filters.add(newLinkedList(singleton(MULTI_WILDCARD)));
+            filters.add(newLinkedList(singleton(SINGLE_WILDCARD)));
+        } else if (SINGLE_WILDCARD.compareTo(topicLevel) > 0) {
+            filters.add(newLinkedList(singleton(MULTI_WILDCARD)));
             filters.add(newLinkedList(singleton(topicLevel)));
-            filters.add(newLinkedList(singleton("+")));
+            filters.add(newLinkedList(singleton(SINGLE_WILDCARD)));
         } else {
-            filters.add(newLinkedList(singleton("#")));
-            filters.add(newLinkedList(singleton("+")));
+            filters.add(newLinkedList(singleton(MULTI_WILDCARD)));
+            filters.add(newLinkedList(singleton(SINGLE_WILDCARD)));
             filters.add(newLinkedList(singleton(topicLevel)));
         }
         return filters;
@@ -239,18 +242,18 @@ public class TopicUtil {
 
     public static String escape(String topicFilter) {
         assert !topicFilter.contains(NUL);
-        return topicFilter.replace("/", NUL);
+        return topicFilter.replace(DELIMITER, NUL);
     }
 
     public static String unescape(String topicFilter) {
-        return topicFilter.replace(NUL, "/");
+        return topicFilter.replace(NUL, DELIMITER);
     }
 
     // parse a topic or topic filter string into a list of topic levels
     // eg. "/" -> ["",""], "/a" -> ["",a], "a/" -> [a,""]
     public static List<String> parse(String topic, boolean isEscaped) {
         List<String> topicLevels = new ArrayList<>();
-        char splitter = isEscaped ? '\u0000' : '/';
+        char splitter = isEscaped ? NUL_CHAR : DELIMITER_CHAR;
         StringBuilder tl = new StringBuilder();
         for (int i = 0; i < topic.length(); i++) {
             if (topic.charAt(i) == splitter) {
@@ -265,7 +268,7 @@ public class TopicUtil {
     }
 
     public static boolean isWildcardTopicFilter(String topicFilter) {
-        return topicFilter.contains("+") || topicFilter.contains("#");
+        return topicFilter.contains(SINGLE_WILDCARD) || topicFilter.contains(MULTI_WILDCARD);
     }
 
     public static boolean isNormalTopicFilter(String topicFilter) {
@@ -284,8 +287,8 @@ public class TopicUtil {
         assert !isNormalTopicFilter(topicFilter);
         String sharePrefix = topicFilter.startsWith(UNORDERED_SHARE) ? UNORDERED_SHARE : ORDERED_SHARE;
         boolean ordered = !topicFilter.startsWith(UNORDERED_SHARE);
-        String rest = topicFilter.substring((sharePrefix + TOPIC_SEPARATOR).length());
-        int firstTopicSeparatorIndex = rest.indexOf(TOPIC_SEPARATOR);
+        String rest = topicFilter.substring((sharePrefix + DELIMITER_CHAR).length());
+        int firstTopicSeparatorIndex = rest.indexOf(DELIMITER_CHAR);
         String shareGroup = rest.substring(0, firstTopicSeparatorIndex);
         return new SharedTopicFilter(topicFilter, ordered, shareGroup,
             rest.substring(firstTopicSeparatorIndex + 1));

@@ -15,10 +15,9 @@ package com.baidu.bifromq.dist.server.scheduler;
 
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKeyPrefix;
 import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
-import static com.baidu.bifromq.dist.util.MessageUtil.buildBatchDistRequest;
 
-import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
@@ -32,6 +31,7 @@ import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistPack;
+import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
 import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
 import com.baidu.bifromq.sysprops.props.DistWorkerFanOutSplitThreshold;
@@ -182,7 +182,9 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                                 .setVer(rangeReplica.ver)
                                 .setKvRangeId(rangeReplica.id)
                                 .setRoCoProc(ROCoProcInput.newBuilder()
-                                    .setDistService(buildBatchDistRequest(batchDist))
+                                    .setDistService(DistServiceROCoProcInput.newBuilder()
+                                        .setBatchDist(batchDist)
+                                        .build())
                                     .build())
                                 .build(), batchDist.getOrderKey())
                             .thenApply(v -> {

@@ -42,6 +42,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Ignore;
 import org.testng.annotations.Test;
 
 @Slf4j
@@ -84,7 +85,7 @@ public class DistQoS0Test extends DistWorkerTest {
         BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "TopicB", copyFromUtf8("Hello"), "orderKey1");
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().getOrDefault("TopicB", 0).intValue(), 0);
 
-        unmatch(tenantA, "TopicA/#", InboxService, "inbox1", "batch1");
+        unmatch(tenantA, "TopicA/#", MqttBroker, "inbox1", "batch1");
     }
 
     @Test(groups = "integration")
@@ -299,21 +300,20 @@ public class DistQoS0Test extends DistWorkerTest {
         when(mqttBroker.open("batch2")).thenReturn(writer2);
         when(mqttBroker.open("batch3")).thenReturn(writer3);
 
-        match(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
-        match(tenantA, "$share/group//a/b/c", MqttBroker, "inbox2", "batch2");
-        match(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox3", "batch3");
-        for (int i = 0; i < 1; ++i) {
-            BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-            assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 3);
-        }
+        match(tenantA, "/a/b/c", MqttBroker, "inbox6", "batch1");
+        match(tenantA, "$share/group//a/b/c", MqttBroker, "inbox7", "batch2");
+        match(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox8", "batch3");
+
+        BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 3);
 
         verify(writer1, timeout(1000).times(1)).deliver(any());
         verify(writer2, timeout(1000).times(1)).deliver(any());
         verify(writer3, timeout(1000).times(1)).deliver(any());
 
-        unmatch(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox3", "batch3");
-        unmatch(tenantA, "$share/group//a/b/c", MqttBroker, "inbox2", "batch2");
-        unmatch(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
+        unmatch(tenantA, "/a/b/c", MqttBroker, "inbox6", "batch1");
+        unmatch(tenantA, "$share/group//a/b/c", MqttBroker, "inbox7", "batch2");
+        unmatch(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox8", "batch3");
     }
 
     @Test(groups = "integration")

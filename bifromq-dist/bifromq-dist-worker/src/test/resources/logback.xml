@@ -20,9 +20,9 @@
         </encoder>
     </appender>
 
-    <logger name="com.baidu.bifromq" level="debug"/>
+    <logger name="com.baidu.bifromq.dist" level="debug"/>
 
-    <root level="info">
+    <root level="WARN">
         <appender-ref ref="STDOUT"/>
     </root>
 </configuration>
