@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.dist.server.scheduler;
 
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKeyPrefix;
 import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
 
@@ -152,10 +153,10 @@ public class DistCallScheduler extends BatchCallScheduler<DistWorkerCall, Map<St
                     });
                     DistPack distPack = distPackBuilder.build();
                     int fanoutScale = tenantFanoutGetter.apply(tenantId);
-                    List<KVRangeSetting> ranges = distWorkerClient.findByBoundary(Boundary.newBuilder()
+                    List<KVRangeSetting> ranges = findByBoundary(Boundary.newBuilder()
                         .setStartKey(matchRecordKeyPrefix(tenantId))
                         .setEndKey(tenantUpperBound(tenantId))
-                        .build());
+                        .build(), distWorkerClient.latestEffectiveRouter());
                     if (fanoutScale > fanoutSplitThreshold) {
                         ranges.forEach(range -> distPacksByRangeReplica.computeIfAbsent(
                             new KVRangeReplica(range.id, range.ver, range.leader),

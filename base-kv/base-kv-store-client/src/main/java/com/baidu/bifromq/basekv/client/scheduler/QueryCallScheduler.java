@@ -13,8 +13,10 @@
 
 package com.baidu.bifromq.basekv.client.scheduler;
 
-import com.baidu.bifromq.basekv.client.KVRangeSetting;
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
+
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
@@ -51,7 +53,7 @@ public abstract class QueryCallScheduler<ReqT, RespT> extends BatchCallScheduler
 
     @Override
     protected final Optional<QueryCallBatcherKey> find(ReqT req) {
-        return storeClient.findByKey(rangeKey(req)).map(
+        return findByKey(rangeKey(req), storeClient.latestEffectiveRouter()).map(
             range -> new QueryCallBatcherKey(range.id, selectStore(range, req), selectQueue(req), range.ver));
     }
 

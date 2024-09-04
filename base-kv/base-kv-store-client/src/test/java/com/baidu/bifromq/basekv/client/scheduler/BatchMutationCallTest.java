@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basekv.client.scheduler;
 
 import static com.baidu.bifromq.basekv.client.scheduler.Fixtures.setting;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.timeout;
@@ -21,18 +22,18 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.IMutationPipeline;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
+import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadLocalRandom;
@@ -42,7 +43,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.internal.util.collections.Sets;
-import org.mockito.stubbing.Answer;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -71,7 +71,10 @@ public class BatchMutationCallTest {
 
     @Test
     public void addToSameBatch() {
-        when(storeClient.findByKey(any())).thenReturn(Optional.of(setting(id, "V1", 0)));
+        when(storeClient.latestEffectiveRouter()).thenReturn(new TreeMap<>(BoundaryUtil::compare) {{
+            put(FULL_BOUNDARY, setting(id, "V1", 0));
+        }});
+
         when(storeClient.createMutationPipeline("V1")).thenReturn(mutationPipeline1);
         when(mutationPipeline1.execute(any()))
             .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeRWReply.newBuilder().build(),
@@ -102,12 +105,6 @@ public class BatchMutationCallTest {
 
     @Test
     public void addToDifferentBatch() {
-        when(storeClient.findByKey(any())).thenAnswer((Answer<Optional<KVRangeSetting>>) invocation -> {
-            int req = Integer.parseInt(((ByteString) invocation.getArgument(0)).toStringUtf8());
-            return Optional.of(req < 500 ?
-                setting(id, "V1", 0) :
-                setting(id, "V2", 0));
-        });
         when(storeClient.createMutationPipeline("V1")).thenReturn(mutationPipeline1);
         when(storeClient.createMutationPipeline("V2")).thenReturn(mutationPipeline2);
         when(mutationPipeline1.execute(any()))
@@ -124,6 +121,15 @@ public class BatchMutationCallTest {
         for (int i = 0; i < 1000; i++) {
             int req = ThreadLocalRandom.current().nextInt(1, 1001);
             reqList.add(req);
+            if (req < 500) {
+                when(storeClient.latestEffectiveRouter()).thenReturn(new TreeMap<>(BoundaryUtil::compare) {{
+                    put(FULL_BOUNDARY, setting(id, "V1", 0));
+                }});
+            } else {
+                when(storeClient.latestEffectiveRouter()).thenReturn(new TreeMap<>(BoundaryUtil::compare) {{
+                    put(FULL_BOUNDARY, setting(id, "V2", 0));
+                }});
+            }
             futures.add(scheduler.schedule(ByteString.copyFromUtf8(Integer.toString(req)))
                 .thenAccept((v) -> respList.add(Integer.parseInt(v.toStringUtf8()))));
         }
@@ -134,7 +140,10 @@ public class BatchMutationCallTest {
 
     @Test
     public void pipelineExpiry() {
-        when(storeClient.findByKey(any())).thenReturn(Optional.of(setting(id, "V1", 0)));
+        when(storeClient.latestEffectiveRouter()).thenReturn(new TreeMap<>(BoundaryUtil::compare) {{
+            put(FULL_BOUNDARY, setting(id, "V1", 0));
+        }});
+
         when(storeClient.createMutationPipeline("V1")).thenReturn(mutationPipeline1);
         when(mutationPipeline1.execute(any()))
             .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeRWReply.newBuilder().build()));

@@ -26,8 +26,10 @@ import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getQue
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getRecoverMethod;
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getSplitMethod;
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getTransferLeadershipMethod;
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.toLeaderRanges;
 import static java.util.Collections.emptyMap;
+import static java.util.Collections.emptyNavigableMap;
 
 import com.baidu.bifromq.basecrdt.core.api.IORMap;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
@@ -37,6 +39,7 @@ import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
+import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.baidu.bifromq.basekv.store.proto.BootstrapReply;
 import com.baidu.bifromq.basekv.store.proto.BootstrapRequest;
 import com.baidu.bifromq.basekv.store.proto.ChangeReplicaConfigReply;
@@ -54,13 +57,14 @@ import com.baidu.bifromq.basekv.store.proto.RecoverRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipReply;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipRequest;
+import com.baidu.bifromq.basekv.utils.DescriptorUtil;
+import com.baidu.bifromq.basekv.utils.KeySpaceDAG;
 import com.baidu.bifromq.baserpc.BluePrint;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.baserpc.exception.ServerNotFoundException;
 import com.baidu.bifromq.baserpc.utils.BehaviorSubject;
 import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.collect.Iterators;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
@@ -69,15 +73,16 @@ import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.subjects.Subject;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.slf4j.Logger;
 
@@ -92,7 +97,6 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     private final ICRDTService crdtService;
     private final AtomicBoolean closed = new AtomicBoolean();
     private final CompositeDisposable disposables = new CompositeDisposable();
-    private final KVRangeRouter rangeRouter;
     private final int queryPipelinesPerStore;
     private final IORMap storeDescriptorCRDT;
     private final MethodDescriptor<BootstrapRequest, BootstrapReply> bootstrapMethod;
@@ -106,6 +110,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     private final MethodDescriptor<KVRangeRORequest, KVRangeROReply> queryMethod;
     private final Subject<Map<String, String>> storeToServerSubject = BehaviorSubject.createDefault(Maps.newHashMap());
     private final Observable<ClusterInfo> clusterInfoObservable;
+    private final BehaviorSubject<NavigableMap<Boundary, KVRangeSetting>> effectiveRouterSubject =
+        BehaviorSubject.createDefault(emptyNavigableMap());
 
     // key: serverId, val: storeId
     private volatile Map<String, String> serverToStoreMap = Maps.newHashMap();
@@ -121,7 +127,6 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     BaseKVStoreClient(BaseKVStoreClientBuilder builder) {
         this.clusterId = builder.clusterId;
         log = SiftLogger.getLogger(BaseKVStoreClient.class, "clusterId", clusterId);
-        rangeRouter = new KVRangeRouter(clusterId);
         BluePrint bluePrint = RPCBluePrint.build(clusterId);
         this.bootstrapMethod = bluePrint.methodDesc(
             toScopedFullMethodName(clusterId, getBootstrapMethod().getFullMethodName()));
@@ -171,6 +176,13 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                 return complete;
             });
         disposables.add(clusterInfoObservable.subscribe(this::refresh));
+        disposables.add(effectiveRouterSubject.subscribe(router -> {
+            if (!router.isEmpty()) {
+                synchronized (this) {
+                    this.notifyAll();
+                }
+            }
+        }));
     }
 
     @Override
@@ -189,13 +201,13 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     }
 
     @Override
-    public Optional<KVRangeSetting> findByKey(ByteString key) {
-        return rangeRouter.findByKey(key);
+    public Observable<NavigableMap<Boundary, KVRangeSetting>> effectiveRouter() {
+        return effectiveRouterSubject.distinctUntilChanged();
     }
 
     @Override
-    public List<KVRangeSetting> findByBoundary(Boundary boundary) {
-        return rangeRouter.findByBoundary(boundary);
+    public NavigableMap<Boundary, KVRangeSetting> latestEffectiveRouter() {
+        return effectiveRouterSubject.getValue();
     }
 
     @Override
@@ -335,29 +347,31 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
 
     @Override
     public IMutationPipeline createMutationPipeline(String storeId) {
-        return new ManagedMutationPipeline(storeToServerSubject.map(m -> {
-            String serverId = m.get(storeId);
-            if (serverId == null) {
-                return new IRPCClient.IRequestPipeline<>() {
-                    @Override
-                    public boolean isClosed() {
-                        return false;
-                    }
+        return new ManagedMutationPipeline(storeToServerSubject
+            .map(m -> m.get(storeId))
+            .distinctUntilChanged()
+            .map(serverId -> {
+                if (serverId == null) {
+                    return new IRPCClient.IRequestPipeline<>() {
+                        @Override
+                        public boolean isClosed() {
+                            return false;
+                        }
 
-                    @Override
-                    public CompletableFuture<KVRangeRWReply> invoke(KVRangeRWRequest req) {
-                        return CompletableFuture.failedFuture(
-                            new ServerNotFoundException("No hosting server found for store: " + storeId));
-                    }
+                        @Override
+                        public CompletableFuture<KVRangeRWReply> invoke(KVRangeRWRequest req) {
+                            return CompletableFuture.failedFuture(
+                                new ServerNotFoundException("No hosting server found for store: " + storeId));
+                        }
 
-                    @Override
-                    public void close() {
+                        @Override
+                        public void close() {
 
-                    }
-                };
-            }
-            return rpcClient.createRequestPipeline("", serverId, null, emptyMap(), executeMethod);
-        }));
+                        }
+                    };
+                }
+                return rpcClient.createRequestPipeline("", serverId, null, emptyMap(), executeMethod);
+            }));
     }
 
     @Override
@@ -371,42 +385,44 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     }
 
     private IQueryPipeline createQueryPipeline(String storeId, boolean linearized) {
-        return new ManagedQueryPipeline(storeToServerSubject.map(m -> {
-            String serverId = m.get(storeId);
-            if (serverId == null) {
-                return new IRPCClient.IRequestPipeline<>() {
-                    @Override
-                    public boolean isClosed() {
-                        return false;
-                    }
+        return new ManagedQueryPipeline(storeToServerSubject
+            .map(m -> m.get(storeId))
+            .distinctUntilChanged()
+            .map(serverId -> {
+                if (serverId == null) {
+                    return new IRPCClient.IRequestPipeline<>() {
+                        @Override
+                        public boolean isClosed() {
+                            return false;
+                        }
 
-                    @Override
-                    public CompletableFuture<KVRangeROReply> invoke(KVRangeRORequest req) {
-                        return CompletableFuture.failedFuture(
-                            new ServerNotFoundException("No hosting server found for store: " + storeId));
-                    }
+                        @Override
+                        public CompletableFuture<KVRangeROReply> invoke(KVRangeRORequest req) {
+                            return CompletableFuture.failedFuture(
+                                new ServerNotFoundException("No hosting server found for store: " + storeId));
+                        }
 
-                    @Override
-                    public void close() {
+                        @Override
+                        public void close() {
 
-                    }
-                };
-            }
-            if (linearized) {
-                return rpcClient.createRequestPipeline("", serverId, null, emptyMap(), linearizedQueryMethod);
-            } else {
-                return rpcClient.createRequestPipeline("", serverId, null, emptyMap(), queryMethod);
-            }
-        }));
+                        }
+                    };
+                }
+                if (linearized) {
+                    return rpcClient.createRequestPipeline("", serverId, null, emptyMap(), linearizedQueryMethod);
+                } else {
+                    return rpcClient.createRequestPipeline("", serverId, null, emptyMap(), queryMethod);
+                }
+            }));
     }
 
     @Override
     public void join() {
         // wait for router covering full range
-        if (!rangeRouter.isFullRangeCovered()) {
+        if (effectiveRouterSubject.getValue() == null || effectiveRouterSubject.getValue().isEmpty()) {
             synchronized (this) {
                 try {
-                    if (!rangeRouter.isFullRangeCovered()) {
+                    if (effectiveRouterSubject.getValue().isEmpty()) {
                         this.wait();
                     }
                 } catch (InterruptedException e) {
@@ -455,22 +471,30 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         boolean rangeRouteUpdated = refreshRangeRoute(clusterInfo);
         boolean storeRouteUpdated = refreshStoreRoute(clusterInfo);
         if (storeRouteUpdated) {
-            refreshQueryPipelines(storeToServerMap);
+            refreshQueryPipelines(clusterInfo.storeDescriptors.keySet());
         }
         if (rangeRouteUpdated || storeRouteUpdated) {
-            refreshMutPipelines(storeToServerMap, clusterInfo.storeDescriptors);
-        }
-        if (rangeRouteUpdated) {
-            if (rangeRouter.isFullRangeCovered()) {
-                synchronized (this) {
-                    this.notifyAll();
-                }
-            }
+            refreshMutPipelines(clusterInfo.storeDescriptors);
         }
     }
 
     private boolean refreshRangeRoute(ClusterInfo clusterInfo) {
-        return rangeRouter.reset(Sets.newHashSet(clusterInfo.storeDescriptors.values()));
+        Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch =
+            getEffectiveEpoch(Sets.newHashSet(clusterInfo.storeDescriptors.values()));
+        if (effectiveEpoch.isEmpty()) {
+            return false;
+        }
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> leaderRanges =
+            toLeaderRanges(effectiveEpoch.get().storeDescriptors());
+        KeySpaceDAG dag = new KeySpaceDAG(leaderRanges);
+        NavigableMap<Boundary, KVRangeSetting> router = Maps.transformValues(dag.getEffectiveFullCoveredRoute(),
+            leaderRange -> new KVRangeSetting(clusterId, leaderRange.storeId(), leaderRange.descriptor()));
+        if (router.isEmpty()) {
+            return false;
+        }
+        NavigableMap<Boundary, KVRangeSetting> last = effectiveRouterSubject.getValue();
+        effectiveRouterSubject.onNext(router);
+        return !router.equals(last);
     }
 
     private boolean refreshStoreRoute(ClusterInfo clusterInfo) {
@@ -486,121 +510,52 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         return true;
     }
 
-    private void refreshMutPipelines(Map<String, String> newStoreToServerMap,
-                                     Map<String, KVRangeStoreDescriptor> storeDescriptorMap) {
-        Map<String, Map<KVRangeId, IMutationPipeline>> nextMutPplns = Maps.newHashMap(mutPplns);
-        nextMutPplns.forEach((k, v) -> nextMutPplns.put(k, Maps.newHashMap(v)));
-        Set<String> oldStoreIds = Sets.newHashSet(mutPplns.keySet());
-        for (String existingStoreId : Sets.intersection(newStoreToServerMap.keySet(), oldStoreIds)) {
-            Set<KVRangeId> newRangeIds = storeDescriptorMap.get(existingStoreId).getRangesList().stream()
-                .map(KVRangeDescriptor::getId).collect(Collectors.toSet());
-            Set<KVRangeId> oldRangeIds = Sets.newHashSet(nextMutPplns.get(existingStoreId).keySet());
-            for (KVRangeId newRangeId : Sets.difference(newRangeIds, oldRangeIds)) {
-                nextMutPplns.get(existingStoreId)
-                    .put(newRangeId, new MutPipeline(newStoreToServerMap.get(existingStoreId)));
-            }
-            for (KVRangeId deadRangeId : Sets.difference(oldRangeIds, newRangeIds)) {
-                nextMutPplns.get(existingStoreId).remove(deadRangeId).close();
-            }
-        }
-        Set<KVRangeId> effectiveKVRangeIds = rangeRouter.findByBoundary(FULL_BOUNDARY).stream()
-            .map(m -> m.id).collect(Collectors.toSet());
-        for (String newStoreId : Sets.difference(newStoreToServerMap.keySet(), oldStoreIds)) {
-            Map<KVRangeId, IMutationPipeline> rangeExecPplns =
-                nextMutPplns.computeIfAbsent(newStoreId, k -> new HashMap<>());
-            for (KVRangeDescriptor rangeDesc : storeDescriptorMap.get(newStoreId).getRangesList()) {
-                if (effectiveKVRangeIds.contains(rangeDesc.getId())) {
-                    // only create mutation pipelines for effective ranges
-                    rangeExecPplns.put(rangeDesc.getId(), new MutPipeline(newStoreToServerMap.get(newStoreId)));
+    private void refreshMutPipelines(Map<String, KVRangeStoreDescriptor> storeDescriptors) {
+        Map<String, Map<KVRangeId, IMutationPipeline>> nextMutPplns = new HashMap<>();
+        Map<String, Map<KVRangeId, IMutationPipeline>> currentMutPplns = mutPplns;
+
+        for (KVRangeStoreDescriptor storeDescriptor : storeDescriptors.values()) {
+            String storeId = storeDescriptor.getId();
+            for (KVRangeDescriptor rangeDescriptor : storeDescriptor.getRangesList()) {
+                if (rangeDescriptor.getRole() != RaftNodeStatus.Leader) {
+                    continue;
+                }
+                KVRangeId rangeId = rangeDescriptor.getId();
+                Map<KVRangeId, IMutationPipeline> currentRanges =
+                    currentMutPplns.getOrDefault(storeId, Collections.emptyMap());
+                IMutationPipeline existingPpln = currentRanges.get(rangeId);
+                if (existingPpln != null) {
+                    nextMutPplns.computeIfAbsent(storeId, k -> new HashMap<>()).put(rangeId, existingPpln);
+                } else {
+                    nextMutPplns.computeIfAbsent(storeId, k -> new HashMap<>())
+                        .put(rangeId, createMutationPipeline(storeId));
                 }
             }
         }
-
-        for (String deadStoreId : Sets.difference(oldStoreIds, newStoreToServerMap.keySet())) {
-            nextMutPplns.remove(deadStoreId).values().forEach(IMutationPipeline::close);
-        }
         mutPplns = nextMutPplns;
-    }
-
-    private void refreshQueryPipelines(Map<String, String> newStoreToServerMap) {
-        if (newStoreToServerMap.keySet().equals(queryPplns.keySet())) {
-            return;
-        }
-        Set<String> oldStoreIds = Sets.newHashSet(queryPplns.keySet());
-        // query pipelines
-        Map<String, List<IQueryPipeline>> nextQueryPplns = Maps.newHashMap(queryPplns);
-        nextQueryPplns.forEach((k, v) -> nextQueryPplns.put(k, Lists.newArrayList(v)));
-        // lnr query pipelines
-        Map<String, List<IQueryPipeline>> nextLnrQueryPplns = Maps.newHashMap(lnrQueryPplns);
-        nextQueryPplns.forEach((k, v) -> nextLnrQueryPplns.put(k, Lists.newArrayList(v)));
-
-        for (String newStoreId : Sets.difference(newStoreToServerMap.keySet(), oldStoreIds)) {
-            // setup new query pipelines
-            List<IQueryPipeline> storeQueryPplns = nextQueryPplns.computeIfAbsent(newStoreId, k -> new ArrayList<>());
-            IntStream.range(0, queryPipelinesPerStore)
-                .forEach(i -> storeQueryPplns.add(new QueryPipeline(newStoreToServerMap.get(newStoreId))));
-
-            // setup new linear query pipelines
-            List<IQueryPipeline> storeLnrQueryPplns =
-                nextLnrQueryPplns.computeIfAbsent(newStoreId, k -> new ArrayList<>());
-            IntStream.range(0, queryPipelinesPerStore)
-                .forEach(i -> storeLnrQueryPplns.add(new QueryPipeline(newStoreToServerMap.get(newStoreId), true)));
-        }
-        for (String deadStoreId : Sets.difference(oldStoreIds, newStoreToServerMap.keySet())) {
-            // close store pipelines
-            nextQueryPplns.remove(deadStoreId).forEach(IQueryPipeline::close);
-            nextLnrQueryPplns.remove(deadStoreId).forEach(IQueryPipeline::close);
-        }
-        queryPplns = nextQueryPplns;
-        lnrQueryPplns = nextLnrQueryPplns;
-    }
-
-    private class MutPipeline implements IMutationPipeline {
-        private final IRPCClient.IRequestPipeline<KVRangeRWRequest, KVRangeRWReply> ppln;
-
-        MutPipeline(String serverId) {
-            ppln = rpcClient.createRequestPipeline("", serverId, null, emptyMap(), executeMethod);
-        }
-
-        @Override
-        public CompletableFuture<KVRangeRWReply> execute(KVRangeRWRequest request) {
-            log.trace("Requesting rw range:req={}", request);
-            return ppln.invoke(request);
-        }
-
-        @Override
-        public void close() {
-            ppln.close();
+        // clear mut pipelines targeting non-exist storeId;
+        for (String storeId : Sets.difference(currentMutPplns.keySet(), nextMutPplns.keySet())) {
+            currentMutPplns.get(storeId).values().forEach(IMutationPipeline::close);
         }
     }
 
-    private class QueryPipeline implements IQueryPipeline {
-        private final IRPCClient.IRequestPipeline<KVRangeRORequest, KVRangeROReply> ppln;
-        private final boolean linearized;
-
-        QueryPipeline(String serverId) {
-            this(serverId, false);
-        }
-
-        QueryPipeline(String serverId, boolean linearized) {
-            this.linearized = linearized;
-            if (linearized) {
-                ppln = rpcClient.createRequestPipeline("", serverId, null, emptyMap(), linearizedQueryMethod);
+    private void refreshQueryPipelines(Set<String> allStoreIds) {
+        Map<String, List<IQueryPipeline>> nextQueryPplns = new HashMap<>();
+        Map<String, List<IQueryPipeline>> currentQueryPplns = queryPplns;
+        for (String storeId : allStoreIds) {
+            if (currentQueryPplns.containsKey(storeId)) {
+                nextQueryPplns.put(storeId, currentQueryPplns.get(storeId));
             } else {
-                ppln = rpcClient.createRequestPipeline("", serverId, null,
-                    emptyMap(), queryMethod);
+                List<IQueryPipeline> queryPipelines = new ArrayList<>(queryPipelinesPerStore);
+                IntStream.range(0, queryPipelinesPerStore)
+                    .forEach(i -> queryPipelines.add(createQueryPipeline(storeId)));
+                nextQueryPplns.put(storeId, queryPipelines);
             }
         }
-
-        @Override
-        public CompletableFuture<KVRangeROReply> query(KVRangeRORequest request) {
-            log.trace("Invoke ro range request: linearized={} \n{}", linearized, request);
-            return ppln.invoke(request);
-        }
-
-        @Override
-        public void close() {
-            ppln.close();
+        queryPplns = nextQueryPplns;
+        // clear query pipelines targeting non-exist storeId;
+        for (String storeId : Sets.difference(currentQueryPplns.keySet(), allStoreIds)) {
+            currentQueryPplns.get(storeId).forEach(IQueryPipeline::close);
         }
     }
 }

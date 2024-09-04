@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.basekv.client.scheduler;
 
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -23,6 +25,7 @@ public class Fixtures {
         KVRangeDescriptor descriptor = KVRangeDescriptor.newBuilder()
             .setId(id)
             .setVer(ver)
+            .setBoundary(FULL_BOUNDARY)
             .setConfig(ClusterConfig.newBuilder()
                 .addVoters(leaderStoreId)
                 .build())

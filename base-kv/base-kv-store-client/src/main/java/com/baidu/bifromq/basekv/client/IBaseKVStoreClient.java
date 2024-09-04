@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.client;
 
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.store.proto.BootstrapReply;
 import com.baidu.bifromq.basekv.store.proto.BootstrapRequest;
@@ -32,10 +33,11 @@ import com.baidu.bifromq.basekv.store.proto.TransferLeadershipReply;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipRequest;
 import com.baidu.bifromq.baserpc.IConnectable;
 import io.reactivex.rxjava3.core.Observable;
+import java.util.NavigableMap;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
-public interface IBaseKVStoreClient extends IKVRangeRouter, IConnectable {
+public interface IBaseKVStoreClient extends IConnectable {
     static BaseKVStoreClientBuilder newBuilder() {
         return new BaseKVStoreClientBuilder();
     }
@@ -43,6 +45,10 @@ public interface IBaseKVStoreClient extends IKVRangeRouter, IConnectable {
     String clusterId();
 
     Observable<Set<KVRangeStoreDescriptor>> describe();
+
+    Observable<NavigableMap<Boundary, KVRangeSetting>> effectiveRouter();
+
+    NavigableMap<Boundary, KVRangeSetting> latestEffectiveRouter();
 
     CompletableFuture<BootstrapReply> bootstrap(String storeId, BootstrapRequest request);
 

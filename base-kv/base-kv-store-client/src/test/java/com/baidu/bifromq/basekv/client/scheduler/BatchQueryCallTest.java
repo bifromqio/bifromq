@@ -14,23 +14,26 @@
 package com.baidu.bifromq.basekv.client.scheduler;
 
 import static com.baidu.bifromq.basekv.client.scheduler.Fixtures.setting;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.IQueryPipeline;
+import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.KVRangeROReply;
+import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -70,7 +73,9 @@ public class BatchQueryCallTest {
     public void addToSameBatch() {
         ExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
-        when(storeClient.findByKey(any())).thenReturn(Optional.of(setting(id, "V1", 0)));
+        when(storeClient.latestEffectiveRouter()).thenReturn(new TreeMap<>(BoundaryUtil::compare) {{
+            put(FULL_BOUNDARY, setting(id, "V1", 0));
+        }});
         when(storeClient.createLinearizedQueryPipeline("V1")).thenReturn(queryPipeline1);
         when(queryPipeline1.query(any()))
             .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeROReply.newBuilder().build(), executor));
@@ -95,12 +100,6 @@ public class BatchQueryCallTest {
 
     @Test
     public void addToDifferentBatch() {
-        when(storeClient.findByKey(any())).thenAnswer((Answer<Optional<KVRangeSetting>>) invocation -> {
-            int req = Integer.parseInt(((ByteString) invocation.getArgument(0)).toStringUtf8());
-            return Optional.of(req < 500 ?
-                setting(id, "V1", 0) :
-                setting(id, "V2", 0));
-        });
         when(storeClient.createLinearizedQueryPipeline("V1")).thenReturn(queryPipeline1);
         when(storeClient.createLinearizedQueryPipeline("V2")).thenReturn(queryPipeline2);
         ExecutorService executor1 = Executors.newSingleThreadScheduledExecutor();
@@ -121,10 +120,16 @@ public class BatchQueryCallTest {
             int req = ThreadLocalRandom.current().nextInt(1, 1001);
             if (req < 500) {
                 reqList1.add(req);
+                when(storeClient.latestEffectiveRouter()).thenReturn(new TreeMap<>(BoundaryUtil::compare) {{
+                    put(FULL_BOUNDARY, setting(id, "V1", 0));
+                }});
                 futures.add(scheduler.schedule(ByteString.copyFromUtf8(Integer.toString(req)))
                     .thenAccept((v) -> respList1.add(Integer.parseInt(v.toStringUtf8()))));
             } else {
                 reqList2.add(req);
+                when(storeClient.latestEffectiveRouter()).thenReturn(new TreeMap<>(BoundaryUtil::compare) {{
+                    put(FULL_BOUNDARY, setting(id, "V2", 0));
+                }});
                 futures.add(scheduler.schedule(ByteString.copyFromUtf8(Integer.toString(req)))
                     .thenAccept((v) -> respList2.add(Integer.parseInt(v.toStringUtf8()))));
             }
@@ -141,7 +146,10 @@ public class BatchQueryCallTest {
     public void pipelineExpiry() {
         ExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
-        when(storeClient.findByKey(any())).thenReturn(Optional.of(setting(id, "V1", 0)));
+        when(storeClient.latestEffectiveRouter()).thenReturn(new TreeMap<>(BoundaryUtil::compare) {{
+            put(FULL_BOUNDARY, setting(id, "V1", 0));
+        }});
+
         when(storeClient.createQueryPipeline("V1")).thenReturn(queryPipeline1);
         when(queryPipeline1.query(any()))
             .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeROReply.newBuilder().build(), executor));

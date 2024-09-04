@@ -13,13 +13,14 @@
 
 package com.baidu.bifromq.inbox.store.gc;
 
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
 import static com.baidu.bifromq.inbox.util.MessageUtil.buildGCRequest;
 
-import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
@@ -61,10 +62,11 @@ public class InboxStoreGCProcessor implements IInboxStoreGCProcessor {
         List<KVRangeSetting> rangeSettingList;
         if (tenantId != null) {
             ByteString tenantPrefix = tenantPrefix(tenantId);
-            rangeSettingList = storeClient.findByBoundary(Boundary.newBuilder()
-                .setStartKey(tenantPrefix).setEndKey(upperBound(tenantPrefix)).build());
+            rangeSettingList = findByBoundary(Boundary.newBuilder()
+                    .setStartKey(tenantPrefix).setEndKey(upperBound(tenantPrefix)).build(),
+                storeClient.latestEffectiveRouter());
         } else {
-            rangeSettingList = storeClient.findByBoundary(FULL_BOUNDARY);
+            rangeSettingList = findByBoundary(FULL_BOUNDARY, storeClient.latestEffectiveRouter());
             if (localServerId != null) {
                 rangeSettingList.removeIf(rangeSetting -> !rangeSetting.leader.equals(localServerId));
             }

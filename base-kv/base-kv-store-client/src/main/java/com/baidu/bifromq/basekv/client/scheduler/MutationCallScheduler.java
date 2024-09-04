@@ -13,8 +13,10 @@
 
 package com.baidu.bifromq.basekv.client.scheduler;
 
-import com.baidu.bifromq.basekv.client.KVRangeSetting;
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
+
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
@@ -45,7 +47,7 @@ public abstract class MutationCallScheduler<ReqT, RespT>
 
     @Override
     protected final Optional<MutationCallBatcherKey> find(ReqT subCall) {
-        Optional<KVRangeSetting> rangeSetting = storeClient.findByKey(rangeKey(subCall));
+        Optional<KVRangeSetting> rangeSetting = findByKey(rangeKey(subCall), storeClient.latestEffectiveRouter());
         return rangeSetting.map(setting -> new MutationCallBatcherKey(setting.id, setting.leader, setting.ver));
     }
 

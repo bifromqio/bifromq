@@ -24,13 +24,17 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.KVRangeSetting;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
+import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.retain.rpc.proto.GCRequest;
-import java.util.List;
+import com.google.protobuf.ByteString;
+import java.util.Collections;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -58,11 +62,11 @@ public class RetainStoreGCProcessorTest {
     public void testGCNonExistTenant() {
         String tenantId = "tenantId";
         gcProcessor = new RetainStoreGCProcessor(storeClient, null);
-        when(storeClient.findByKey(any())).thenReturn(Optional.empty());
+        when(storeClient.latestEffectiveRouter()).thenReturn(Collections.emptyNavigableMap());
+
         IRetainStoreGCProcessor.Result result =
             gcProcessor.gc(System.nanoTime(), tenantId, null, HLC.INST.getPhysical()).join();
         assertEquals(result, IRetainStoreGCProcessor.Result.ERROR);
-        verify(storeClient).findByKey(eq(tenantNS(tenantId)));
     }
 
     @Test
@@ -74,12 +78,14 @@ public class RetainStoreGCProcessorTest {
         KVRangeDescriptor rangeDescriptor = KVRangeDescriptor.newBuilder()
             .setId(KVRangeIdUtil.generate())
             .setVer(1)
+            .setBoundary(FULL_BOUNDARY)
             .build();
         KVRangeSetting setting = new KVRangeSetting("clueter", "store", rangeDescriptor);
-        when(storeClient.findByKey(any())).thenReturn(Optional.of(setting));
+        when(storeClient.latestEffectiveRouter()).thenReturn(new TreeMap<>(BoundaryUtil::compare) {{
+            put(FULL_BOUNDARY, setting);
+        }});
         when(storeClient.execute(anyString(), any())).thenReturn(new CompletableFuture<>());
         gcProcessor.gc(reqId, tenantId, null, now);
-        verify(storeClient).findByKey(eq(tenantNS(tenantId)));
         verify(storeClient).execute(eq(setting.leader), argThat(req -> {
             if (req.getReqId() != reqId
                 || req.getVer() != rangeDescriptor.getVer()
@@ -104,12 +110,14 @@ public class RetainStoreGCProcessorTest {
         KVRangeDescriptor rangeDescriptor = KVRangeDescriptor.newBuilder()
             .setId(KVRangeIdUtil.generate())
             .setVer(1)
+            .setBoundary(FULL_BOUNDARY)
             .build();
-        KVRangeSetting setting = new KVRangeSetting("clueter", "store", rangeDescriptor);
-        when(storeClient.findByKey(any())).thenReturn(Optional.of(setting));
+        KVRangeSetting setting = new KVRangeSetting("cluster", "store", rangeDescriptor);
+        when(storeClient.latestEffectiveRouter()).thenReturn(new TreeMap<>(BoundaryUtil::compare) {{
+            put(FULL_BOUNDARY, setting);
+        }});
         when(storeClient.execute(anyString(), any())).thenReturn(new CompletableFuture<>());
         gcProcessor.gc(reqId, tenantId, expirySeconds, now);
-        verify(storeClient).findByKey(eq(tenantNS(tenantId)));
         verify(storeClient).execute(eq(setting.leader), argThat(req -> {
             if (req.getReqId() != reqId
                 || req.getVer() != rangeDescriptor.getVer()
@@ -131,19 +139,28 @@ public class RetainStoreGCProcessorTest {
         int expirySeconds = 10;
         String localStoreId = "localStore";
         gcProcessor = new RetainStoreGCProcessor(storeClient, localStoreId);
-        KVRangeDescriptor rangeDescriptor = KVRangeDescriptor.newBuilder()
-            .setId(KVRangeIdUtil.generate())
+        KVRangeDescriptor localDescriptor = KVRangeDescriptor.newBuilder()
+            .setId(KVRangeIdUtil.next(1))
             .setVer(1)
+            .setBoundary(Boundary.newBuilder().setEndKey(ByteString.copyFromUtf8("a")).build())
             .build();
-        KVRangeSetting localSetting = new KVRangeSetting("cluster", localStoreId, rangeDescriptor);
-        KVRangeSetting remoteSetting = new KVRangeSetting("cluster", "remoteStore", rangeDescriptor);
-        when(storeClient.findByBoundary(FULL_BOUNDARY)).thenReturn(List.of(localSetting, remoteSetting));
+        KVRangeDescriptor remoteDescriptor = KVRangeDescriptor.newBuilder()
+            .setId(KVRangeIdUtil.next(1))
+            .setVer(1)
+            .setBoundary(Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("a")).build())
+            .build();
+        KVRangeSetting localSetting = new KVRangeSetting("cluster", localStoreId, localDescriptor);
+        KVRangeSetting remoteSetting = new KVRangeSetting("cluster", "remoteStore", remoteDescriptor);
+        when(storeClient.latestEffectiveRouter()).thenReturn(new TreeMap<>(BoundaryUtil::compare) {{
+            put(localDescriptor.getBoundary(), localSetting);
+            put(remoteDescriptor.getBoundary(), remoteSetting);
+        }});
         when(storeClient.execute(anyString(), any())).thenReturn(new CompletableFuture<>());
         gcProcessor.gc(reqId, null, expirySeconds, now);
         verify(storeClient).execute(eq(localSetting.leader), argThat(req -> {
             if (req.getReqId() != reqId
-                || req.getVer() != rangeDescriptor.getVer()
-                || !req.getKvRangeId().equals(rangeDescriptor.getId())) {
+                || req.getVer() != localDescriptor.getVer()
+                || !req.getKvRangeId().equals(localDescriptor.getId())) {
                 return false;
             }
             GCRequest gcRequest = req.getRwCoProc().getRetainService().getGc();
@@ -160,19 +177,28 @@ public class RetainStoreGCProcessorTest {
         long now = HLC.INST.getPhysical();
         String localStoreId = "localStore";
         gcProcessor = new RetainStoreGCProcessor(storeClient, localStoreId);
-        KVRangeDescriptor rangeDescriptor = KVRangeDescriptor.newBuilder()
-            .setId(KVRangeIdUtil.generate())
+        KVRangeDescriptor localDescriptor = KVRangeDescriptor.newBuilder()
+            .setId(KVRangeIdUtil.next(1))
             .setVer(1)
+            .setBoundary(Boundary.newBuilder().setEndKey(ByteString.copyFromUtf8("a")).build())
             .build();
-        KVRangeSetting localSetting = new KVRangeSetting("cluster", localStoreId, rangeDescriptor);
-        KVRangeSetting remoteSetting = new KVRangeSetting("cluster", "remoteStore", rangeDescriptor);
-        when(storeClient.findByBoundary(FULL_BOUNDARY)).thenReturn(List.of(localSetting, remoteSetting));
+        KVRangeDescriptor remoteDescriptor = KVRangeDescriptor.newBuilder()
+            .setId(KVRangeIdUtil.next(1))
+            .setVer(1)
+            .setBoundary(Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("a")).build())
+            .build();
+        KVRangeSetting localSetting = new KVRangeSetting("cluster", localStoreId, localDescriptor);
+        KVRangeSetting remoteSetting = new KVRangeSetting("cluster", "remoteStore", remoteDescriptor);
+        when(storeClient.latestEffectiveRouter()).thenReturn(new TreeMap<>(BoundaryUtil::compare) {{
+            put(localDescriptor.getBoundary(), localSetting);
+            put(remoteDescriptor.getBoundary(), remoteSetting);
+        }});
         when(storeClient.execute(anyString(), any())).thenReturn(new CompletableFuture<>());
         gcProcessor.gc(reqId, null, null, now);
         verify(storeClient).execute(eq(localSetting.leader), argThat(req -> {
             if (req.getReqId() != reqId
-                || req.getVer() != rangeDescriptor.getVer()
-                || !req.getKvRangeId().equals(rangeDescriptor.getId())) {
+                || req.getVer() != localDescriptor.getVer()
+                || !req.getKvRangeId().equals(localDescriptor.getId())) {
                 return false;
             }
             GCRequest gcRequest = req.getRwCoProc().getRetainService().getGc();

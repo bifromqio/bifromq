@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.inbox.store;
 
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.inbox.util.KeyUtil.inboxPrefix;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionNumGauge;
@@ -31,9 +33,9 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
-import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBWALableKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
@@ -254,7 +256,7 @@ abstract class InboxStoreTest {
     }
 
     private InboxServiceROCoProcOutput query(ByteString routeKey, InboxServiceROCoProcInput input) {
-        KVRangeSetting s = storeClient.findByKey(routeKey).get();
+        KVRangeSetting s = findByKey(routeKey, storeClient.latestEffectiveRouter()).get();
         return query(s, input);
     }
 
@@ -272,7 +274,7 @@ abstract class InboxStoreTest {
 
 
     private InboxServiceRWCoProcOutput mutate(ByteString routeKey, InboxServiceRWCoProcInput input) {
-        KVRangeSetting s = storeClient.findByKey(routeKey).get();
+        KVRangeSetting s = findByKey(routeKey, storeClient.latestEffectiveRouter()).get();
         KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
             .setReqId(input.getReqId())
             .setVer(s.ver)
@@ -290,7 +292,7 @@ abstract class InboxStoreTest {
             .setReqId(reqId)
             .setGc(request)
             .build();
-        List<KVRangeSetting> rangeSettings = storeClient.findByBoundary(FULL_BOUNDARY);
+        List<KVRangeSetting> rangeSettings = findByBoundary(FULL_BOUNDARY, storeClient.latestEffectiveRouter());
         assert !rangeSettings.isEmpty();
         InboxServiceROCoProcOutput output = query(rangeSettings.get(0), input);
         assertTrue(output.hasGc());

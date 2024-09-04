@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.basekv.client;
 
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.EMPTY_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.testng.Assert.assertEquals;
@@ -22,23 +24,17 @@ import static org.testng.Assert.assertTrue;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
+import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.google.protobuf.ByteString;
+import java.util.Collections;
 import java.util.List;
+import java.util.NavigableMap;
 import java.util.Optional;
-import java.util.Set;
-import org.testng.annotations.BeforeMethod;
+import java.util.TreeMap;
 import org.testng.annotations.Test;
 
-public class KVRangeRouterTest {
-
-    private KVRangeRouter router;
-
-    @BeforeMethod
-    public void setUp() {
-        router = new KVRangeRouter("testCluster");
-    }
+public class KVRangeRouterUtilTest {
 
     @Test
     public void reset() {
@@ -47,18 +43,19 @@ public class KVRangeRouterTest {
 
     @Test
     public void emptyRouter() {
-        assertFalse(router.findByKey(ByteString.copyFromUtf8("a")).isPresent());
-        assertTrue(router.findByBoundary(FULL_BOUNDARY).isEmpty());
+        assertFalse(findByKey(ByteString.copyFromUtf8("a"), Collections.emptyNavigableMap()).isPresent());
+        assertTrue(findByBoundary(FULL_BOUNDARY, Collections.emptyNavigableMap()).isEmpty());
     }
 
     @Test
-    public void findByKey() {
+    public void testFindByKey() {
         // Prepare test data with full space coverage
         KVRangeDescriptor range1 = KVRangeDescriptor.newBuilder()
             .setId(KVRangeId.newBuilder().setId(1).build())
             .setRole(RaftNodeStatus.Leader)
             .setBoundary(Boundary.newBuilder().setEndKey(ByteString.copyFromUtf8("b")).build()) // (null, "b")
             .build();
+        KVRangeSetting rangeSetting1 = new KVRangeSetting("testCluster", "V1", range1);
 
         KVRangeDescriptor range2 = KVRangeDescriptor.newBuilder()
             .setId(KVRangeId.newBuilder().setId(2).build())
@@ -68,6 +65,7 @@ public class KVRangeRouterTest {
                 .setEndKey(ByteString.copyFromUtf8("c"))
                 .build()) // ["b", "c")
             .build();
+        KVRangeSetting rangeSetting2 = new KVRangeSetting("testCluster", "V1", range2);
 
         KVRangeDescriptor range3 = KVRangeDescriptor.newBuilder()
             .setId(KVRangeId.newBuilder().setId(3).build())
@@ -77,6 +75,8 @@ public class KVRangeRouterTest {
                 .setEndKey(ByteString.copyFromUtf8("d"))
                 .build()) // ["c", "d")
             .build();
+        KVRangeSetting rangeSetting3 = new KVRangeSetting("testCluster", "V1", range3);
+
 
         KVRangeDescriptor range4 = KVRangeDescriptor.newBuilder()
             .setId(KVRangeId.newBuilder().setId(4).build())
@@ -85,51 +85,51 @@ public class KVRangeRouterTest {
                 .setStartKey(ByteString.copyFromUtf8("d"))
                 .build()) // ["d", null)
             .build();
+        KVRangeSetting rangeSetting4 = new KVRangeSetting("testCluster", "V1", range4);
 
-        KVRangeStoreDescriptor storeDescriptor = KVRangeStoreDescriptor.newBuilder()
-            .setId("store1")
-            .addRanges(range1)
-            .addRanges(range2)
-            .addRanges(range3)
-            .addRanges(range4)
-            .build();
+        NavigableMap<Boundary, KVRangeSetting> router = new TreeMap<>(BoundaryUtil::compare);
+        router.put(range1.getBoundary(), rangeSetting1);
+        router.put(range2.getBoundary(), rangeSetting2);
+        router.put(range3.getBoundary(), rangeSetting3);
+        router.put(range4.getBoundary(), rangeSetting4);
 
-        assertTrue(router.reset(Set.of(storeDescriptor)));
 
         // Test find by key within the first range
-        Optional<KVRangeSetting> result1 = router.findByKey(ByteString.copyFromUtf8("a"));
+        Optional<KVRangeSetting> result1 = findByKey(ByteString.copyFromUtf8("a"), router);
         assertTrue(result1.isPresent());
         assertEquals(result1.get().id.getId(), 1L);
 
         // Test find by key within the second range
-        Optional<KVRangeSetting> result2 = router.findByKey(ByteString.copyFromUtf8("b"));
+        Optional<KVRangeSetting> result2 = findByKey(ByteString.copyFromUtf8("b"), router);
         assertTrue(result2.isPresent());
         assertEquals(result2.get().id.getId(), 2L);
 
         // Test find by key within the third range
-        Optional<KVRangeSetting> result3 = router.findByKey(ByteString.copyFromUtf8("c"));
+        Optional<KVRangeSetting> result3 = findByKey(ByteString.copyFromUtf8("c"), router);
         assertTrue(result3.isPresent());
         assertEquals(result3.get().id.getId(), 3L);
 
         // Test find by key within the fourth range
-        Optional<KVRangeSetting> result4 = router.findByKey(ByteString.copyFromUtf8("d"));
+        Optional<KVRangeSetting> result4 = findByKey(ByteString.copyFromUtf8("d"), router);
         assertTrue(result4.isPresent());
         assertEquals(result4.get().id.getId(), 4L);
 
         // Test find by key not in any range
-        Optional<KVRangeSetting> result5 = router.findByKey(ByteString.copyFromUtf8("z"));
+        Optional<KVRangeSetting> result5 = findByKey(ByteString.copyFromUtf8("z"), router);
         assertTrue(result5.isPresent());
         assertEquals(result5.get().id.getId(), 4L);
     }
 
     @Test
-    public void findByBoundary() {
+    public void testFindByBoundary() {
         // Prepare test data with full space coverage
         KVRangeDescriptor range1 = KVRangeDescriptor.newBuilder()
             .setId(KVRangeId.newBuilder().setId(1).build())
             .setRole(RaftNodeStatus.Leader)
             .setBoundary(Boundary.newBuilder().setEndKey(ByteString.copyFromUtf8("b")).build()) // (null, "b")
             .build();
+        KVRangeSetting rangeSetting1 = new KVRangeSetting("testCluster", "V1", range1);
+
 
         KVRangeDescriptor range2 = KVRangeDescriptor.newBuilder()
             .setId(KVRangeId.newBuilder().setId(2).build())
@@ -139,6 +139,8 @@ public class KVRangeRouterTest {
                 .setEndKey(ByteString.copyFromUtf8("c"))
                 .build()) // ["b", "c")
             .build();
+        KVRangeSetting rangeSetting2 = new KVRangeSetting("testCluster", "V1", range2);
+
 
         KVRangeDescriptor range3 = KVRangeDescriptor.newBuilder()
             .setId(KVRangeId.newBuilder().setId(3).build())
@@ -148,6 +150,7 @@ public class KVRangeRouterTest {
                 .setEndKey(ByteString.copyFromUtf8("d"))
                 .build()) // ["c", "d")
             .build();
+        KVRangeSetting rangeSetting3 = new KVRangeSetting("testCluster", "V1", range3);
 
         KVRangeDescriptor range4 = KVRangeDescriptor.newBuilder()
             .setId(KVRangeId.newBuilder().setId(4).build())
@@ -156,59 +159,58 @@ public class KVRangeRouterTest {
                 .setStartKey(ByteString.copyFromUtf8("d"))
                 .build()) // ["d", null)
             .build();
+        KVRangeSetting rangeSetting4 = new KVRangeSetting("testCluster", "V1", range4);
 
-        KVRangeStoreDescriptor storeDescriptor = KVRangeStoreDescriptor.newBuilder()
-            .setId("store1")
-            .addRanges(range1)
-            .addRanges(range2)
-            .addRanges(range3)
-            .addRanges(range4)
-            .build();
+        NavigableMap<Boundary, KVRangeSetting> router = new TreeMap<>(BoundaryUtil::compare);
+        router.put(range1.getBoundary(), rangeSetting1);
+        router.put(range2.getBoundary(), rangeSetting2);
+        router.put(range3.getBoundary(), rangeSetting3);
+        router.put(range4.getBoundary(), rangeSetting4);
 
-        router.reset(Set.of(storeDescriptor));
-        List<KVRangeSetting> result0 = router.findByBoundary(
-            Boundary.newBuilder().setEndKey(ByteString.copyFromUtf8("a")).build()); // (null, "a")
+
+        List<KVRangeSetting> result0 = findByBoundary(
+            Boundary.newBuilder().setEndKey(ByteString.copyFromUtf8("a")).build(), router); // (null, "a")
         assertEquals(result0.size(), 1);
         assertEquals(result0.get(0).id.getId(), 1L);
 
         // Test find by exact boundary of the first range
-        List<KVRangeSetting> result1 = router.findByBoundary(
-            Boundary.newBuilder().setEndKey(ByteString.copyFromUtf8("b")).build()); // (null, "b")
+        List<KVRangeSetting> result1 = findByBoundary(
+            Boundary.newBuilder().setEndKey(ByteString.copyFromUtf8("b")).build(), router); // (null, "b")
         assertEquals(result1.size(), 1);
         assertEquals(result1.get(0).id.getId(), 1L);
 
         // Test find by overlapping boundary with the second range
-        List<KVRangeSetting> result2 = router.findByBoundary(
-            Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("b")).build()); // ["b", null)
+        List<KVRangeSetting> result2 = findByBoundary(
+            Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("b")).build(), router); // ["b", null)
         assertEquals(result2.size(), 3); // Covers ranges 2, 3, and 4
         assertEquals(result2.get(0).boundary, range2.getBoundary());
         assertEquals(result2.get(1).boundary, range3.getBoundary());
         assertEquals(result2.get(2).boundary, range4.getBoundary());
 
         // Test find by a boundary that overlaps multiple ranges
-        List<KVRangeSetting> result3 = router.findByBoundary(
+        List<KVRangeSetting> result3 = findByBoundary(
             Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("b"))
                 .setEndKey(ByteString.copyFromUtf8("d"))
-                .build()); // ["b", "d")
+                .build(), router); // ["b", "d")
         assertEquals(result3.size(), 2); // Covers ranges 2 and 3
         assertEquals(result3.get(0).boundary, range2.getBoundary());
         assertEquals(result3.get(1).boundary, range3.getBoundary());
 
-        List<KVRangeSetting> result4 = router.findByBoundary(
+        List<KVRangeSetting> result4 = findByBoundary(
             Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("x"))
                 .setEndKey(ByteString.copyFromUtf8("y"))
-                .build()); // ["x", "y")
+                .build(), router); // ["x", "y")
         assertEquals(result4.size(), 1);
         assertEquals(result4.get(0).boundary, range4.getBoundary());
 
-        List<KVRangeSetting> result5 = router.findByBoundary(FULL_BOUNDARY);
+        List<KVRangeSetting> result5 = findByBoundary(FULL_BOUNDARY, router);
         assertEquals(result5.size(), 4);
         assertEquals(result5.get(0).boundary, range1.getBoundary());
         assertEquals(result5.get(1).boundary, range2.getBoundary());
         assertEquals(result5.get(2).boundary, range3.getBoundary());
         assertEquals(result5.get(3).boundary, range4.getBoundary());
 
-        List<KVRangeSetting> result6 = router.findByBoundary(EMPTY_BOUNDARY);
+        List<KVRangeSetting> result6 = findByBoundary(EMPTY_BOUNDARY, router);
         assertEquals(result6.size(), 1);
         assertEquals(result6.get(0).boundary, range1.getBoundary());
     }

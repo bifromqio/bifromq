@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.retain.store;
 
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainNumGauge;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainSpaceGauge;
@@ -29,9 +31,9 @@ import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBWALableKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
@@ -201,7 +203,7 @@ public class RetainStoreTest {
     protected RetainResult.Code requestRetain(String tenantId, TopicMessage topicMsg) {
         long reqId = ThreadLocalRandom.current().nextInt();
         ByteString tenantNS = KeyUtil.tenantNS(tenantId);
-        KVRangeSetting s = storeClient.findByKey(tenantNS).get();
+        KVRangeSetting s = findByKey(tenantNS, storeClient.latestEffectiveRouter()).get();
         String topic = topicMsg.getTopic();
         Message message = topicMsg.getMessage();
         BatchRetainRequest request = BatchRetainRequest.newBuilder()
@@ -235,7 +237,7 @@ public class RetainStoreTest {
     protected MatchResult requestMatch(String tenantId, long now, String topicFilter, int limit) {
         long reqId = ThreadLocalRandom.current().nextInt();
         ByteString tenantNS = KeyUtil.tenantNS(tenantId);
-        KVRangeSetting s = storeClient.findByKey(tenantNS).get();
+        KVRangeSetting s = findByKey(tenantNS, storeClient.latestEffectiveRouter()).get();
         BatchMatchRequest request = BatchMatchRequest.newBuilder()
             .setReqId(reqId)
             .putMatchParams(tenantId, MatchParam.newBuilder()
@@ -260,7 +262,7 @@ public class RetainStoreTest {
 
     protected GCReply requestGC(long now, String tenantId, Integer expirySeconds) {
         long reqId = ThreadLocalRandom.current().nextInt();
-        KVRangeSetting s = storeClient.findByBoundary(FULL_BOUNDARY).get(0);
+        KVRangeSetting s = findByBoundary(FULL_BOUNDARY, storeClient.latestEffectiveRouter()).get(0);
         RetainServiceRWCoProcInput input = buildGCRequest(reqId, now, tenantId, expirySeconds);
         KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
             .setReqId(reqId)

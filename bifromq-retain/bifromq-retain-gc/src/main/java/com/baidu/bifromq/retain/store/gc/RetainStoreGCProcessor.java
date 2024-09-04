@@ -13,12 +13,14 @@
 
 package com.baidu.bifromq.retain.store.gc;
 
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
 import static com.baidu.bifromq.retain.utils.MessageUtil.buildGCRequest;
 
-import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import java.util.Arrays;
@@ -43,14 +45,15 @@ public class RetainStoreGCProcessor implements IRetainStoreGCProcessor {
                                         @Nullable Integer expirySeconds,
                                         long now) {
         if (tenantId != null) {
-            Optional<KVRangeSetting> rangeSettingOpt = storeClient.findByKey(tenantNS(tenantId));
+            Optional<KVRangeSetting> rangeSettingOpt =
+                findByKey(tenantNS(tenantId), storeClient.latestEffectiveRouter());
             if (rangeSettingOpt.isEmpty()) {
                 return CompletableFuture.completedFuture(Result.ERROR);
             }
             KVRangeSetting rangeSetting = rangeSettingOpt.get();
             return gcRange(reqId, rangeSetting, tenantId, expirySeconds, now);
         } else {
-            CompletableFuture<?>[] gcFutures = storeClient.findByBoundary(FULL_BOUNDARY)
+            CompletableFuture<?>[] gcFutures = findByBoundary(FULL_BOUNDARY, storeClient.latestEffectiveRouter())
                 .stream()
                 .filter(k -> localServerId == null || k.leader.equals(localServerId))
                 .map(rangeSetting -> gcRange(reqId, rangeSetting, null, expirySeconds, now))

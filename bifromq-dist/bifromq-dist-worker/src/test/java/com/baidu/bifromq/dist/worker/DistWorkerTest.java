@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.dist.worker;
 
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toMatchRecordKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
 import static com.baidu.bifromq.plugin.subbroker.TypeUtil.to;
@@ -279,7 +280,8 @@ public abstract class DistWorkerTest {
                                            int maxMembersPerSharedSubGroup) {
         long reqId = ThreadLocalRandom.current().nextInt();
         String qInboxId = toQInboxId(subBroker, inboxId, delivererKey);
-        KVRangeSetting s = storeClient.findByKey(toMatchRecordKey(tenantId, topicFilter, qInboxId)).get();
+        KVRangeSetting s =
+            findByKey(toMatchRecordKey(tenantId, topicFilter, qInboxId), storeClient.latestEffectiveRouter()).get();
         String scopedTopicFilter = EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter);
         DistServiceRWCoProcInput input = DistServiceRWCoProcInput.newBuilder()
             .setBatchMatch(BatchMatchRequest.newBuilder()
@@ -306,7 +308,8 @@ public abstract class DistWorkerTest {
                                                String delivererKey) {
         long reqId = ThreadLocalRandom.current().nextInt();
         String qInboxId = toQInboxId(subBroker, inboxId, delivererKey);
-        KVRangeSetting s = storeClient.findByKey(toMatchRecordKey(tenantId, topicFilter, qInboxId)).get();
+        KVRangeSetting s =
+            findByKey(toMatchRecordKey(tenantId, topicFilter, qInboxId), storeClient.latestEffectiveRouter()).get();
         String scopedTopicFilter = EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter);
         DistServiceRWCoProcInput input = DistServiceRWCoProcInput.newBuilder()
             .setBatchUnmatch(BatchUnmatchRequest.newBuilder()
@@ -328,7 +331,8 @@ public abstract class DistWorkerTest {
 
     protected BatchDistReply dist(String tenantId, List<TopicMessagePack> msgs, String orderKey) {
         long reqId = ThreadLocalRandom.current().nextInt();
-        KVRangeSetting s = storeClient.findByKey(EntityUtil.matchRecordKeyPrefix(tenantId)).get();
+        KVRangeSetting s =
+            findByKey(EntityUtil.matchRecordKeyPrefix(tenantId), storeClient.latestEffectiveRouter()).get();
         BatchDistRequest request = BatchDistRequest.newBuilder()
             .setReqId(reqId)
             .addDistPack(DistPack.newBuilder()
