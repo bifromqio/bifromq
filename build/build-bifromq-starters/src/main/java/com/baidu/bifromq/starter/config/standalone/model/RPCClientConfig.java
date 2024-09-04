@@ -22,6 +22,7 @@ import lombok.Setter;
 @Setter
 public class RPCClientConfig {
     private Integer workerThreads;
+    private boolean enableSSL;
     @JsonSetter(nulls = Nulls.SKIP)
     private SSLContextConfig sslConfig;
 }

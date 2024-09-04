@@ -23,5 +23,5 @@ public class ServerSSLContextConfig {
     private String certFile;
     private String keyFile;
     private String trustCertsFile;
-    private String clientAuth = ClientAuth.OPTIONAL.name();
+    private ClientAuth clientAuth = ClientAuth.OPTIONAL;
 }

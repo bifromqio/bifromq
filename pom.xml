@@ -85,6 +85,7 @@
     <properties>
         <apache.commons.cli.version>1.5.0</apache.commons.cli.version>
         <apache.commons.collections.version>4.4</apache.commons.collections.version>
+        <bouncycastle.version>1.78.1</bouncycastle.version>
         <caffeine.version>3.1.8</caffeine.version>
         <grpc.version>1.66.0</grpc.version>
         <guava.version>33.2.1-jre</guava.version>
@@ -515,6 +516,18 @@
                 <type>pom</type>
                 <scope>import</scope>
                 <version>${netty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcpkix-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+                <scope>runtime</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+                <scope>runtime</scope>
             </dependency>
             <dependency>
                 <groupId>com.github.ben-manes.caffeine</groupId>

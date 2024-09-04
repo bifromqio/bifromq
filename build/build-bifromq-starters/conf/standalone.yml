@@ -3,8 +3,8 @@
 # Once the BifroMQ service process is started, the consolidated configuration will be output in the info.log,
 # providing a helpful reference for writing and customizing this file.
 
-# if the node is responsible for cluster bootstrap. NOTE: there must be EXACTLY ONE bootstrap node in cluster deployment
-bootstrap: true
+# if the node is responsible for cluster bootstrap. NOTE: there must be AT LEAST ONE bootstrap node in cluster deployment
+bootstrap: true # deprecated since 3.3.0
 
 
 # Enabling custom auth provider, specify the Fully Qualified Name of the auth provider class from your plugin.

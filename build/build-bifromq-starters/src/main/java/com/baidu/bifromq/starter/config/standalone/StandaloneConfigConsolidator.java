@@ -16,6 +16,7 @@ package com.baidu.bifromq.starter.config.standalone;
 import com.baidu.bifromq.starter.config.standalone.model.ClusterConfig;
 import com.baidu.bifromq.starter.config.standalone.model.RPCClientConfig;
 import com.baidu.bifromq.starter.config.standalone.model.RPCServerConfig;
+import com.baidu.bifromq.starter.config.standalone.model.SSLContextConfig;
 import com.baidu.bifromq.starter.config.standalone.model.ServerSSLContextConfig;
 import com.baidu.bifromq.starter.config.standalone.model.apiserver.APIServerConfig;
 import com.baidu.bifromq.starter.config.standalone.model.mqttserver.MQTTServerConfig;
@@ -23,6 +24,7 @@ import com.google.common.base.Strings;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
+import java.security.cert.CertificateException;
 import java.util.Enumeration;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -33,10 +35,10 @@ public class StandaloneConfigConsolidator {
     public static void consolidate(StandaloneConfig config) {
         consolidateClusterConfig(config);
         consolidateMQTTServerConfig(config);
-        consolidateRPCClientConfig(config);
         consolidateRPCServerConfig(config);
-        consolidateBaseKVClientConfig(config);
+        consolidateRPCClientConfig(config);
         consolidateBaseKVServerConfig(config);
+        consolidateBaseKVClientConfig(config);
         consolidateAPIServerConfig(config);
     }
 
@@ -70,31 +72,28 @@ public class StandaloneConfigConsolidator {
             mqttServerConfig.getWssListener().setHost(mqttServerConfig.getTcpListener().getHost());
         }
         // fill self-signed certificate for ssl connection
-        if ((mqttServerConfig.getWssListener().isEnable() &&
-            mqttServerConfig.getWssListener().getSslConfig() == null) ||
-            (mqttServerConfig.getTlsListener().isEnable() &&
-                mqttServerConfig.getTlsListener().getSslConfig() == null)) {
+        if ((mqttServerConfig.getWssListener().isEnable()
+            && mqttServerConfig.getWssListener().getSslConfig() == null)
+            || (mqttServerConfig.getTlsListener().isEnable()
+            && mqttServerConfig.getTlsListener().getSslConfig() == null)) {
             try {
-                SelfSignedCertificate selfCert = new SelfSignedCertificate();
-                ServerSSLContextConfig sslContextConfig = new ServerSSLContextConfig();
-                sslContextConfig.setCertFile(selfCert.certificate().getAbsolutePath());
-                sslContextConfig.setKeyFile(selfCert.privateKey().getAbsolutePath());
-                if (mqttServerConfig.getTlsListener().isEnable() &&
-                    mqttServerConfig.getTlsListener().getSslConfig() == null) {
+                ServerSSLContextConfig sslContextConfig = genSelfSignedServerCert();
+                if (mqttServerConfig.getTlsListener().isEnable()
+                    && mqttServerConfig.getTlsListener().getSslConfig() == null) {
                     mqttServerConfig.getTlsListener().setSslConfig(sslContextConfig);
                 }
-                if (mqttServerConfig.getWssListener().isEnable() &&
-                    mqttServerConfig.getWssListener().getSslConfig() == null) {
+                if (mqttServerConfig.getWssListener().isEnable()
+                    && mqttServerConfig.getWssListener().getSslConfig() == null) {
                     mqttServerConfig.getWssListener().setSslConfig(sslContextConfig);
                 }
             } catch (Throwable e) {
                 log.warn("Unable to generate self-signed certificate, mqtt over tls or wss will be disabled", e);
-                if (mqttServerConfig.getTlsListener().isEnable() &&
-                    mqttServerConfig.getTlsListener().getSslConfig() == null) {
+                if (mqttServerConfig.getTlsListener().isEnable()
+                    && mqttServerConfig.getTlsListener().getSslConfig() == null) {
                     mqttServerConfig.getTlsListener().setEnable(false);
                 }
-                if (mqttServerConfig.getWssListener().isEnable() &&
-                    mqttServerConfig.getWssListener().getSslConfig() == null) {
+                if (mqttServerConfig.getWssListener().isEnable()
+                    && mqttServerConfig.getWssListener().getSslConfig() == null) {
                     mqttServerConfig.getWssListener().setEnable(false);
                 }
             }
@@ -102,7 +101,24 @@ public class StandaloneConfigConsolidator {
     }
 
     private static void consolidateRPCClientConfig(StandaloneConfig config) {
-        // do nothing for now
+        if (!config.getRpcServerConfig().isEnableSSL() && config.getRpcClientConfig().isEnableSSL()) {
+            log.warn(
+                "Rectify config: rpcClientConfig.enableSSL = false, incompatible with rpcKVServerConfig.enableSSL");
+            config.getRpcClientConfig().setEnableSSL(false);
+        }
+        if (config.getRpcServerConfig().isEnableSSL() && !config.getRpcClientConfig().isEnableSSL()) {
+            log.warn(
+                "Rectify config: rpcClientConfig.enableSSL = true, incompatible with rpcKVServerConfig.enableSSL");
+            config.getRpcClientConfig().setEnableSSL(true);
+        }
+        if (config.getRpcClientConfig().isEnableSSL() && config.getRpcClientConfig().getSslConfig() == null) {
+            try {
+                config.getRpcClientConfig().setSslConfig(new SSLContextConfig());
+            } catch (Throwable e) {
+                log.warn("Unable to generate self-signed certificate, rpc client ssl will be disabled", e);
+                config.getRpcClientConfig().setEnableSSL(false);
+            }
+        }
     }
 
     private static void consolidateRPCServerConfig(StandaloneConfig config) {
@@ -111,12 +127,39 @@ public class StandaloneConfigConsolidator {
         if (rpcServerConfig.getHost() == null) {
             rpcServerConfig.setHost(resolveHost(config));
         }
+        if (rpcServerConfig.isEnableSSL() && rpcServerConfig.getSslConfig() == null) {
+            try {
+                log.warn("Generate self-signed certificate for RPC server");
+                rpcServerConfig.setSslConfig(genSelfSignedServerCert());
+            } catch (Throwable e) {
+                log.warn("Unable to generate self-signed certificate, rpc server ssl will be disabled", e);
+                rpcServerConfig.setEnableSSL(false);
+            }
+        }
     }
 
     private static void consolidateBaseKVClientConfig(StandaloneConfig config) {
         RPCClientConfig rpcClientConfig = config.getBaseKVClientConfig();
         if (rpcClientConfig.getWorkerThreads() == null) {
             rpcClientConfig.setWorkerThreads(Math.max(2, Runtime.getRuntime().availableProcessors() / 8));
+        }
+        if (!config.getBaseKVServerConfig().isEnableSSL() && rpcClientConfig.isEnableSSL()) {
+            log.warn(
+                "Rectify config: baseKVClientConfig.enableSSL = false, incompatible with baseKVServerConfig.enableSSL");
+            rpcClientConfig.setEnableSSL(false);
+        }
+        if (config.getBaseKVServerConfig().isEnableSSL() && !rpcClientConfig.isEnableSSL()) {
+            log.warn(
+                "Rectify config: baseKVClientConfig.enableSSL = true, incompatible with baseKVServerConfig.enableSSL");
+            rpcClientConfig.setEnableSSL(true);
+        }
+        if (rpcClientConfig.isEnableSSL() && rpcClientConfig.getSslConfig() == null) {
+            try {
+                rpcClientConfig.setSslConfig(new SSLContextConfig());
+            } catch (Throwable e) {
+                log.warn("Unable to generate self-signed certificate, baseKV client ssl will be disabled", e);
+                rpcClientConfig.setEnableSSL(false);
+            }
         }
     }
 
@@ -128,7 +171,15 @@ public class StandaloneConfigConsolidator {
         if (baseKVRpcServerConfig.getWorkerThreads() == null) {
             baseKVRpcServerConfig.setWorkerThreads(Math.max(2, Runtime.getRuntime().availableProcessors() / 2));
         }
-        config.setBaseKVServerConfig(baseKVRpcServerConfig);
+        if (baseKVRpcServerConfig.isEnableSSL() && baseKVRpcServerConfig.getSslConfig() == null) {
+            try {
+                log.warn("Generate self-signed certificate for BaseKV server");
+                baseKVRpcServerConfig.setSslConfig(genSelfSignedServerCert());
+            } catch (Throwable e) {
+                log.warn("Unable to generate self-signed certificate, baseKV server ssl will be disabled", e);
+                baseKVRpcServerConfig.setEnableSSL(false);
+            }
+        }
     }
 
     private static void consolidateAPIServerConfig(StandaloneConfig config) {
@@ -136,6 +187,17 @@ public class StandaloneConfigConsolidator {
         if (apiServerConfig.getHost() == null) {
             apiServerConfig.setHost(resolveHost(config));
         }
+        // fill self-signed certificate for ssl connection
+        if (apiServerConfig.getHttpsListenerConfig().isEnable()
+            && apiServerConfig.getHttpsListenerConfig().getSslConfig() == null) {
+            try {
+                apiServerConfig.getHttpsListenerConfig().setSslConfig(genSelfSignedServerCert());
+            } catch (Throwable e) {
+                log.warn("Unable to generate self-signed certificate, Https API listener is be disabled", e);
+                apiServerConfig.getHttpsListenerConfig().setEnable(false);
+            }
+        }
+
     }
 
     @SneakyThrows
@@ -166,5 +228,13 @@ public class StandaloneConfigConsolidator {
             }
         }
         throw new IllegalStateException("Unable to resolve host, please specify host in config file");
+    }
+
+    private static ServerSSLContextConfig genSelfSignedServerCert() throws CertificateException {
+        SelfSignedCertificate selfCert = new SelfSignedCertificate();
+        ServerSSLContextConfig sslContextConfig = new ServerSSLContextConfig();
+        sslContextConfig.setCertFile(selfCert.certificate().getAbsolutePath());
+        sslContextConfig.setKeyFile(selfCert.privateKey().getAbsolutePath());
+        return sslContextConfig;
     }
 }

@@ -234,27 +234,32 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .workerEventLoopGroup(kvRPCWorkerELG)
             .crdtService(serverCrdtService)
             .executor(baseKVServerExecutor);
-        if (config.getRpcServerConfig().getSslConfig() != null) {
-            sharedIORPCServerBuilder.sslContext(buildServerSslContext(config.getRpcServerConfig().getSslConfig()));
-            sharedBaseKVRPCServerBuilder.sslContext(buildServerSslContext(config.getRpcServerConfig().getSslConfig()));
+        if (config.getRpcServerConfig().isEnableSSL()) {
+            sharedIORPCServerBuilder.sslContext(buildRPCServerSslContext(config.getRpcServerConfig().getSslConfig()));
         }
-        SslContext clientSslContext = config.getRpcClientConfig().getSslConfig() != null
-            ? buildClientSslContext(config.getRpcClientConfig().getSslConfig()) : null;
+        if (config.getBaseKVServerConfig().isEnableSSL()) {
+            sharedBaseKVRPCServerBuilder.sslContext(
+                buildRPCServerSslContext(config.getBaseKVServerConfig().getSslConfig()));
+        }
+        SslContext rpcClientSslContext = config.getRpcClientConfig().isEnableSSL()
+            ? buildRPCClientSslContext(config.getRpcClientConfig().getSslConfig()) : null;
+        SslContext baseKVClientSslContext = config.getBaseKVClientConfig().isEnableSSL()
+            ? buildRPCClientSslContext(config.getBaseKVClientConfig().getSslConfig()) : null;
         distClient = IDistClient.newBuilder()
             .crdtService(clientCrdtService)
             .executor(rpcClientExecutor)
-            .sslContext(clientSslContext)
+            .sslContext(rpcClientSslContext)
             .build();
         retainClient = IRetainClient.newBuilder()
             .crdtService(clientCrdtService)
             .executor(rpcClientExecutor)
-            .sslContext(clientSslContext)
+            .sslContext(rpcClientSslContext)
             .build();
         retainStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IRetainStore.CLUSTER_NAME)
             .crdtService(clientCrdtService)
             .executor(baseKVClientExecutor)
-            .sslContext(clientSslContext)
+            .sslContext(baseKVClientSslContext)
             .queryPipelinesPerStore(config
                 .getStateStoreConfig()
                 .getRetainStoreConfig()
@@ -293,13 +298,13 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         inboxClient = IInboxClient.newBuilder()
             .crdtService(clientCrdtService)
             .executor(rpcClientExecutor)
-            .sslContext(clientSslContext)
+            .sslContext(rpcClientSslContext)
             .build();
         inboxStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
             .crdtService(clientCrdtService)
             .executor(baseKVClientExecutor)
-            .sslContext(clientSslContext)
+            .sslContext(baseKVClientSslContext)
             .queryPipelinesPerStore(config.getStateStoreConfig().getInboxStoreConfig()
                 .getQueryPipelinePerStore())
             .build();
@@ -351,7 +356,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .clusterId(IDistWorker.CLUSTER_NAME)
             .crdtService(clientCrdtService)
             .executor(baseKVClientExecutor)
-            .sslContext(clientSslContext)
+            .sslContext(baseKVClientSslContext)
             .queryPipelinesPerStore(config
                 .getStateStoreConfig()
                 .getDistWorkerConfig()
@@ -360,7 +365,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         mqttBrokerClient = IMqttBrokerClient.newBuilder()
             .crdtService(clientCrdtService)
             .executor(rpcClientExecutor)
-            .sslContext(clientSslContext)
+            .sslContext(rpcClientSslContext)
             .build();
 
         subBrokerManager = new SubBrokerManager(pluginMgr, mqttBrokerClient, inboxClient);
@@ -368,7 +373,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         sessionDictClient = ISessionDictClient.newBuilder()
             .crdtService(clientCrdtService)
             .executor(rpcClientExecutor)
-            .sslContext(clientSslContext)
+            .sslContext(rpcClientSslContext)
             .build();
 
         sessionDictServer = ISessionDictServer.nonStandaloneBuilder()

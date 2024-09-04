@@ -144,8 +144,7 @@ public final class RPCClientBuilder {
                     internalChannelBuilder
                         .negotiationType(NegotiationType.TLS)
                         .intercept(new TenantAwareClientInterceptor())
-                        .sslContext(sslContext)
-                        .overrideAuthority(serviceUniqueName);
+                        .sslContext(sslContext);
                 } else {
                     internalChannelBuilder
                         .negotiationType(NegotiationType.PLAINTEXT)

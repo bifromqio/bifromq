@@ -25,6 +25,7 @@ public class RPCServerConfig {
     private int port = 0;
     @JsonSetter(nulls = Nulls.SKIP)
     private Integer workerThreads;
+    private boolean enableSSL;
     @JsonSetter(nulls = Nulls.SKIP)
     private ServerSSLContextConfig sslConfig;
 }

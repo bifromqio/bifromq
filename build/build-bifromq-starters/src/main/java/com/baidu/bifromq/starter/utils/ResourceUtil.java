@@ -14,55 +14,70 @@
 package com.baidu.bifromq.starter.utils;
 
 import java.io.File;
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.io.FileNotFoundException;
 import java.net.URL;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class ResourceUtil {
+    private static final String CONF_DIR_PROP = "CONF_DIR";
+
+
     /**
-     * Get file using default classloader
+     * Load file using following logic: 1. If pathToFile is absolute path, return the file if it exists. 2. If CONF_DIR
+     * system property is set, try to load the file from that directory. 3. Try to load the file from the current
+     * working directory. 4. Try to load the file from the classpath.
      *
-     * @param pathToResourceFile
-     * @return
+     * @param pathToFile the path to the file
+     * @return the file
+     * @throws FileNotFoundException if the file is not found
      */
-    public static File getFile(@NonNull String pathToResourceFile) {
-        URL url = ResourceUtil.class.getClassLoader().getResource(pathToResourceFile);
-        if (url != null) {
-            log.trace("File found in resources: {}", pathToResourceFile);
-            try {
-                URI uri = url.toURI();
-                return new File(uri);
-            } catch (URISyntaxException e) {
-                log.error("Failed to parse url:{}", url, e);
+    public static File loadFile(@NonNull String pathToFile) throws FileNotFoundException {
+        File file = new File(pathToFile);
+        if (file.isAbsolute()) {
+            if (file.exists() && file.isFile()) {
+                return file;
+            } else {
+                throw new FileNotFoundException("File not found at absolute path: " + pathToFile);
             }
         }
-        return null;
+
+        String confDir = System.getProperty(CONF_DIR_PROP);
+        if (confDir != null) {
+            file = new File(confDir, pathToFile);
+            if (file.exists() && file.isFile()) {
+                return file;
+            }
+        }
+
+        String userDir = System.getProperty("user.dir");
+        if (userDir != null) {
+            file = new File(userDir, pathToFile);
+            if (file.exists() && file.isFile()) {
+                return file;
+            }
+        }
+
+        URL resource = ResourceUtil.class.getClassLoader().getResource(pathToFile);
+        if (resource != null) {
+            return new File(resource.getFile());
+        }
+        throw new FileNotFoundException("File not found: " + pathToFile);
     }
 
     /**
-     * Get the file from relativePath, if env variable(the 2nd argument) is specified, will try to load the file in
-     * corresponding directory first, then load it via same class loader as a resource, return null if not found
+     * Get file using the loadFile method. If the file is not found, return null.
      *
-     * @param relativePathToFile the relative path of the file
-     * @param sysPropOfDir       it's the env var specifies the directory to look for first
-     * @return
+     * @param pathToFile the path to the file
+     * @return the file or null if the file is not found
      */
-    public static File getFile(@NonNull String relativePathToFile, String sysPropOfDir) {
-        // First try to get from config directory.
-        if (sysPropOfDir != null && !"".equals(sysPropOfDir)) {
-            String dir = System.getProperty(sysPropOfDir);
-            if (dir != null) {
-                File file = new File(dir, relativePathToFile);
-                if (file.exists()) {
-                    log.trace("File found in path: {}", file.getAbsolutePath());
-                    return file;
-                }
-            }
+    public static File getFile(@NonNull String pathToFile) {
+        try {
+            return loadFile(pathToFile);
+        } catch (FileNotFoundException e) {
+            log.debug("File not found: {}", pathToFile);
+            return null;
         }
-        log.warn("No dir or file found from sysPropOfDir:{}, fall back to classpath.", sysPropOfDir);
-        return getFile(relativePathToFile);
     }
 }
