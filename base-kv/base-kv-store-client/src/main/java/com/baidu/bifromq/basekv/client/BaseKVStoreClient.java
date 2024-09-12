@@ -348,10 +348,10 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     @Override
     public IMutationPipeline createMutationPipeline(String storeId) {
         return new ManagedMutationPipeline(storeToServerSubject
-            .map(m -> m.get(storeId))
+            .map(m -> Optional.ofNullable(m.get(storeId)))
             .distinctUntilChanged()
-            .map(serverId -> {
-                if (serverId == null) {
+            .map(serverIdOpt -> {
+                if (serverIdOpt.isEmpty()) {
                     return new IRPCClient.IRequestPipeline<>() {
                         @Override
                         public boolean isClosed() {
@@ -370,7 +370,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                         }
                     };
                 }
-                return rpcClient.createRequestPipeline("", serverId, null, emptyMap(), executeMethod);
+                return rpcClient.createRequestPipeline("", serverIdOpt.get(), null, emptyMap(), executeMethod);
             }));
     }
 
@@ -386,10 +386,10 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
 
     private IQueryPipeline createQueryPipeline(String storeId, boolean linearized) {
         return new ManagedQueryPipeline(storeToServerSubject
-            .map(m -> m.get(storeId))
+            .map(m -> Optional.ofNullable(m.get(storeId)))
             .distinctUntilChanged()
-            .map(serverId -> {
-                if (serverId == null) {
+            .map(serverIdOpt -> {
+                if (serverIdOpt.isEmpty()) {
                     return new IRPCClient.IRequestPipeline<>() {
                         @Override
                         public boolean isClosed() {
@@ -409,9 +409,10 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                     };
                 }
                 if (linearized) {
-                    return rpcClient.createRequestPipeline("", serverId, null, emptyMap(), linearizedQueryMethod);
+                    return rpcClient.createRequestPipeline("", serverIdOpt.get(), null, emptyMap(),
+                        linearizedQueryMethod);
                 } else {
-                    return rpcClient.createRequestPipeline("", serverId, null, emptyMap(), queryMethod);
+                    return rpcClient.createRequestPipeline("", serverIdOpt.get(), null, emptyMap(), queryMethod);
                 }
             }));
     }

@@ -16,21 +16,20 @@ package com.baidu.bifromq.dist.worker.cache;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compare;
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordPrefixWithEscapedTopicFilter;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
-import static java.util.Collections.singleton;
+import static com.baidu.bifromq.util.TopicConst.NUL;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.dist.entity.Matching;
-import com.baidu.bifromq.dist.util.TopicFilterMatcher;
-import com.baidu.bifromq.dist.util.TopicTrie;
-import com.baidu.bifromq.type.TopicMessage;
-import com.google.common.collect.Maps;
+import com.baidu.bifromq.dist.trie.TopicFilterIterator;
+import com.baidu.bifromq.dist.trie.TopicTrieNode;
+import com.baidu.bifromq.dist.util.TopicUtil;
+import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Timer;
 import java.util.HashSet;
-import java.util.Map;
-import java.util.Optional;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -48,15 +47,17 @@ class TenantRouteMatcher implements ITenantRouteMatcher {
     @Override
     public Set<Matching> match(String topic, Boundary matchRecordBoundary) {
         final Timer.Sample sample = Timer.start();
-        Set<Matching> routes = new HashSet<>();
         IKVReader rangeReader = kvReaderSupplier.get();
         rangeReader.refresh();
 
-        TopicTrie topicTrie = new TopicTrie();
-        topicTrie.add(topic, singleton(TopicMessage.getDefaultInstance()));
-        // key: topicFilter, value: set of matched topics
-        Map<String, Set<String>> matched = Maps.newHashMap();
-        TopicFilterMatcher matcher = new TopicFilterMatcher(topicTrie);
+        TopicTrieNode<String> topicTrie = TopicTrieNode.<String>builder(false)
+            .addTopic(TopicUtil.parse(topic, false), topic)
+            .build();
+        TopicFilterIterator<String> expansionSetItr = new TopicFilterIterator<>(topicTrie);
+
+        Set<Matching> matchedRoutes = new HashSet<>();
+
+        Set<String> matchedTopicFilters = Sets.newHashSet();
         int probe = 0;
         IKVIterator itr = rangeReader.iterator();
         // track seek
@@ -65,26 +66,25 @@ class TenantRouteMatcher implements ITenantRouteMatcher {
             // track itr.key()
             Matching matching = parseMatchRecord(itr.key(), itr.value());
             // key: topic
-            Set<String> matchedTopics = matched.get(matching.escapedTopicFilter);
-            if (matchedTopics == null) {
-                Optional<Map<String, Iterable<TopicMessage>>> clientMsgs =
-                    matcher.match(matching.escapedTopicFilter);
-                if (clientMsgs.isPresent()) {
-                    matchedTopics = clientMsgs.get().keySet();
-                    matched.put(matching.escapedTopicFilter, matchedTopics);
-                    itr.next();
-                    probe = 0;
-                } else {
-                    Optional<String> higherFilter = matcher.higher(matching.escapedTopicFilter);
-                    if (higherFilter.isPresent()) {
+            if (!matchedTopicFilters.contains(matching.escapedTopicFilter)) {
+                List<String> seekTopicFilter = TopicUtil.parse(matching.escapedTopicFilter, true);
+                expansionSetItr.seek(seekTopicFilter);
+                if (expansionSetItr.isValid()) {
+                    List<String> topicFilterToMatch = expansionSetItr.key();
+                    if (topicFilterToMatch.equals(seekTopicFilter)) {
+                        matchedTopicFilters.add(matching.escapedTopicFilter);
+                        matchedRoutes.add(matching);
+                        itr.next();
+                        probe = 0;
+                    } else {
                         // next() is much cheaper than seek(), we probe following 20 entries
                         if (probe++ < 20) {
                             // probe next
                             itr.next();
                         } else {
                             // seek to match next topic filter
-                            ByteString nextMatch =
-                                matchRecordPrefixWithEscapedTopicFilter(tenantId, higherFilter.get());
+                            ByteString nextMatch = matchRecordPrefixWithEscapedTopicFilter(tenantId,
+                                TopicUtil.fastJoin(NUL, topicFilterToMatch));
                             if (ByteString.unsignedLexicographicalComparator().compare(nextMatch, itr.key()) <= 0) {
                                 // TODO: THIS IS ONLY FOR BYPASSING THE HANG ISSUE CAUSED BY PREVIOUS BUGGY MATCH_RECORD_KEY ENCODING
                                 // AND WILL BE REMOVED IN LATER VERSION
@@ -93,17 +93,16 @@ class TenantRouteMatcher implements ITenantRouteMatcher {
                                 itr.seek(nextMatch);
                             }
                         }
-                        continue;
-                    } else {
-                        break; // no more topic filter to match, stop here
                     }
+                } else {
+                    break; // no more topic filter to match, stop here
                 }
             } else {
                 itr.next();
+                matchedRoutes.add(matching);
             }
-            matchedTopics.forEach(t -> routes.add(matching));
         }
         sample.stop(timer);
-        return routes;
+        return matchedRoutes;
     }
 }

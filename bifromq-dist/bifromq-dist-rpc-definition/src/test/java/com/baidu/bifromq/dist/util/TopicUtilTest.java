@@ -43,6 +43,8 @@ public class TopicUtilTest {
 
     @Test
     public void testParse() {
+        assertEquals(parse("", false), Lists.newArrayList(""));
+        assertEquals(parse(" ", false), Lists.newArrayList(" "));
         assertEquals(parse("/", false), Lists.newArrayList("", ""));
         assertEquals(parse(escape("/"), true), Lists.newArrayList("", ""));
         assertEquals(parse("//", false), Lists.newArrayList("", "", ""));
