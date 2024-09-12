@@ -37,6 +37,7 @@ public class MonitoredSettingProviderTest {
     @BeforeMethod
     public void setup() {
         registry = new SimpleMeterRegistry();
+        Metrics.globalRegistry.clear();
         Metrics.addRegistry(registry);
         closeable = MockitoAnnotations.openMocks(this);
     }
