@@ -11,11 +11,11 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.util.benchmark;
+package com.baidu.bifromq.dist.trie.benchmark;
 
-import com.baidu.bifromq.dist.util.TestUtil;
-import com.baidu.bifromq.dist.util.TopicTrie;
-import com.baidu.bifromq.type.TopicMessage;
+import com.baidu.bifromq.dist.trie.TopicTrieNode;
+import com.baidu.bifromq.dist.TestUtil;
+import com.baidu.bifromq.dist.util.TopicUtil;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.openjdk.jmh.annotations.Level;
@@ -27,12 +27,11 @@ import org.openjdk.jmh.annotations.TearDown;
 @Slf4j
 @State(Scope.Thread)
 public class TopicTrieBuilderBenchmarkState {
-    public TopicTrie topicTrie;
-    public final List<TopicMessage> distMessages = List.of(TopicMessage.getDefaultInstance());
+    public TopicTrieNode.Builder<String> topicTrieBuilder;
 
     @Setup(Level.Iteration)
     public void setup() {
-        topicTrie = new TopicTrie();
+        topicTrieBuilder = TopicTrieNode.builder(false);
     }
 
     /*
@@ -40,11 +39,10 @@ public class TopicTrieBuilderBenchmarkState {
      */
 
     @TearDown(Level.Iteration)
-    public void teardown() {
-        log.info("topic count: {}", topicTrie.topicCount());
+    public void tearDown() {
     }
 
-    public String randomTopic() {
-        return TestUtil.randomTopic();
+    public List<String> randomTopic() {
+        return TopicUtil.parse(TestUtil.randomTopic(), true);
     }
 }

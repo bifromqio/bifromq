@@ -69,8 +69,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
         tenantFanouts = Caffeine.newBuilder()
             .expireAfterAccess(120, TimeUnit.SECONDS)
             .build(k -> new RunningAverage(5));
-        this.distCallScheduler = new DistCallScheduler(this.distCallRateScheduler, distWorkerClient,
-            tenantId -> tenantFanouts.get(tenantId).estimate());
+        this.distCallScheduler = new DistCallScheduler(this.distCallRateScheduler, distWorkerClient, settingProvider);
     }
 
     @Override

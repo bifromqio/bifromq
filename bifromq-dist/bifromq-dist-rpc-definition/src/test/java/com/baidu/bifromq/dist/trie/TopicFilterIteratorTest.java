@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.dist.trie;
 
-import static com.baidu.bifromq.dist.util.TestUtil.randomTopic;
-import static com.baidu.bifromq.dist.util.TestUtil.randomTopicFilter;
+import static com.baidu.bifromq.dist.TestUtil.randomTopic;
+import static com.baidu.bifromq.dist.TestUtil.randomTopicFilter;
 import static com.baidu.bifromq.dist.util.TopicUtil.escape;
 import static com.baidu.bifromq.dist.util.TopicUtil.fastJoin;
 import static com.baidu.bifromq.dist.util.TopicUtil.parse;
@@ -22,7 +22,9 @@ import static com.baidu.bifromq.util.TopicConst.NUL;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.dist.TestUtil;
 import com.baidu.bifromq.dist.util.TopicUtil;
+import com.baidu.bifromq.util.TopicConst;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -44,7 +46,7 @@ public class TopicFilterIteratorTest {
         for (; itr.isValid(); itr.next()) {
             generated.add(fastJoin(NUL, itr.key()));
         }
-        List<String> allFilters = TopicUtil.expand(topic);
+        List<String> allFilters = TestUtil.expand(topic);
         assertEquals(generated, allFilters);
     }
 
@@ -295,6 +297,32 @@ public class TopicFilterIteratorTest {
         assertEquals(itr.value().get(List.of("a", "b")), Set.of("v2"));
     }
 
+    @Test
+    public void localSysTopicMatch() {
+        TopicTrieNode.Builder<String> builder = TopicTrieNode.builder(false);
+        builder.addTopic(parse("$sys/a", false), "v1");
+        builder.addTopic(parse("a/b", false), "v2");
+        builder.addTopic(parse("c", false), "v3");
+        TopicFilterIterator<String> itr = new TopicFilterIterator<>(builder.build());
+        itr.seek(List.of("#"));
+        assertEquals(itr.value().size(), 2);
+        assertEquals(itr.value().get(List.of("a", "b")), Set.of("v2"));
+        assertEquals(itr.value().get(List.of("c")), Set.of("v3"));
+    }
+
+    @Test
+    public void globalSysTopicMatch() {
+        TopicTrieNode.Builder<String> builder = TopicTrieNode.builder(true);
+        builder.addTopic(parse("tenant/$sys/a", false), "v1");
+        builder.addTopic(parse("tenant/a/b", false), "v2");
+        builder.addTopic(parse("tenant/c", false), "v3");
+        TopicFilterIterator<String> itr = new TopicFilterIterator<>(builder.build());
+        itr.seek(List.of("tenant", "#"));
+        assertEquals(itr.value().size(), 2);
+        assertEquals(itr.value().get(List.of("tenant", "a", "b")), Set.of("v2"));
+        assertEquals(itr.value().get(List.of("tenant", "c")), Set.of("v3"));
+    }
+
     private void expandTopics(Map<String, List<String>> topicToFilters, boolean isGlobal) {
         TopicTrieNode.Builder<String> topicTrieBuilder = TopicTrieNode.builder(isGlobal);
         Set<String> allTopicFilters = new HashSet<>();
@@ -307,6 +335,7 @@ public class TopicFilterIteratorTest {
         List<String> generated = new ArrayList<>();
         for (; iterator.isValid(); iterator.next()) {
             generated.add(fastJoin(NUL, iterator.key()));
+            log.info("{}-{}", fastJoin(TopicConst.DELIMITER, iterator.key()), iterator.value().values());
         }
         assertEquals(sortedTopicFilters, generated);
     }

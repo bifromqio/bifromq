@@ -15,7 +15,6 @@ package com.baidu.bifromq.dist.entity;
 
 import static com.baidu.bifromq.dist.util.TopicUtil.escape;
 import static com.baidu.bifromq.dist.util.TopicUtil.isNormalTopicFilter;
-import static com.baidu.bifromq.dist.util.TopicUtil.parseSharedTopic;
 import static com.baidu.bifromq.dist.util.TopicUtil.unescape;
 import static com.baidu.bifromq.util.TopicConst.DELIMITER_CHAR;
 import static com.baidu.bifromq.util.TopicConst.NUL;
@@ -25,7 +24,6 @@ import static com.baidu.bifromq.util.TopicConst.UNORDERED_SHARE;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 
 import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;
-import com.baidu.bifromq.dist.util.TopicUtil;
 import com.google.protobuf.ByteString;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -160,7 +158,7 @@ public class EntityUtil {
 
     public static ByteString toGroupMatchRecordKey(String tenantId, String topicFilter) {
         assert !isNormalTopicFilter(topicFilter);
-        TopicUtil.SharedTopicFilter stf = parseSharedTopic(topicFilter);
+        SharedTopicFilter stf = parseSharedTopic(topicFilter);
         return matchRecordKeyPrefix(tenantId, stf.topicFilter)
             .concat(stf.ordered ? FLAG_ORDERD_SHARE : FLAG_UNORDERD_SHARE)
             .concat(copyFromUtf8(stf.shareGroup));
@@ -172,7 +170,7 @@ public class EntityUtil {
                 .concat(FLAG_NORMAL)
                 .concat(copyFromUtf8(qInboxId));
         } else {
-            TopicUtil.SharedTopicFilter stf = parseSharedTopic(topicFilter);
+            SharedTopicFilter stf = parseSharedTopic(topicFilter);
             return matchRecordKeyPrefix(tenantId, stf.topicFilter)
                 .concat(stf.ordered ? FLAG_ORDERD_SHARE : FLAG_UNORDERD_SHARE)
                 .concat(copyFromUtf8(stf.shareGroup));
@@ -187,9 +185,20 @@ public class EntityUtil {
         if (isNormalTopicFilter(topicFilter)) {
             return matchRecordKeyPrefix(tenantId, topicFilter);
         } else {
-            TopicUtil.SharedTopicFilter stf = parseSharedTopic(topicFilter);
+            SharedTopicFilter stf = parseSharedTopic(topicFilter);
             return matchRecordKeyPrefix(tenantId, stf.topicFilter);
         }
+    }
+
+    private static SharedTopicFilter parseSharedTopic(String topicFilter) {
+        assert !isNormalTopicFilter(topicFilter);
+        String sharePrefix = topicFilter.startsWith(UNORDERED_SHARE) ? UNORDERED_SHARE : ORDERED_SHARE;
+        boolean ordered = !topicFilter.startsWith(UNORDERED_SHARE);
+        String rest = topicFilter.substring((sharePrefix + DELIMITER_CHAR).length());
+        int firstTopicSeparatorIndex = rest.indexOf(DELIMITER_CHAR);
+        String shareGroup = rest.substring(0, firstTopicSeparatorIndex);
+        return new SharedTopicFilter(topicFilter, ordered, shareGroup,
+            rest.substring(firstTopicSeparatorIndex + 1));
     }
 
     public static String parseTopicFilter(String matchRecordKeyStr) {
@@ -236,6 +245,20 @@ public class EntityUtil {
                 }
                 default -> throw new UnsupportedOperationException("Unknown flag: " + flag);
             }
+        }
+    }
+
+    public static TenantAndEscapedTopicFilter parseTenantAndEscapedTopicFilter(ByteString matchRecordKey) {
+        String matchRecordKeyStr = matchRecordKey.toStringUtf8();
+        int firstSplit = matchRecordKeyStr.indexOf(NUL_CHAR);
+        int lastSplit = matchRecordKeyStr.lastIndexOf(NUL_CHAR);
+        return new TenantAndEscapedTopicFilter(matchRecordKeyStr.substring(0, firstSplit),
+            matchRecordKeyStr.substring(firstSplit + 2, lastSplit));
+    }
+
+    public record TenantAndEscapedTopicFilter(String tenantId, String escapedTopicFilter) {
+        public String toGlobalTopicFilter() {
+            return tenantId + NUL + escapedTopicFilter;
         }
     }
 }

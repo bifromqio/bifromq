@@ -30,6 +30,19 @@ public class Fixtures {
             "tenantA/a",
             "tenantA/a/#"
         ));
+        GlobalTopicToFilters.put("tenantA/a/b", List.of(
+            "tenantA/#",
+            "tenantA/+/#",
+            "tenantA/+/+",
+            "tenantA/+/+/#",
+            "tenantA/+/b",
+            "tenantA/+/b/#",
+            "tenantA/a/#",
+            "tenantA/a/+",
+            "tenantA/a/+/#",
+            "tenantA/a/b",
+            "tenantA/a/b/#"
+        ));
 
         GlobalTopicToFilters.put("tenantA/$sys/a", List.of(
             "tenantA/$sys/#",
@@ -60,6 +73,7 @@ public class Fixtures {
             "a",
             "a/#"
         ));
+
 
         LocalTopicToFilters.put("$sys/a", List.of(
             "$sys/#",

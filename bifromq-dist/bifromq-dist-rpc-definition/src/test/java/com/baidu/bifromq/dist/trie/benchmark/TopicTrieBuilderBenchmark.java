@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.util.benchmark;
+package com.baidu.bifromq.dist.trie.benchmark;
 
 import lombok.SneakyThrows;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -41,6 +41,6 @@ public class TopicTrieBuilderBenchmark {
     @Threads(1)
     @Fork(1)
     public void testBuild(TopicTrieBuilderBenchmarkState state) {
-        state.topicTrie.add(state.randomTopic(), state.distMessages);
+        state.topicTrieBuilder.addTopic(state.randomTopic(), "value");
     }
 }

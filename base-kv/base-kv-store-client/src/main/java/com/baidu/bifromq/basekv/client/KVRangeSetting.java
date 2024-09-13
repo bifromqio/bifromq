@@ -23,9 +23,9 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
@@ -51,12 +51,12 @@ public class KVRangeSetting {
         ver = desc.getVer();
         boundary = desc.getBoundary();
         leader = leaderStoreId;
-        Set<String> voters = new HashSet<>();
-        Set<String> inProcVoters = new HashSet<>();
-        Set<String> followers = new HashSet<>();
-        Set<String> inProcFollowers = new HashSet<>();
-        Set<String> allReplicas = new HashSet<>();
-        Set<String> inProcReplicas = new HashSet<>();
+        Set<String> voters = new TreeSet<>();
+        Set<String> inProcVoters = new TreeSet<>();
+        Set<String> followers = new TreeSet<>();
+        Set<String> inProcFollowers = new TreeSet<>();
+        Set<String> allReplicas = new TreeSet<>();
+        Set<String> inProcReplicas = new TreeSet<>();
 
         Set<String> allVoters =
             Sets.newHashSet(Iterables.concat(desc.getConfig().getVotersList(), desc.getConfig().getNextVotersList()));
@@ -97,9 +97,23 @@ public class KVRangeSetting {
         this.inProcReplicas = Collections.unmodifiableList(Lists.newArrayList(inProcReplicas));
     }
 
+    public boolean hasInProcVoter() {
+        return !inProcVoters.isEmpty();
+    }
+
+    public boolean hasInProcReplica() {
+        return !inProcReplicas.isEmpty();
+    }
+
     public String randomReplica() {
         if (!inProcReplicas.isEmpty()) {
+            if (inProcReplicas.size() == 1) {
+                return inProcReplicas.get(0);
+            }
             return inProcReplicas.get(ThreadLocalRandom.current().nextInt(inProcReplicas.size()));
+        }
+        if (allReplicas.size() == 1) {
+            return allReplicas.get(0);
         }
         return allReplicas.get(ThreadLocalRandom.current().nextInt(allReplicas.size()));
     }
@@ -108,7 +122,13 @@ public class KVRangeSetting {
         if (getInProcStores(clusterId).contains(leader)) {
             return leader;
         } else if (!inProcVoters.isEmpty()) {
+            if (inProcVoters.size() == 1) {
+                return inProcVoters.get(0);
+            }
             return inProcVoters.get(ThreadLocalRandom.current().nextInt(inProcVoters.size()));
+        }
+        if (voters.size() == 1) {
+            return voters.get(0);
         }
         return voters.get(ThreadLocalRandom.current().nextInt(voters.size()));
     }

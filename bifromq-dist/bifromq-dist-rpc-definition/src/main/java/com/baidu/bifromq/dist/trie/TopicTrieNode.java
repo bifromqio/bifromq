@@ -97,7 +97,7 @@ public final class TopicTrieNode<V> {
     }
 
     /**
-     * The builder for building a TopicTrie.
+     * The builder for building a TopicTrieNode.
      *
      * @param <V> the value associated with the topic
      */

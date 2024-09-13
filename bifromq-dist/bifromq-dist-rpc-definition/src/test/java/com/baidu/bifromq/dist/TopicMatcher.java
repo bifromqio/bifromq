@@ -11,14 +11,15 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.util;
+package com.baidu.bifromq.dist;
 
 
-import static com.baidu.bifromq.dist.util.TopicUtil.findNext;
+import static com.baidu.bifromq.dist.TestUtil.findNext;
 import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
 import static com.baidu.bifromq.util.TopicConst.SINGLE_WILDCARD;
 import static com.baidu.bifromq.util.TopicConst.SYS_PREFIX;
 
+import com.baidu.bifromq.dist.util.TopicUtil;
 import java.util.List;
 import java.util.Optional;
 
