@@ -96,7 +96,7 @@ public abstract class KVRangeStoreClusterTestTemplate extends MockableTest {
         if (cluster != null) {
             log.info("Shutting down test cluster");
             KVRangeStoreTestCluster lastCluster = this.cluster;
-            new Thread(lastCluster::shutdown).start();
+            lastCluster.shutdown();
         }
     }
 
