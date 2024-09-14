@@ -351,6 +351,9 @@ public class KVRangeStore implements IKVRangeStore {
             if (payload.hasEnsureRange()) {
                 EnsureRange request = storeMessage.getPayload().getEnsureRange();
                 mgmtTaskRunner.add(() -> {
+                    if (status.get() != Status.STARTED) {
+                        return CompletableFuture.completedFuture(null);
+                    }
                     KVRangeId rangeId = payload.getRangeId();
                     IKVRangeFSM range = kvRangeMap.get(rangeId);
                     try {
