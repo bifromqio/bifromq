@@ -32,7 +32,7 @@ public final class InboxFetcherRegistry implements IInboxFetcherRegistry {
     public void reg(IInboxFetcher fetcher) {
         fetchers.compute(fetcher.tenantId(), (key, val) -> {
             if (val == null) {
-                val = new HashMap<>();
+                val = new ConcurrentHashMap<>();
             }
             IInboxFetcher prevFetcher = val.computeIfAbsent(fetcher.delivererKey(), k -> new ConcurrentHashMap<>())
                 .put(fetcher.id(), fetcher);
