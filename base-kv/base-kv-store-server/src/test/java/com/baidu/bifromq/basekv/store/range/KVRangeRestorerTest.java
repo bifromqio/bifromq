@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -59,7 +60,8 @@ public class KVRangeRestorerTest {
 
     @Test
     public void awaitDone() {
-        when(range.toReseter(snapshot)).thenReturn(reseter);
+        IKVReseter reseter = mock(IKVReseter.class);
+        when(range.toReseter(eq(snapshot))).thenReturn(reseter);
         KVRangeRestorer restorer = new KVRangeRestorer(snapshot, range, messenger, metricManager, executor, 10);
 
         assertTrue(restorer.awaitDone().isDone());
@@ -128,7 +130,7 @@ public class KVRangeRestorerTest {
     @Test
     public void restoreFromTimeout() {
         IKVReseter reseter = mock(IKVReseter.class);
-        when(range.toReseter(snapshot)).thenReturn(reseter);
+        when(range.toReseter(eq(snapshot))).thenReturn(reseter);
 
         KVRangeRestorer restorer = new KVRangeRestorer(snapshot, range, messenger, metricManager, executor, 1);
         CompletableFuture<Void> restoreFuture = restorer.restoreFrom("leader", snapshot);
@@ -143,7 +145,7 @@ public class KVRangeRestorerTest {
     @Test
     public void cancelPreviousSession() {
         IKVReseter reseter = mock(IKVReseter.class);
-        when(range.toReseter(snapshot)).thenReturn(reseter);
+        when(range.toReseter(eq(snapshot))).thenReturn(reseter);
 
         KVRangeRestorer restorer = new KVRangeRestorer(snapshot, range, messenger, metricManager, executor, 10);
 
@@ -152,6 +154,7 @@ public class KVRangeRestorerTest {
 
         // Start the second restore session, which should cancel the first
         KVRangeSnapshot newSnapshot = KVRangeSnapshot.newBuilder().setId(snapshot.getId()).setVer(1).build();
+        when(range.toReseter(eq(newSnapshot))).thenReturn(reseter);
         CompletableFuture<Void> secondRestore = restorer.restoreFrom("leader", newSnapshot);
 
         verify(reseter, times(1)).abort();
