@@ -13,14 +13,14 @@
 
 package com.baidu.bifromq.dist.entity;
 
-import static com.baidu.bifromq.dist.util.TopicUtil.escape;
-import static com.baidu.bifromq.dist.util.TopicUtil.isNormalTopicFilter;
-import static com.baidu.bifromq.dist.util.TopicUtil.unescape;
+import static com.baidu.bifromq.util.TopicUtil.escape;
+import static com.baidu.bifromq.util.TopicUtil.unescape;
 import static com.baidu.bifromq.util.TopicConst.DELIMITER_CHAR;
 import static com.baidu.bifromq.util.TopicConst.NUL;
 import static com.baidu.bifromq.util.TopicConst.NUL_CHAR;
 import static com.baidu.bifromq.util.TopicConst.ORDERED_SHARE;
 import static com.baidu.bifromq.util.TopicConst.UNORDERED_SHARE;
+import static com.baidu.bifromq.util.TopicUtil.isNormalTopicFilter;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 
 import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;

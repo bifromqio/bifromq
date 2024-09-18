@@ -17,7 +17,7 @@ import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseTopicFilter;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toMatchRecordKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
-import static com.baidu.bifromq.dist.util.TopicUtil.escape;
+import static com.baidu.bifromq.util.TopicUtil.escape;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 

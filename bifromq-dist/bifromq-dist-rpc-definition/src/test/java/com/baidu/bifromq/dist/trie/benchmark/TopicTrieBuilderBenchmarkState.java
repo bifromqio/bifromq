@@ -15,7 +15,7 @@ package com.baidu.bifromq.dist.trie.benchmark;
 
 import com.baidu.bifromq.dist.trie.TopicTrieNode;
 import com.baidu.bifromq.dist.TestUtil;
-import com.baidu.bifromq.dist.util.TopicUtil;
+import com.baidu.bifromq.util.TopicUtil;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.openjdk.jmh.annotations.Level;

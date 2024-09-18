@@ -39,7 +39,7 @@ import com.baidu.bifromq.dist.rpc.proto.DistPack;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 import com.baidu.bifromq.dist.trie.TopicFilterIterator;
 import com.baidu.bifromq.dist.trie.TopicTrieNode;
-import com.baidu.bifromq.dist.util.TopicUtil;
+import com.baidu.bifromq.util.TopicUtil;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;

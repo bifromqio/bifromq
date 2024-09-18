@@ -28,7 +28,7 @@ import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toGroupMatchRecordKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toNormalMatchRecordKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toScopedTopicFilter;
-import static com.baidu.bifromq.dist.util.TopicUtil.isNormalTopicFilter;
+import static com.baidu.bifromq.util.TopicUtil.isNormalTopicFilter;
 import static java.util.Collections.singletonMap;
 
 import com.baidu.bifromq.basekv.proto.Boundary;

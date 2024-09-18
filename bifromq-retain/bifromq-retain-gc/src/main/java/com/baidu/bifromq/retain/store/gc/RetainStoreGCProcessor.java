@@ -14,17 +14,17 @@
 package com.baidu.bifromq.retain.store.gc;
 
 import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
-import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
 import static com.baidu.bifromq.retain.utils.MessageUtil.buildGCRequest;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import java.util.Arrays;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
@@ -44,31 +44,25 @@ public class RetainStoreGCProcessor implements IRetainStoreGCProcessor {
                                         @Nullable String tenantId,
                                         @Nullable Integer expirySeconds,
                                         long now) {
-        if (tenantId != null) {
-            Optional<KVRangeSetting> rangeSettingOpt =
-                findByKey(tenantNS(tenantId), storeClient.latestEffectiveRouter());
-            if (rangeSettingOpt.isEmpty()) {
-                return CompletableFuture.completedFuture(Result.ERROR);
-            }
-            KVRangeSetting rangeSetting = rangeSettingOpt.get();
-            return gcRange(reqId, rangeSetting, tenantId, expirySeconds, now);
-        } else {
-            CompletableFuture<?>[] gcFutures = findByBoundary(FULL_BOUNDARY, storeClient.latestEffectiveRouter())
-                .stream()
-                .filter(k -> localServerId == null || k.leader.equals(localServerId))
-                .map(rangeSetting -> gcRange(reqId, rangeSetting, null, expirySeconds, now))
-                .toArray(CompletableFuture[]::new);
-            return CompletableFuture.allOf(gcFutures)
-                .thenApply(v -> Arrays.stream(gcFutures).map(CompletableFuture::join).toList())
-                .thenApply(v -> {
-                    log.debug("All range gc succeed");
-                    return v.stream().anyMatch(r -> r != Result.OK) ? Result.ERROR : Result.OK;
-                })
-                .exceptionally(e -> {
-                    log.error("Some range gc failed");
-                    return Result.ERROR;
-                });
-        }
+        Boundary boundary = tenantId != null ? Boundary.newBuilder()
+            .setStartKey(tenantNS(tenantId))
+            .setEndKey(upperBound(tenantNS(tenantId)))
+            .build() : FULL_BOUNDARY;
+        CompletableFuture<?>[] gcFutures = findByBoundary(boundary, storeClient.latestEffectiveRouter())
+            .stream()
+            .filter(k -> localServerId == null || k.leader.equals(localServerId))
+            .map(rangeSetting -> gcRange(reqId, rangeSetting, tenantId, expirySeconds, now))
+            .toArray(CompletableFuture[]::new);
+        return CompletableFuture.allOf(gcFutures)
+            .thenApply(v -> Arrays.stream(gcFutures).map(CompletableFuture::join).toList())
+            .thenApply(v -> {
+                log.debug("All range gc succeed");
+                return v.stream().anyMatch(r -> r != Result.OK) ? Result.ERROR : Result.OK;
+            })
+            .exceptionally(e -> {
+                log.error("Some range gc failed");
+                return Result.ERROR;
+            });
     }
 
     private CompletableFuture<Result> gcRange(long reqId,

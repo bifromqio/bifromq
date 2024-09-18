@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist;
 
-import static com.baidu.bifromq.dist.util.TopicUtil.escape;
+import static com.baidu.bifromq.util.TopicUtil.escape;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;

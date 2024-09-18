@@ -21,7 +21,7 @@ import com.baidu.bifromq.type.TopicMessage;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-public class MatchTest extends RetainStoreTest {
+public class RetainMatchTest extends RetainStoreTest {
     private String tenantId;
 
     @BeforeMethod(alwaysRun = true)
@@ -64,9 +64,9 @@ public class MatchTest extends RetainStoreTest {
         assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message3));
 
         matchReply = requestMatch(tenantId, "/#", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 4);
+        assertEquals(matchReply.getOk().getMessagesCount(), 3);
         assertEquals(newHashSet(matchReply.getOk().getMessagesList()),
-            newHashSet(message1, message2, message3, message4));
+            newHashSet(message1, message2, message3));
 
         matchReply = requestMatch(tenantId, "/c/#", 10);
         assertEquals(matchReply.getOk().getMessagesCount(), 1);

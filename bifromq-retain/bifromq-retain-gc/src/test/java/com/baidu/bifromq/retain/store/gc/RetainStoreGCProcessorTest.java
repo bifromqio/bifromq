@@ -66,7 +66,7 @@ public class RetainStoreGCProcessorTest {
 
         IRetainStoreGCProcessor.Result result =
             gcProcessor.gc(System.nanoTime(), tenantId, null, HLC.INST.getPhysical()).join();
-        assertEquals(result, IRetainStoreGCProcessor.Result.ERROR);
+        assertEquals(result, IRetainStoreGCProcessor.Result.OK);
     }
 
     @Test

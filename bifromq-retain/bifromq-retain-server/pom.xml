@@ -38,6 +38,10 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-util</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-metrics</artifactId>
         </dependency>
         <dependency>

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023. The BifroMQ Authors. All Rights Reserved.
+ * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,73 +13,198 @@
 
 package com.baidu.bifromq.retain.server.scheduler;
 
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
+import static com.baidu.bifromq.retain.rpc.proto.MatchReply.Result.ERROR;
+import static com.baidu.bifromq.retain.rpc.proto.MatchReply.Result.OK;
+import static com.baidu.bifromq.retain.utils.KeyUtil.filterPrefix;
+import static com.baidu.bifromq.retain.utils.KeyUtil.retainKeyPrefix;
+import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
+import static com.baidu.bifromq.util.TopicUtil.isMultiWildcardTopicFilter;
+import static com.baidu.bifromq.util.TopicUtil.isNormalTopicFilter;
+import static com.baidu.bifromq.util.TopicUtil.isWildcardTopicFilter;
+import static com.baidu.bifromq.util.TopicUtil.parse;
+
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.client.scheduler.BatchQueryCall;
-import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.client.KVRangeSetting;
+import com.baidu.bifromq.basekv.proto.Boundary;
+import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
-import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
+import com.baidu.bifromq.basekv.store.proto.ReplyCode;
+import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.basescheduler.ICallTask;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.retain.rpc.proto.BatchMatchReply;
 import com.baidu.bifromq.retain.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchParam;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchResult;
-import com.baidu.bifromq.retain.rpc.proto.MatchResultPack;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcInput;
-import java.time.Duration;
+import com.baidu.bifromq.retain.utils.KeyUtil;
+import com.baidu.bifromq.type.TopicMessage;
+import com.google.common.primitives.UnsignedBytes;
+import com.google.protobuf.ByteString;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
+import java.util.Optional;
 import java.util.Queue;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
-public class BatchMatchCall extends BatchQueryCall<MatchCall, MatchCallResult> {
-    protected BatchMatchCall(KVRangeId rangeId,
-                             IBaseKVStoreClient storeClient,
-                             Duration pipelineExpiryTime) {
-        super(rangeId, storeClient, true, pipelineExpiryTime);
+@Slf4j
+public class BatchMatchCall implements IBatchCall<MatchCall, MatchCallResult, MatchCallBatcherKey> {
+    private final MatchCallBatcherKey batcherKey;
+    private final IBaseKVStoreClient retainStoreClient;
+    private final ISettingProvider settingProvider;
+    private final Queue<ICallTask<MatchCall, MatchCallResult, MatchCallBatcherKey>> tasks = new ArrayDeque<>(128);
+    private Set<String> topicFilters = new HashSet<>(128);
+
+
+    public BatchMatchCall(MatchCallBatcherKey batcherKey,
+                          IBaseKVStoreClient retainStoreClient,
+                          ISettingProvider settingProvider) {
+        this.batcherKey = batcherKey;
+        this.retainStoreClient = retainStoreClient;
+        this.settingProvider = settingProvider;
     }
 
     @Override
-    protected ROCoProcInput makeBatch(Iterator<MatchCall> matchRequestIterator) {
-        Map<String, MatchParam.Builder> matchParamBuilders = new HashMap<>(128);
-        matchRequestIterator.forEachRemaining(request ->
-            matchParamBuilders.computeIfAbsent(request.tenantId(), k -> MatchParam.newBuilder())
-                .setNow(HLC.INST.getPhysical())
-                .putTopicFilters(request.topicFilter(), request.limit()));
+    public void add(ICallTask<MatchCall, MatchCallResult, MatchCallBatcherKey> task) {
+        tasks.add(task);
+        topicFilters.add(task.call().topicFilter());
+    }
+
+    @Override
+    public void reset() {
+        topicFilters = new HashSet<>(128);
+    }
+
+    @Override
+    public CompletableFuture<Void> execute() {
+        long now = HLC.INST.getPhysical();
         long reqId = System.nanoTime();
-        BatchMatchRequest.Builder reqBuilder = BatchMatchRequest
-            .newBuilder()
-            .setReqId(reqId);
-        matchParamBuilders.forEach((tenantId, matchParamsBuilder) ->
-            reqBuilder.putMatchParams(tenantId, matchParamsBuilder.build()));
-
-        return ROCoProcInput.newBuilder()
-            .setRetainService(RetainServiceROCoProcInput.newBuilder()
-                .setBatchMatch(reqBuilder.build())
-                .build())
-            .build();
-    }
-
-    @Override
-    protected void handleOutput(Queue<ICallTask<MatchCall, MatchCallResult, QueryCallBatcherKey>> batchedTasks,
-                                ROCoProcOutput output) {
-        ICallTask<MatchCall, MatchCallResult, QueryCallBatcherKey> task;
-        while ((task = batchedTasks.poll()) != null) {
-            task.resultPromise().complete(new MatchCallResult(MatchReply.Result.OK, output.getRetainService()
-                .getBatchMatch()
-                .getResultPackMap()
-                .getOrDefault(task.call().tenantId(),
-                    MatchResultPack.getDefaultInstance())
-                .getResultsOrDefault(task.call().topicFilter(),
-                    MatchResult.getDefaultInstance()).getOk()
-                .getMessagesList()));
+        Map<KVRangeSetting, Set<String>> topicFiltersByRange =
+            rangeLookup(topicFilters, retainStoreClient.latestEffectiveRouter());
+        List<CompletableFuture<BatchMatchReply>> futures = new ArrayList<>(topicFiltersByRange.size());
+        int limit = settingProvider.provide(Setting.RetainMessageMatchLimit, batcherKey.tenantId());
+        for (KVRangeSetting rangeSetting : topicFiltersByRange.keySet()) {
+            Set<String> topicFilters = topicFiltersByRange.get(rangeSetting);
+            futures.add(queryCoProc(BatchMatchRequest.newBuilder()
+                .putMatchParams(batcherKey.tenantId(), MatchParam.newBuilder()
+                    .putAllTopicFilters(topicFilters.stream().collect(Collectors.toMap(k -> k, v -> limit)))
+                    .setNow(now)
+                    .build())
+                .setReqId(reqId)
+                .build(), rangeSetting));
         }
+        return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
+            .handle((v, e) -> {
+                ICallTask<MatchCall, MatchCallResult, MatchCallBatcherKey> task;
+                if (e != null) {
+                    while ((task = tasks.poll()) != null) {
+                        task.resultPromise()
+                            .complete(new MatchCallResult(MatchReply.Result.ERROR, Collections.emptyList()));
+                    }
+                } else {
+                    // aggregate result from each reply
+                    Map<String, List<MatchResult>> aggregatedResults = new HashMap<>();
+                    for (CompletableFuture<BatchMatchReply> future : futures) {
+                        BatchMatchReply reply = future.join();
+                        Map<String, MatchResult> matchResults =
+                            reply.getResultPackMap().get(batcherKey.tenantId()).getResultsMap();
+                        matchResults.forEach((topic, matchResult) ->
+                            aggregatedResults.computeIfAbsent(topic, k -> new ArrayList<>()).add(matchResult));
+                    }
+                    while ((task = tasks.poll()) != null) {
+                        List<MatchResult> matchResults = aggregatedResults.get(task.call().topicFilter());
+                        List<TopicMessage> messages = new LinkedList<>();
+                        int i = 0;
+                        boolean anySucceed = false;
+                        out:
+                        for (MatchResult matchResult : matchResults) {
+                            if (matchResult.hasOk()) {
+                                for (TopicMessage message : matchResult.getOk().getMessagesList()) {
+                                    if (i++ < limit) {
+                                        messages.add(message);
+                                    } else {
+                                        break out;
+                                    }
+                                }
+                                anySucceed = true;
+                            }
+                        }
+                        if (anySucceed) {
+                            task.resultPromise().complete(new MatchCallResult(OK, messages));
+                        } else {
+                            task.resultPromise().complete(new MatchCallResult(ERROR, Collections.emptyList()));
+                        }
+                    }
+                }
+                return null;
+            });
     }
 
-    @Override
-    protected void handleException(ICallTask<MatchCall, MatchCallResult, QueryCallBatcherKey> callTask, Throwable e) {
-        callTask.resultPromise().complete(new MatchCallResult(MatchReply.Result.ERROR, Collections.emptyList()));
+    private CompletableFuture<BatchMatchReply> queryCoProc(BatchMatchRequest request, KVRangeSetting rangeSetting) {
+        return retainStoreClient.query(rangeSetting.randomReplica(), KVRangeRORequest.newBuilder()
+                .setReqId(request.getReqId())
+                .setKvRangeId(rangeSetting.id)
+                .setVer(rangeSetting.ver)
+                .setRoCoProc(ROCoProcInput.newBuilder()
+                    .setRetainService(RetainServiceROCoProcInput.newBuilder()
+                        .setBatchMatch(request)
+                        .build())
+                    .build())
+                .build())
+            .thenApply(v -> {
+                if (v.getCode() == ReplyCode.Ok) {
+                    BatchMatchReply batchMatchReply = v.getRoCoProcResult()
+                        .getRetainService()
+                        .getBatchMatch();
+                    assert batchMatchReply.getReqId() == request.getReqId();
+                    return batchMatchReply;
+                }
+                log.warn("Failed to exec ro co-proc[code={}]", v.getCode());
+                throw new RuntimeException("Failed to exec rw co-proc");
+            });
+    }
+
+    private Map<KVRangeSetting, Set<String>> rangeLookup(Set<String> topicFilters,
+                                                         NavigableMap<Boundary, KVRangeSetting> effectiveRouter) {
+        Map<KVRangeSetting, Set<String>> topicFiltersByRange = new HashMap<>();
+        for (String topicFilter : topicFilters) {
+            // not shared subscription
+            assert isNormalTopicFilter(topicFilter);
+            if (isWildcardTopicFilter(topicFilter)) {
+                List<String> filterLevels = parse(topicFilter, false);
+                ByteString startKey = isMultiWildcardTopicFilter(topicFilter)
+                    ? retainKeyPrefix(batcherKey.tenantId(), filterLevels.size() - 1, filterPrefix(filterLevels)) :
+                    retainKeyPrefix(batcherKey.tenantId(), filterLevels.size(), filterPrefix(filterLevels));
+                ByteString endKey = isMultiWildcardTopicFilter(topicFilter)
+                    ? retainKeyPrefix(batcherKey.tenantId(), UnsignedBytes.MAX_VALUE, filterPrefix(filterLevels)) :
+                    retainKeyPrefix(batcherKey.tenantId(), filterLevels.size() + 1, filterLevels);
+                Boundary topicBoundary = Boundary.newBuilder().setStartKey(startKey).setEndKey(endKey).build();
+                List<KVRangeSetting> rangeSettingList = findByBoundary(topicBoundary, effectiveRouter);
+                for (KVRangeSetting rangeSetting : rangeSettingList) {
+                    topicFiltersByRange.computeIfAbsent(rangeSetting, k -> new HashSet<>()).add(topicFilter);
+                }
+            } else {
+                ByteString retainKey = KeyUtil.retainKey(tenantNS(batcherKey.tenantId()), topicFilter);
+                Optional<KVRangeSetting> rangeSetting = findByKey(retainKey, retainStoreClient.latestEffectiveRouter());
+                assert rangeSetting.isPresent();
+                topicFiltersByRange.computeIfAbsent(rangeSetting.get(), k -> new HashSet<>()).add(topicFilter);
+            }
+        }
+        return topicFiltersByRange;
     }
 }

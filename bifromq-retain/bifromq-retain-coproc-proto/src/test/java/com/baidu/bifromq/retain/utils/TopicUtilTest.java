@@ -14,7 +14,7 @@
 package com.baidu.bifromq.retain.utils;
 
 import static com.baidu.bifromq.retain.utils.TopicUtil.match;
-import static com.baidu.bifromq.retain.utils.TopicUtil.parse;
+import static com.baidu.bifromq.util.TopicUtil.parse;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 

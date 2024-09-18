@@ -13,13 +13,45 @@
 
 package com.baidu.bifromq.util;
 
+import static com.baidu.bifromq.util.TopicUtil.escape;
+import static com.baidu.bifromq.util.TopicUtil.isWildcardTopicFilter;
+import static com.baidu.bifromq.util.TopicUtil.parse;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-import org.testng.Assert;
+import java.util.List;
 import org.testng.annotations.Test;
 
 public class TopicUtilsTest {
+    @Test
+    public void check() {
+        assertTrue(isWildcardTopicFilter("#"));
+        assertTrue(isWildcardTopicFilter("+"));
+        assertTrue(isWildcardTopicFilter("/#"));
+        assertTrue(isWildcardTopicFilter("/+"));
+        assertFalse(isWildcardTopicFilter("/"));
+    }
+
+    @Test
+    public void testParse() {
+        assertEquals(parse("", false), List.of(""));
+        assertEquals(parse(" ", false), List.of(" "));
+        assertEquals(parse("/", false), List.of("", ""));
+        assertEquals(parse(escape("/"), true), List.of("", ""));
+        assertEquals(parse("//", false), List.of("", "", ""));
+        assertEquals(parse(escape("//"), true), List.of("", "", ""));
+        assertEquals(parse(" //", false), List.of(" ", "", ""));
+        assertEquals(parse(escape(" //"), true), List.of(" ", "", ""));
+        assertEquals(parse(" / / ", false), List.of(" ", " ", " "));
+        assertEquals(parse(escape(" / / "), true), List.of(" ", " ", " "));
+        assertEquals(parse("a/", false), List.of("a", ""));
+        assertEquals(parse(escape("a/"), true), List.of("a", ""));
+        assertEquals(parse("a/b", false), List.of("a", "b"));
+        assertEquals(parse(escape("a/b"), true), List.of("a", "b"));
+        assertEquals(parse("a/b/", false), List.of("a", "b", ""));
+        assertEquals(parse(escape("a/b/"), true), List.of("a", "b", ""));
+    }
 
     @Test
     public void testIsValidTopic() {
@@ -110,17 +142,4 @@ public class TopicUtilsTest {
         assertFalse(TopicUtil.isValidTopicFilter("$share/g/#/a", 10, 4, 100));
 
     }
-
-    @Test
-    public void testParseTopicFilter() {
-        Assert.assertEquals("/a/b/c", TopicUtil.parseTopicFilter("$share/g1//a/b/c"));
-        Assert.assertEquals("/a/b/c", TopicUtil.parseTopicFilter("$oshare/g1//a/b/c"));
-        Assert.assertEquals("a/b/c", TopicUtil.parseTopicFilter("$share/g1/a/b/c"));
-        Assert.assertEquals("a/b/c", TopicUtil.parseTopicFilter("$oshare/g1/a/b/c"));
-        Assert.assertEquals("/a/b/c", TopicUtil.parseTopicFilter("/a/b/c"));
-        Assert.assertEquals("$share", TopicUtil.parseTopicFilter("$share"));
-        Assert.assertEquals("$oshare", TopicUtil.parseTopicFilter("$oshare"));
-        Assert.assertEquals("$oshared/a", TopicUtil.parseTopicFilter("$oshared/a"));
-    }
-
 }

@@ -15,7 +15,7 @@ package com.baidu.bifromq.dist.worker.cache;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
-import static com.baidu.bifromq.dist.util.TopicUtil.unescape;
+import static com.baidu.bifromq.util.TopicUtil.unescape;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;

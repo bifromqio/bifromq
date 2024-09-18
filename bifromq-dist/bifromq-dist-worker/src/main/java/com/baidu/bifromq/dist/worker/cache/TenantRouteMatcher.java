@@ -24,7 +24,7 @@ import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.dist.entity.Matching;
 import com.baidu.bifromq.dist.trie.TopicFilterIterator;
 import com.baidu.bifromq.dist.trie.TopicTrieNode;
-import com.baidu.bifromq.dist.util.TopicUtil;
+import com.baidu.bifromq.util.TopicUtil;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Timer;

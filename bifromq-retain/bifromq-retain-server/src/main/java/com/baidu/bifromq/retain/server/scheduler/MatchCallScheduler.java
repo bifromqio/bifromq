@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023. The BifroMQ Authors. All Rights Reserved.
+ * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,60 +13,40 @@
 
 package com.baidu.bifromq.retain.server.scheduler;
 
-import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
-
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcher;
-import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
-import com.baidu.bifromq.basekv.client.scheduler.QueryCallScheduler;
+import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.IBatchCall;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
 import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
-import com.google.protobuf.ByteString;
 import java.time.Duration;
-import java.util.concurrent.ThreadLocalRandom;
-import lombok.extern.slf4j.Slf4j;
+import java.util.Optional;
 
-@Slf4j
-public class MatchCallScheduler extends QueryCallScheduler<MatchCall, MatchCallResult> implements IMatchCallScheduler {
-    public MatchCallScheduler(IBaseKVStoreClient retainStoreClient) {
-        super("retain_server_match_batcher", retainStoreClient,
+public class MatchCallScheduler extends BatchCallScheduler<MatchCall, MatchCallResult, MatchCallBatcherKey>
+    implements IMatchCallScheduler {
+    private final IBaseKVStoreClient retainStoreClient;
+    private final ISettingProvider settingProvider;
+
+    public MatchCallScheduler(IBaseKVStoreClient retainStoreClient, ISettingProvider settingProvider) {
+        super("retain_server_match_batcher",
             Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
             Duration.ofSeconds(DataPlaneBurstLatencyMillis.INSTANCE.get()));
+        this.retainStoreClient = retainStoreClient;
+        this.settingProvider = settingProvider;
     }
 
     @Override
-    protected Batcher<MatchCall, MatchCallResult, QueryCallBatcherKey> newBatcher(String name,
+    protected Batcher<MatchCall, MatchCallResult, MatchCallBatcherKey> newBatcher(String name,
                                                                                   long tolerableLatencyNanos,
                                                                                   long burstLatencyNanos,
-                                                                                  QueryCallBatcherKey batcherKey) {
-        return new MatchCallBatcher(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos, storeClient);
+                                                                                  MatchCallBatcherKey key) {
+        return new MatchCallBatcher(key, name, tolerableLatencyNanos, burstLatencyNanos,
+            retainStoreClient, settingProvider);
     }
 
     @Override
-    protected int selectQueue(MatchCall request) {
-        return ThreadLocalRandom.current().nextInt(5);
-    }
-
-    @Override
-    protected ByteString rangeKey(MatchCall request) {
-        return tenantNS(request.tenantId());
-    }
-
-    public static class MatchCallBatcher extends QueryCallBatcher<MatchCall, MatchCallResult> {
-
-        protected MatchCallBatcher(QueryCallBatcherKey batcherKey,
-                                   String name,
-                                   long tolerableLatencyNanos,
-                                   long burstLatencyNanos,
-                                   IBaseKVStoreClient storeClient) {
-            super(name, tolerableLatencyNanos, burstLatencyNanos, batcherKey, storeClient);
-        }
-
-        @Override
-        protected IBatchCall<MatchCall, MatchCallResult, QueryCallBatcherKey> newBatch() {
-            return new BatchMatchCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
-        }
+    protected Optional<MatchCallBatcherKey> find(MatchCall call) {
+        // TODO: implement multi batcher for tenant
+        return Optional.of(new MatchCallBatcherKey(call.tenantId(), 0));
     }
 }

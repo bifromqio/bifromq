@@ -11,19 +11,8 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.worker.index;
+package com.baidu.bifromq.retain.server.scheduler;
 
-public class MainNode<V> {
-    final CNode<V> cNode;
-    final TNode tNode;
+public record MatchCallBatcherKey(String tenantId, int queueId) {
 
-    MainNode(CNode<V> cNode) {
-        this.cNode = cNode;
-        this.tNode = null;
-    }
-
-    MainNode(TNode tNode) {
-        this.cNode = null;
-        this.tNode = tNode;
-    }
 }

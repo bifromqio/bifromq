@@ -27,7 +27,7 @@ abstract class AbstractRetainServer implements IRetainServer {
         this.retainService = new RetainService(
             new RetainStoreGCProcessor(builder.retainStoreClient, null),
             new MessageDeliverer(builder.subBrokerManager),
-            new MatchCallScheduler(builder.retainStoreClient),
+            new MatchCallScheduler(builder.retainStoreClient, builder.settingProvider),
             new RetainCallScheduler(builder.retainStoreClient));
     }
 

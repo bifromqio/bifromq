@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static com.baidu.bifromq.dist.util.TopicUtil.escape;
+import static com.baidu.bifromq.util.TopicUtil.escape;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentFanOutBytes;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersistentFanOutBytesPerSeconds;

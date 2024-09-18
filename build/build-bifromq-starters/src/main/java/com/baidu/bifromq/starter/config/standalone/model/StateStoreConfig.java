@@ -108,7 +108,7 @@ public class StateStoreConfig {
         @JsonSetter(nulls = Nulls.SKIP)
         private StorageEngineConfig walEngineConfig = new RocksDBEngineConfig()
             .setManualCompaction(true)
-            .setCompactMinTombstoneKeys(5000)
+            .setCompactMinTombstoneKeys(2500)
             .setCompactMinTombstoneRanges(2);
         @JsonSetter(nulls = Nulls.SKIP)
         private BalancerOptions balanceConfig = new BalancerOptions();

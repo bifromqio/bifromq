@@ -11,13 +11,15 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.worker.index;
+package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
 import static com.baidu.bifromq.util.TopicConst.SINGLE_WILDCARD;
 import static com.baidu.bifromq.util.TopicConst.SYS_PREFIX;
 
-import com.baidu.bifromq.dist.util.TopicUtil;
+import com.baidu.bifromq.util.TopicUtil;
+import com.baidu.bifromq.util.index.Branch;
+import com.baidu.bifromq.util.index.TopicLevelTrie;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -35,6 +37,8 @@ public final class TopicIndex<V> extends TopicLevelTrie<V> {
             if (currentLevel < topicLevels.size() - 1) {
                 // not last level
                 String topicLevelToMatch = topicLevels.get(currentLevel);
+                boolean matchParent = currentLevel + 1 == topicLevels.size() - 1
+                    && topicLevels.get(currentLevel + 1).equals(MULTI_WILDCARD);
                 switch (topicLevelToMatch) {
                     case SINGLE_WILDCARD -> {
                         Map<Branch<T>, Action> result = new HashMap<>();
@@ -44,30 +48,15 @@ public final class TopicIndex<V> extends TopicLevelTrie<V> {
                                 // + skip SYS topic
                                 continue;
                             }
-                            result.put(branch, Action.CONTINUE);
-                        }
-                        return result;
-                    }
-                    case MULTI_WILDCARD -> {
-                        Map<Branch<T>, Action> result = new HashMap<>();
-                        for (Map.Entry<String, Branch<T>> entry : branches.entrySet()) {
-                            Branch<T> branch = entry.getValue();
-                            if (currentLevel == 0 && entry.getKey().startsWith(SYS_PREFIX)) {
-                                // # skip SYS topic
-                                continue;
-                            }
-                            result.put(branch, Action.MATCH_AND_CONTINUE);
+                            result.put(branch, matchParent ? Action.MATCH_AND_CONTINUE : Action.CONTINUE);
                         }
                         return result;
                     }
                     default -> {
+                        assert !topicLevelToMatch.equals(MULTI_WILDCARD) : "MULTI_WILDCARD should be the last level";
                         if (branches.containsKey(topicLevelToMatch)) {
-                            if (currentLevel + 1 < topicLevels.size()
-                                && topicLevels.get(currentLevel + 1).equals(MULTI_WILDCARD)) {
-                                // # match parent level
-                                return Map.of(branches.get(topicLevelToMatch), Action.MATCH_AND_CONTINUE);
-                            }
-                            return Map.of(branches.get(topicLevelToMatch), Action.CONTINUE);
+                            return Map.of(branches.get(topicLevelToMatch),
+                                matchParent ? Action.MATCH_AND_CONTINUE : Action.CONTINUE);
                         }
                         return Collections.emptyMap();
                     }

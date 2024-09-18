@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.worker.index;
+package com.baidu.bifromq.util.index;
 
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 

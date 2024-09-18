@@ -13,9 +13,12 @@
 
 package com.baidu.bifromq.retain.utils;
 
-import static com.baidu.bifromq.retain.utils.TopicUtil.NUL;
-import static com.baidu.bifromq.retain.utils.TopicUtil.escape;
-import static com.baidu.bifromq.retain.utils.TopicUtil.parse;
+import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
+import static com.baidu.bifromq.util.TopicConst.NUL;
+import static com.baidu.bifromq.util.TopicConst.SINGLE_WILDCARD;
+import static com.baidu.bifromq.util.TopicUtil.escape;
+import static com.baidu.bifromq.util.TopicUtil.fastJoin;
+import static com.baidu.bifromq.util.TopicUtil.parse;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 
@@ -35,9 +38,28 @@ public class KeyUtil {
         return SCHEMA_VER.concat(toByteString(tenantIdBS.size())).concat(tenantIdBS);
     }
 
+    public static ByteString retainKey(String tenantId, String topic) {
+        return retainKey(tenantNS(tenantId), topic);
+    }
+
     public static ByteString retainKey(ByteString tenantNS, String topic) {
         return tenantNS.concat(unsafeWrap(new byte[] {(byte) parse(topic, false).size()}))
             .concat(copyFromUtf8(escape(topic)));
+    }
+
+    public static List<String> filterPrefix(List<String> filterLevels) {
+        int firstWildcard = filterLevels.indexOf(SINGLE_WILDCARD);
+        if (firstWildcard == -1) {
+            assert filterLevels.get(filterLevels.size() - 1).equals(MULTI_WILDCARD);
+            firstWildcard = filterLevels.size() - 1;
+        }
+        return filterLevels.subList(0, firstWildcard);
+    }
+
+    public static ByteString retainKeyPrefix(String tenantId, int levels, List<String> filterPrefix) {
+        return tenantNS(tenantId)
+            .concat(unsafeWrap(new byte[] {(byte) levels}))
+            .concat(copyFromUtf8(fastJoin(NUL, filterPrefix)));
     }
 
     public static ByteString retainKeyPrefix(ByteString tenantNS, List<String> topicFilterLevels) {

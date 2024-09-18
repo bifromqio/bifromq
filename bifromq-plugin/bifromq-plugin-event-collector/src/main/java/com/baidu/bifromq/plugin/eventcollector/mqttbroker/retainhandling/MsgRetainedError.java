@@ -18,11 +18,13 @@ import com.baidu.bifromq.type.QoS;
 import java.nio.ByteBuffer;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
 import lombok.experimental.Accessors;
 
 @Getter
 @Setter
 @Accessors(fluent = true, chain = true)
+@ToString(callSuper = true)
 public final class MsgRetainedError extends RetainEvent<MsgRetainedError> {
     private String topic;
 

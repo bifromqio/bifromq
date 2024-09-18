@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.dist;
 
-import static com.baidu.bifromq.dist.util.TopicUtil.fastJoin;
-import static com.baidu.bifromq.dist.util.TopicUtil.parse;
+import static com.baidu.bifromq.util.TopicUtil.fastJoin;
+import static com.baidu.bifromq.util.TopicUtil.parse;
 import static com.baidu.bifromq.util.TopicConst.DELIMITER;
 import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
 import static com.baidu.bifromq.util.TopicConst.NUL;

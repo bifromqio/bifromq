@@ -15,15 +15,15 @@ package com.baidu.bifromq.dist.trie;
 
 import static com.baidu.bifromq.dist.TestUtil.randomTopic;
 import static com.baidu.bifromq.dist.TestUtil.randomTopicFilter;
-import static com.baidu.bifromq.dist.util.TopicUtil.escape;
-import static com.baidu.bifromq.dist.util.TopicUtil.fastJoin;
-import static com.baidu.bifromq.dist.util.TopicUtil.parse;
+import static com.baidu.bifromq.util.TopicUtil.escape;
+import static com.baidu.bifromq.util.TopicUtil.fastJoin;
+import static com.baidu.bifromq.util.TopicUtil.parse;
 import static com.baidu.bifromq.util.TopicConst.NUL;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.dist.TestUtil;
-import com.baidu.bifromq.dist.util.TopicUtil;
+import com.baidu.bifromq.util.TopicUtil;
 import com.baidu.bifromq.util.TopicConst;
 import java.util.ArrayList;
 import java.util.HashSet;

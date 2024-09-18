@@ -19,7 +19,7 @@ import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
 import static com.baidu.bifromq.util.TopicConst.SINGLE_WILDCARD;
 import static com.baidu.bifromq.util.TopicConst.SYS_PREFIX;
 
-import com.baidu.bifromq.dist.util.TopicUtil;
+import com.baidu.bifromq.util.TopicUtil;
 import java.util.List;
 import java.util.Optional;
 

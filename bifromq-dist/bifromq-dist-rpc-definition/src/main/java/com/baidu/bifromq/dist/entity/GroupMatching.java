@@ -16,7 +16,7 @@ package com.baidu.bifromq.dist.entity;
 import static com.baidu.bifromq.util.TopicConst.DELIMITER_CHAR;
 import static com.baidu.bifromq.util.TopicConst.ORDERED_SHARE;
 import static com.baidu.bifromq.util.TopicConst.UNORDERED_SHARE;
-import static com.baidu.bifromq.dist.util.TopicUtil.unescape;
+import static com.baidu.bifromq.util.TopicUtil.unescape;
 
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;

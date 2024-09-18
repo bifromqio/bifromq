@@ -18,11 +18,13 @@ import static com.baidu.bifromq.retain.store.RetainMatcher.MatchResult.MATCHED_A
 import static com.baidu.bifromq.retain.store.RetainMatcher.MatchResult.MISMATCH_AND_CONTINUE;
 import static com.baidu.bifromq.retain.store.RetainMatcher.MatchResult.MISMATCH_AND_STOP;
 import static com.baidu.bifromq.retain.store.RetainMatcher.match;
-import static com.baidu.bifromq.retain.utils.TopicUtil.parse;
+import static com.baidu.bifromq.util.TopicUtil.parse;
 import static org.testng.Assert.assertEquals;
 
+import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Test;
 
+@Slf4j
 public class RetainMatcherTest {
     @Test
     public void matches() {

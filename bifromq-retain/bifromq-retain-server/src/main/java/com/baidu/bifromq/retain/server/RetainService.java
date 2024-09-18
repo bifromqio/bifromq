@@ -63,13 +63,13 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
         log.trace("Handling retain request:\n{}", request);
         response((tenantId, metadata) -> retainCallScheduler.schedule(request)
             .exceptionally(e -> {
-                log.error("Retain failed", e);
                 if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
                     return RetainReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setResult(RetainReply.Result.BACK_PRESSURE_REJECTED)
                         .build();
                 }
+                log.debug("Retain failed", e);
                 return RetainReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setResult(RetainReply.Result.ERROR)
@@ -126,13 +126,13 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                     .build());
             })
             .exceptionally(e -> {
-                log.error("Match failed", e);
                 if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
                     return MatchReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setResult(MatchReply.Result.BACK_PRESSURE_REJECTED)
                         .build();
                 }
+                log.debug("Match failed", e);
                 return MatchReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setResult(MatchReply.Result.ERROR)

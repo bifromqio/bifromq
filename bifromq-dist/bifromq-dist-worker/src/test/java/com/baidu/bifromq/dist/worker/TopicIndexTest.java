@@ -11,12 +11,12 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.worker.index;
+package com.baidu.bifromq.dist.worker;
 
 import static org.testng.Assert.assertEquals;
 
-import com.google.common.collect.Sets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -48,16 +48,21 @@ public class TopicIndexTest {
         assertMatch(topicIndex.match(""));
         assertMatch(topicIndex.match("fakeTopic"));
 
-        assertMatch(topicIndex.match("+"), "a");
         assertMatch(topicIndex.match("#"), "/", "/a", "/b", "a", "a/", "a/b", "a/b/c");
+        assertMatch(topicIndex.match("+"), "a");
+        assertMatch(topicIndex.match("+/#"), "/", "/a", "/b", "a", "a/", "a/b", "a/b/c");
+        assertMatch(topicIndex.match("+/+"), "/", "/a", "/b", "a/", "a/b");
+        assertMatch(topicIndex.match("+/+/#"), "/", "/a", "/b", "a/", "a/b", "a/b/c");
 
         assertMatch(topicIndex.match("/+"), "/", "/a", "/b");
+        assertMatch(topicIndex.match("/+/#"), "/", "/a", "/b");
         assertMatch(topicIndex.match("/#"), "/", "/a", "/b");
 
         assertMatch(topicIndex.match("a/+"), "a/", "a/b");
         assertMatch(topicIndex.match("a/#"), "a", "a/", "a/b", "a/b/c");
 
         assertMatch(topicIndex.match("$a/+"), "$a/", "$a/b");
+        assertMatch(topicIndex.match("$a/+/#"), "$a/", "$a/b");
         assertMatch(topicIndex.match("$a/#"), "$a", "$a/", "$a/b");
     }
 
@@ -104,6 +109,6 @@ public class TopicIndexTest {
     }
 
     private void assertMatch(List<String> matches, String... expected) {
-        assertEquals(Sets.newHashSet(matches), Set.of(expected));
+        assertEquals(new HashSet<>(matches), Set.of(expected));
     }
 }
