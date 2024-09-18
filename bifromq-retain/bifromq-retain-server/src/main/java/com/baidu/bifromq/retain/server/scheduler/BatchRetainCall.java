@@ -20,19 +20,17 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basescheduler.ICallTask;
-import com.baidu.bifromq.retain.rpc.proto.BatchRetainRequest;
-import com.baidu.bifromq.retain.rpc.proto.RetainMessage;
-import com.baidu.bifromq.retain.rpc.proto.RetainParam;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainResult;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcInput;
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Queue;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class BatchRetainCall extends BatchMutationCall<RetainRequest, RetainReply> {
 
     protected BatchRetainCall(KVRangeId rangeId,
@@ -43,21 +41,9 @@ public class BatchRetainCall extends BatchMutationCall<RetainRequest, RetainRepl
 
     @Override
     protected RWCoProcInput makeBatch(Iterator<RetainRequest> retainRequestIterator) {
-        Map<String, RetainParam.Builder> retainMsgPackBuilders = new HashMap<>(128);
-        retainRequestIterator.forEachRemaining(request ->
-            retainMsgPackBuilders.computeIfAbsent(request.getPublisher().getTenantId(), k -> RetainParam.newBuilder()
-                .putTopicMessages(request.getTopic(), RetainMessage.newBuilder()
-                    .setMessage(request.getMessage().toBuilder().setIsRetained(true).build())
-                    .setPublisher(request.getPublisher())
-                    .build())));
-        long reqId = System.nanoTime();
-        BatchRetainRequest.Builder reqBuilder = BatchRetainRequest.newBuilder().setReqId(reqId);
-        retainMsgPackBuilders.forEach((tenantId, retainMsgPackBuilder) ->
-            reqBuilder.putParams(tenantId, retainMsgPackBuilder.build()));
-
         return RWCoProcInput.newBuilder()
             .setRetainService(RetainServiceRWCoProcInput.newBuilder()
-                .setBatchRetain(reqBuilder.build())
+                .setBatchRetain(BatchRetainCallHelper.makeBatch(retainRequestIterator))
                 .build()).build();
     }
 
@@ -68,12 +54,22 @@ public class BatchRetainCall extends BatchMutationCall<RetainRequest, RetainRepl
         while ((task = batchedTasks.poll()) != null) {
             RetainReply.Builder replyBuilder = RetainReply.newBuilder()
                 .setReqId(task.call().getReqId());
-            RetainResult.Code result = output.getRetainService()
+            Map<String, RetainResult> resultMap = output.getRetainService()
                 .getBatchRetain()
-                .getResultsMap()
-                .getOrDefault(task.call().getPublisher().getTenantId(),
-                    RetainResult.getDefaultInstance())
-                .getResultsOrDefault(task.call().getTopic(), RetainResult.Code.ERROR);
+                .getResultsMap();
+            RetainResult topicMap = resultMap.get(task.call().getPublisher().getTenantId());
+            if (topicMap == null) {
+                log.error("tenantId not found in result map, tenantId: {}", task.call().getPublisher().getTenantId());
+                task.resultPromise().complete(replyBuilder.setResult(RetainReply.Result.ERROR).build());
+                continue;
+            }
+            RetainResult.Code result = topicMap.getResultsMap().get(task.call().getTopic());
+            if (result == null) {
+                log.error("topic not found in result map, tenantId: {}, topic: {}",
+                    task.call().getPublisher().getTenantId(), task.call().getTopic());
+                task.resultPromise().complete(replyBuilder.setResult(RetainReply.Result.ERROR).build());
+                continue;
+            }
             switch (result) {
                 case RETAINED -> replyBuilder.setResult(RetainReply.Result.RETAINED);
                 case CLEARED -> replyBuilder.setResult(RetainReply.Result.CLEARED);
