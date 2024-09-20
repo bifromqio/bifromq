@@ -97,7 +97,7 @@
         <micrometer.version>1.11.12</micrometer.version>
         <netty.version>4.1.112.Final</netty.version>
         <pf4j.version>3.12.0</pf4j.version>
-        <protobuf-java.version>3.25.3</protobuf-java.version>
+        <protobuf-java.version>3.25.5</protobuf-java.version>
         <reflections.verion>0.10.2</reflections.verion>
         <rocksdb.version>9.4.0</rocksdb.version>
         <rxjava3.version>3.1.9</rxjava3.version>
