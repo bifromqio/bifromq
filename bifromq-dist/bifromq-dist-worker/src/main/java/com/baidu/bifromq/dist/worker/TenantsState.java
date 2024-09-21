@@ -25,7 +25,7 @@ import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class TenantsState {
+class TenantsState implements ITenantsState {
     private final Map<String, TenantRouteState> tenantRouteStates = new ConcurrentHashMap<>();
     private final IKVCloseableReader reader;
     private final String[] tags;
@@ -37,21 +37,25 @@ class TenantsState {
         boundary = reader.boundary();
     }
 
-    void incNormalRoutes(String tenantId) {
+    @Override
+    public void incNormalRoutes(String tenantId) {
         incNormalRoutes(tenantId, 1);
     }
 
-    void incNormalRoutes(String tenantId, int count) {
+    @Override
+    public void incNormalRoutes(String tenantId, int count) {
         assert count > 0;
         tenantRouteStates.computeIfAbsent(tenantId,
             k -> new TenantRouteState(tenantId, getSpaceUsageProvider(tenantId), tags)).addNormalRoutes(count);
     }
 
-    void decNormalRoutes(String tenantId) {
+    @Override
+    public void decNormalRoutes(String tenantId) {
         decSharedRoutes(tenantId, 1);
     }
 
-    void decNormalRoutes(String tenantId, int count) {
+    @Override
+    public void decNormalRoutes(String tenantId, int count) {
         assert count > 0;
         tenantRouteStates.computeIfPresent(tenantId, (k, v) -> {
             v.addNormalRoutes(-count);
@@ -63,21 +67,25 @@ class TenantsState {
         });
     }
 
-    void incSharedRoutes(String tenantId) {
+    @Override
+    public void incSharedRoutes(String tenantId) {
         incSharedRoutes(tenantId, 1);
     }
 
-    void incSharedRoutes(String tenantId, int count) {
+    @Override
+    public void incSharedRoutes(String tenantId, int count) {
         assert count > 0;
         tenantRouteStates.computeIfAbsent(tenantId,
             k -> new TenantRouteState(tenantId, getSpaceUsageProvider(tenantId), tags)).addSharedRoutes(count);
     }
 
-    void decSharedRoutes(String tenantId) {
+    @Override
+    public void decSharedRoutes(String tenantId) {
         decSharedRoutes(tenantId, 1);
     }
 
-    void decSharedRoutes(String tenantId, int count) {
+    @Override
+    public void decSharedRoutes(String tenantId, int count) {
         assert count > 0;
         tenantRouteStates.computeIfPresent(tenantId, (k, v) -> {
             v.addSharedRoutes(-count);
@@ -89,13 +97,15 @@ class TenantsState {
         });
     }
 
-    void reset() {
+    @Override
+    public void reset() {
         tenantRouteStates.values().forEach(TenantRouteState::destroy);
         tenantRouteStates.clear();
         boundary = reader.boundary();
     }
 
-    void close() {
+    @Override
+    public void close() {
         reset();
         reader.close();
     }

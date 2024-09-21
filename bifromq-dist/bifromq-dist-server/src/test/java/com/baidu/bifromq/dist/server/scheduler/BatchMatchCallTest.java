@@ -81,7 +81,8 @@ public class BatchMatchCallTest {
             .setDelivererKey("key2")
             .build();
 
-        Iterator<MatchRequest> iterator = List.of(request1, request2).iterator();
+        // contain duplicate request
+        Iterator<MatchRequest> iterator = List.of(request1, request1, request2).iterator();
 
         when(settingProvider.provide(Setting.MaxSharedGroupMembers, "tenant1")).thenReturn(100);
         when(settingProvider.provide(Setting.MaxSharedGroupMembers, "tenant2")).thenReturn(200);

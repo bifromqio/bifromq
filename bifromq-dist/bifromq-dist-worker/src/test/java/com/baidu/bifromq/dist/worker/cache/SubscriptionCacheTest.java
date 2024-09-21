@@ -106,8 +106,8 @@ public class SubscriptionCacheTest {
     @Test
     public void addAllMatch() {
         String tenantId = "tenant1";
-        Map<String, Matching> matchings = new HashMap<>();
-        Map<String, Map<String, Matching>> matchesByTenant = new HashMap<>();
+        Map<String, Set<Matching>> matchings = new HashMap<>();
+        Map<String, Map<String, Set<Matching>>> matchesByTenant = new HashMap<>();
         matchesByTenant.put(tenantId, matchings);
 
         when(tenantRouteCacheFactoryMock.create(tenantId)).thenReturn(tenantRouteCacheMock);
@@ -119,8 +119,8 @@ public class SubscriptionCacheTest {
     @Test
     public void removeAllMatch() {
         String tenantId = "tenant1";
-        Map<String, Matching> matchings = new HashMap<>();
-        Map<String, Map<String, Matching>> matchesByTenant = new HashMap<>();
+        Map<String, Set<Matching>> matchings = new HashMap<>();
+        Map<String, Map<String, Set<Matching>>> matchesByTenant = new HashMap<>();
         matchesByTenant.put(tenantId, matchings);
 
         when(tenantRouteCacheFactoryMock.create(tenantId)).thenReturn(tenantRouteCacheMock);

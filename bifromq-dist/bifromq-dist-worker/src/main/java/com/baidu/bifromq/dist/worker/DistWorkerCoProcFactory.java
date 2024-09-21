@@ -23,9 +23,12 @@ import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
 import com.baidu.bifromq.deliverer.MessageDeliverer;
 import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.dist.worker.cache.ISubscriptionCache;
+import com.baidu.bifromq.dist.worker.cache.SubscriptionCache;
 import com.baidu.bifromq.dist.worker.hinter.FanoutSplitHinter;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
+import com.baidu.bifromq.sysprops.props.DistFanOutParallelism;
 import com.baidu.bifromq.sysprops.props.DistMatchParallelism;
 import com.baidu.bifromq.sysprops.props.DistWorkerFanOutSplitThreshold;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
@@ -89,8 +92,13 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     @Override
     public IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id,
                                        Supplier<IKVCloseableReader> rangeReaderProvider) {
-        return new DistWorkerCoProc(clusterId, storeId, id, rangeReaderProvider, eventCollector, resourceThrottler,
-            distClient, deliverer, matchExecutor);
+        ISubscriptionCache routeCache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor);
+        ITenantsState tenantsState = new TenantsState(rangeReaderProvider.get(),
+            "clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id));
+        IDeliverExecutorGroup executorGroup =
+            new DeliverExecutorGroup(deliverer, eventCollector, resourceThrottler, distClient,
+                DistFanOutParallelism.INSTANCE.get());
+        return new DistWorkerCoProc(id, rangeReaderProvider, routeCache, tenantsState, executorGroup);
     }
 
     public void close() {

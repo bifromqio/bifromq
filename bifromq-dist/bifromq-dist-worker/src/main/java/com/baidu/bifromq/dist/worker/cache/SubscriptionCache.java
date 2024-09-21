@@ -43,7 +43,7 @@ import lombok.extern.slf4j.Slf4j;
  * Cache for subscription matching.
  */
 @Slf4j
-public class SubscriptionCache {
+public class SubscriptionCache implements ISubscriptionCache {
     @EqualsAndHashCode
     static class TenantKey {
         final String tenantId;
@@ -111,6 +111,7 @@ public class SubscriptionCache {
             .build(k -> tenantRouteCacheFactory.create(k.tenantId));
     }
 
+    @Override
     public CompletableFuture<Set<Matching>> get(String tenantId, String topic) {
         ITenantRouteCache routesCache = tenantCache.get(refreshExpiry(tenantId));
         Boundary tenantBoundary = intersect(Boundary.newBuilder()
@@ -126,7 +127,8 @@ public class SubscriptionCache {
         return CompletableFuture.supplyAsync(() -> routesCache.get(topic, tenantBoundary), matchExecutor);
     }
 
-    public void removeAllMatch(Map<String, Map<String, Matching>> matchesByTenant) {
+    @Override
+    public void removeAllMatch(Map<String, Map<String, Set<Matching>>> matchesByTenant) {
         matchesByTenant.forEach(
             (tenantId, matches) -> {
                 ITenantRouteCache cache = tenantCache.getIfPresent(noRefreshExpiry(tenantId));
@@ -136,7 +138,8 @@ public class SubscriptionCache {
             });
     }
 
-    public void addAllMatch(Map<String, Map<String, Matching>> matchesByTenant) {
+    @Override
+    public void addAllMatch(Map<String, Map<String, Set<Matching>>> matchesByTenant) {
         matchesByTenant.forEach((tenantId, matches) -> {
             ITenantRouteCache cache = tenantCache.getIfPresent(noRefreshExpiry(tenantId));
             if (cache != null) {
@@ -145,10 +148,12 @@ public class SubscriptionCache {
         });
     }
 
+    @Override
     public void reset(Boundary boundary) {
         this.boundary = boundary;
     }
 
+    @Override
     public void close() {
         tenantCache.invalidateAll();
         tenantRouteCacheFactory.close();

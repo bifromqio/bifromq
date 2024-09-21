@@ -11,24 +11,26 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.worker.cache;
+package com.baidu.bifromq.dist.worker;
 
-import com.baidu.bifromq.basekv.proto.Boundary;
-import com.baidu.bifromq.dist.entity.Matching;
-import java.util.Map;
-import java.util.Set;
+public interface ITenantsState {
+    void incNormalRoutes(String tenantId);
 
-/**
- * Cache for matched routes for given tenant.
- */
-public interface ITenantRouteCache {
-    void addAllMatch(Map<String, Set<Matching>> newMatches);
+    void incNormalRoutes(String tenantId, int count);
 
-    void removeAllMatch(Map<String, Set<Matching>> obsoleteMatches);
+    void decNormalRoutes(String tenantId);
 
-    Set<Matching> getIfPresent(String topic, Boundary matchRecordRange);
+    void decNormalRoutes(String tenantId, int count);
 
-    Set<Matching> get(String topic, Boundary matchRecordRange);
+    void incSharedRoutes(String tenantId);
 
-    void destroy();
+    void incSharedRoutes(String tenantId, int count);
+
+    void decSharedRoutes(String tenantId);
+
+    void decSharedRoutes(String tenantId, int count);
+
+    void reset();
+
+    void close();
 }

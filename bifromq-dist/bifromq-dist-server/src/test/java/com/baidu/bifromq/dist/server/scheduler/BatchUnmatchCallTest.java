@@ -74,7 +74,8 @@ public class BatchUnmatchCallTest {
             .setDelivererKey("key2")
             .build();
 
-        Iterator<UnmatchRequest> iterator = List.of(request1, request2).iterator();
+        // contain duplicate request
+        Iterator<UnmatchRequest> iterator = List.of(request1, request1, request2).iterator();
 
         RWCoProcInput input = batchUnmatchCall.makeBatch(iterator);
 

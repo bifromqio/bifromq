@@ -94,12 +94,16 @@ public class TenantRouteCacheTest extends MeterTest {
 
         Matching normalMatching1 = mock(Matching.class);
         when(normalMatching1.type()).thenReturn(Matching.Type.Normal);
-        Map<String, Matching> newMatches = new HashMap<>();
-        newMatches.put("#", normalMatching1);
+
+        Matching normalMatching2 = mock(Matching.class);
+        when(normalMatching2.type()).thenReturn(Matching.Type.Normal);
+
+        Map<String, Set<Matching>> newMatches = new HashMap<>();
+        newMatches.put("#", Set.of(normalMatching1, normalMatching2));
         cache.addAllMatch(newMatches);
 
         cachedMatchings = cache.getIfPresent(topic, FULL_BOUNDARY);
-        assertEquals(cachedMatchings.size(), 2);
+        assertEquals(cachedMatchings.size(), 3);
     }
 
     @Test
@@ -108,8 +112,8 @@ public class TenantRouteCacheTest extends MeterTest {
         Matching normalMatching = mock(Matching.class);
         when(normalMatching.type()).thenReturn(Matching.Type.Normal);
 
-        Map<String, Matching> newMatches = new HashMap<>();
-        newMatches.put("#", normalMatching);
+        Map<String, Set<Matching>> newMatches = new HashMap<>();
+        newMatches.put("#", Set.of(normalMatching));
         cache.addAllMatch(newMatches);
 
         assertNull(cache.getIfPresent(topic, FULL_BOUNDARY));
@@ -124,13 +128,19 @@ public class TenantRouteCacheTest extends MeterTest {
         String topicFilter = "home/sensor/temperature";
         Matching normalMatching = mock(Matching.class);
         when(normalMatching.type()).thenReturn(Matching.Type.Normal);
-        when(mockMatcher.match(eq(topicFilter), eq(FULL_BOUNDARY))).thenReturn(Sets.newHashSet(normalMatching));
+
+        Matching normalMatching1 = mock(Matching.class);
+        when(normalMatching1.type()).thenReturn(Matching.Type.Normal);
+
+        when(mockMatcher.match(eq(topicFilter), eq(FULL_BOUNDARY))).thenReturn(
+            Sets.newHashSet(normalMatching, normalMatching1));
 
         Set<Matching> cachedMatchings = cache.get(topicFilter, FULL_BOUNDARY);
         assertTrue(cachedMatchings.contains(normalMatching));
+        assertTrue(cachedMatchings.contains(normalMatching1));
 
-        Map<String, Matching> obsoleteMatches = new HashMap<>();
-        obsoleteMatches.put("#", normalMatching);
+        Map<String, Set<Matching>> obsoleteMatches = new HashMap<>();
+        obsoleteMatches.put("#", Set.of(normalMatching, normalMatching1));
         cache.removeAllMatch(obsoleteMatches);
 
         cachedMatchings = cache.getIfPresent(topicFilter, FULL_BOUNDARY);
@@ -143,8 +153,8 @@ public class TenantRouteCacheTest extends MeterTest {
         Matching normalMatching = mock(Matching.class);
         when(normalMatching.type()).thenReturn(Matching.Type.Normal);
 
-        Map<String, Matching> obsoleteMatches = new HashMap<>();
-        obsoleteMatches.put("#", normalMatching);
+        Map<String, Set<Matching>> obsoleteMatches = new HashMap<>();
+        obsoleteMatches.put("#", Set.of(normalMatching));
         cache.removeAllMatch(obsoleteMatches);
 
         assertNull(cache.getIfPresent(topic, FULL_BOUNDARY));
@@ -171,13 +181,13 @@ public class TenantRouteCacheTest extends MeterTest {
         assertNotNull(cachedMatchings);
         assertTrue(cachedMatchings.contains(groupMatching));
 
-        Map<String, Matching> newMatches = new HashMap<>();
+        Map<String, Set<Matching>> newMatches = new HashMap<>();
         matchRecord = GroupMatchRecord.newBuilder()
             .addQReceiverId(toQInboxId(1, "inbox2", "deliverer1"))
             .build();
         groupMatching = (GroupMatching) EntityUtil.parseMatchRecord(key, matchRecord.toByteString());
 
-        newMatches.put(unescape(groupMatching.escapedTopicFilter), groupMatching);
+        newMatches.put(unescape(groupMatching.escapedTopicFilter), Set.of(groupMatching));
         cache.addAllMatch(newMatches);
 
         cachedMatchings = cache.getIfPresent(topic, FULL_BOUNDARY);
@@ -203,13 +213,13 @@ public class TenantRouteCacheTest extends MeterTest {
         assertNotNull(cachedMatchings);
         assertTrue(cachedMatchings.contains(groupMatching));
 
-        Map<String, Matching> delMatches = new HashMap<>();
+        Map<String, Set<Matching>> delMatches = new HashMap<>();
         matchRecord = GroupMatchRecord.newBuilder()
             .addQReceiverId(toQInboxId(1, "inbox1", "deliverer1"))
             .build();
         groupMatching = (GroupMatching) EntityUtil.parseMatchRecord(key, matchRecord.toByteString());
 
-        delMatches.put(unescape(groupMatching.escapedTopicFilter), groupMatching);
+        delMatches.put(unescape(groupMatching.escapedTopicFilter), Set.of(groupMatching));
         cache.removeAllMatch(delMatches);
 
         cachedMatchings = cache.getIfPresent(topic, FULL_BOUNDARY);
@@ -250,8 +260,8 @@ public class TenantRouteCacheTest extends MeterTest {
 
         Matching normalMatching1 = mock(Matching.class);
         when(normalMatching1.type()).thenReturn(Matching.Type.Normal);
-        Map<String, Matching> newMatches = new HashMap<>();
-        newMatches.put("#", normalMatching1);
+        Map<String, Set<Matching>> newMatches = new HashMap<>();
+        newMatches.put("#", Set.of(normalMatching1));
         cache.addAllMatch(newMatches);
 
         when(mockTicker.read()).thenReturn(Duration.ofSeconds(6).toNanos());
@@ -270,8 +280,8 @@ public class TenantRouteCacheTest extends MeterTest {
         assertNotNull(cache.get(topic, FULL_BOUNDARY));
         when(mockTicker.read()).thenReturn(Duration.ofSeconds(4).toNanos());
 
-        Map<String, Matching> obsoleteMatches = new HashMap<>();
-        obsoleteMatches.put("#", normalMatching);
+        Map<String, Set<Matching>> obsoleteMatches = new HashMap<>();
+        obsoleteMatches.put("#", Set.of(normalMatching));
         cache.removeAllMatch(obsoleteMatches);
 
         when(mockTicker.read()).thenReturn(Duration.ofSeconds(6).toNanos());

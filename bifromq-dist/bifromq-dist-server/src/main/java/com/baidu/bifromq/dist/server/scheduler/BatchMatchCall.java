@@ -33,9 +33,11 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 
 public class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> {
     private final ISettingProvider settingProvider;
@@ -50,18 +52,20 @@ public class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> 
     protected RWCoProcInput makeBatch(Iterator<MatchRequest> reqIterator) {
         BatchMatchRequest.Builder reqBuilder = BatchMatchRequest.newBuilder();
         Map<String, TenantOption> tenantOptionMap = new HashMap<>();
+        Set<String> scopedTopicFilters = new HashSet<>();
         while (reqIterator.hasNext()) {
             MatchRequest subCall = reqIterator.next();
             String qInboxId =
                 toQInboxId(subCall.getBrokerId(), subCall.getReceiverId(), subCall.getDelivererKey());
             String scopedTopicFilter =
                 toScopedTopicFilter(subCall.getTenantId(), qInboxId, subCall.getTopicFilter());
-            reqBuilder.addScopedTopicFilter(scopedTopicFilter);
+            scopedTopicFilters.add(scopedTopicFilter);
             tenantOptionMap.computeIfAbsent(subCall.getTenantId(), k -> TenantOption.newBuilder()
                 .setMaxReceiversPerSharedSubGroup(
                     settingProvider.provide(Setting.MaxSharedGroupMembers, subCall.getTenantId()))
                 .build());
         }
+        reqBuilder.addAllScopedTopicFilter(scopedTopicFilters);
         reqBuilder.putAllOptions(tenantOptionMap);
         long reqId = System.nanoTime();
         return RWCoProcInput.newBuilder()

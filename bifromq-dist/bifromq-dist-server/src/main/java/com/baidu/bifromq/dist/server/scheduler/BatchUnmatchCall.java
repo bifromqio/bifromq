@@ -29,8 +29,10 @@ import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Queue;
+import java.util.Set;
 
 public class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchReply> {
     BatchUnmatchCall(KVRangeId rangeId,
@@ -42,14 +44,16 @@ public class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchR
     @Override
     protected RWCoProcInput makeBatch(Iterator<UnmatchRequest> reqIterator) {
         BatchUnmatchRequest.Builder reqBuilder = BatchUnmatchRequest.newBuilder();
+        Set<String> scopedTopicFilters = new HashSet<>();
         while (reqIterator.hasNext()) {
             UnmatchRequest subCall = reqIterator.next();
             String qInboxId =
                 toQInboxId(subCall.getBrokerId(), subCall.getReceiverId(), subCall.getDelivererKey());
             String scopedTopicFilter =
                 toScopedTopicFilter(subCall.getTenantId(), qInboxId, subCall.getTopicFilter());
-            reqBuilder.addScopedTopicFilter(scopedTopicFilter);
+            scopedTopicFilters.add(scopedTopicFilter);
         }
+        reqBuilder.addAllScopedTopicFilter(scopedTopicFilters);
         long reqId = System.nanoTime();
         return RWCoProcInput.newBuilder()
             .setDistService(DistServiceRWCoProcInput.newBuilder()

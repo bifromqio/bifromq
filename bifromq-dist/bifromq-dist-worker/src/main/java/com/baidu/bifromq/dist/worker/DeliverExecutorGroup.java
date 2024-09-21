@@ -49,7 +49,7 @@ import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class DeliverExecutorGroup {
+class DeliverExecutorGroup implements IDeliverExecutorGroup {
     private record OrderedSharedMatchingKey(String tenantId, String escapedTopicFilter) {
     }
 
@@ -59,8 +59,6 @@ class DeliverExecutorGroup {
     private final int inlineFanOutThreshold = DistInlineFanOutThreshold.INSTANCE.get();
     private final IEventCollector eventCollector;
     private final IResourceThrottler resourceThrottler;
-    private final IDistClient distClient;
-    private final IMessageDeliverer deliverer;
     private final DeliverExecutor[] fanoutExecutors;
 
     DeliverExecutorGroup(IMessageDeliverer deliverer,
@@ -71,8 +69,6 @@ class DeliverExecutorGroup {
         int expirySec = DistTopicMatchExpirySeconds.INSTANCE.get();
         this.eventCollector = eventCollector;
         this.resourceThrottler = resourceThrottler;
-        this.distClient = distClient;
-        this.deliverer = deliverer;
         orderedSharedMatching = Caffeine.newBuilder()
             .expireAfterAccess(expirySec * 2L, TimeUnit.SECONDS)
             .scheduler(Scheduler.systemScheduler())
@@ -91,6 +87,7 @@ class DeliverExecutorGroup {
         }
     }
 
+    @Override
     public void shutdown() {
         for (DeliverExecutor fanoutExecutor : fanoutExecutors) {
             fanoutExecutor.shutdown();
@@ -98,16 +95,17 @@ class DeliverExecutorGroup {
         orderedSharedMatching.invalidateAll();
     }
 
-    public void submit(String tenantId, Set<Matching> matchedRoutes, TopicMessagePack msgPack) {
+    @Override
+    public void submit(String tenantId, Set<Matching> routes, TopicMessagePack msgPack) {
         int msgPackSize = SizeUtil.estSizeOf(msgPack);
-        if (matchedRoutes.size() == 1) {
-            Matching matching = matchedRoutes.iterator().next();
+        if (routes.size() == 1) {
+            Matching matching = routes.iterator().next();
             prepareSend(matching, msgPack, true);
             if (isSendToInbox(matching)) {
                 ITenantMeter.get(matching.tenantId).recordSummary(MqttPersistentFanOutBytes, msgPackSize);
             }
-        } else if (matchedRoutes.size() > 1) {
-            boolean inline = matchedRoutes.size() > inlineFanOutThreshold;
+        } else if (routes.size() > 1) {
+            boolean inline = routes.size() > inlineFanOutThreshold;
             boolean hasTFanOutBandwidth =
                 resourceThrottler.hasResource(tenantId, TenantResourceType.TotalTransientFanOutBytesPerSeconds);
             boolean hasTFannedOutUnderThrottled = false;
@@ -116,7 +114,7 @@ class DeliverExecutorGroup {
             boolean hasPFannedOutUnderThrottled = false;
             // we meter persistent fanout bytes here, since for transient fanout is actually happened in the broker
             long pFanoutBytes = 0;
-            for (Matching matching : matchedRoutes) {
+            for (Matching matching : routes) {
                 if (isSendToInbox(matching)) {
                     if (hasPFanOutBandwidth || !hasPFannedOutUnderThrottled) {
                         pFanoutBytes += msgPackSize;
@@ -155,6 +153,7 @@ class DeliverExecutorGroup {
         return matching.type() == Matching.Type.Normal && ((NormalMatching) matching).subBrokerId == 1;
     }
 
+    @Override
     public void invalidate(String tenantId, String topicFilter) {
         orderedSharedMatching.invalidate(new OrderedSharedMatchingKey(tenantId, escape(topicFilter)));
     }

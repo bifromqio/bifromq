@@ -16,10 +16,10 @@ package com.baidu.bifromq.dist.worker.cache;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.dist.entity.GroupMatching;
 import com.baidu.bifromq.dist.entity.Matching;
+import com.baidu.bifromq.dist.worker.TopicIndex;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.metrics.TenantMetric;
 import com.baidu.bifromq.sysprops.props.DistMaxCachedRoutesPerTenant;
-import com.baidu.bifromq.dist.worker.TopicIndex;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Expiry;
@@ -99,34 +99,35 @@ class TenantRouteCache implements ITenantRouteCache {
     }
 
     @Override
-    public void addAllMatch(Map<String, Matching> newMatches) {
+    public void addAllMatch(Map<String, Set<Matching>> newMatches) {
         long stamp = stampedLock.writeLock();
         try {
-            for (Map.Entry<String, Matching> entry : newMatches.entrySet()) {
+            for (Map.Entry<String, Set<Matching>> entry : newMatches.entrySet()) {
                 String topicFilter = entry.getKey();
-                Matching matching = entry.getValue();
                 for (RouteCacheKey cacheKey : index.match(topicFilter)) {
-                    // indexed key will not refresh expiry
-                    Set<Matching> cachedMatching = routesCache.getIfPresent(cacheKey);
-                    if (cachedMatching != null) {
-                        switch (matching.type()) {
-                            case Normal -> cachedMatching.add(matching);
-                            case Group -> {
-                                GroupMatching newGroupMatching = (GroupMatching) matching;
-                                boolean found = false;
-                                for (Matching m : cachedMatching) {
-                                    if (m.type() == Matching.Type.Group) {
-                                        GroupMatching cachedGroupMatching = (GroupMatching) m;
-                                        if (cachedGroupMatching.originalTopicFilter()
-                                            .equals(newGroupMatching.originalTopicFilter())) {
-                                            cachedGroupMatching.addAll(newGroupMatching.receiverIds);
-                                            found = true;
-                                            break;
+                    for (Matching matching : entry.getValue()) {
+                        // indexed key will not refresh expiry
+                        Set<Matching> cachedMatching = routesCache.getIfPresent(cacheKey);
+                        if (cachedMatching != null) {
+                            switch (matching.type()) {
+                                case Normal -> cachedMatching.add(matching);
+                                case Group -> {
+                                    GroupMatching newGroupMatching = (GroupMatching) matching;
+                                    boolean found = false;
+                                    for (Matching m : cachedMatching) {
+                                        if (m.type() == Matching.Type.Group) {
+                                            GroupMatching cachedGroupMatching = (GroupMatching) m;
+                                            if (cachedGroupMatching.originalTopicFilter()
+                                                .equals(newGroupMatching.originalTopicFilter())) {
+                                                cachedGroupMatching.addAll(newGroupMatching.receiverIds);
+                                                found = true;
+                                                break;
+                                            }
                                         }
                                     }
-                                }
-                                if (!found) {
-                                    cachedMatching.add(matching);
+                                    if (!found) {
+                                        cachedMatching.add(matching);
+                                    }
                                 }
                             }
                         }
@@ -139,32 +140,33 @@ class TenantRouteCache implements ITenantRouteCache {
     }
 
     @Override
-    public void removeAllMatch(Map<String, Matching> obsoleteMatches) {
+    public void removeAllMatch(Map<String, Set<Matching>> obsoleteMatches) {
         long stamp = stampedLock.writeLock();
         try {
-            for (Map.Entry<String, Matching> entry : obsoleteMatches.entrySet()) {
+            for (Map.Entry<String, Set<Matching>> entry : obsoleteMatches.entrySet()) {
                 String topicFilter = entry.getKey();
-                Matching matching = entry.getValue();
                 for (RouteCacheKey cacheKey : index.match(topicFilter)) {
-                    // indexed key will not refresh expiry
-                    Set<Matching> cachedMatching = routesCache.getIfPresent(cacheKey);
-                    if (cachedMatching != null) {
-                        // remove matching from cache
-                        switch (matching.type()) {
-                            case Normal -> cachedMatching.remove(matching);
-                            case Group -> {
-                                GroupMatching obsoleteGroupMatching = (GroupMatching) matching;
-                                cachedMatching.removeIf(m -> {
-                                    if (m.type() == Matching.Type.Group) {
-                                        GroupMatching cachedGroupMatching = ((GroupMatching) m);
-                                        if (cachedGroupMatching.originalTopicFilter()
-                                            .equals(obsoleteGroupMatching.originalTopicFilter())) {
-                                            cachedGroupMatching.removeAll(obsoleteGroupMatching.receiverIds);
-                                            return cachedGroupMatching.receiverIds.isEmpty();
+                    for (Matching matching : entry.getValue()) {
+                        // indexed key will not refresh expiry
+                        Set<Matching> cachedMatching = routesCache.getIfPresent(cacheKey);
+                        if (cachedMatching != null) {
+                            // remove matching from cache
+                            switch (matching.type()) {
+                                case Normal -> cachedMatching.remove(matching);
+                                case Group -> {
+                                    GroupMatching obsoleteGroupMatching = (GroupMatching) matching;
+                                    cachedMatching.removeIf(m -> {
+                                        if (m.type() == Matching.Type.Group) {
+                                            GroupMatching cachedGroupMatching = ((GroupMatching) m);
+                                            if (cachedGroupMatching.originalTopicFilter()
+                                                .equals(obsoleteGroupMatching.originalTopicFilter())) {
+                                                cachedGroupMatching.removeAll(obsoleteGroupMatching.receiverIds);
+                                                return cachedGroupMatching.receiverIds.isEmpty();
+                                            }
                                         }
-                                    }
-                                    return false;
-                                });
+                                        return false;
+                                    });
+                                }
                             }
                         }
                     }
