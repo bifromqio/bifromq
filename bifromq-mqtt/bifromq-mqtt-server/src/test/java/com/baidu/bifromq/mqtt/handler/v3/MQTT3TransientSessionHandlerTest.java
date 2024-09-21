@@ -768,7 +768,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.runPendingTasks();
         MqttPublishMessage message = channel.readOutbound();
         assertNull(message);
-        verifyEvent(MQTT_SESSION_START, QOS1_DROPPED);
+        verifyEvent(MQTT_SESSION_START, QOS1_DROPPED, QOS1_CONFIRMED);
     }
 
     @Test
@@ -862,7 +862,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.runPendingTasks();
         MqttPublishMessage message = channel.readOutbound();
         assertNull(message);
-        verifyEvent(MQTT_SESSION_START, QOS2_DROPPED);
+        verifyEvent(MQTT_SESSION_START, QOS2_DROPPED, QOS2_CONFIRMED);
     }
 
     @Test

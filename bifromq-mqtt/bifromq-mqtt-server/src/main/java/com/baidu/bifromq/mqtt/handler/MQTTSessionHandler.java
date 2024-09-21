@@ -769,67 +769,71 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         ConfirmingMessage confirmingMsg = unconfirmedPacketIds.get(packetId);
         SubMessage msg = null;
         if (confirmingMsg != null) {
-            long now = sessionCtx.nanoTime();
             msg = confirmingMsg.message;
-            confirmingMsg.setAcked();
-            resendQueue.remove(confirmingMsg);
-            Iterator<Integer> packetIdItr = unconfirmedPacketIds.keySet().iterator();
-            while (packetIdItr.hasNext()) {
-                packetId = packetIdItr.next();
-                confirmingMsg = unconfirmedPacketIds.get(packetId);
-                if (confirmingMsg.acked) {
-                    packetIdItr.remove();
-                    SubMessage confirmed = confirmingMsg.message;
-                    onConfirm(confirmingMsg.seq);
-                    switch (confirmed.qos()) {
-                        case AT_LEAST_ONCE -> {
-                            tenantMeter.timer(MqttQoS1ExternalLatency)
-                                .record(now - confirmingMsg.timestamp, TimeUnit.NANOSECONDS);
-                            if (settings.debugMode) {
-                                eventCollector.report(getLocal(QoS1Confirmed.class)
-                                    .reqId(confirmed.message().getMessageId())
-                                    .messageId(packetId)
-                                    .isRetain(confirmed.isRetain())
-                                    .sender(confirmed.publisher())
-                                    .delivered(delivered)
-                                    .topic(confirmed.topic())
-                                    .matchedFilter(confirmed.topicFilter())
-                                    .size(confirmed.message().getPayload().size())
-                                    .clientInfo(clientInfo));
-                            }
-                        }
-                        case EXACTLY_ONCE -> {
-                            tenantMeter.timer(MqttQoS2ExternalLatency)
-                                .record(now - confirmingMsg.timestamp, TimeUnit.NANOSECONDS);
-                            if (!delivered && settings.debugMode) {
-                                eventCollector.report(getLocal(QoS2Confirmed.class)
-                                    .reqId(confirmed.message().getMessageId())
-                                    .messageId(packetId)
-                                    .isRetain(confirmed.isRetain())
-                                    .sender(confirmed.publisher())
-                                    .delivered(false)
-                                    .topic(confirmed.topic())
-                                    .matchedFilter(confirmed.topicFilter())
-                                    .size(confirmed.message().getPayload().size())
-                                    .clientInfo(clientInfo));
-                            }
-                        }
-                    }
-                } else {
-                    // the seq should be confirmed one by one, stop at first unconfirmed msg
-                    break;
-                }
-            }
-            if (resendTask != null && !resendTask.isDone()) {
-                resendTask.cancel(true);
-            }
-            if (!resendQueue.isEmpty()) {
-                scheduleResend();
-            }
+            confirm(confirmingMsg, delivered);
         } else {
             log.trace("No msg to confirm: sessionId={}, packetId={}", userSessionId, packetId);
         }
         return msg;
+    }
+
+    private void confirm(ConfirmingMessage confirmingMsg, boolean delivered) {
+        long now = sessionCtx.nanoTime();
+        confirmingMsg.setAcked();
+        resendQueue.remove(confirmingMsg);
+        Iterator<Integer> packetIdItr = unconfirmedPacketIds.keySet().iterator();
+        while (packetIdItr.hasNext()) {
+            int packetId = packetIdItr.next();
+            confirmingMsg = unconfirmedPacketIds.get(packetId);
+            if (confirmingMsg.acked) {
+                packetIdItr.remove();
+                SubMessage confirmed = confirmingMsg.message;
+                onConfirm(confirmingMsg.seq);
+                switch (confirmed.qos()) {
+                    case AT_LEAST_ONCE -> {
+                        tenantMeter.timer(MqttQoS1ExternalLatency)
+                            .record(now - confirmingMsg.timestamp, TimeUnit.NANOSECONDS);
+                        if (settings.debugMode) {
+                            eventCollector.report(getLocal(QoS1Confirmed.class)
+                                .reqId(confirmed.message().getMessageId())
+                                .messageId(packetId)
+                                .isRetain(confirmed.isRetain())
+                                .sender(confirmed.publisher())
+                                .delivered(delivered)
+                                .topic(confirmed.topic())
+                                .matchedFilter(confirmed.topicFilter())
+                                .size(confirmed.message().getPayload().size())
+                                .clientInfo(clientInfo));
+                        }
+                    }
+                    case EXACTLY_ONCE -> {
+                        tenantMeter.timer(MqttQoS2ExternalLatency)
+                            .record(now - confirmingMsg.timestamp, TimeUnit.NANOSECONDS);
+                        if (!delivered && settings.debugMode) {
+                            eventCollector.report(getLocal(QoS2Confirmed.class)
+                                .reqId(confirmed.message().getMessageId())
+                                .messageId(packetId)
+                                .isRetain(confirmed.isRetain())
+                                .sender(confirmed.publisher())
+                                .delivered(false)
+                                .topic(confirmed.topic())
+                                .matchedFilter(confirmed.topicFilter())
+                                .size(confirmed.message().getPayload().size())
+                                .clientInfo(clientInfo));
+                        }
+                    }
+                }
+            } else {
+                // the seq should be confirmed one by one, stop at first unconfirmed msg
+                break;
+            }
+        }
+        if (resendTask != null && !resendTask.isDone()) {
+            resendTask.cancel(true);
+        }
+        if (!resendQueue.isEmpty()) {
+            scheduleResend();
+        }
     }
 
     protected abstract void onConfirm(long seq);
@@ -947,23 +951,27 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     protected final void sendConfirmableSubMessage(long seq, SubMessage msg) {
         assert seq > -1;
         ConfirmingMessage confirmingMessage = new ConfirmingMessage(seq, msg, sessionCtx.nanoTime());
+        // make sure acktimeout moments don't conflict
+        while (resendQueue.contains(confirmingMessage)) {
+            confirmingMessage = new ConfirmingMessage(seq, msg, sessionCtx.nanoTime());
+        }
         ConfirmingMessage prev = unconfirmedPacketIds.putIfAbsent(confirmingMessage.packetId(), confirmingMessage);
         if (prev == null) {
             resendQueue.add(confirmingMessage);
             if (resendTask == null || resendTask.isDone()) {
                 scheduleResend();
             }
-            sendConfirmableSubMessage(seq, msg, msg.topicFilter(), msg.publisher(), false);
+            writeConfirmableSubMessage(seq, msg, msg.topicFilter(), msg.publisher(), false);
         } else {
             log.warn("Bad state: sequence duplicate seq={}", seq);
         }
     }
 
-    private void sendConfirmableSubMessage(long seq,
-                                           SubMessage msg,
-                                           String topicFilter,
-                                           ClientInfo publisher,
-                                           boolean isDup) {
+    private void writeConfirmableSubMessage(long seq,
+                                            SubMessage msg,
+                                            String topicFilter,
+                                            ClientInfo publisher,
+                                            boolean isDup) {
         int packetId = packetId(seq);
         MqttPublishMessage pubMsg = helper().buildMqttPubMessage(packetId, msg, isDup);
         TopicFilterOption option = msg.option();
@@ -1008,6 +1016,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         }
         if (!ctx.channel().isWritable()) {
             reportDropConfirmableMsgEvent(msg, DropReason.Overflow);
+            ctx.executor().execute(() -> confirm(packetId, false));
             return;
         }
         memUsage.addAndGet(msgSize);
@@ -1079,20 +1088,21 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
 
     private void resend() {
         long now = sessionCtx.nanoTime() + Duration.ofMillis(100).toNanos();
-        while (!resendQueue.isEmpty()) {
+        while (!resendQueue.isEmpty() && ctx.channel().isActive()) {
             ConfirmingMessage confirmingMessage = resendQueue.first();
             if (ackTimeoutNanos(confirmingMessage) > now) {
                 scheduleResend();
                 break;
             }
             if (confirmingMessage.sentCount < settings.maxResendTimes + 1) {
+                // reorder and write out again with dup flag set
                 resendQueue.remove(confirmingMessage);
                 confirmingMessage.sentCount++;
-                sendConfirmableSubMessage(confirmingMessage.seq, confirmingMessage.message,
-                    confirmingMessage.message.topicFilter(), confirmingMessage.message.publisher(), true);
                 resendQueue.add(confirmingMessage);
+                writeConfirmableSubMessage(confirmingMessage.seq, confirmingMessage.message,
+                    confirmingMessage.message.topicFilter(), confirmingMessage.message.publisher(), true);
             } else {
-                confirm(confirmingMessage.packetId(), false);
+                confirm(confirmingMessage, false);
             }
         }
     }

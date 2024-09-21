@@ -148,14 +148,14 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         // check resources
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalTransientSubscriptions)) {
             eventCollector.report(getLocal(OutOfTenantResource.class)
-                    .reason(TotalTransientSubscriptions.name())
-                    .clientInfo(clientInfo));
+                .reason(TotalTransientSubscriptions.name())
+                .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(EXCEED_LIMIT);
         }
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalTransientSubscribePerSecond)) {
             eventCollector.report(getLocal(OutOfTenantResource.class)
-                    .reason(TotalTransientSubscribePerSecond.name())
-                    .clientInfo(clientInfo));
+                .reason(TotalTransientSubscribePerSecond.name())
+                .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(EXCEED_LIMIT);
         }
         tenantMeter.recordCount(MqttTransientSubCount);
@@ -164,44 +164,44 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
             return CompletableFuture.completedFuture(EXCEED_LIMIT);
         }
         return addMatchRecord(reqId, topicFilter)
-                .thenApplyAsync(matchResult -> {
-                    switch (matchResult) {
-                        case OK -> {
-                            TopicFilterOption prevOption = topicFilters.put(topicFilter, option);
-                            if (prevOption == null) {
-                                subNumGauge.addAndGet(1);
-                                memUsage.addAndGet(topicFilter.length());
-                                return OK;
-                            } else {
-                                return EXISTS;
-                            }
-                        }
-                        case EXCEED_LIMIT -> {
-                            return IMQTTProtocolHelper.SubResult.EXCEED_LIMIT;
-                        }
-                        case BACK_PRESSURE_REJECTED -> {
-                            return IMQTTProtocolHelper.SubResult.BACK_PRESSURE_REJECTED;
-                        }
-                        default -> {
-                            return IMQTTProtocolHelper.SubResult.ERROR;
+            .thenApplyAsync(matchResult -> {
+                switch (matchResult) {
+                    case OK -> {
+                        TopicFilterOption prevOption = topicFilters.put(topicFilter, option);
+                        if (prevOption == null) {
+                            subNumGauge.addAndGet(1);
+                            memUsage.addAndGet(topicFilter.length());
+                            return OK;
+                        } else {
+                            return EXISTS;
                         }
                     }
-                }, ctx.executor());
+                    case EXCEED_LIMIT -> {
+                        return IMQTTProtocolHelper.SubResult.EXCEED_LIMIT;
+                    }
+                    case BACK_PRESSURE_REJECTED -> {
+                        return IMQTTProtocolHelper.SubResult.BACK_PRESSURE_REJECTED;
+                    }
+                    default -> {
+                        return IMQTTProtocolHelper.SubResult.ERROR;
+                    }
+                }
+            }, ctx.executor());
     }
 
     @Override
     protected CompletableFuture<MatchReply> matchRetainedMessage(long reqId, String topicFilter) {
         return sessionCtx.retainClient.match(MatchRequest.newBuilder()
-                .setReqId(reqId)
-                .setTenantId(clientInfo.getTenantId())
-                .setMatchInfo(MatchInfo.newBuilder()
-                        .setTopicFilter(topicFilter)
-                        .setReceiverId(globalize(channelId()))
-                        .build())
-                .setDelivererKey(toDelivererKey(globalize(channelId()), sessionCtx.serverId))
-                .setBrokerId(0)
-                .setLimit(settings.retainMatchLimit)
-                .build());
+            .setReqId(reqId)
+            .setTenantId(clientInfo.getTenantId())
+            .setMatchInfo(MatchInfo.newBuilder()
+                .setTopicFilter(topicFilter)
+                .setReceiverId(globalize(channelId()))
+                .build())
+            .setDelivererKey(toDelivererKey(globalize(channelId()), sessionCtx.serverId))
+            .setBrokerId(0)
+            .setLimit(settings.retainMatchLimit)
+            .build());
     }
 
     @Override
@@ -209,8 +209,8 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         // check unsub rate
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalTransientUnsubscribePerSecond)) {
             eventCollector.report(getLocal(OutOfTenantResource.class)
-                    .reason(TotalTransientUnsubscribePerSecond.name())
-                    .clientInfo(clientInfo));
+                .reason(TotalTransientUnsubscribePerSecond.name())
+                .clientInfo(clientInfo));
             return CompletableFuture.completedFuture(ERROR);
         }
         tenantMeter.recordCount(MqttTransientUnsubCount);
@@ -219,33 +219,33 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
             return CompletableFuture.completedFuture(IMQTTProtocolHelper.UnsubResult.NO_SUB);
         }
         return removeMatchRecord(reqId, topicFilter)
-                .handleAsync((result, e) -> {
-                    subNumGauge.addAndGet(-1);
-                    memUsage.addAndGet(-topicFilter.length());
-                    if (e != null) {
-                        return ERROR;
-                    } else {
-                        switch (result) {
-                            case OK -> {
-                                start.stop(tenantMeter.timer(MqttTransientUnsubLatency));
-                                return IMQTTProtocolHelper.UnsubResult.OK;
-                            }
-                            case BACK_PRESSURE_REJECTED -> {
-                                return IMQTTProtocolHelper.UnsubResult.BACK_PRESSURE_REJECTED;
-                            }
-                            default -> {
-                                return ERROR;
-                            }
+            .handleAsync((result, e) -> {
+                subNumGauge.addAndGet(-1);
+                memUsage.addAndGet(-topicFilter.length());
+                if (e != null) {
+                    return ERROR;
+                } else {
+                    switch (result) {
+                        case OK -> {
+                            start.stop(tenantMeter.timer(MqttTransientUnsubLatency));
+                            return IMQTTProtocolHelper.UnsubResult.OK;
+                        }
+                        case BACK_PRESSURE_REJECTED -> {
+                            return IMQTTProtocolHelper.UnsubResult.BACK_PRESSURE_REJECTED;
+                        }
+                        default -> {
+                            return ERROR;
                         }
                     }
-                }, ctx.executor());
+                }
+            }, ctx.executor());
     }
 
     @Override
     public boolean publish(MatchInfo matchInfo, List<TopicMessagePack> topicMsgPacks) {
         String topicFilter = matchInfo.getTopicFilter();
         TopicFilterOption option = topicFilters.get(topicFilter);
-        if (option == null) {
+        if (option == null || !ctx.channel().isActive()) {
             return false;
         }
         ctx.executor().execute(() -> publish(topicFilter, option, topicMsgPacks));
@@ -256,6 +256,9 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                          TopicFilterOption option,
                          List<TopicMessagePack> topicMsgPacks) {
         assert ctx.executor().inEventLoop();
+        if (!ctx.channel().isActive()) {
+            return;
+        }
         addFgTask(authProvider.checkPermission(clientInfo(), buildSubAction(topicFilter, option.getQos())))
             .thenAccept(checkResult -> {
                 AtomicInteger totalMsgBytesSize = new AtomicInteger();
