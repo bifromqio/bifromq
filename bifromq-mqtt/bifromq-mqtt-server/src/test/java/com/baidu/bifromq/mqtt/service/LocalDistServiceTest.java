@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.mqtt.service;
 
-import static com.baidu.bifromq.mqtt.inbox.util.DeliveryKeyUtil.toDelivererKey;
+import static com.baidu.bifromq.mqtt.inbox.util.DelivererKeyUtil.toDelivererKey;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalTransientFanOutBytesPerSeconds;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;

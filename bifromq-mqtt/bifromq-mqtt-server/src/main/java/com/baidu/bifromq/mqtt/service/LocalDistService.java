@@ -14,7 +14,7 @@
 package com.baidu.bifromq.mqtt.service;
 
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientFanOutBytes;
-import static com.baidu.bifromq.mqtt.inbox.util.DeliveryKeyUtil.toDelivererKey;
+import static com.baidu.bifromq.mqtt.inbox.util.DelivererKeyUtil.toDelivererKey;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalTransientFanOutBytesPerSeconds;
 import static java.util.Collections.singletonList;
 

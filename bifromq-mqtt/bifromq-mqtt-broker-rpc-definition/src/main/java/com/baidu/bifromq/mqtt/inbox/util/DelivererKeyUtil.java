@@ -15,9 +15,9 @@ package com.baidu.bifromq.mqtt.inbox.util;
 
 import com.baidu.bifromq.sysprops.props.DeliverersPerMqttServer;
 
-public class DeliveryKeyUtil {
+public class DelivererKeyUtil {
     private static final String DELIMITER = ":";
-    private static final int INBOX_GROUPS = DeliverersPerMqttServer.INSTANCE.get();
+    private static final int MAX_DELIVERER_NUM = DeliverersPerMqttServer.INSTANCE.get();
 
     public static String toDelivererKey(String tenantId, String inboxId, String serverId) {
         assert !serverId.contains(DELIMITER) : "serverId SHOULD NOT contain '" + DELIMITER + "'";
@@ -29,9 +29,9 @@ public class DeliveryKeyUtil {
     }
 
     private static int groupIdx(String inboxId) {
-        int idx = inboxId.hashCode() % INBOX_GROUPS;
+        int idx = inboxId.hashCode() % MAX_DELIVERER_NUM;
         if (idx < 0) {
-            idx = (idx + INBOX_GROUPS) % INBOX_GROUPS;
+            idx = (idx + MAX_DELIVERER_NUM) % MAX_DELIVERER_NUM;
         }
         return idx;
     }

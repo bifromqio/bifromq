@@ -23,7 +23,7 @@ import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.EXCEE
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.EXISTS;
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.OK;
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.UnsubResult.ERROR;
-import static com.baidu.bifromq.mqtt.inbox.util.DeliveryKeyUtil.toDelivererKey;
+import static com.baidu.bifromq.mqtt.inbox.util.DelivererKeyUtil.toDelivererKey;
 import static com.baidu.bifromq.mqtt.service.ILocalDistService.globalize;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildSubAction;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;

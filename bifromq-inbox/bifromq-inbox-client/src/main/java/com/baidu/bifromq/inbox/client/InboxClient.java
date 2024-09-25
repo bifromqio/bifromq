@@ -75,7 +75,7 @@ final class InboxClient implements IInboxClient {
     @Override
     public IInboxReader openInboxReader(String tenantId, String inboxId, long incarnation) {
         return new InboxReader(inboxId, incarnation,
-            fetchPipelineCache.get(new FetchPipelineKey(tenantId, getDelivererKey(inboxId))));
+            fetchPipelineCache.get(new FetchPipelineKey(tenantId, getDelivererKey(tenantId, inboxId))));
     }
 
     @Override

@@ -24,8 +24,8 @@ import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetai
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
-import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.records.ScopedInbox;
@@ -334,7 +334,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                             request.getTenantId(),
                             request.getTopicFilter(),
                             distInboxId(request.getInboxId(), request.getIncarnation()),
-                            getDelivererKey(request.getInboxId()), inboxClient.id())
+                            getDelivererKey(request.getTenantId(), request.getInboxId()), inboxClient.id())
                         .thenApply(matchResult -> {
                             switch (matchResult) {
                                 case OK -> {
@@ -448,7 +448,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                                      long incarnation,
                                                      String topicFilter) {
         return distClient.unmatch(reqId, tenantId, topicFilter, distInboxId(inboxId, incarnation),
-            getDelivererKey(inboxId), 1);
+            getDelivererKey(tenantId, inboxId), inboxClient.id());
     }
 
     @Override

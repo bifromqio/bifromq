@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.mqtt.service;
 
-import static com.baidu.bifromq.mqtt.inbox.util.DeliveryKeyUtil.toDelivererKey;
+import static com.baidu.bifromq.mqtt.inbox.util.DelivererKeyUtil.toDelivererKey;
 
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;

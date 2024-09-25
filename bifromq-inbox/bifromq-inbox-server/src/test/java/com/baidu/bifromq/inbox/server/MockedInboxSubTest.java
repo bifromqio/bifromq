@@ -14,8 +14,6 @@
 package com.baidu.bifromq.inbox.server;
 
 import static com.baidu.bifromq.inbox.records.ScopedInbox.distInboxId;
-import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainMessageMatchLimit;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;

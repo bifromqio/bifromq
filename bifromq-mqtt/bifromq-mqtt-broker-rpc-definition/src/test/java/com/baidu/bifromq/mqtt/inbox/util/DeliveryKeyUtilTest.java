@@ -23,7 +23,7 @@ public class DeliveryKeyUtilTest {
         String serverId = "serverId";
         String tenantId = "tenantId";
         String inboxId = "inboxId";
-        String deliveryKey = DeliveryKeyUtil.toDelivererKey(tenantId, inboxId, serverId);
-        assertEquals(serverId, DeliveryKeyUtil.parseServerId(deliveryKey));
+        String deliveryKey = DelivererKeyUtil.toDelivererKey(tenantId, inboxId, serverId);
+        assertEquals(serverId, DelivererKeyUtil.parseServerId(deliveryKey));
     }
 }

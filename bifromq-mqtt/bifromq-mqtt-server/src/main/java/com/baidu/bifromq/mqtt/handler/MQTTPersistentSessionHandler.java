@@ -302,14 +302,15 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
 
     @Override
     protected CompletableFuture<MatchReply> matchRetainedMessage(long reqId, String topicFilter) {
+        String tenantId = clientInfo().getTenantId();
         return sessionCtx.retainClient.match(MatchRequest.newBuilder()
             .setReqId(reqId)
-            .setTenantId(clientInfo.getTenantId())
+            .setTenantId(tenantId)
             .setMatchInfo(MatchInfo.newBuilder()
                 .setTopicFilter(topicFilter)
                 .setReceiverId(distInboxId(userSessionId, incarnation))
                 .build())
-            .setDelivererKey(getDelivererKey(userSessionId))
+            .setDelivererKey(getDelivererKey(tenantId, userSessionId))
             .setBrokerId(inboxClient.id())
             .setLimit(settings.retainMatchLimit)
             .build());

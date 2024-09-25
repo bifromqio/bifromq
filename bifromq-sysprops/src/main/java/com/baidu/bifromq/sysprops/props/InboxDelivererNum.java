@@ -17,7 +17,7 @@ import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.sysprops.parser.IntegerParser;
 
 /**
- * The number of inbox deliverers.
+ * The number of inbox deliverers per tenant.
  */
 public final class InboxDelivererNum extends BifroMQSysProp<Integer, IntegerParser> {
     public static final InboxDelivererNum INSTANCE = new InboxDelivererNum();
