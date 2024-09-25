@@ -23,7 +23,7 @@ import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.EXCEE
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.EXISTS;
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.OK;
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.UnsubResult.ERROR;
-import static com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil.toDelivererKey;
+import static com.baidu.bifromq.mqtt.inbox.util.DeliveryKeyUtil.toDelivererKey;
 import static com.baidu.bifromq.mqtt.service.ILocalDistService.globalize;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildSubAction;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
@@ -191,14 +191,15 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
 
     @Override
     protected CompletableFuture<MatchReply> matchRetainedMessage(long reqId, String topicFilter) {
+        String tenantId = clientInfo().getTenantId();
         return sessionCtx.retainClient.match(MatchRequest.newBuilder()
             .setReqId(reqId)
-            .setTenantId(clientInfo.getTenantId())
+            .setTenantId(tenantId)
             .setMatchInfo(MatchInfo.newBuilder()
                 .setTopicFilter(topicFilter)
                 .setReceiverId(globalize(channelId()))
                 .build())
-            .setDelivererKey(toDelivererKey(globalize(channelId()), sessionCtx.serverId))
+            .setDelivererKey(toDelivererKey(tenantId, globalize(channelId()), sessionCtx.serverId))
             .setBrokerId(0)
             .setLimit(settings.retainMatchLimit)
             .build());

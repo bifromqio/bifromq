@@ -24,7 +24,7 @@ import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
-import com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil;
+import com.baidu.bifromq.mqtt.inbox.util.DeliveryKeyUtil;
 import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
@@ -115,7 +115,7 @@ final class MqttBrokerClient implements IMqttBrokerClient {
         private final IRPCClient.IRequestPipeline<WriteRequest, WriteReply> ppln;
 
         DeliveryPipeline(String deliveryGroupKey) {
-            ppln = rpcClient.createRequestPipeline("", DeliveryGroupKeyUtil.parseServerId(deliveryGroupKey), "",
+            ppln = rpcClient.createRequestPipeline("", DeliveryKeyUtil.parseServerId(deliveryGroupKey), "",
                 emptyMap(), OnlineInboxBrokerGrpc.getWriteMethod());
         }
 

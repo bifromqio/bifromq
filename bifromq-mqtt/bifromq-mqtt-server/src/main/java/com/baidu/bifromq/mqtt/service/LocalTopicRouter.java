@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.mqtt.service;
 
-import static com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil.toDelivererKey;
+import static com.baidu.bifromq.mqtt.inbox.util.DeliveryKeyUtil.toDelivererKey;
 
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
@@ -99,7 +99,7 @@ public class LocalTopicRouter implements ILocalTopicRouter {
                             k.tenantId,
                             k.topicFilter,
                             localRoutes.localReceiverId(),
-                            toDelivererKey(localRoutes.localReceiverId(), serverId), 0)
+                            toDelivererKey(k.tenantId, localRoutes.localReceiverId(), serverId), 0)
                         .thenApply(matchResult -> {
                             if (matchResult == MatchResult.OK) {
                                 localRoutes.routeList.add(channelId);
@@ -154,7 +154,7 @@ public class LocalTopicRouter implements ILocalTopicRouter {
                                     k.tenantId,
                                     k.topicFilter,
                                     localRoutes.localReceiverId(),
-                                    toDelivererKey(localRoutes.localReceiverId(), serverId), 0)
+                                    toDelivererKey(k.tenantId, localRoutes.localReceiverId(), serverId), 0)
                                 .whenComplete((unmatchResult, t) -> {
                                     if (t != null) {
                                         updated.completeExceptionally(t);
@@ -204,8 +204,7 @@ public class LocalTopicRouter implements ILocalTopicRouter {
     private int topicFilterBucketId(String key) {
         int bucketId = key.hashCode() % TOPIC_FILTER_BUCKET_NUM;
         if (bucketId < 0) {
-            bucketId =
-                (bucketId + Runtime.getRuntime().availableProcessors()) % TOPIC_FILTER_BUCKET_NUM;
+            bucketId = (bucketId + TOPIC_FILTER_BUCKET_NUM) % TOPIC_FILTER_BUCKET_NUM;
         }
         return bucketId;
     }

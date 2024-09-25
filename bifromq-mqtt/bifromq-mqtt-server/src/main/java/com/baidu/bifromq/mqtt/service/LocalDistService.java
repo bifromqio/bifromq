@@ -14,7 +14,7 @@
 package com.baidu.bifromq.mqtt.service;
 
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientFanOutBytes;
-import static com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil.toDelivererKey;
+import static com.baidu.bifromq.mqtt.inbox.util.DeliveryKeyUtil.toDelivererKey;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalTransientFanOutBytesPerSeconds;
 import static java.util.Collections.singletonList;
 
@@ -72,7 +72,7 @@ public class LocalDistService implements ILocalDistService {
                 tenantId,
                 topicFilter,
                 ILocalDistService.globalize(session.channelId()),
-                toDelivererKey(ILocalDistService.globalize(session.channelId()), serverId), 0);
+                toDelivererKey(tenantId, ILocalDistService.globalize(session.channelId()), serverId), 0);
         } else {
             return localTopicRouter.addTopicRoute(reqId, tenantId, topicFilter, session.channelId());
         }
@@ -86,7 +86,7 @@ public class LocalDistService implements ILocalDistService {
                 tenantId,
                 topicFilter,
                 ILocalDistService.globalize(session.channelId()),
-                toDelivererKey(ILocalDistService.globalize(session.channelId()), serverId), 0);
+                toDelivererKey(tenantId, ILocalDistService.globalize(session.channelId()), serverId), 0);
         } else {
             return localTopicRouter.removeTopicRoute(reqId, tenantId, topicFilter, session.channelId());
         }

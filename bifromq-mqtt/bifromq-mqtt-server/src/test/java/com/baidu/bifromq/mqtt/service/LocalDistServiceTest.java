@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.mqtt.service;
 
-import static com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil.toDelivererKey;
+import static com.baidu.bifromq.mqtt.inbox.util.DeliveryKeyUtil.toDelivererKey;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalTransientFanOutBytesPerSeconds;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -91,7 +91,7 @@ public class LocalDistServiceTest extends MockableTest {
             localDistService.match(reqId, topicFilter, session);
             verify(distClient).match(eq(reqId), eq(tenantId), eq(topicFilter),
                 eq(ILocalDistService.globalize(channelId)),
-                eq(toDelivererKey(ILocalDistService.globalize(channelId), serverId)), eq(0));
+                eq(toDelivererKey(tenantId, ILocalDistService.globalize(channelId), serverId)), eq(0));
             reset(distClient);
         }
     }
@@ -110,7 +110,7 @@ public class LocalDistServiceTest extends MockableTest {
             localDistService.unmatch(reqId, topicFilter, session);
             verify(distClient).unmatch(eq(reqId), eq(tenantId), eq(topicFilter),
                 eq(ILocalDistService.globalize(channelId)),
-                eq(toDelivererKey(ILocalDistService.globalize(channelId), serverId)), eq(0));
+                eq(toDelivererKey(tenantId, ILocalDistService.globalize(channelId), serverId)), eq(0));
             reset(distClient);
         }
     }

@@ -15,15 +15,17 @@ package com.baidu.bifromq.mqtt.inbox.util;
 
 import com.baidu.bifromq.sysprops.props.DeliverersPerMqttServer;
 
-public class DeliveryGroupKeyUtil {
+public class DeliveryKeyUtil {
+    private static final String DELIMITER = ":";
     private static final int INBOX_GROUPS = DeliverersPerMqttServer.INSTANCE.get();
 
-    public static String toDelivererKey(String inboxId, String serverId) {
-        return serverId + ":" + groupIdx(inboxId);
+    public static String toDelivererKey(String tenantId, String inboxId, String serverId) {
+        assert !serverId.contains(DELIMITER) : "serverId SHOULD NOT contain '" + DELIMITER + "'";
+        return serverId + DELIMITER + tenantId + groupIdx(inboxId);
     }
 
     public static String parseServerId(String delivererKey) {
-        return delivererKey.substring(0, delivererKey.lastIndexOf(":"));
+        return delivererKey.substring(0, delivererKey.indexOf(DELIMITER));
     }
 
     private static int groupIdx(String inboxId) {
