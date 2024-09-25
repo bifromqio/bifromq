@@ -21,7 +21,6 @@ import static com.baidu.bifromq.mqtt.handler.v3.MQTT3MessageUtils.toMessage;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 
-import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper;
 import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
@@ -362,7 +361,7 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public ProtocolResponse onQoS0PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
-        if (result.distResult() == DistResult.BACK_PRESSURE_REJECTED ||
+        if (result.distResult() == com.baidu.bifromq.dist.client.PubResult.BACK_PRESSURE_REJECTED ||
             result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
             return goAway(getLocal(ServerBusy.class)
                 .reason("Too many qos0 publish")
@@ -383,7 +382,7 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public ProtocolResponse onQoS1PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
-        if (result.distResult() == DistResult.BACK_PRESSURE_REJECTED ||
+        if (result.distResult() == com.baidu.bifromq.dist.client.PubResult.BACK_PRESSURE_REJECTED ||
             result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
             return goAway(getLocal(ServerBusy.class)
                 .reason("Too many qos1 publish")
@@ -423,7 +422,7 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public ProtocolResponse onQoS2PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
-        if (result.distResult() == DistResult.BACK_PRESSURE_REJECTED
+        if (result.distResult() == com.baidu.bifromq.dist.client.PubResult.BACK_PRESSURE_REJECTED
             || result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
             return goAway(getLocal(ServerBusy.class)
                 .reason("Too many qos2 publish")

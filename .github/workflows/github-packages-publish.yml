@@ -45,7 +45,7 @@ jobs:
           server-password: BOS_REPO_SK
 
       - name: Publish to BoS Repo
-        run: mvn clean deploy -P bos-repo-deploy -pl :bifromq-plugin-context,:bifromq-plugin-main,:bifromq-plugin-auth-provider,:bifromq-plugin-event-collector,:bifromq-plugin-resource-throttler,:bifromq-plugin-sub-broker,:bifromq-plugin-setting-provider,:base-env-provider-spi,:base-kv-store-balance-spi,:bifromq-dist-spi -am -DskipTests -Dbos.repo.release=$BOS_REPO_RELEASE -Dbos.repo.snapshot=$BOS_REPO_SNAPSHOT
+        run: mvn clean deploy -P bos-repo-deploy -pl :bifromq-plugin-context,:bifromq-plugin-main,:bifromq-plugin-auth-provider,:bifromq-plugin-event-collector,:bifromq-plugin-resource-throttler,:bifromq-plugin-sub-broker,:bifromq-plugin-setting-provider,:base-env-provider-spi,:base-kv-store-balance-spi -am -DskipTests -Dbos.repo.release=$BOS_REPO_RELEASE -Dbos.repo.snapshot=$BOS_REPO_SNAPSHOT
         env:
           MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
           MAVEN_CENTRAL_TOKEN: ${{ secrets.MAVEN_CENTRAL_TOKEN }}
@@ -66,6 +66,6 @@ jobs:
           distribution: 'temurin'
 
       - name: Publish to GitHub Packages
-        run: mvn clean deploy -P github-packages-deploy -pl :base-cluster,:base-env-provider,:base-env-provider-spi,:base-hlc,:base-crdt-store,:base-crdt-service,:base-logger,:base-hookloader,:base-kv-store-balance-spi,:bifromq-dist-spi,:bifromq-plugin-archetype,:bifromq-plugin-context,:bifromq-plugin-main,:bifromq-plugin-auth-provider,:bifromq-plugin-event-collector,:bifromq-plugin-resource-throttler,:bifromq-plugin-sub-broker,:bifromq-plugin-setting-provider -am -DskipTests
+        run: mvn clean deploy -P github-packages-deploy -pl :base-cluster,:base-env-provider,:base-env-provider-spi,:base-hlc,:base-crdt-store,:base-crdt-service,:base-logger,:base-hookloader,:base-kv-store-balance-spi,:bifromq-plugin-archetype,:bifromq-plugin-context,:bifromq-plugin-main,:bifromq-plugin-auth-provider,:bifromq-plugin-event-collector,:bifromq-plugin-resource-throttler,:bifromq-plugin-sub-broker,:bifromq-plugin-setting-provider -am -DskipTests
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}

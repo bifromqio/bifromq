@@ -43,7 +43,7 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.dist.client.DistResult;
+import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.type.ClientInfo;
 import io.netty.handler.codec.mqtt.MqttMessage;
@@ -151,7 +151,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     public void qoS1PubAckWithUnWritable() {
         setupTransientSession();
         mockAuthCheck(true);
-        CompletableFuture<DistResult> distResult = new CompletableFuture<>();
+        CompletableFuture<PubResult> distResult = new CompletableFuture<>();
         when(distClient.pub(anyLong(), anyString(), any(), any(ClientInfo.class))).thenReturn(distResult);
         MqttPublishMessage publishMessage = MQTTMessageUtils.publishQoS1Message("testTopic", 123);
         channel.writeInbound(publishMessage);
@@ -159,7 +159,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(250 * 1024));
         channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(250 * 1024));
         assertFalse(channel.isWritable());
-        distResult.complete(DistResult.OK);
+        distResult.complete(PubResult.OK);
         channel.runPendingTasks();
         verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, PUB_ACK_DROPPED);
     }
@@ -224,7 +224,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
     public void qoS2PubWithUnWritable() {
         setupTransientSession();
         mockAuthCheck(true);
-        CompletableFuture<DistResult> distResult = new CompletableFuture<>();
+        CompletableFuture<PubResult> distResult = new CompletableFuture<>();
         when(distClient.pub(anyLong(), anyString(), any(), any(ClientInfo.class))).thenReturn(distResult);
         channel.writeInbound(MQTTMessageUtils.publishQoS2Message("testTopic", 123));
 
@@ -232,7 +232,7 @@ public class MQTTC2SPubTest extends BaseMQTTTest {
         channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(250 * 1024));
         channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(250 * 1024));
         assertFalse(channel.isWritable());
-        distResult.complete(DistResult.OK);
+        distResult.complete(PubResult.OK);
         channel.runPendingTasks();
         verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, PUB_REC_DROPPED);
 

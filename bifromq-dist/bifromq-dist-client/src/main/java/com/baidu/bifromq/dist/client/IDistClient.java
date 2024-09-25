@@ -33,7 +33,7 @@ public interface IDistClient extends IConnectable {
      * @param publisher the publisher of the message which must have non-null tenantId and type field
      * @return a future for tracking the publishing process asynchronously
      */
-    CompletableFuture<DistResult> pub(long reqId, String topic, Message message, ClientInfo publisher);
+    CompletableFuture<PubResult> pub(long reqId, String topic, Message message, ClientInfo publisher);
 
     /**
      * Add a topic match

@@ -23,7 +23,6 @@ abstract class AbstractDistServerBuilder<T extends AbstractDistServerBuilder<T>>
     ISettingProvider settingProvider;
     IEventCollector eventCollector;
     ICRDTService crdtService;
-    String distCallPreSchedulerFactoryClass;
 
     public T distWorkerClient(IBaseKVStoreClient distWorkerClient) {
         this.distWorkerClient = distWorkerClient;
@@ -42,11 +41,6 @@ abstract class AbstractDistServerBuilder<T extends AbstractDistServerBuilder<T>>
 
     public T crdtService(ICRDTService crdtService) {
         this.crdtService = crdtService;
-        return thisT();
-    }
-
-    public T distCallPreSchedulerFactoryClass(String distCallPreSchedulerFactoryClass) {
-        this.distCallPreSchedulerFactoryClass = distCallPreSchedulerFactoryClass;
         return thisT();
     }
 

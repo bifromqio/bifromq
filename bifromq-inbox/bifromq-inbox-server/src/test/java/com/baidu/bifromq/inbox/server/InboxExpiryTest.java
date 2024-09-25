@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import com.baidu.bifromq.dist.client.DistResult;
+import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
@@ -68,7 +68,7 @@ public class InboxExpiryTest extends InboxServiceTest {
                 .build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         when(distClient.pub(anyLong(), anyString(), any(), any()))
-                .thenReturn(CompletableFuture.completedFuture(DistResult.OK));
+            .thenReturn(CompletableFuture.completedFuture(PubResult.OK));
         inboxClient.create(CreateRequest.newBuilder()
                 .setReqId(reqId)
                 .setInboxId(inboxId)
@@ -113,7 +113,7 @@ public class InboxExpiryTest extends InboxServiceTest {
                 .setDelaySeconds(1).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         when(distClient.pub(anyLong(), anyString(), any(), any())).thenReturn(
-                CompletableFuture.completedFuture(DistResult.OK));
+            CompletableFuture.completedFuture(PubResult.OK));
         when(retainClient.retain(anyLong(), anyString(), any(), any(), anyInt(), any())).thenReturn(
                 CompletableFuture.completedFuture(
                         RetainReply.newBuilder().setResult(RetainReply.Result.RETAINED).build()));
@@ -160,7 +160,7 @@ public class InboxExpiryTest extends InboxServiceTest {
                 .setDelaySeconds(1).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         when(distClient.pub(anyLong(), anyString(), any(), any()))
-                .thenReturn(CompletableFuture.completedFuture(DistResult.OK));
+            .thenReturn(CompletableFuture.completedFuture(PubResult.OK));
         when(retainClient.retain(anyLong(), anyString(), any(), any(), anyInt(), any()))
                 .thenReturn(
                         CompletableFuture.completedFuture(
@@ -209,7 +209,7 @@ public class InboxExpiryTest extends InboxServiceTest {
                 .build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         when(distClient.pub(anyLong(), anyString(), any(), any())).thenReturn(
-                CompletableFuture.completedFuture(DistResult.OK));
+            CompletableFuture.completedFuture(PubResult.OK));
         inboxClient.create(CreateRequest.newBuilder()
                 .setReqId(reqId)
                 .setInboxId(inboxId)

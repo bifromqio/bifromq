@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
-import com.baidu.bifromq.dist.client.DistResult;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
@@ -36,7 +35,7 @@ public interface IMQTTProtocolHelper {
     record SubTask(String topicFilter, TopicFilterOption option, UserProperties userProperties) {
     }
 
-    record PubResult(DistResult distResult, RetainReply.Result retainResult) {
+    record PubResult(com.baidu.bifromq.dist.client.PubResult distResult, RetainReply.Result retainResult) {
     }
 
     enum SubResult {

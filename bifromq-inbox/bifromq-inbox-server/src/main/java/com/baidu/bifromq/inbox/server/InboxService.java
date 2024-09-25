@@ -24,7 +24,7 @@ import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetai
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
-import com.baidu.bifromq.dist.client.DistResult;
+import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
@@ -615,7 +615,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         public void run() {
             long reqId = HLC.INST.getPhysical();
             if (lwt != null) {
-                CompletableFuture<DistResult> distLWTFuture = distClient.pub(reqId,
+                CompletableFuture<PubResult> distLWTFuture = distClient.pub(reqId,
                     lwt.getTopic(),
                     lwt.getMessage().toBuilder()
                         .setTimestamp(HLC.INST.getPhysical()) // refresh the timestamp
@@ -683,8 +683,8 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                 }
                 CompletableFuture.allOf(distLWTFuture, retainLWTFuture)
                     .thenAccept(v -> {
-                        DistResult distResult = distLWTFuture.join();
-                        boolean retry = distResult == DistResult.ERROR;
+                        PubResult distResult = distLWTFuture.join();
+                        boolean retry = distResult == PubResult.ERROR;
                         if (!retry) {
                             if (willRetain && retainEnabled) {
                                 retry = retainLWTFuture.join() == RetainReply.Result.ERROR;

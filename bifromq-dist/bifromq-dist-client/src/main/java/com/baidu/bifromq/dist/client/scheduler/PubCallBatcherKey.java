@@ -11,10 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.server.scheduler;
+package com.baidu.bifromq.dist.client.scheduler;
 
-import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
-import java.util.Map;
-
-public interface IDistCallScheduler extends IBatchCallScheduler<DistWorkerCall, Map<String, Integer>> {
+public record PubCallBatcherKey(String tenantId, long threadId) {
 }

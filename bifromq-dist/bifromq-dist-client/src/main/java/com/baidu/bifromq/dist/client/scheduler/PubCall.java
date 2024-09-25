@@ -13,5 +13,13 @@
 
 package com.baidu.bifromq.dist.client.scheduler;
 
-public record BatcherKey(String tenantId, long threadId) {
+import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.Message;
+import lombok.AllArgsConstructor;
+
+@AllArgsConstructor
+public class PubCall {
+    final ClientInfo publisher;
+    final String topic;
+    final Message message;
 }

@@ -15,9 +15,7 @@ package com.baidu.bifromq.dist.server;
 
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
 
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basescheduler.ICallScheduler;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceGrpc;
@@ -27,38 +25,28 @@ import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
 import com.baidu.bifromq.dist.server.handler.MatchReqHandler;
 import com.baidu.bifromq.dist.server.handler.UnmatchReqHandler;
-import com.baidu.bifromq.dist.server.scheduler.DistCallScheduler;
-import com.baidu.bifromq.dist.server.scheduler.DistWorkerCall;
-import com.baidu.bifromq.dist.server.scheduler.IDistCallScheduler;
-import com.baidu.bifromq.dist.server.scheduler.IGlobalDistCallRateSchedulerFactory;
+import com.baidu.bifromq.dist.server.scheduler.DistWorkerCallScheduler;
+import com.baidu.bifromq.dist.server.scheduler.IDistWorkerCallScheduler;
 import com.baidu.bifromq.dist.server.scheduler.IMatchCallScheduler;
 import com.baidu.bifromq.dist.server.scheduler.IUnmatchCallScheduler;
 import com.baidu.bifromq.dist.server.scheduler.MatchCallScheduler;
 import com.baidu.bifromq.dist.server.scheduler.UnmatchCallScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
 import io.grpc.stub.StreamObserver;
-import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class DistService extends DistServiceGrpc.DistServiceImplBase {
     private final IEventCollector eventCollector;
-    private final ICallScheduler<DistWorkerCall> distCallRateScheduler;
-    private final IDistCallScheduler distCallScheduler;
+    private final IDistWorkerCallScheduler distCallScheduler;
     private final MatchReqHandler matchReqHandler;
     private final UnmatchReqHandler unmatchReqHandler;
-    private final LoadingCache<String, RunningAverage> tenantFanouts;
 
     DistService(IBaseKVStoreClient distWorkerClient,
                 ISettingProvider settingProvider,
-                IEventCollector eventCollector,
-                ICRDTService crdtService,
-                IGlobalDistCallRateSchedulerFactory distCallRateScheduler) {
+                IEventCollector eventCollector) {
         this.eventCollector = eventCollector;
-        this.distCallRateScheduler = distCallRateScheduler.createScheduler(settingProvider, crdtService);
 
         IMatchCallScheduler matchCallScheduler = new MatchCallScheduler(distWorkerClient, settingProvider);
         matchReqHandler = new MatchReqHandler(eventCollector, matchCallScheduler);
@@ -66,10 +54,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
         IUnmatchCallScheduler unmatchCallScheduler = new UnmatchCallScheduler(distWorkerClient);
         unmatchReqHandler = new UnmatchReqHandler(eventCollector, unmatchCallScheduler);
 
-        tenantFanouts = Caffeine.newBuilder()
-            .expireAfterAccess(120, TimeUnit.SECONDS)
-            .build(k -> new RunningAverage(5));
-        this.distCallScheduler = new DistCallScheduler(this.distCallRateScheduler, distWorkerClient, settingProvider);
+        this.distCallScheduler = new DistWorkerCallScheduler(distWorkerClient, settingProvider);
     }
 
     @Override
@@ -83,17 +68,15 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
 
     @Override
     public StreamObserver<DistRequest> dist(StreamObserver<DistReply> responseObserver) {
-        return new DistResponsePipeline(distCallScheduler, responseObserver, eventCollector, tenantFanouts);
+        return new DistResponsePipeline(distCallScheduler, responseObserver, eventCollector);
     }
 
     public void stop() {
-        log.debug("stop dist call scheduler");
+        log.debug("stop dist worker call scheduler");
         distCallScheduler.close();
-        log.debug("stop dist call pre-scheduler");
-        distCallRateScheduler.close();
-        log.debug("Stop match req handler");
+        log.debug("Stop match call handler");
         matchReqHandler.close();
-        log.debug("Stop unmatch req handler");
+        log.debug("Stop unmatch call handler");
         unmatchReqHandler.close();
     }
 }

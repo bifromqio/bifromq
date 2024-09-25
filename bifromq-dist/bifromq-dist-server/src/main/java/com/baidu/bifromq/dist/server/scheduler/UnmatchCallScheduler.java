@@ -17,11 +17,9 @@ import static com.baidu.bifromq.dist.entity.EntityUtil.toMatchRecordKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
 import com.baidu.bifromq.sysprops.props.ControlPlaneBurstLatencyMillis;
@@ -52,20 +50,5 @@ public class UnmatchCallScheduler extends MutationCallScheduler<UnmatchRequest, 
     protected ByteString rangeKey(UnmatchRequest call) {
         String qInboxId = toQInboxId(call.getBrokerId(), call.getReceiverId(), call.getDelivererKey());
         return toMatchRecordKey(call.getTenantId(), call.getTopicFilter(), qInboxId);
-    }
-
-    private static class UnsubCallBatcher extends MutationCallBatcher<UnmatchRequest, UnmatchReply> {
-        private UnsubCallBatcher(String name,
-                                 long tolerableLatencyNanos,
-                                 long burstLatencyNanos,
-                                 MutationCallBatcherKey batcherKey,
-                                 IBaseKVStoreClient distWorkerClient) {
-            super(name, tolerableLatencyNanos, burstLatencyNanos, batcherKey, distWorkerClient);
-        }
-
-        @Override
-        protected IBatchCall<UnmatchRequest, UnmatchReply, MutationCallBatcherKey> newBatch() {
-            return new BatchUnmatchCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
-        }
     }
 }

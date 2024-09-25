@@ -13,10 +13,6 @@
 
 package com.baidu.bifromq.dist.server;
 
-import static com.baidu.bifromq.basehookloader.BaseHookLoader.load;
-
-import com.baidu.bifromq.dist.server.scheduler.IGlobalDistCallRateSchedulerFactory;
-import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -27,24 +23,7 @@ public abstract class AbstractDistServer implements IDistServer {
         this.distService = new DistService(
             builder.distWorkerClient,
             builder.settingProvider,
-            builder.eventCollector,
-            builder.crdtService,
-            distCallPreBatchSchedulerFactory(builder.distCallPreSchedulerFactoryClass));
-    }
-
-    private IGlobalDistCallRateSchedulerFactory distCallPreBatchSchedulerFactory(String factoryClass) {
-        if (factoryClass == null) {
-            log.info("DistCallPreBatchSchedulerFactory[DEFAULT] loaded");
-            return IGlobalDistCallRateSchedulerFactory.DEFAULT;
-        } else {
-            Map<String, IGlobalDistCallRateSchedulerFactory> factoryMap =
-                load(IGlobalDistCallRateSchedulerFactory.class);
-            IGlobalDistCallRateSchedulerFactory factory =
-                factoryMap.getOrDefault(factoryClass, IGlobalDistCallRateSchedulerFactory.DEFAULT);
-            log.info("DistCallPreBatchSchedulerFactory[{}] loaded",
-                factory != IGlobalDistCallRateSchedulerFactory.DEFAULT ? factoryClass : "DEFAULT");
-            return factory;
-        }
+            builder.eventCollector);
     }
 
     @Override

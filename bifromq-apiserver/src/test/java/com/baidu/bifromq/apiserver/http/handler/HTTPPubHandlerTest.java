@@ -29,7 +29,7 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertThrows;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.dist.client.DistResult;
+import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
@@ -89,10 +89,10 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
 
     @Test
     public void distResults() {
-        dist(DistResult.OK, HttpResponseStatus.OK);
-        dist(DistResult.NO_MATCH, HttpResponseStatus.OK);
-        dist(DistResult.ERROR, HttpResponseStatus.INTERNAL_SERVER_ERROR);
-        dist(DistResult.BACK_PRESSURE_REJECTED, HttpResponseStatus.BAD_REQUEST);
+        dist(PubResult.OK, HttpResponseStatus.OK);
+        dist(PubResult.NO_MATCH, HttpResponseStatus.OK);
+        dist(PubResult.ERROR, HttpResponseStatus.INTERNAL_SERVER_ERROR);
+        dist(PubResult.BACK_PRESSURE_REJECTED, HttpResponseStatus.BAD_REQUEST);
     }
 
     @Test
@@ -108,7 +108,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         HTTPPubHandler handler = new HTTPPubHandler(distClient, settingProvider);
 
         when(distClient.pub(anyLong(), anyString(), any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(DistResult.OK));
+            .thenReturn(CompletableFuture.completedFuture(PubResult.OK));
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());
         assertEquals(response.status(), HttpResponseStatus.BAD_REQUEST);
@@ -129,7 +129,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         HTTPPubHandler handler = new HTTPPubHandler(distClient, settingProvider);
 
         when(distClient.pub(anyLong(), anyString(), any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(DistResult.OK));
+            .thenReturn(CompletableFuture.completedFuture(PubResult.OK));
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());
         assertEquals(response.status(), HttpResponseStatus.BAD_REQUEST);
@@ -137,7 +137,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
     }
 
 
-    public void dist(DistResult result, HttpResponseStatus expectedStatus) {
+    public void dist(PubResult result, HttpResponseStatus expectedStatus) {
         DefaultFullHttpRequest req = buildRequest();
         req.headers().set(HEADER_TOPIC.header, "/greeting");
         req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");

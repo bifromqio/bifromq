@@ -13,6 +13,6 @@
 
 package com.baidu.bifromq.dist.client;
 
-public enum DistResult {
+public enum PubResult {
     OK, NO_MATCH, BACK_PRESSURE_REJECTED, ERROR
 }

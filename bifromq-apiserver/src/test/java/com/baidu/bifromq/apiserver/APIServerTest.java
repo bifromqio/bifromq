@@ -20,7 +20,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.dist.client.DistResult;
+import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
@@ -85,7 +85,7 @@ public class APIServerTest extends MockableTest {
             .POST(HttpRequest.BodyPublishers.ofString("Hello BifroMQ"))
             .build();
         when(distClient.pub(anyLong(), anyString(), any(), any())).thenReturn(
-            CompletableFuture.completedFuture(DistResult.OK));
+            CompletableFuture.completedFuture(PubResult.OK));
         when(retainClient.retain(anyLong(), anyString(), any(), any(), anyInt(), any())).thenReturn(
             CompletableFuture.completedFuture(RetainReply.newBuilder().setResult(RetainReply.Result.RETAINED).build()));
         HttpResponse<?> resp = httpClient.send(pubRequest, HttpResponse.BodyHandlers.discarding());

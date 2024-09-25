@@ -13,14 +13,9 @@
 
 package com.baidu.bifromq.dist.server.scheduler;
 
-import com.baidu.bifromq.type.PublisherMessagePack;
-import java.util.List;
-import lombok.AllArgsConstructor;
+import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
+import java.util.Map;
+import java.util.Optional;
 
-@AllArgsConstructor
-public class DistWorkerCall {
-    public final String tenantId;
-    public final List<PublisherMessagePack> publisherMsgPacks;
-    public final Integer callQueueIdx;
-    public final int fanout;
+public interface IDistWorkerCallScheduler extends IBatchCallScheduler<DistServerCall, Map<String, Optional<Integer>>> {
 }

@@ -59,22 +59,4 @@ public class MatchCallScheduler extends MutationCallScheduler<MatchRequest, Matc
         return toMatchRecordKey(call.getTenantId(), call.getTopicFilter(), qInboxId);
     }
 
-    private static class MatchCallBatcher extends MutationCallBatcher<MatchRequest, MatchReply> {
-        private final ISettingProvider settingProvider;
-
-        private MatchCallBatcher(String name,
-                                 long tolerableLatencyNanos,
-                                 long burstLatencyNanos,
-                                 MutationCallBatcherKey batcherKey,
-                                 IBaseKVStoreClient distWorkerClient,
-                                 ISettingProvider settingProvider) {
-            super(name, tolerableLatencyNanos, burstLatencyNanos, batcherKey, distWorkerClient);
-            this.settingProvider = settingProvider;
-        }
-
-        @Override
-        protected IBatchCall<MatchRequest, MatchReply, MutationCallBatcherKey> newBatch() {
-            return new BatchMatchCall(batcherKey.id, storeClient, Duration.ofMinutes(5), settingProvider);
-        }
-    }
 }

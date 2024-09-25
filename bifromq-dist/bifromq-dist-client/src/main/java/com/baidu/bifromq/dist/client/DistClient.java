@@ -15,7 +15,7 @@ package com.baidu.bifromq.dist.client;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.dist.RPCBluePrint;
-import com.baidu.bifromq.dist.client.scheduler.DistServerCall;
+import com.baidu.bifromq.dist.client.scheduler.PubCall;
 import com.baidu.bifromq.dist.client.scheduler.DistServerCallScheduler;
 import com.baidu.bifromq.dist.client.scheduler.IDistServerCallScheduler;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceGrpc;
@@ -51,11 +51,11 @@ final class DistClient implements IDistClient {
     }
 
     @Override
-    public CompletableFuture<DistResult> pub(long reqId, String topic, Message message, ClientInfo publisher) {
-        return reqScheduler.schedule(new DistServerCall(publisher, topic, message))
+    public CompletableFuture<PubResult> pub(long reqId, String topic, Message message, ClientInfo publisher) {
+        return reqScheduler.schedule(new PubCall(publisher, topic, message))
             .exceptionally(e -> {
                 log.debug("Failed to pub", e);
-                return DistResult.ERROR;
+                return PubResult.ERROR;
             });
     }
 

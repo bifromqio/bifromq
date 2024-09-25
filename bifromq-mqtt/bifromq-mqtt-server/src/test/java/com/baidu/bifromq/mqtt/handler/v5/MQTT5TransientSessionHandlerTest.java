@@ -69,7 +69,7 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.dist.client.DistResult;
+import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.mqtt.handler.BaseSessionHandlerTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
@@ -304,7 +304,7 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         mockCheckPermission(true);
         mockDistDist(true);
         when(distClient.pub(anyLong(), anyString(), any(Message.class), any(ClientInfo.class))).thenReturn(
-            CompletableFuture.completedFuture(DistResult.OK));
+            CompletableFuture.completedFuture(PubResult.OK));
         assertTrue(channel.isOpen());
         MqttPublishMessage message = MQTTMessageUtils.publishMQTT5QoS1Message(topic, 123, 1);
         channel.writeInbound(message);
@@ -322,7 +322,7 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         mockCheckPermission(true);
         mockDistDist(true);
         when(distClient.pub(anyLong(), anyString(), any(Message.class), any(ClientInfo.class))).thenReturn(
-            CompletableFuture.completedFuture(DistResult.OK));
+            CompletableFuture.completedFuture(PubResult.OK));
         assertTrue(channel.isOpen());
         MqttPublishMessage message = MQTTMessageUtils.publishQoS0Message(topic, 123);
         channel.writeInbound(message);
@@ -441,7 +441,7 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
 
     @Test
     public void qoS2PubWithUnWritable() {
-        CompletableFuture<DistResult> distResult = new CompletableFuture<>();
+        CompletableFuture<PubResult> distResult = new CompletableFuture<>();
         when(authProvider.checkPermission(any(ClientInfo.class), any(MQTTAction.class))).thenReturn(
             CompletableFuture.completedFuture(
                 CheckResult.newBuilder().setGranted(Granted.newBuilder().build()).build()));
@@ -453,7 +453,7 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(300 * 1024));
         channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(300 * 1024));
         assertFalse(channel.isWritable());
-        distResult.complete(DistResult.OK);
+        distResult.complete(PubResult.OK);
         channel.runPendingTasks();
         verifyEvent(MQTT_SESSION_START, PUB_REC_DROPPED);
 

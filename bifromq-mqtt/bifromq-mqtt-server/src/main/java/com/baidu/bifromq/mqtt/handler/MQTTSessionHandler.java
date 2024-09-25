@@ -56,7 +56,7 @@ import static java.util.concurrent.CompletableFuture.allOf;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.utils.FutureTracker;
-import com.baidu.bifromq.dist.client.DistResult;
+import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.metrics.ITenantMeter;
@@ -458,7 +458,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             case AT_MOST_ONCE -> handleQoS0Pub(reqId, topic, mqttMessage, ingressMsgBytes);
             case AT_LEAST_ONCE -> handleQoS1Pub(reqId, topic, mqttMessage, ingressMsgBytes);
             case EXACTLY_ONCE -> handleQoS2Pub(reqId, topic, mqttMessage, ingressMsgBytes);
-            case FAILURE -> CompletableFuture.completedFuture(DistResult.ERROR);
+            case FAILURE -> CompletableFuture.completedFuture(PubResult.ERROR);
         }).whenComplete((v, e) -> mqttMessage.release());
     }
 
@@ -1270,8 +1270,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                             }
                             if (ctx.channel().isActive()) {
                                 if (ctx.channel().isWritable()) {
-                                    if (pubResult.distResult() == DistResult.BACK_PRESSURE_REJECTED
-                                        || pubResult.distResult() == DistResult.ERROR) {
+                                    if (pubResult.distResult() == PubResult.BACK_PRESSURE_REJECTED
+                                        || pubResult.distResult() == PubResult.ERROR) {
                                         decReceivingCount();
                                         inUsePacketIds.remove(packetId);
                                     }
@@ -1496,7 +1496,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 reqId, topic, message.getPubQoS(), message.getPayload().size());
         }
 
-        CompletableFuture<DistResult> distTask =
+        CompletableFuture<PubResult> distTask =
             trackTask(sessionCtx.distClient.pub(reqId, topic, message, clientInfo), background);
         if (!message.getIsRetain()) {
             return distTask

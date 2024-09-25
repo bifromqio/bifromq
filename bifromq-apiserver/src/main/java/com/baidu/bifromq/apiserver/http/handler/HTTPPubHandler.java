@@ -27,7 +27,7 @@ import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.apiserver.utils.TopicUtil;
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.dist.client.DistResult;
+import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.ClientInfo;
@@ -114,7 +114,7 @@ public final class HTTPPubHandler implements IHTTPRequestHandler {
                 .setType(clientType)
                 .putAllMetadata(clientMeta)
                 .build();
-            CompletableFuture<DistResult> distFuture = distClient.pub(reqId, topic,
+            CompletableFuture<PubResult> distFuture = distClient.pub(reqId, topic,
                 Message.newBuilder()
                     .setMessageId(0)
                     .setPubQoS(QoS.forNumber(qos))
@@ -124,15 +124,15 @@ public final class HTTPPubHandler implements IHTTPRequestHandler {
                     .build(),
                 clientInfo);
             return distFuture
-                .thenApply(distResult -> {
-                    switch (distResult) {
+                .thenApply(pubResult -> {
+                    switch (pubResult) {
                         case OK, NO_MATCH -> {
                             return new DefaultFullHttpResponse(req.protocolVersion(), OK,
-                                Unpooled.wrappedBuffer(distResult.name().getBytes()));
+                                Unpooled.wrappedBuffer(pubResult.name().getBytes()));
                         }
                         case BACK_PRESSURE_REJECTED -> {
                             return new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
-                                Unpooled.wrappedBuffer(distResult.name().getBytes()));
+                                Unpooled.wrappedBuffer(pubResult.name().getBytes()));
                         }
                         default -> {
                             return new DefaultFullHttpResponse(req.protocolVersion(), INTERNAL_SERVER_ERROR,

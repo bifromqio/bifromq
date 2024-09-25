@@ -48,7 +48,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
 
-import com.baidu.bifromq.dist.client.DistResult;
+import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
@@ -242,12 +242,12 @@ public class BaseSessionHandlerTest extends MockableTest {
 
     protected void mockDistDist(boolean success) {
         when(distClient.pub(anyLong(), anyString(), any(), any(ClientInfo.class)))
-            .thenReturn(CompletableFuture.completedFuture(success ? DistResult.OK : DistResult.ERROR));
+            .thenReturn(CompletableFuture.completedFuture(success ? PubResult.OK : PubResult.ERROR));
     }
 
     protected void mockDistBackPressure() {
         when(distClient.pub(anyLong(), anyString(), any(), any(ClientInfo.class)))
-            .thenReturn(CompletableFuture.completedFuture(DistResult.BACK_PRESSURE_REJECTED));
+            .thenReturn(CompletableFuture.completedFuture(PubResult.BACK_PRESSURE_REJECTED));
     }
 
     protected void mockDistMatch(boolean success) {

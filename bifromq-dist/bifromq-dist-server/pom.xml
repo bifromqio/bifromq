@@ -37,10 +37,6 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-dist-spi</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.baidu.bifromq</groupId>
             <artifactId>base-kv-store-client</artifactId>
         </dependency>
         <dependency>

@@ -14,7 +14,7 @@
 package com.baidu.bifromq.dist.client.scheduler;
 
 import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
-import com.baidu.bifromq.dist.client.DistResult;
+import com.baidu.bifromq.dist.client.PubResult;
 
-public interface IDistServerCallScheduler extends IBatchCallScheduler<DistServerCall, DistResult> {
+public interface IDistServerCallScheduler extends IBatchCallScheduler<PubCall, PubResult> {
 }

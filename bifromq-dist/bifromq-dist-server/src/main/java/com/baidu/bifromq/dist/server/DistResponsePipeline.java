@@ -22,21 +22,20 @@ import com.baidu.bifromq.baserpc.ResponsePipeline;
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
-import com.baidu.bifromq.dist.server.scheduler.DistWorkerCall;
-import com.baidu.bifromq.dist.server.scheduler.IDistCallScheduler;
+import com.baidu.bifromq.dist.server.scheduler.DistServerCall;
+import com.baidu.bifromq.dist.server.scheduler.IDistWorkerCallScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DistError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.Disted;
-import com.baidu.bifromq.sysprops.props.DistWorkerCallQueueNum;
 import com.baidu.bifromq.sysprops.props.IngressSlowDownDirectMemoryUsage;
 import com.baidu.bifromq.sysprops.props.IngressSlowDownHeapMemoryUsage;
 import com.baidu.bifromq.sysprops.props.MaxSlowDownTimeoutSeconds;
 import com.baidu.bifromq.type.PublisherMessagePack;
-import com.github.benmanes.caffeine.cache.LoadingCache;
 import io.grpc.stub.StreamObserver;
 import java.time.Duration;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -44,27 +43,22 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
     private static final double SLOWDOWN_DIRECT_MEM_USAGE = IngressSlowDownDirectMemoryUsage.INSTANCE.get();
     private static final double SLOWDOWN_HEAP_MEM_USAGE = IngressSlowDownHeapMemoryUsage.INSTANCE.get();
     private static final Duration SLOWDOWN_TIMEOUT = Duration.ofSeconds(MaxSlowDownTimeoutSeconds.INSTANCE.get());
+    private final String id = UUID.randomUUID().toString();
     private final IEventCollector eventCollector;
-    private final IDistCallScheduler distCallScheduler;
-    private final LoadingCache<String, RunningAverage> tenantFanouts;
-    private final Integer callQueueIdx;
+    private final IDistWorkerCallScheduler distCallScheduler;
 
-    DistResponsePipeline(IDistCallScheduler distCallScheduler,
+    DistResponsePipeline(IDistWorkerCallScheduler distCallScheduler,
                          StreamObserver<DistReply> responseObserver,
-                         IEventCollector eventCollector,
-                         LoadingCache<String, RunningAverage> tenantFanouts) {
+                         IEventCollector eventCollector) {
         super(responseObserver, () -> MemUsage.local().nettyDirectMemoryUsage() > SLOWDOWN_DIRECT_MEM_USAGE
             || MemUsage.local().heapMemoryUsage() > SLOWDOWN_HEAP_MEM_USAGE, SLOWDOWN_TIMEOUT);
         this.distCallScheduler = distCallScheduler;
         this.eventCollector = eventCollector;
-        this.tenantFanouts = tenantFanouts;
-        this.callQueueIdx = DistQueueAllocator.allocate();
     }
 
     @Override
     protected CompletableFuture<DistReply> handleRequest(String tenantId, DistRequest request) {
-        return distCallScheduler.schedule(new DistWorkerCall(tenantId, request.getMessagesList(),
-                callQueueIdx, tenantFanouts.get(tenantId).estimate()))
+        return distCallScheduler.schedule(new DistServerCall(tenantId, request.getMessagesList(), id))
             .handle((v, e) -> {
                 DistReply.Builder replyBuilder = DistReply.newBuilder().setReqId(request.getReqId());
                 if (e != null) {
@@ -94,31 +88,28 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
                             .code(RPC_FAILURE));
                     }
                 } else {
-                    tenantFanouts.get(tenantId).log(v.values().stream().reduce(0, Integer::sum) / v.size());
+                    int totalFanout = 0;
                     for (PublisherMessagePack publisherMsgPack : request.getMessagesList()) {
                         DistReply.Result.Builder resultBuilder = DistReply.Result.newBuilder();
                         for (PublisherMessagePack.TopicPack topicPack : publisherMsgPack.getMessagePackList()) {
-                            int fanout = v.get(topicPack.getTopic());
-                            resultBuilder.putTopic(topicPack.getTopic(),
-                                fanout > 0 ? DistReply.Code.OK : DistReply.Code.NO_MATCH);
+                            Optional<Integer> fanout = v.get(topicPack.getTopic());
+                            if (fanout.isPresent()) {
+                                resultBuilder.putTopic(topicPack.getTopic(),
+                                    fanout.get() > 0 ? DistReply.Code.OK : DistReply.Code.NO_MATCH);
+                                totalFanout += fanout.get();
+                            } else {
+                                log.warn("No fanout for topic: {}", topicPack.getTopic());
+                                resultBuilder.putTopic(topicPack.getTopic(), DistReply.Code.ERROR);
+                            }
                         }
                         replyBuilder.addResults(resultBuilder.build());
                     }
                     eventCollector.report(getLocal(Disted.class)
                         .reqId(request.getReqId())
                         .messages(request.getMessagesList())
-                        .fanout(v.values().stream().reduce(0, Integer::sum)));
+                        .fanout(totalFanout));
                 }
                 return replyBuilder.build();
             });
-    }
-
-    private static class DistQueueAllocator {
-        private static final int QUEUE_NUMS = DistWorkerCallQueueNum.INSTANCE.get();
-        private static final AtomicInteger IDX = new AtomicInteger(0);
-
-        public static int allocate() {
-            return IDX.getAndIncrement() % QUEUE_NUMS;
-        }
     }
 }
