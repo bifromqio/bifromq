@@ -16,6 +16,7 @@ package com.baidu.bifromq.baserpc.trafficgovernor;
 import static com.baidu.bifromq.baserpc.RPCContext.GPID;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.proto.RPCServer;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import java.net.InetSocketAddress;
@@ -48,7 +49,7 @@ final class RPCServiceServerRegister extends RPCServiceAnnouncer implements IRPC
                 .addAllGroup(groupTags)
                 .putAllAttrs(attrs)
                 .setAnnouncerId(id())
-                .setAnnouncedTS(System.currentTimeMillis())
+                .setAnnouncedTS(HLC.INST.get())
                 .build();
 
             // make an announcement via rpcServiceCRDT
@@ -59,7 +60,7 @@ final class RPCServiceServerRegister extends RPCServiceAnnouncer implements IRPC
             disposable.add(announcedServers()
                 .subscribe(serverMap -> {
                     if (!serverMap.containsKey(localServer.getId())) {
-                        localServer = localServer.toBuilder().setAnnouncedTS(System.currentTimeMillis()).build();
+                        localServer = localServer.toBuilder().setAnnouncedTS(HLC.INST.get()).build();
                         log.debug("Re-announce local server: {}", localServer);
                         // refresh announcement time
                         announce(localServer);

@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.baserpc.utils;
+package com.baidu.bifromq.baserpc.loadbalancer;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -22,13 +22,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public final class TrieMap<V> extends AbstractMap<String, V> {
+final class TrieMap<V> extends AbstractMap<String, V> {
     /**
-     * Child tries
+     * Child tries.
      */
     private Map<String, TrieMap<V>> children;
     /**
-     * Value at a leaf node (leaf node is indicated by non-null value)
+     * Value at a leaf node (leaf node is indicated by non-null value).
      */
     private V value;
 

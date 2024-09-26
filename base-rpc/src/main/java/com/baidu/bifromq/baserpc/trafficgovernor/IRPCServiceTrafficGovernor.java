@@ -17,23 +17,26 @@ import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * The interface for the traffic governor of a RPC service.
+ */
 public interface IRPCServiceTrafficGovernor extends IRPCServiceTrafficDirector {
     static IRPCServiceTrafficGovernor newInstance(String serviceUniqueName, ICRDTService crdtService) {
         return new RPCServiceTrafficGovernor(serviceUniqueName, crdtService);
     }
 
     /**
-     * Update the groupTags for a server. If the server not join yet, nothing happens
+     * Update the groupTags for a server. If the server not join yet, nothing happens.
      *
-     * @param id        the id of the server
-     * @param groupTags
+     * @param serverId  the serverId of the server
+     * @param groupTags the groupTags to be assigned
      */
-    void assignLBGroups(String id, Set<String> groupTags);
+    void assignLBGroups(String serverId, Set<String> groupTags);
 
     /**
-     * Update the traffic directive in the form of mapping tenantIdPrefix to a set of group tags
+     * Update the traffic directive in the form of mapping tenantIdPrefix to a set of weighted group tags.
      *
-     * @param trafficDirective
+     * @param trafficDirective the traffic directive
      */
     void updateTrafficDirective(Map<String, Map<String, Integer>> trafficDirective);
 }

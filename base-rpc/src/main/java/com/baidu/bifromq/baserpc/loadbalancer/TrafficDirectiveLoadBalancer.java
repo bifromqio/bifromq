@@ -60,7 +60,7 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
     private final AtomicBoolean balancingStateUpdateScheduled = new AtomicBoolean(false);
 
     private volatile Map<String, Map<String, Integer>> currentTrafficDirective;
-    private final Map<ServerKey, List<Subchannel>> subchannelRegistry = Maps.newHashMap();
+    private final Map<ServerKey, List<Subchannel>> subChannelRegistry = Maps.newHashMap();
     private final Map<String, Set<String>> lbGroupAssignment = Maps.newHashMap();
 
     TrafficDirectiveLoadBalancer(Helper helper, BluePrint bluePrint,
@@ -94,19 +94,19 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
             .get(Constants.TRAFFIC_DIRECTIVE_ATTR_KEY).equals(currentTrafficDirective));
         currentTrafficDirective = resolvedAddresses.getAttributes().get(Constants.TRAFFIC_DIRECTIVE_ATTR_KEY);
         int requested = Math.min(5, EnvProvider.INSTANCE.availableProcessors());
-        Set<ServerKey> currentServers = subchannelRegistry.keySet();
+        Set<ServerKey> currentServers = subChannelRegistry.keySet();
         Set<ServerKey> latestServers = newResolved.keySet();
-        Set<ServerKey> addedServers = setsDifference(latestServers, currentServers);
-        Set<ServerKey> removedServers = setsDifference(currentServers, latestServers);
+        Set<ServerKey> addedServers = difference(latestServers, currentServers);
+        Set<ServerKey> removedServers = difference(currentServers, latestServers);
 
         // make sure enough subchannelRegistry opened for existing servers.
         for (ServerKey serverKey : currentServers) {
             if (!removedServers.contains(serverKey)) {
-                int openNow = subchannelRegistry.get(serverKey).size();
+                int openNow = subChannelRegistry.get(serverKey).size();
                 if (requested > openNow) {
                     updatePicker = true;
                     IntStream.range(0, requested - openNow).forEach(
-                        i -> subchannelRegistry.get(serverKey)
+                        i -> subChannelRegistry.get(serverKey)
                             .add(setupSubchannel(serverKey, newResolved.get(serverKey))));
                 }
             }
@@ -114,7 +114,7 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
 
         // Create new subchannelRegistry for new servers.
         for (ServerKey serverKey : addedServers) {
-            subchannelRegistry.compute(serverKey, (k, v) -> {
+            subChannelRegistry.compute(serverKey, (k, v) -> {
                 if (v != null) {
                     log.error("Illegal state: new server already exists: serverId={}", serverKey);
                     return v;
@@ -128,12 +128,12 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
 
         ArrayList<Subchannel> removedSubchannels = new ArrayList<>();
         for (ServerKey serverKey : removedServers) {
-            removedSubchannels.addAll(subchannelRegistry.remove(serverKey));
+            removedSubchannels.addAll(subChannelRegistry.remove(serverKey));
         }
 
         // Shutdown removed subchannelRegistry
         for (Subchannel removedSubchannel : removedSubchannels) {
-            shutdownSubchannel(removedSubchannel);
+            shutdownSubChannel(removedSubchannel);
         }
 
         if (updatePicker) {
@@ -152,9 +152,9 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
     @Override
     public void shutdown() {
         log.debug("Shutting down all subchannels");
-        for (List<Subchannel> subchannels : subchannelRegistry.values()) {
+        for (List<Subchannel> subchannels : subChannelRegistry.values()) {
             for (Subchannel subchannel : subchannels) {
-                shutdownSubchannel(subchannel);
+                shutdownSubChannel(subchannel);
             }
         }
     }
@@ -164,7 +164,7 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
         return true;
     }
 
-    private ConnectivityStateInfo getSubchannelState(Subchannel subchannel) {
+    private ConnectivityStateInfo getSubChannelState(Subchannel subchannel) {
         return subchannel.getAttributes().get(Constants.STATE_INFO).get();
     }
 
@@ -181,7 +181,7 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
         ConnectivityState newState = determineChannelState();
         if (newState != SHUTDOWN) {
             log.debug("Update balancing state to {}", newState);
-            currentPicker.refresh(currentTrafficDirective, subchannelRegistry, lbGroupAssignment);
+            currentPicker.refresh(currentTrafficDirective, subChannelRegistry, lbGroupAssignment);
             helper.updateBalancingState(newState, currentPicker);
             updateListener.onUpdate(currentPicker);
         }
@@ -196,19 +196,19 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
         // if all subchannel shutdown, the final state is SHUTDOWN
         // otherwise state is READY
         ConnectivityState connectivityState = READY;
-        if (subchannelRegistry.isEmpty() || subchannelRegistry.values().stream().flatMap(Collection::stream)
-            .map(this::getSubchannelState)
+        if (subChannelRegistry.isEmpty() || subChannelRegistry.values().stream().flatMap(Collection::stream)
+            .map(this::getSubChannelState)
             .allMatch(state -> state.getState() == TRANSIENT_FAILURE)) {
             connectivityState = TRANSIENT_FAILURE;
         } else {
-            if (subchannelRegistry.values().stream()
+            if (subChannelRegistry.values().stream()
                 .flatMap(Collection::stream)
-                .map(this::getSubchannelState)
+                .map(this::getSubChannelState)
                 .allMatch(state -> state.getState() == SHUTDOWN)) {
                 connectivityState = SHUTDOWN;
-            } else if (subchannelRegistry.values().stream()
+            } else if (subChannelRegistry.values().stream()
                 .flatMap(Collection::stream)
-                .map(this::getSubchannelState)
+                .map(this::getSubChannelState)
                 .allMatch(state -> state.getState() != READY)) {
                 connectivityState = CONNECTING;
             }
@@ -234,25 +234,25 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
     }
 
     private void handleSubchannelStateChange(Subchannel subchannel, ConnectivityStateInfo state) {
-        updateSubchannelState(subchannel, state);
+        updateSubChannelState(subchannel, state);
         scheduleBalancingStateUpdate();
     }
 
-    private void shutdownSubchannel(Subchannel subchannel) {
-        log.trace("Shutdown subchannel: {}", subchannel);
+    private void shutdownSubChannel(Subchannel subchannel) {
+        log.trace("Shutdown sub-channel: {}", subchannel);
         subchannel.shutdown();
-        updateSubchannelState(subchannel, ConnectivityStateInfo.forNonError(SHUTDOWN));
+        updateSubChannelState(subchannel, ConnectivityStateInfo.forNonError(SHUTDOWN));
     }
 
-    private void updateSubchannelState(Subchannel subchannel, ConnectivityStateInfo state) {
-        log.trace("Subchannel[{}] state change to {}", subchannel, state);
+    private void updateSubChannelState(Subchannel subchannel, ConnectivityStateInfo state) {
+        log.trace("Sub-channel[{}] state change to {}", subchannel, state);
         subchannel.getAttributes().get(Constants.STATE_INFO).set(state);
         if (state.getState() == IDLE) {
             subchannel.requestConnection();
         }
     }
 
-    private static <T> Set<T> setsDifference(Set<T> a, Set<T> b) {
+    private static <T> Set<T> difference(Set<T> a, Set<T> b) {
         Set<T> aCopy = new HashSet<>(a);
         aCopy.removeAll(b);
         return aCopy;

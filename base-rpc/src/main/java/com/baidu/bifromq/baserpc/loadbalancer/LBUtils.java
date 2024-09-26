@@ -13,32 +13,20 @@
 
 package com.baidu.bifromq.baserpc.loadbalancer;
 
+import com.google.common.collect.Lists;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 class LBUtils {
-    static class Tuple<X> {
-        final Integer weight;
-        final X x;
-
-        private Tuple(Integer weight, X x) {
-            this.weight = weight;
-            this.x = x;
-        }
-
-        static <X> Tuple of(Integer weight, X x) {
-            return new Tuple(weight, x);
-        }
-
-        @Override
-        public String toString() {
-            return String.format("weight: %d, object: %s", weight, x.toString());
-        }
+    private record WeightedValue<X>(Integer weight, X val) {
     }
 
-    static <T> List<T> toWeightedRRSequence(List<Tuple<T>> tuples) {
+    static <T> List<T> toWeightedRRSequence(Map<T, Integer> weightedValues) {
+        List<LBUtils.WeightedValue<T>> tuples = Lists.newArrayListWithCapacity(weightedValues.size());
+        weightedValues.forEach((server, weight) -> tuples.add(new WeightedValue<>(weight, server)));
         List<T> sequence = new ArrayList<>();
         int i = -1;
         int n = tuples.size();
@@ -59,7 +47,7 @@ class LBUtils {
                     }
                 }
                 if (weights.get(i) >= currentW) {
-                    sequence.add(tuples.get(i).x);
+                    sequence.add(tuples.get(i).val);
                 }
             }
         }
@@ -82,5 +70,4 @@ class LBUtils {
 
         return result;
     }
-
 }

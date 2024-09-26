@@ -14,7 +14,9 @@
 package com.baidu.bifromq.baserpc.trafficgovernor;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.proto.RPCServer;
+import com.google.common.collect.Sets;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -26,14 +28,13 @@ final class RPCServiceTrafficGovernor extends RPCServiceTrafficDirector implemen
     }
 
     @Override
-    public void assignLBGroups(String id, Set<String> groupTags) {
-        Optional<RPCServer> announced = announcedServer(id);
-        if (announced.isPresent() && (!groupTags.containsAll(announced.get().getGroupList()) ||
-            !announced.get().getGroupList().containsAll(groupTags))) {
+    public void assignLBGroups(String serverId, Set<String> groupTags) {
+        Optional<RPCServer> announced = announcedServer(serverId);
+        if (announced.isPresent() && !groupTags.equals(Sets.newHashSet(announced.get().getGroupList()))) {
             RPCServer updated = announced.get().toBuilder()
                 .clearGroup()
                 .addAllGroup(groupTags)
-                .setAnnouncedTS(System.currentTimeMillis())
+                .setAnnouncedTS(HLC.INST.get())
                 .build();
             announce(updated);
         }

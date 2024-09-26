@@ -25,6 +25,7 @@ import com.baidu.bifromq.basecrdt.core.api.ORMapOperation;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.proto.LoadAssignment;
 import com.baidu.bifromq.baserpc.proto.RPCServer;
 import com.baidu.bifromq.baserpc.proto.TrafficDirective;
@@ -67,9 +68,9 @@ abstract class RPCServiceAnnouncer {
         Optional<IORMap> crdtOpt = crdtService.get(crdtReplica.getUri());
         assert crdtOpt.isPresent();
         this.rpcServiceCRDT = crdtOpt.get();
-        Map<String, RPCServer> serverMap = buildAnnouncedServers(System.currentTimeMillis());
+        Map<String, RPCServer> serverMap = buildAnnouncedServers(HLC.INST.get());
         svrSubject = serverMap.isEmpty() ? BehaviorSubject.create() : BehaviorSubject.createDefault(serverMap);
-        tdSubject = BehaviorSubject.createDefault(buildAnnouncedTrafficDirective(System.currentTimeMillis())
+        tdSubject = BehaviorSubject.createDefault(buildAnnouncedTrafficDirective(HLC.INST.get())
             .orElse(TrafficDirective.getDefaultInstance()));
         disposable.add(rpcServiceCRDT.getORMap(SERVER_LIST_KEY)
             .inflation()
@@ -108,7 +109,7 @@ abstract class RPCServiceAnnouncer {
             .with(MVRegOperation.write(TrafficDirective.newBuilder()
                 .putAllAssignment(Maps.transformValues(trafficDirective,
                     v -> LoadAssignment.newBuilder().putAllWeightedGroup(v).build()))
-                .setAnnouncedTS(System.currentTimeMillis())
+                .setAnnouncedTS(HLC.INST.get())
                 .build().toByteString())));
     }
 
@@ -152,16 +153,14 @@ abstract class RPCServiceAnnouncer {
             IORMap.ORMapKey orMapKey = keyItr.next();
             assert orMapKey.valueType() == CausalCRDTType.mvreg;
             Optional<RPCServer> rpcServer = announcedServer(serverListORMap.getMVReg(orMapKey.key()));
-            if (rpcServer.isPresent()) {
-                announced.put(rpcServer.get().getId(), rpcServer.get());
-            }
+            rpcServer.ifPresent(server -> announced.put(server.getId(), server));
         }
         log.debug("Build service[{}]'s server list at {}:{}", serviceUniqueName, t, announced);
         return announced;
     }
 
     protected Observable<Map<String, Map<String, Integer>>> trafficDirective() {
-        return tdSubject.map(td -> Maps.transformValues(td.getAssignmentMap(), v -> v.getWeightedGroupMap()))
+        return tdSubject.map(td -> Maps.transformValues(td.getAssignmentMap(), LoadAssignment::getWeightedGroupMap))
             .observeOn(RPC_SHARED_SCHEDULER);
     }
 
@@ -187,5 +186,4 @@ abstract class RPCServiceAnnouncer {
         }
         return Optional.ofNullable(td);
     }
-
 }
