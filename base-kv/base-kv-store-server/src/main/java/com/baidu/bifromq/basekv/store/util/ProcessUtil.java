@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.store.util;
 
-import io.micrometer.common.lang.Nullable;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
 import java.lang.reflect.InvocationTargetException;
@@ -22,7 +21,47 @@ import java.util.Arrays;
 import java.util.List;
 
 public class ProcessUtil {
-    private static final ProcessCpuLoad CPU_LOAD = new ProcessCpuLoad();
+    private interface IProcessCpuLoad {
+        double get();
+    }
+
+    private static final List<String> OPERATING_SYSTEM_BEAN_CLASS_NAMES = Arrays.asList(
+        "com.ibm.lang.management.OperatingSystemMXBean", // J9
+        "com.sun.management.OperatingSystemMXBean" // HotSpot
+    );
+
+    private static final List<String> POSSIBLE_METHODS =
+        Arrays.asList("getProcessCpuLoad", "getSystemCpuLoad", "getCpuLoad");
+
+    private static final IProcessCpuLoad CPU_LOAD;
+
+    static {
+        OperatingSystemMXBean operatingSystemBean = ManagementFactory.getOperatingSystemMXBean();
+        Method method = null;
+        for (String className : OPERATING_SYSTEM_BEAN_CLASS_NAMES) {
+            try {
+                Class<?> osBeanClass = Class.forName(className);
+                // ensure the Bean we have is actually an instance of the interface
+                osBeanClass.cast(operatingSystemBean);
+                method = findMethod(osBeanClass);
+                break;
+            } catch (Throwable ignore) {
+            }
+        }
+        if (method != null) {
+            IProcessCpuLoad finalMethod = null;
+            try {
+                double load = (double) method.invoke(operatingSystemBean);
+                finalMethod = new ProcessCpuLoad(operatingSystemBean, method);
+            } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+                finalMethod = () -> Double.NaN;
+            } finally {
+                CPU_LOAD = finalMethod;
+            }
+        } else {
+            CPU_LOAD = () -> Double.NaN;
+        }
+    }
 
     public static double cpuLoad() {
         return CPU_LOAD.get();
@@ -32,51 +71,34 @@ public class ProcessUtil {
         return ManagementFactory.getRuntimeMXBean().getName();
     }
 
-    private static class ProcessCpuLoad {
-        private static final List<String> OPERATING_SYSTEM_BEAN_CLASS_NAMES = Arrays.asList(
-            "com.ibm.lang.management.OperatingSystemMXBean", // J9
-            "com.sun.management.OperatingSystemMXBean" // HotSpot
-        );
-
-        private static final List<String> POSSIBLE_METHODS =
-            Arrays.asList("getProcessCpuLoad", "getSystemCpuLoad", "getCpuLoad");
+    private static class ProcessCpuLoad implements IProcessCpuLoad {
         private final OperatingSystemMXBean operatingSystemBean;
 
-        @Nullable
         private final Method cpuUsageMethod;
 
-        ProcessCpuLoad() {
-            this.operatingSystemBean = ManagementFactory.getOperatingSystemMXBean();
-            Method method = null;
-            for (String className : OPERATING_SYSTEM_BEAN_CLASS_NAMES) {
-                try {
-                    Class<?> osBeanClass = Class.forName(className);
-                    // ensure the Bean we have is actually an instance of the interface
-                    osBeanClass.cast(operatingSystemBean);
-                    method = findMethod(osBeanClass);
-                    break;
-                } catch (Throwable ignore) {
-                }
-            }
-            this.cpuUsageMethod = method;
+        private ProcessCpuLoad(OperatingSystemMXBean operatingSystemBean, Method cpuUsageMethod) {
+            this.operatingSystemBean = operatingSystemBean;
+            this.cpuUsageMethod = cpuUsageMethod;
         }
 
-        private double get() {
+
+        public double get() {
             try {
-                return cpuUsageMethod != null ? (double) cpuUsageMethod.invoke(operatingSystemBean) : Double.NaN;
+                double load = (double) cpuUsageMethod.invoke(operatingSystemBean);
+                return load > 1.0 ? load / 100 : load;
             } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
                 return Double.NaN;
             }
         }
+    }
 
-        private Method findMethod(Class<?> clazz) {
-            for (String methodName : POSSIBLE_METHODS) {
-                try {
-                    return clazz.getMethod(methodName);
-                } catch (ClassCastException | NoSuchMethodException | SecurityException e) {
-                }
+    private static Method findMethod(Class<?> clazz) {
+        for (String methodName : POSSIBLE_METHODS) {
+            try {
+                return clazz.getMethod(methodName);
+            } catch (ClassCastException | NoSuchMethodException | SecurityException e) {
             }
-            return null;
         }
+        return null;
     }
 }

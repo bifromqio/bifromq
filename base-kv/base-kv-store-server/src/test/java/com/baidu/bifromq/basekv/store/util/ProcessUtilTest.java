@@ -22,6 +22,6 @@ public class ProcessUtilTest extends MockableTest {
     @Test
     public void cpuLoad() {
         double cpuLoad = ProcessUtil.cpuLoad();
-        assertTrue((cpuLoad >= 0.0 && cpuLoad < 1.0) || Double.isNaN(cpuLoad));
+        assertTrue((cpuLoad >= 0.0 && cpuLoad <= 1.0) || Double.isNaN(cpuLoad));
     }
 }
