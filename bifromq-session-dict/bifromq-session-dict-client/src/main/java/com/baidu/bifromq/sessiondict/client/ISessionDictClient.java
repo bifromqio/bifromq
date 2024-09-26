@@ -32,7 +32,7 @@ public interface ISessionDictClient extends IConnectable {
         return new SessionDictClientBuilder();
     }
 
-    ISessionRegister reg(ClientInfo owner, Consumer<ClientInfo> onKick);
+    ISessionRegistration reg(ClientInfo owner, Consumer<ClientInfo> onKick);
 
     CompletableFuture<KillReply> kill(long reqId, String tenantId, String userId, String clientId, ClientInfo killer);
 

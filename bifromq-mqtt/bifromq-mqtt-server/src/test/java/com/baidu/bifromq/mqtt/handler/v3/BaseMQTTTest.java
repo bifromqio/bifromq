@@ -86,7 +86,7 @@ import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
-import com.baidu.bifromq.sessiondict.client.ISessionRegister;
+import com.baidu.bifromq.sessiondict.client.ISessionRegistration;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
@@ -135,7 +135,7 @@ public abstract class BaseMQTTTest {
     @Mock
     protected ISessionDictClient sessionDictClient;
     @Mock
-    protected ISessionRegister sessionRegister;
+    protected ISessionRegistration sessionRegister;
     @Mock
     protected IInboxClient.IInboxReader inboxReader;
 
@@ -376,7 +376,7 @@ public abstract class BaseMQTTTest {
 
     protected void mockSessionReg() {
         when(sessionDictClient.reg(any(), any())).thenAnswer(
-            (Answer<ISessionRegister>) invocation -> {
+            (Answer<ISessionRegistration>) invocation -> {
                 onKick.set(invocation.getArgument(1));
                 return sessionRegister;
             });

@@ -54,7 +54,7 @@ public class SessionRegisterTest {
     private IRPCClient rpcClient;
     @Mock
     private IRPCClient.IMessageStream<Quit, Session> messageStream;
-    private SessionRegPipeline regPipeline;
+    private SessionRegister regPipeline;
     private final String tenantId = "tenantId";
     private final String registryKey = "registryKey";
     private final String userId = "userId";
@@ -70,13 +70,13 @@ public class SessionRegisterTest {
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
-        when(rpcClient.createMessageStream(eq(""), any(), eq(registryKey), anyMap(),
+        when(rpcClient.createMessageStream(eq(tenantId), any(), eq(registryKey), anyMap(),
             eq(SessionDictServiceGrpc.getDictMethod()))).thenReturn(messageStream);
         when(messageStream.msg()).thenAnswer((Answer<Observable<Quit>>) invocation -> {
             quitSubject.set(PublishSubject.create());
             return quitSubject.get();
         });
-        regPipeline = new SessionRegPipeline(registryKey, rpcClient);
+        regPipeline = new SessionRegister(tenantId, registryKey, rpcClient);
     }
 
     @AfterMethod
@@ -87,7 +87,7 @@ public class SessionRegisterTest {
 
     @Test
     public void regAfterInit() {
-        new SessionRegister(owner, onKick, regPipeline);
+        new SessionRegistration(owner, onKick, regPipeline);
         ArgumentCaptor<Session> argCaptor = ArgumentCaptor.forClass(Session.class);
         verify(messageStream).ack(argCaptor.capture());
         assertEquals(argCaptor.getValue().getOwner(), owner);
@@ -96,7 +96,7 @@ public class SessionRegisterTest {
 
     @Test
     public void reRegAfterError() {
-        new SessionRegister(owner, onKick, regPipeline);
+        new SessionRegistration(owner, onKick, regPipeline);
         quitSubject.get().onError(new RuntimeException("Test Exception"));
         ArgumentCaptor<Session> argCaptor = ArgumentCaptor.forClass(Session.class);
         verify(messageStream, times(2)).ack(argCaptor.capture());
@@ -106,7 +106,7 @@ public class SessionRegisterTest {
 
     @Test
     public void reRegAfterComplete() {
-        new SessionRegister(owner, onKick, regPipeline);
+        new SessionRegistration(owner, onKick, regPipeline);
         quitSubject.get().onComplete();
         ArgumentCaptor<Session> argCaptor = ArgumentCaptor.forClass(Session.class);
         verify(messageStream, times(2)).ack(argCaptor.capture());
@@ -116,7 +116,7 @@ public class SessionRegisterTest {
 
     @Test
     public void quitAndStop() {
-        new SessionRegister(owner, onKick, regPipeline);
+        new SessionRegistration(owner, onKick, regPipeline);
         Quit quit = Quit.newBuilder()
             .setReqId(System.nanoTime())
             .setOwner(owner)
@@ -130,7 +130,7 @@ public class SessionRegisterTest {
 
     @Test
     public void ignoreQuit() {
-        new SessionRegister(owner, onKick, regPipeline);
+        new SessionRegistration(owner, onKick, regPipeline);
         Quit quit = Quit.newBuilder()
             .setReqId(System.nanoTime())
             .setOwner(owner.toBuilder().putMetadata(MQTT_CLIENT_ID_KEY, "FakeClient").build())
@@ -143,7 +143,7 @@ public class SessionRegisterTest {
 
     @Test
     public void stop() {
-        SessionRegister register = new SessionRegister(owner, onKick, regPipeline);
+        SessionRegistration register = new SessionRegistration(owner, onKick, regPipeline);
         register.stop();
         ArgumentCaptor<Session> sessionCaptor = ArgumentCaptor.forClass(Session.class);
         verify(messageStream, times(2)).ack(sessionCaptor.capture());
@@ -154,7 +154,8 @@ public class SessionRegisterTest {
 
     @Test
     public void registerGC() throws InterruptedException {
-        SessionRegister register = new SessionRegister(owner, onKick, new SessionRegPipeline(registryKey, rpcClient));
+        SessionRegistration register =
+            new SessionRegistration(owner, onKick, new SessionRegister(tenantId, registryKey, rpcClient));
         register.stop();
         register = null;
         System.gc();
@@ -167,7 +168,7 @@ public class SessionRegisterTest {
 
     @Test
     public void regPipelineClose() throws InterruptedException {
-        SessionRegPipeline sessionRegPipeline = new SessionRegPipeline(registryKey, rpcClient);
+        SessionRegister sessionRegPipeline = new SessionRegister(tenantId, registryKey, rpcClient);
         sessionRegPipeline.close();
         Thread.sleep(10);
         await().until(() -> {

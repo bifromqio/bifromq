@@ -13,6 +13,6 @@
 
 package com.baidu.bifromq.sessiondict.client;
 
-public interface ISessionRegister {
+public interface ISessionRegistration {
     void stop();
 }

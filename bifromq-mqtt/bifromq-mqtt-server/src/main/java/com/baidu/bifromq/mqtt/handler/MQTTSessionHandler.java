@@ -104,7 +104,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.subhandling.SubAcked;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.subhandling.UnsubAcked;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
-import com.baidu.bifromq.sessiondict.client.ISessionRegister;
+import com.baidu.bifromq.sessiondict.client.ISessionRegistration;
 import com.baidu.bifromq.sysprops.props.SanityCheckMqttUtf8String;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MQTTClientInfoConstants;
@@ -233,7 +233,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     private LWT willMessage;
     private boolean isGoAway;
     private ScheduledFuture<?> idleTimeoutTask;
-    private ISessionRegister sessionRegister;
+    private ISessionRegistration sessionRegistration;
     private long lastActiveAtNanos;
     private final LinkedHashMap<Integer, ConfirmingMessage> unconfirmedPacketIds = new LinkedHashMap<>();
     private final TreeSet<ConfirmingMessage> resendQueue;
@@ -353,7 +353,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         ChannelAttrs.trafficShaper(ctx).setMaxWriteSize(settings.outboundBandwidth);
         ChannelAttrs.setMaxPayload(settings.maxPacketSize, ctx);
         sessionCtx.localSessionRegistry.add(channelId(), this);
-        sessionRegister = ChannelAttrs.mqttSessionContext(ctx).sessionDictClient
+        sessionRegistration = ChannelAttrs.mqttSessionContext(ctx).sessionDictClient
             .reg(clientInfo, kicker -> ctx.executor().execute(() -> handleProtocolResponse(helper().onKick(kicker))));
         lastActiveAtNanos = sessionCtx.nanoTime();
         idleTimeoutTask = ctx.executor()
@@ -375,7 +375,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         }
         Sets.newHashSet(fgTasks).forEach(t -> t.cancel(true));
         sessionCtx.localSessionRegistry.remove(channelId(), this);
-        sessionRegister.stop();
+        sessionRegistration.stop();
         tenantMeter.recordCount(MqttDisconnectCount);
         memUsage.addAndGet(-estMemSize());
         if (!isGoAway) {

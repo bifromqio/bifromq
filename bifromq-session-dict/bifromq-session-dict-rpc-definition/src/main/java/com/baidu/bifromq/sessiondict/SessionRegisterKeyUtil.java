@@ -24,15 +24,16 @@ public class SessionRegisterKeyUtil {
     private static final int SESSION_REGISTER_NUM = SessionRegisterNumber.INSTANCE.get();
 
     public static String toRegisterKey(ClientInfo owner) {
-        return toRegisterKey(owner.getTenantId(), owner.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),
+        return toRegisterKey(owner.getTenantId(),
+            owner.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),
             owner.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""));
     }
 
     public static String toRegisterKey(String tenantId, String userId, String clientId) {
-        int key = Objects.hash(tenantId, userId, clientId) % SESSION_REGISTER_NUM;
+        int key = Objects.hash(userId, clientId) % SESSION_REGISTER_NUM;
         if (key < 0) {
             key += SESSION_REGISTER_NUM;
         }
-        return Integer.toString(key);
+        return tenantId + key;
     }
 }

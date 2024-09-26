@@ -85,7 +85,7 @@ import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
-import com.baidu.bifromq.sessiondict.client.ISessionRegister;
+import com.baidu.bifromq.sessiondict.client.ISessionRegistration;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
@@ -128,7 +128,7 @@ public class BaseSessionHandlerTest extends MockableTest {
     @Mock
     protected ILocalSessionRegistry localSessionRegistry;
     @Mock
-    protected ISessionRegister sessionRegister;
+    protected ISessionRegistration sessionRegister;
     @Mock
     protected IAuthProvider authProvider;
     @Mock
@@ -469,7 +469,7 @@ public class BaseSessionHandlerTest extends MockableTest {
 
     protected void mockSessionReg() {
         when(sessionDictClient.reg(any(), any())).thenAnswer(
-            (Answer<ISessionRegister>) invocation -> {
+            (Answer<ISessionRegistration>) invocation -> {
                 onKick.set(invocation.getArgument(1));
                 return sessionRegister;
             });

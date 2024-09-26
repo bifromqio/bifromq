@@ -41,16 +41,20 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 final class SessionDictClient implements ISessionDictClient {
+
+    private record ManagerCacheKey(String tenantId, String registerKey) {
+    }
+
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final IRPCClient rpcClient;
-    private final LoadingCache<String, SessionRegPipeline> regPipeline;
+    private final LoadingCache<ManagerCacheKey, SessionRegister> tenantSessionRegisterManagers;
 
     SessionDictClient(IRPCClient rpcClient) {
         this.rpcClient = rpcClient;
-        regPipeline = Caffeine.newBuilder()
+        tenantSessionRegisterManagers = Caffeine.newBuilder()
             .weakValues()
             .executor(MoreExecutors.directExecutor())
-            .build(registerKey -> new SessionRegPipeline(registerKey, rpcClient));
+            .build(key -> new SessionRegister(key.tenantId, key.registerKey, rpcClient));
     }
 
     @Override
@@ -59,8 +63,10 @@ final class SessionDictClient implements ISessionDictClient {
     }
 
     @Override
-    public ISessionRegister reg(ClientInfo owner, Consumer<ClientInfo> onKick) {
-        return new SessionRegister(owner, onKick, regPipeline.get(SessionRegisterKeyUtil.toRegisterKey(owner)));
+    public ISessionRegistration reg(ClientInfo owner, Consumer<ClientInfo> onKick) {
+        return new SessionRegistration(owner, onKick,
+            tenantSessionRegisterManagers.get(
+                new ManagerCacheKey(owner.getTenantId(), SessionRegisterKeyUtil.toRegisterKey(owner))));
     }
 
     @Override
@@ -170,8 +176,8 @@ final class SessionDictClient implements ISessionDictClient {
     public void stop() {
         if (closed.compareAndSet(false, true)) {
             log.info("Stopping session dict client");
-            regPipeline.asMap().forEach((k, v) -> v.close());
-            regPipeline.invalidateAll();
+            tenantSessionRegisterManagers.asMap().forEach((k, v) -> v.close());
+            tenantSessionRegisterManagers.invalidateAll();
             log.debug("Stopping rpc client");
             rpcClient.stop();
             log.info("Session dict client stopped");

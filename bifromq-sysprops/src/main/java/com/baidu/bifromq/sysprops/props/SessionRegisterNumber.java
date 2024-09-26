@@ -23,6 +23,6 @@ public class SessionRegisterNumber extends BifroMQSysProp<Integer, IntegerParser
     public static final SessionRegisterNumber INSTANCE = new SessionRegisterNumber();
 
     private SessionRegisterNumber() {
-        super("session_register_num", 1000, IntegerParser.POSITIVE);
+        super("session_register_num", 10, IntegerParser.POSITIVE);
     }
 }
