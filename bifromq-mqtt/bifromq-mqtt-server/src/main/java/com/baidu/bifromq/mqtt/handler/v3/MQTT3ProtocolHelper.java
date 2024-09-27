@@ -38,6 +38,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Malfo
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.MalformedTopicFilter;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.NoPubPermission;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Redirect;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ServerBusy;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.TooLargeSubscription;
@@ -68,6 +69,7 @@ import io.netty.handler.codec.mqtt.MqttUnsubscribeMessage;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import javax.annotation.Nullable;
 import lombok.AllArgsConstructor;
 
 @AllArgsConstructor
@@ -274,8 +276,16 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public ProtocolResponse onKick(ClientInfo kicker) {
-        return goAwayNow(getLocal(Kicked.class).kicker(kicker).clientInfo(clientInfo));
+    public ProtocolResponse onKick(ClientInfo killer) {
+        return goAwayNow(getLocal(Kicked.class).kicker(killer).clientInfo(clientInfo));
+    }
+
+    @Override
+    public ProtocolResponse onRedirect(boolean isPermanent, @Nullable String serverReference) {
+        return goAwayNow(getLocal(Redirect.class)
+            .isPermanent(isPermanent)
+            .serverReference(serverReference)
+            .clientInfo(clientInfo));
     }
 
     @Override

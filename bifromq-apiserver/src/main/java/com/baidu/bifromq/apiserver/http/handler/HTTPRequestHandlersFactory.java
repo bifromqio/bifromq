@@ -33,7 +33,7 @@ public class HTTPRequestHandlersFactory implements IHTTPRequestHandlersFactory {
                                       IRetainClient retainClient,
                                       ISettingProvider settingProvider) {
         register(new HTTPGetSessionInfoHandler(sessionDictClient));
-        register(new HTTPKickHandler(sessionDictClient));
+        register(new HTTPKillHandler(sessionDictClient));
         register(new HTTPRetainHandler(retainClient, settingProvider));
         register(new HTTPExpireRetainHandler(retainClient));
         register(new HTTPPubHandler(distClient, settingProvider));

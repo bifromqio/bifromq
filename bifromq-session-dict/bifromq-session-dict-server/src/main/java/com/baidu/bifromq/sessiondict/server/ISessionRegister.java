@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.sessiondict.server;
 
+import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
 import com.baidu.bifromq.type.ClientInfo;
 import java.util.Comparator;
 
@@ -28,7 +29,10 @@ public interface ISessionRegister {
         void on(ClientInfo owner, boolean reg, ISessionRegister register);
     }
 
-    boolean kick(String tenantId, ClientKey clientKey, ClientInfo kicker);
+    boolean kick(String tenantId,
+                 ClientKey clientKey,
+                 ClientInfo kicker,
+                 ServerRedirection serverRedirection);
 
     ClientInfo owner(String tenantId, ClientKey clientKey);
 

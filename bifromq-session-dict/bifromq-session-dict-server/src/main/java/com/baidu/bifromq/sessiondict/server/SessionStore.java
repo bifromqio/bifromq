@@ -24,6 +24,7 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION_TYPE_T_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 
+import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
 import com.baidu.bifromq.type.ClientInfo;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -33,6 +34,9 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class SessionStore {
+    private static final ServerRedirection NO_MOVE =
+        ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build();
+
     private record SessionCollection(AtomicInteger persistentSessions,
                                      NavigableMap<ISessionRegister.ClientKey, ISessionRegister> clients) {
         static final SessionCollection EMPTY =
@@ -60,7 +64,7 @@ public class SessionStore {
         }
         if (prevRegister != null) {
             // kick the session registered via previous register
-            prevRegister.kick(tenantId, clientKey, sessionOwner);
+            prevRegister.kick(tenantId, clientKey, sessionOwner, NO_MOVE);
         }
     }
 

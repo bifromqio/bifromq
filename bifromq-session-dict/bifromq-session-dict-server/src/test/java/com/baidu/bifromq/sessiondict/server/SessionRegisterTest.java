@@ -32,6 +32,7 @@ import com.baidu.bifromq.baserpc.RPCContext;
 import com.baidu.bifromq.baserpc.metrics.IRPCMeter;
 import com.baidu.bifromq.baserpc.metrics.RPCMetric;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
+import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
 import com.baidu.bifromq.sessiondict.rpc.proto.Session;
 import com.baidu.bifromq.type.ClientInfo;
 import io.grpc.Context;
@@ -217,15 +218,45 @@ public class SessionRegisterTest {
                 .build());
             verify(listener).on(eq(owner), eq(true), eq(register));
             reset(listener);
-            assertTrue(register.kick(tenantId, new ISessionRegister.ClientKey(userId, clientId), killer));
+            assertTrue(register.kick(tenantId, new ISessionRegister.ClientKey(userId, clientId), killer,
+                ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build()));
             ArgumentCaptor<Quit> quitCaptor = ArgumentCaptor.forClass(Quit.class);
             verify(responseObserver).onNext(quitCaptor.capture());
             verify(listener).on(eq(owner), eq(false), eq(register));
             Quit quit = quitCaptor.getValue();
             assertEquals(quit.getOwner(), owner);
             assertEquals(quit.getKiller(), killer);
+            assertEquals(quit.getServerRedirection().getType(), ServerRedirection.Type.NO_MOVE);
         });
     }
+
+    @Test
+    public void serverRedirect() {
+        test(() -> {
+            SessionRegister register = new SessionRegister(listener, responseObserver);
+            register.onNext(Session.newBuilder()
+                .setReqId(System.nanoTime())
+                .setOwner(owner)
+                .setKeep(true)
+                .build());
+            verify(listener).on(eq(owner), eq(true), eq(register));
+            reset(listener);
+            ServerRedirection serverRedirection = ServerRedirection.newBuilder()
+                .setType(ServerRedirection.Type.PERMANENT_MOVE)
+                .setServerReference("serverId")
+                .build();
+            assertTrue(
+                register.kick(tenantId, new ISessionRegister.ClientKey(userId, clientId), killer, serverRedirection));
+            ArgumentCaptor<Quit> quitCaptor = ArgumentCaptor.forClass(Quit.class);
+            verify(responseObserver).onNext(quitCaptor.capture());
+            verify(listener).on(eq(owner), eq(false), eq(register));
+            Quit quit = quitCaptor.getValue();
+            assertEquals(quit.getOwner(), owner);
+            assertEquals(quit.getKiller(), killer);
+            assertEquals(serverRedirection, quit.getServerRedirection());
+        });
+    }
+
 
     @Test
     public void ignoreKick() {
@@ -236,7 +267,8 @@ public class SessionRegisterTest {
                 .setOwner(owner)
                 .setKeep(true)
                 .build());
-            assertFalse(register.kick(tenantId, new ISessionRegister.ClientKey(userId, "FakeClientId"), killer));
+            assertFalse(register.kick(tenantId, new ISessionRegister.ClientKey(userId, "FakeClientId"), killer,
+                ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build()));
             verify(responseObserver, times(0)).onNext(any());
         });
     }
@@ -252,7 +284,7 @@ public class SessionRegisterTest {
                 .build());
             assertFalse(register.kick(tenantId,
                 new ISessionRegister.ClientKey(userId, owner.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, clientId)),
-                owner));
+                owner, ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build()));
             verify(responseObserver, times(0)).onNext(any());
         });
     }

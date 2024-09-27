@@ -89,8 +89,7 @@ public final class HTTPRetainHandler implements IHTTPRequestHandler {
             int expirySeconds = Optional.ofNullable(getHeader(HEADER_EXPIRY_SECONDS, req, false)).map(Integer::parseInt)
                 .orElse(Integer.MAX_VALUE);
             Map<String, String> clientMeta = getClientMeta(req);
-            log.trace("Handling http retain request: reqId={}, tenantId={}, topic={}, clientType={}, clientMeta={}",
-                reqId, tenantId, topic, clientType, clientMeta);
+            log.trace("Handling http retain request: {}", req);
             boolean retainEnabled = settingProvider.provide(Setting.RetainEnabled, tenantId);
             if (!retainEnabled) {
                 return CompletableFuture.completedFuture(

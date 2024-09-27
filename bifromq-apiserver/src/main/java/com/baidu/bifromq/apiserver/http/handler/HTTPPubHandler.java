@@ -27,8 +27,8 @@ import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.apiserver.utils.TopicUtil;
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
@@ -95,8 +95,7 @@ public final class HTTPPubHandler implements IHTTPRequestHandler {
             int expirySeconds = Optional.ofNullable(getHeader(HEADER_EXPIRY_SECONDS, req, false)).map(Integer::parseInt)
                 .orElse(Integer.MAX_VALUE);
             Map<String, String> clientMeta = getClientMeta(req);
-            log.trace("Handling http pub request: reqId={}, tenantId={}, topic={}, clientType={}, clientMeta={}",
-                reqId, tenantId, topic, clientType, clientMeta);
+            log.trace("Handling http pub request: {}", req);
             if (!TopicUtil.checkTopicFilter(topic, tenantId, settingProvider)) {
                 return CompletableFuture.completedFuture(
                     new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN, UNACCEPTED_TOPIC));

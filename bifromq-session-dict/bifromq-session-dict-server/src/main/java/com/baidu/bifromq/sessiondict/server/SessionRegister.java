@@ -18,6 +18,7 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 
 import com.baidu.bifromq.baserpc.AckStream;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
+import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
 import com.baidu.bifromq.sessiondict.rpc.proto.Session;
 import com.baidu.bifromq.type.ClientInfo;
 import io.grpc.stub.StreamObserver;
@@ -32,6 +33,8 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class SessionRegister extends AckStream<Session, Quit> implements ISessionRegister {
+    private static final ServerRedirection NO_MOVE =
+        ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build();
     // keep the session registered via this stream
     private final Map<String, Map<ClientKey, ClientInfo>> registeredSession = new ConcurrentHashMap<>();
     private final IRegistrationListener regListener;
@@ -50,7 +53,7 @@ class SessionRegister extends AckStream<Session, Quit> implements ISessionRegist
                     owner.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""));
                 if (session.getKeep()) {
                     try {
-                        KickResult kickResult = doKick(tenantId, clientKey, owner);
+                        KickResult kickResult = doKick(tenantId, clientKey, owner, NO_MOVE);
                         if (kickResult == KickResult.IGNORED_SELF_KICK) {
                             return;
                         }
@@ -86,15 +89,18 @@ class SessionRegister extends AckStream<Session, Quit> implements ISessionRegist
     }
 
     @Override
-    public boolean kick(String tenantId, ClientKey clientKey, ClientInfo kicker) {
-        return doKick(tenantId, clientKey, kicker) == KickResult.KICKED;
+    public boolean kick(String tenantId, ClientKey clientKey, ClientInfo kicker, ServerRedirection serverRedirection) {
+        return doKick(tenantId, clientKey, kicker, serverRedirection) == KickResult.KICKED;
     }
 
     private enum KickResult {
         KICKED, NOT_FOUND, IGNORED_SELF_KICK
     }
 
-    private KickResult doKick(String tenantId, ClientKey clientKey, ClientInfo kicker) {
+    private KickResult doKick(String tenantId,
+                              ClientKey clientKey,
+                              ClientInfo kicker,
+                              ServerRedirection serverRedirection) {
         AtomicReference<KickResult> result = new AtomicReference<>(KickResult.NOT_FOUND);
         AtomicReference<ClientInfo> toKick = new AtomicReference<>();
         registeredSession.computeIfPresent(tenantId, (k, v) -> {
@@ -118,7 +124,7 @@ class SessionRegister extends AckStream<Session, Quit> implements ISessionRegist
                 .setReqId(System.nanoTime())
                 .setOwner(toKick.get())
                 .setKiller(kicker)
-                .build());
+                .setServerRedirection(serverRedirection).build());
             regListener.on(toKick.get(), false, this);
         }
         return result.get();

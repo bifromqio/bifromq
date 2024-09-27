@@ -39,7 +39,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import java.util.concurrent.CompletableFuture;
 import javax.ws.rs.GET;
-import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -75,8 +74,7 @@ public final class HTTPGetSessionInfoHandler implements IHTTPRequestHandler {
         try {
             String userId = getHeader(HEADER_USER_ID, req, true);
             String clientId = getHeader(HEADER_CLIENT_ID, req, true);
-            log.trace("Handling http get session info request: reqId={}, tenantId={}, userId={}, clientId={}",
-                reqId, tenantId, userId, clientId);
+            log.trace("Handling http get session info request: {}", req);
             return sessionDictClient.get(GetRequest.newBuilder()
                     .setReqId(reqId)
                     .setTenantId(tenantId)

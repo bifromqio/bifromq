@@ -21,6 +21,7 @@ import com.baidu.bifromq.sessiondict.rpc.proto.KillAllReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillAllRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillRequest;
+import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
 import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictServiceGrpc;
 import com.baidu.bifromq.sessiondict.rpc.proto.SubReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.SubRequest;
@@ -35,7 +36,6 @@ import io.reactivex.rxjava3.core.Observable;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 
@@ -63,8 +63,8 @@ final class SessionDictClient implements ISessionDictClient {
     }
 
     @Override
-    public ISessionRegistration reg(ClientInfo owner, Consumer<ClientInfo> onKick) {
-        return new SessionRegistration(owner, onKick,
+    public ISessionRegistration reg(ClientInfo owner, IKillListener killListener) {
+        return new SessionRegistration(owner, killListener,
             tenantSessionRegisterManagers.get(
                 new ManagerCacheKey(owner.getTenantId(), SessionRegisterKeyUtil.toRegisterKey(owner))));
     }
@@ -74,13 +74,16 @@ final class SessionDictClient implements ISessionDictClient {
                                              String tenantId,
                                              String userId,
                                              String clientId,
-                                             ClientInfo killer) {
+                                             ClientInfo killer,
+                                             ServerRedirection redirection) {
         return rpcClient.invoke(tenantId, null, KillRequest.newBuilder()
                 .setReqId(reqId)
                 .setTenantId(tenantId)
                 .setUserId(userId)
                 .setClientId(clientId)
-                .setKiller(killer).build(), SessionDictServiceGrpc.getKillMethod())
+                .setKiller(killer)
+                .setServerRedirection(redirection)
+                .build(), SessionDictServiceGrpc.getKillMethod())
             .exceptionally(e -> KillReply.newBuilder()
                 .setReqId(reqId)
                 .setResult(KillReply.Result.ERROR)
@@ -91,11 +94,13 @@ final class SessionDictClient implements ISessionDictClient {
     public CompletableFuture<KillAllReply> killAll(long reqId,
                                                    String tenantId,
                                                    @Nullable String userId,
-                                                   ClientInfo killer) {
+                                                   ClientInfo killer,
+                                                   ServerRedirection redirection) {
         KillAllRequest.Builder reqBuilder = KillAllRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
-            .setKiller(killer);
+            .setKiller(killer)
+            .setServerRedirection(redirection);
         if (!Strings.isNullOrEmpty(userId)) {
             reqBuilder.setUserId(userId);
         }

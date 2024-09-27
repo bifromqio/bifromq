@@ -139,7 +139,7 @@ public abstract class BaseMQTTTest {
     @Mock
     protected IInboxClient.IInboxReader inboxReader;
 
-    protected AtomicReference<Consumer<ClientInfo>> onKick = new AtomicReference<>();
+    protected AtomicReference<ISessionDictClient.IKillListener> onKill = new AtomicReference<>();
     protected TestTicker testTicker;
     protected MQTTSessionContext sessionContext;
     protected EmbeddedChannel channel;
@@ -377,7 +377,7 @@ public abstract class BaseMQTTTest {
     protected void mockSessionReg() {
         when(sessionDictClient.reg(any(), any())).thenAnswer(
             (Answer<ISessionRegistration>) invocation -> {
-                onKick.set(invocation.getArgument(1));
+                onKill.set(invocation.getArgument(1));
                 return sessionRegister;
             });
     }

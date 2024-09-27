@@ -46,6 +46,7 @@ public enum EventType {
     INVALID_TOPIC_FILTER,
     MALFORMED_TOPIC_FILTER, // malformed utf8
     KICKED,
+    SERVER_REDIRECTED, // server redirection
     RE_AUTH_FAILED,
     NO_PUB_PERMISSION,
     PROTOCOL_VIOLATION,

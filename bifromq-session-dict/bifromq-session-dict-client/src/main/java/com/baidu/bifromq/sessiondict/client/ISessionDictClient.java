@@ -18,25 +18,35 @@ import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillAllReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
+import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
 import com.baidu.bifromq.sessiondict.rpc.proto.SubReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.SubRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.UnsubReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.type.ClientInfo;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import javax.annotation.Nullable;
 
 public interface ISessionDictClient extends IConnectable {
+
+    interface IKillListener {
+        void onKill(ClientInfo killer, ServerRedirection redirection);
+    }
+
     static SessionDictClientBuilder newBuilder() {
         return new SessionDictClientBuilder();
     }
 
-    ISessionRegistration reg(ClientInfo owner, Consumer<ClientInfo> onKick);
+    ISessionRegistration reg(ClientInfo owner, IKillListener killListener);
 
-    CompletableFuture<KillReply> kill(long reqId, String tenantId, String userId, String clientId, ClientInfo killer);
+    CompletableFuture<KillReply> kill(long reqId, String tenantId, String userId, String clientId, ClientInfo killer,
+                                      ServerRedirection redirection);
 
-    CompletableFuture<KillAllReply> killAll(long reqId, String tenantId, @Nullable String userId, ClientInfo killer);
+    CompletableFuture<KillAllReply> killAll(long reqId,
+                                            String tenantId,
+                                            @Nullable String userId,
+                                            ClientInfo killer,
+                                            ServerRedirection redirection);
 
     CompletableFuture<GetReply> get(GetRequest request);
 

@@ -25,6 +25,7 @@ import static org.testng.Assert.assertFalse;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillAllReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
+import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
 import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictServiceGrpc;
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.common.collect.Maps;
@@ -66,7 +67,8 @@ public class KillTest {
         SessionDictClient client = new SessionDictClient(rpcClient);
         String tenantId = "tenantId";
         ClientInfo killer = ClientInfo.newBuilder().setTenantId(tenantId).setType("abc").build();
-        CompletableFuture<KillAllReply> reply = client.killAll(1, tenantId, null, killer);
+        CompletableFuture<KillAllReply> reply = client.killAll(1, tenantId, null, killer,
+            ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build());
         assertFalse(reply.isDone());
         ArgumentCaptor<String> serverIdCaptor = ArgumentCaptor.forClass(String.class);
         verify(rpcClient, times(3)).invoke(
@@ -98,7 +100,8 @@ public class KillTest {
         SessionDictClient client = new SessionDictClient(rpcClient);
         String tenantId = "tenantId";
         ClientInfo killer = ClientInfo.newBuilder().setTenantId(tenantId).setType("abc").build();
-        CompletableFuture<KillAllReply> reply = client.killAll(1, tenantId, null, killer);
+        CompletableFuture<KillAllReply> reply = client.killAll(1, tenantId, null, killer,
+            ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build());
         assertEquals(reply.join().getResult(), KillAllReply.Result.ERROR);
     }
 
@@ -124,7 +127,8 @@ public class KillTest {
         SessionDictClient client = new SessionDictClient(rpcClient);
         String tenantId = "tenantId";
         ClientInfo killer = ClientInfo.newBuilder().setTenantId(tenantId).setType("abc").build();
-        CompletableFuture<KillAllReply> reply = client.killAll(1, tenantId, null, killer);
+        CompletableFuture<KillAllReply> reply = client.killAll(1, tenantId, null, killer,
+            ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build());
         assertEquals(reply.join().getResult(), KillAllReply.Result.OK);
     }
 
@@ -148,7 +152,8 @@ public class KillTest {
         SessionDictClient client = new SessionDictClient(rpcClient);
         String tenantId = "tenantId";
         ClientInfo killer = ClientInfo.newBuilder().setTenantId(tenantId).setType("abc").build();
-        CompletableFuture<KillAllReply> reply = client.killAll(1, tenantId, null, killer);
+        CompletableFuture<KillAllReply> reply = client.killAll(1, tenantId, null, killer,
+            ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build());
         assertEquals(reply.join().getResult(), KillAllReply.Result.ERROR);
     }
 
@@ -164,7 +169,8 @@ public class KillTest {
         String tenantId = "tenantId";
         String userId = "user1";
         ClientInfo killer = ClientInfo.newBuilder().setTenantId(tenantId).setType("abc").build();
-        CompletableFuture<KillAllReply> reply = client.killAll(1, tenantId, userId, killer);
+        CompletableFuture<KillAllReply> reply = client.killAll(1, tenantId, userId, killer,
+            ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build());
         assertFalse(reply.isDone());
         ArgumentCaptor<String> serverIdCaptor = ArgumentCaptor.forClass(String.class);
         verify(rpcClient, times(3)).invoke(
@@ -189,7 +195,8 @@ public class KillTest {
         String userId = "user1";
         String clientId = "client1";
         ClientInfo killer = ClientInfo.newBuilder().setTenantId(tenantId).setType("abc").build();
-        CompletableFuture<KillReply> reply = client.kill(1, tenantId, userId, clientId, killer);
+        CompletableFuture<KillReply> reply = client.kill(1, tenantId, userId, clientId, killer,
+            ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build());
         assertFalse(reply.isDone());
         ArgumentCaptor<String> serverIdCaptor = ArgumentCaptor.forClass(String.class);
         verify(rpcClient).invoke(
@@ -216,7 +223,8 @@ public class KillTest {
         String userId = "user1";
         String clientId = "client1";
         ClientInfo killer = ClientInfo.newBuilder().setTenantId(tenantId).setType("abc").build();
-        CompletableFuture<KillReply> reply = client.kill(1, tenantId, userId, clientId, killer);
+        CompletableFuture<KillReply> reply = client.kill(1, tenantId, userId, clientId, killer,
+            ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build());
         assertEquals(reply.join().getResult(), KillReply.Result.ERROR);
     }
 }

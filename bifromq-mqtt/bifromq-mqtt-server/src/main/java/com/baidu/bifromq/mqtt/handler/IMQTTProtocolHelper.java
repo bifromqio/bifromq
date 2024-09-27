@@ -30,6 +30,7 @@ import io.netty.handler.codec.mqtt.MqttUnsubAckMessage;
 import io.netty.handler.codec.mqtt.MqttUnsubscribeMessage;
 import java.util.List;
 import java.util.Optional;
+import javax.annotation.Nullable;
 
 public interface IMQTTProtocolHelper {
     record SubTask(String topicFilter, TopicFilterOption option, UserProperties userProperties) {
@@ -76,6 +77,7 @@ public interface IMQTTProtocolHelper {
     ProtocolResponse onDisconnect();
 
     ProtocolResponse onResourceExhaustedDisconnect(TenantResourceType resourceType);
+
     ProtocolResponse respondDisconnectProtocolError();
 
     boolean isNormalDisconnect(MqttMessage message);
@@ -112,7 +114,9 @@ public interface IMQTTProtocolHelper {
 
     int clientReceiveMaximum();
 
-    ProtocolResponse onKick(ClientInfo kicker);
+    ProtocolResponse onKick(ClientInfo killer);
+
+    ProtocolResponse onRedirect(boolean isPermanent, @Nullable String serverReference);
 
     MqttPublishMessage buildMqttPubMessage(int packetId, MQTTSessionHandler.SubMessage message, boolean isDup);
 

@@ -13,19 +13,20 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
-import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
-import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
-import com.baidu.bifromq.type.ClientInfo;
-import io.netty.handler.codec.mqtt.MqttConnAckMessage;
-import io.netty.handler.codec.mqtt.MqttConnectMessage;
-import org.testng.Assert;
-import org.testng.annotations.Test;
-
 import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.KICKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_START;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_STOP;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
+
+import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
+import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
+import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
+import com.baidu.bifromq.type.ClientInfo;
+import io.netty.handler.codec.mqtt.MqttConnAckMessage;
+import io.netty.handler.codec.mqtt.MqttConnectMessage;
+import org.testng.Assert;
+import org.testng.annotations.Test;
 
 public class MQTTKickTest extends BaseMQTTTest {
 
@@ -41,7 +42,8 @@ public class MQTTKickTest extends BaseMQTTTest {
 
         // kick
 
-        onKick.get().accept(ClientInfo.newBuilder().build());
+        onKill.get().onKill(ClientInfo.newBuilder().build(),
+            ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build());
 
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());

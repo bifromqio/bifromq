@@ -105,6 +105,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.subhandling.UnsubAcked
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sessiondict.client.ISessionRegistration;
+import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
 import com.baidu.bifromq.sysprops.props.SanityCheckMqttUtf8String;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MQTTClientInfoConstants;
@@ -354,7 +355,15 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         ChannelAttrs.setMaxPayload(settings.maxPacketSize, ctx);
         sessionCtx.localSessionRegistry.add(channelId(), this);
         sessionRegistration = ChannelAttrs.mqttSessionContext(ctx).sessionDictClient
-            .reg(clientInfo, kicker -> ctx.executor().execute(() -> handleProtocolResponse(helper().onKick(kicker))));
+            .reg(clientInfo, (killer, redirection) -> {
+                if (redirection.getType() != ServerRedirection.Type.NO_MOVE) {
+                    ctx.executor().execute(() -> handleProtocolResponse(
+                        helper().onRedirect(redirection.getType() == ServerRedirection.Type.PERMANENT_MOVE,
+                            redirection.getServerReference())));
+                } else {
+                    ctx.executor().execute(() -> handleProtocolResponse(helper().onKick(killer)));
+                }
+            });
         lastActiveAtNanos = sessionCtx.nanoTime();
         idleTimeoutTask = ctx.executor()
             .scheduleAtFixedRate(this::checkIdle, idleTimeoutNanos, idleTimeoutNanos, TimeUnit.NANOSECONDS);

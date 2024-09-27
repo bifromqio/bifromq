@@ -14,27 +14,15 @@
 package com.baidu.bifromq.mqtt.handler.v3;
 
 
-import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
-import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
-import com.baidu.bifromq.plugin.eventcollector.EventType;
-import com.baidu.bifromq.type.ClientInfo;
-import io.netty.handler.codec.mqtt.MqttConnAckMessage;
-import io.netty.handler.codec.mqtt.MqttConnectMessage;
-import lombok.extern.slf4j.Slf4j;
-import org.testng.Assert;
-import org.testng.annotations.Test;
-
-import java.util.concurrent.TimeUnit;
-
 import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.IDLE;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.KICKED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_START;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_STOP;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MSG_RETAINED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MSG_RETAINED_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_ACTION_DISALLOW;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.RETAIN_MSG_CLEARED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_START;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_STOP;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.WILL_DISTED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.WILL_DIST_ERROR;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.CLEARED;
@@ -47,6 +35,18 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.testng.Assert.assertEquals;
+
+import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
+import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
+import com.baidu.bifromq.plugin.eventcollector.EventType;
+import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
+import com.baidu.bifromq.type.ClientInfo;
+import io.netty.handler.codec.mqtt.MqttConnAckMessage;
+import io.netty.handler.codec.mqtt.MqttConnectMessage;
+import java.util.concurrent.TimeUnit;
+import lombok.extern.slf4j.Slf4j;
+import org.testng.Assert;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class MQTTWillMessageTest extends BaseMQTTTest {
@@ -93,11 +93,11 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
         setupTransientSessionWithLWT(false);
         mockAuthCheck(true);
         mockDistDist(true);
-        onKick.get().accept(ClientInfo.newBuilder()
-                .setTenantId("sys")
-                .putMetadata("agent", "sys")
-                .putMetadata("clientId", clientId)
-                .build());
+        onKill.get().onKill(ClientInfo.newBuilder()
+            .setTenantId("sys")
+            .putMetadata("agent", "sys")
+            .putMetadata("clientId", clientId)
+            .build(), ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build());
         channel.runPendingTasks();
         Assert.assertFalse(channel.isActive());
         verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, KICKED, MQTT_SESSION_STOP, WILL_DISTED);

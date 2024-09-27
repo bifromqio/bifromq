@@ -20,6 +20,7 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION_TYPE_P_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_SESSION_TYPE_T_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
@@ -29,6 +30,7 @@ import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.metrics.TenantMetric;
+import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
 import com.baidu.bifromq.type.ClientInfo;
 import com.google.common.collect.Sets;
 import io.micrometer.core.instrument.Gauge;
@@ -113,7 +115,8 @@ public class SessionStoreTest {
         ISessionRegister.ClientKey clientKey = new ISessionRegister.ClientKey("userId", "clientId");
         assertSame(sessionStore.get(sessionOwner.getTenantId(), clientKey), register2);
 
-        verify(register1).kick(sessionOwner.getTenantId(), clientKey, sessionOwner);
+        verify(register1).kick(eq(sessionOwner.getTenantId()), eq(clientKey), eq(sessionOwner),
+            eq(ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build()));
     }
 
     @Test

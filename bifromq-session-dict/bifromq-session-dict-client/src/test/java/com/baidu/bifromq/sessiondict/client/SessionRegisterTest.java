@@ -19,7 +19,9 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -29,6 +31,7 @@ import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
+import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
 import com.baidu.bifromq.sessiondict.rpc.proto.Session;
 import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictServiceGrpc;
 import com.baidu.bifromq.type.ClientInfo;
@@ -36,7 +39,6 @@ import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import io.reactivex.rxjava3.subjects.Subject;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 import lombok.SneakyThrows;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -49,7 +51,7 @@ import org.testng.annotations.Test;
 public class SessionRegisterTest {
     private AutoCloseable closeable;
     @Mock
-    private Consumer<ClientInfo> onKick;
+    private ISessionDictClient.IKillListener killListener;
     @Mock
     private IRPCClient rpcClient;
     @Mock
@@ -87,7 +89,7 @@ public class SessionRegisterTest {
 
     @Test
     public void regAfterInit() {
-        new SessionRegistration(owner, onKick, regPipeline);
+        new SessionRegistration(owner, killListener, regPipeline);
         ArgumentCaptor<Session> argCaptor = ArgumentCaptor.forClass(Session.class);
         verify(messageStream).ack(argCaptor.capture());
         assertEquals(argCaptor.getValue().getOwner(), owner);
@@ -96,7 +98,7 @@ public class SessionRegisterTest {
 
     @Test
     public void reRegAfterError() {
-        new SessionRegistration(owner, onKick, regPipeline);
+        new SessionRegistration(owner, killListener, regPipeline);
         quitSubject.get().onError(new RuntimeException("Test Exception"));
         ArgumentCaptor<Session> argCaptor = ArgumentCaptor.forClass(Session.class);
         verify(messageStream, times(2)).ack(argCaptor.capture());
@@ -106,7 +108,7 @@ public class SessionRegisterTest {
 
     @Test
     public void reRegAfterComplete() {
-        new SessionRegistration(owner, onKick, regPipeline);
+        new SessionRegistration(owner, killListener, regPipeline);
         quitSubject.get().onComplete();
         ArgumentCaptor<Session> argCaptor = ArgumentCaptor.forClass(Session.class);
         verify(messageStream, times(2)).ack(argCaptor.capture());
@@ -116,7 +118,7 @@ public class SessionRegisterTest {
 
     @Test
     public void quitAndStop() {
-        new SessionRegistration(owner, onKick, regPipeline);
+        new SessionRegistration(owner, killListener, regPipeline);
         Quit quit = Quit.newBuilder()
             .setReqId(System.nanoTime())
             .setOwner(owner)
@@ -124,26 +126,27 @@ public class SessionRegisterTest {
             .build();
         quitSubject.get().onNext(quit);
         ArgumentCaptor<ClientInfo> killerCaptor = ArgumentCaptor.forClass(ClientInfo.class);
-        verify(onKick).accept(killerCaptor.capture());
+        verify(killListener).onKill(killerCaptor.capture(),
+            argThat(r -> r.getType() == ServerRedirection.Type.NO_MOVE));
         assertEquals(killerCaptor.getValue(), quit.getKiller());
     }
 
     @Test
     public void ignoreQuit() {
-        new SessionRegistration(owner, onKick, regPipeline);
+        new SessionRegistration(owner, killListener, regPipeline);
         Quit quit = Quit.newBuilder()
             .setReqId(System.nanoTime())
             .setOwner(owner.toBuilder().putMetadata(MQTT_CLIENT_ID_KEY, "FakeClient").build())
             .setKiller(ClientInfo.newBuilder().setTenantId(tenantId).setType("MockKiller").build())
             .build();
         quitSubject.get().onNext(quit);
-        verify(onKick, times(0)).accept(any());
+        verify(killListener, times(0)).onKill(any(), isNull());
         verify(messageStream, times(1)).ack(any());
     }
 
     @Test
     public void stop() {
-        SessionRegistration register = new SessionRegistration(owner, onKick, regPipeline);
+        SessionRegistration register = new SessionRegistration(owner, killListener, regPipeline);
         register.stop();
         ArgumentCaptor<Session> sessionCaptor = ArgumentCaptor.forClass(Session.class);
         verify(messageStream, times(2)).ack(sessionCaptor.capture());
@@ -155,7 +158,7 @@ public class SessionRegisterTest {
     @Test
     public void registerGC() throws InterruptedException {
         SessionRegistration register =
-            new SessionRegistration(owner, onKick, new SessionRegister(tenantId, registryKey, rpcClient));
+            new SessionRegistration(owner, killListener, new SessionRegister(tenantId, registryKey, rpcClient));
         register.stop();
         register = null;
         System.gc();

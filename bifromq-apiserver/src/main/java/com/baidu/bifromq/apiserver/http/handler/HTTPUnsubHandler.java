@@ -75,8 +75,7 @@ public final class HTTPUnsubHandler implements IHTTPRequestHandler {
             String topicFilter = getHeader(HEADER_TOPIC_FILTER, req, true);
             String userId = getHeader(HEADER_USER_ID, req, true);
             String clientId = getHeader(HEADER_CLIENT_ID, req, true);
-            log.trace("Handling http unsub request: reqId={}, tenantId={}, topicFilter={}, userId={}, " +
-                "clientId={}", reqId, tenantId, topicFilter, userId, clientId);
+            log.trace("Handling http unsub request: {}", req);
             return sessionDictClient.unsub(com.baidu.bifromq.sessiondict.rpc.proto.UnsubRequest.newBuilder()
                     .setReqId(reqId)
                     .setTenantId(tenantId)

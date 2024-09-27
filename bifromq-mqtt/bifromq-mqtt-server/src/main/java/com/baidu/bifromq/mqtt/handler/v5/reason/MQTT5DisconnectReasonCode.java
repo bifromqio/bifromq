@@ -36,7 +36,7 @@ public enum MQTT5DisconnectReasonCode {
     PayloadFormatInvalid((byte) 0x99),
     RetainNotSupported((byte) 0x9A),
     QoSNotSupported((byte) 0x9B),
-    UseAnotherServer((byte) 0x9B),
+    UseAnotherServer((byte) 0x9C),
     ServerMoved((byte) 0x9D),
     SharedSubscriptionsNotSupported((byte) 0x9E),
     ConnectionRateExceeded((byte) 0x9F),

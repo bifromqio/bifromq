@@ -48,6 +48,7 @@ import com.baidu.bifromq.retain.server.IRetainServer;
 import com.baidu.bifromq.retain.store.IRetainStore;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
+import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
 import com.baidu.bifromq.sessiondict.server.ISessionDictServer;
 import com.baidu.bifromq.type.ClientInfo;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
@@ -401,9 +402,11 @@ public abstract class MQTTTest {
 
     protected CompletableFuture<KillReply.Result> kill(String userId, String clientId) {
         return sessionDictClient.kill(System.nanoTime(), tenantId, userId, clientId, ClientInfo.newBuilder()
-            .setTenantId(tenantId)
-            .setType("Killer")
-            .build()).thenApply(KillReply::getResult);
+                    .setTenantId(tenantId)
+                    .setType("Killer")
+                    .build(),
+                ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build())
+            .thenApply(KillReply::getResult);
     }
 
     protected void doSetup(Method method) {

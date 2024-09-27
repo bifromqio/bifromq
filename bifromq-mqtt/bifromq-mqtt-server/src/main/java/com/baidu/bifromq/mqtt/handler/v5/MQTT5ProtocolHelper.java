@@ -57,6 +57,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Malfo
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.MalformedTopicFilter;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.NoPubPermission;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Redirect;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ServerBusy;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.TooLargeSubscription;
@@ -482,13 +483,24 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public ProtocolResponse onKick(ClientInfo kicker) {
+    public ProtocolResponse onKick(ClientInfo killer) {
         return farewellNow(
             MQTT5MessageBuilders.disconnect()
                 .reasonCode(MQTT5DisconnectReasonCode.SessionTakenOver)
-                .reasonString(kicker.getMetadataOrDefault(MQTT_CLIENT_ADDRESS_KEY, ""))
+                .reasonString(killer.getMetadataOrDefault(MQTT_CLIENT_ADDRESS_KEY, ""))
                 .build(),
-            getLocal(Kicked.class).kicker(kicker).clientInfo(clientInfo));
+            getLocal(Kicked.class).kicker(killer).clientInfo(clientInfo));
+    }
+
+    @Override
+    public ProtocolResponse onRedirect(boolean isPermanent, String serverReference) {
+        return farewellNow(
+            MQTT5MessageBuilders.disconnect()
+                .reasonCode(
+                    isPermanent ? MQTT5DisconnectReasonCode.ServerMoved : MQTT5DisconnectReasonCode.UseAnotherServer)
+                .serverReference(serverReference)
+                .build(),
+            getLocal(Redirect.class).isPermanent(isPermanent).clientInfo(clientInfo));
     }
 
     @Override

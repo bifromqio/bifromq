@@ -66,8 +66,7 @@ public final class HTTPExpireRetainHandler implements IHTTPRequestHandler {
                                                       @Parameter(hidden = true) FullHttpRequest req) {
         try {
             int expirySeconds = Integer.parseInt(getHeader(HEADER_EXPIRY_SECONDS, req, true));
-            log.trace("Handling http expiry request: reqId={}, tenantId={}, expirySeconds={}",
-                reqId, tenantId, expirySeconds);
+            log.trace("Handling http expire retain request: {}", req);
             ExpireAllRequest.Builder reqBuilder = ExpireAllRequest.newBuilder()
                 .setReqId(reqId)
                 .setExpirySeconds(expirySeconds)

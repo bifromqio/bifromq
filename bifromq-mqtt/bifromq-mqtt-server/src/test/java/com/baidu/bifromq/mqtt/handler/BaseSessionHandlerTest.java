@@ -166,7 +166,7 @@ public class BaseSessionHandlerTest extends MockableTest {
     protected final TestTicker testTicker = new TestTicker();
     protected Consumer<Fetched> inboxFetchConsumer;
     protected List<Integer> fetchHints = new ArrayList<>();
-    protected AtomicReference<Consumer<ClientInfo>> onKick = new AtomicReference<>();
+    protected AtomicReference<ISessionDictClient.IKillListener> onKill = new AtomicReference<>();
 
     public void setup(Method method) {
         super.setup(method);
@@ -470,7 +470,7 @@ public class BaseSessionHandlerTest extends MockableTest {
     protected void mockSessionReg() {
         when(sessionDictClient.reg(any(), any())).thenAnswer(
             (Answer<ISessionRegistration>) invocation -> {
-                onKick.set(invocation.getArgument(1));
+                onKill.set(invocation.getArgument(1));
                 return sessionRegister;
             });
     }

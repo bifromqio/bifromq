@@ -25,10 +25,21 @@ message Session {
   bool keep = 3;
 }
 
+message ServerRedirection{
+  enum Type{
+    NO_MOVE = 0;
+    PERMANENT_MOVE = 1;
+    TEMPORARY_MOVE = 2;
+  }
+  Type type = 1;
+  optional string serverReference = 2; // should be less than 65,535, valid for PERMANENT_MOVE and TEMPORARY_MOVE
+}
+
 message Quit {
   uint64  reqId = 1;
   commontype.ClientInfo owner = 2;
   commontype.ClientInfo killer = 3;
+  ServerRedirection serverRedirection = 4;
 }
 
 message KillRequest {
@@ -37,6 +48,7 @@ message KillRequest {
   string userId = 3;
   string clientId = 4;
   commontype.ClientInfo killer = 5;
+  ServerRedirection serverRedirection = 6;
 }
 
 message KillReply {
@@ -53,6 +65,7 @@ message KillAllRequest {
   string tenantId = 2;
   optional string userId = 3;
   commontype.ClientInfo killer = 4;
+  ServerRedirection serverRedirection = 5;
 }
 
 message KillAllReply {

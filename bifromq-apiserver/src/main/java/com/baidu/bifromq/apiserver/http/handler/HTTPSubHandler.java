@@ -82,8 +82,7 @@ public final class HTTPSubHandler implements IHTTPRequestHandler {
             QoS subQoS = getRequiredSubQoS(req);
             String userId = getHeader(HEADER_USER_ID, req, true);
             String clientId = getHeader(HEADER_CLIENT_ID, req, true);
-            log.trace("Handling http sub request: reqId={}, tenantId={}, topicFilter={}, subQoS={}, userId={}, " +
-                "clientId={}", reqId, tenantId, topicFilter, subQoS, userId, clientId);
+            log.trace("Handling http sub request: {}", req);
             return sessionDictClient.sub(SubRequest.newBuilder()
                     .setReqId(reqId)
                     .setTenantId(tenantId)

@@ -23,6 +23,8 @@ public enum Headers {
     HEADER_CLIENT_META_PREFIX("client_meta_"),
     HEADER_USER_ID("user_id"),
     HEADER_CLIENT_ID("client_id"),
+    HEADER_SERVER_REDIRECT("server_redirect"),
+    HEADER_SERVER_REFERENCE("server_reference"),
     HEADER_RETAIN("retain"),
     HEADER_QOS("qos"),
     HEADER_EXPIRY_SECONDS("expiry_seconds");

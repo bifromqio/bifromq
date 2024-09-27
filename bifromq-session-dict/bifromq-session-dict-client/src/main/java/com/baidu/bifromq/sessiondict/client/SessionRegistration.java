@@ -15,7 +15,6 @@ package com.baidu.bifromq.sessiondict.client;
 
 import com.baidu.bifromq.type.ClientInfo;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -28,7 +27,7 @@ class SessionRegistration implements ISessionRegistration {
     private final ClientInfo owner;
     private final SessionRegister register;
 
-    SessionRegistration(ClientInfo owner, Consumer<ClientInfo> onKick, SessionRegister register) {
+    SessionRegistration(ClientInfo owner, ISessionDictClient.IKillListener killListener, SessionRegister register) {
         this.owner = owner;
         this.register = register;
         this.state = new AtomicReference<>(State.Registered);
@@ -36,7 +35,7 @@ class SessionRegistration implements ISessionRegistration {
             if (log.isTraceEnabled()) {
                 log.trace("Received quit request:reqId={},killer={}", quit.getReqId(), quit.getKiller());
             }
-            onKick.accept(quit.getKiller());
+            killListener.onKill(quit.getKiller(), quit.getServerRedirection());
             state.set(State.Kicked);
             stop();
         });

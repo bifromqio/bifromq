@@ -25,6 +25,7 @@ import com.baidu.bifromq.sessiondict.rpc.proto.KillAllRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
+import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
 import com.baidu.bifromq.sessiondict.rpc.proto.Session;
 import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictServiceGrpc;
 import com.baidu.bifromq.sessiondict.rpc.proto.SubReply;
@@ -65,7 +66,7 @@ class SessionDictService extends SessionDictServiceGrpc.SessionDictServiceImplBa
             ISessionRegister.ClientKey clientKey =
                 new ISessionRegister.ClientKey(request.getUserId(), request.getClientId());
             try {
-                kick(tenantId, clientKey, request.getKiller());
+                kick(tenantId, clientKey, request.getKiller(), request.getServerRedirection());
                 return CompletableFuture.completedFuture(KillReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setResult(KillReply.Result.OK)
@@ -92,7 +93,8 @@ class SessionDictService extends SessionDictServiceGrpc.SessionDictServiceImplBa
             }
             try {
                 // TODO: support disconnect a constant rate
-                clientKeys.forEach(clientKey -> kick(tenantId, clientKey, request.getKiller()));
+                clientKeys.forEach(
+                    clientKey -> kick(tenantId, clientKey, request.getKiller(), request.getServerRedirection()));
                 return CompletableFuture.completedFuture(KillAllReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setResult(KillAllReply.Result.OK)
@@ -107,10 +109,13 @@ class SessionDictService extends SessionDictServiceGrpc.SessionDictServiceImplBa
         }, responseObserver);
     }
 
-    private void kick(String tenantId, ISessionRegister.ClientKey clientKey, ClientInfo killer) {
+    private void kick(String tenantId,
+                      ISessionRegister.ClientKey clientKey,
+                      ClientInfo killer,
+                      ServerRedirection serverRedirection) {
         ISessionRegister sessionRegister = sessionStore.get(tenantId, clientKey);
         if (sessionRegister != null) {
-            sessionRegister.kick(tenantId, clientKey, killer);
+            sessionRegister.kick(tenantId, clientKey, killer, serverRedirection);
         }
     }
 
