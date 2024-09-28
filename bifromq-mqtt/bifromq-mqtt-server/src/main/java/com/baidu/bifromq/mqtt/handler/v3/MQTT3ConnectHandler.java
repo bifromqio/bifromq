@@ -47,6 +47,8 @@ import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.plugin.authprovider.type.Reject;
+import com.baidu.bifromq.plugin.clientbalancer.IClientBalancer;
+import com.baidu.bifromq.plugin.clientbalancer.Redirection;
 import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.AuthError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.IdentifierRejected;
@@ -58,6 +60,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.Unauthen
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InboxTransientError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InvalidTopic;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Redirect;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.sysprops.props.MaxMqtt3ClientIdLength;
 import com.baidu.bifromq.type.ClientInfo;
@@ -85,6 +88,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
     public static final String NAME = "MQTT3ConnectHandler";
     private static final int MAX_CLIENT_ID_LEN = MaxMqtt3ClientIdLength.INSTANCE.get();
     private ChannelHandlerContext ctx;
+    private IClientBalancer clientBalancer;
     private IAuthProvider authProvider;
 
     @Override
@@ -92,6 +96,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
         super.handlerAdded(ctx);
         this.ctx = ctx;
         authProvider = ChannelAttrs.mqttSessionContext(ctx).authProvider(ctx);
+        clientBalancer = ChannelAttrs.mqttSessionContext(ctx).clientBalancer;
     }
 
     @Override
@@ -271,6 +276,19 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
             }
         }
         return null;
+    }
+
+    @Override
+    protected GoAway needRedirect(ClientInfo clientInfo) {
+        Optional<Redirection> redirection = clientBalancer.needRedirect(clientInfo);
+        return redirection.map(value -> new GoAway(MqttMessageBuilders
+            .connAck()
+            .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
+            .build(),
+            getLocal(Redirect.class)
+                .isPermanent(value.permanentMove())
+                .serverReference(value.serverReference().orElse(null))
+                .clientInfo(clientInfo))).orElse(null);
     }
 
     @Override

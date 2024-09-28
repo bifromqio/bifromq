@@ -447,8 +447,6 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
             queryPplns.values().forEach(pplns -> pplns.forEach(IQueryPipeline::close));
             log.debug("Closing linearizable query pipelines: cluster[{}]", clusterId);
             lnrQueryPplns.values().forEach(pplns -> pplns.forEach(IQueryPipeline::close));
-            log.debug("Stopping hosting crdt: cluster[{}]", clusterId);
-            crdtService.stopHosting(storeDescriptorMapCRDTURI(clusterId)).join();
             log.debug("Stopping rpc client: cluster[{}]", clusterId);
             rpcClient.stop();
             log.info("BaseKVStore client stopped: cluster[{}]", clusterId);

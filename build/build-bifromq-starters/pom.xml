@@ -116,6 +116,14 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-plugin-auth-provider-helper</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-plugin-client-balancer-helper</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-plugin-event-collector-helper</artifactId>
         </dependency>
         <dependency>
@@ -129,10 +137,6 @@
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-plugin-sub-broker-helper</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-plugin-auth-provider-helper</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>

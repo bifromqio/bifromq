@@ -41,9 +41,9 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
 
-import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
+import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
@@ -77,6 +77,7 @@ import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.plugin.authprovider.type.Reject;
+import com.baidu.bifromq.plugin.clientbalancer.IClientBalancer;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
@@ -104,6 +105,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -117,7 +119,8 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 
 public abstract class BaseMQTTTest {
-
+    @Mock
+    private IClientBalancer clientBalancer;
     @Mock
     protected IAuthProvider authProvider;
     @Mock
@@ -161,6 +164,7 @@ public abstract class BaseMQTTTest {
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
+        when(clientBalancer.needRedirect(any())).thenReturn(Optional.empty());
         testTicker = new TestTicker();
         sessionRegistry = new LocalSessionRegistry();
         ILocalTopicRouter router = new LocalTopicRouter(serverId, distClient);
@@ -175,6 +179,7 @@ public abstract class BaseMQTTTest {
             .inboxClient(inboxClient)
             .retainClient(retainClient)
             .sessionDictClient(sessionDictClient)
+            .clientBalancer(clientBalancer)
             .localSessionRegistry(sessionRegistry)
             .localDistService(distService)
             .defaultKeepAliveTimeSeconds(300)

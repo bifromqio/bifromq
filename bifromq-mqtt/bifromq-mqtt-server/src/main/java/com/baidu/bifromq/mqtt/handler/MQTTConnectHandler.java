@@ -153,6 +153,11 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                             handleGoAway(isInvalid);
                             return CompletableFuture.completedFuture(null);
                         }
+                        GoAway needRedirect = needRedirect(clientInfo);
+                        if (needRedirect != null) {
+                            handleGoAway(needRedirect);
+                            return CompletableFuture.completedFuture(null);
+                        }
                         LWT willMessage = connMsg.variableHeader().isWillFlag() ? getWillMessage(connMsg) : null;
                         int keepAliveSeconds = keepAliveSeconds(connMsg.variableHeader().keepAliveTimeSeconds());
                         String userSessionId = userSessionId(clientInfo);
@@ -313,6 +318,8 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                   ClientInfo clientInfo);
 
     protected abstract GoAway validate(MqttConnectMessage message, TenantSettings settings, ClientInfo clientInfo);
+
+    protected abstract GoAway needRedirect(ClientInfo clientInfo);
 
     protected abstract LWT getWillMessage(MqttConnectMessage message);
 

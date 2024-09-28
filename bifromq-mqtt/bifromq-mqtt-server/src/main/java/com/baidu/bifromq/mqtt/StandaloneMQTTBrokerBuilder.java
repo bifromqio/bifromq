@@ -28,7 +28,6 @@ public final class StandaloneMQTTBrokerBuilder extends AbstractMQTTBrokerBuilder
     String id = UUID.randomUUID().toString();
     String rpcHost;
     int rpcPort;
-    ICRDTService crdtService;
     EventLoopGroup rpcBossGroup;
     EventLoopGroup rpcWorkerGroup;
     Executor ioExecutor;

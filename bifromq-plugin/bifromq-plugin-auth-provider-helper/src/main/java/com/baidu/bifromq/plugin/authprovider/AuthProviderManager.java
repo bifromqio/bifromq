@@ -64,7 +64,7 @@ public class AuthProviderManager implements IAuthProvider {
             delegate = new DevOnlyAuthProvider();
         } else {
             if (authProviderFQN == null) {
-                pluginLog.warn("Auth provider plugin type are not specified, use DEV ONLY one instead");
+                pluginLog.warn("Auth provider plugin type not specified, use DEV ONLY one instead");
                 delegate = new DevOnlyAuthProvider();
             } else if (!availAuthProviders.containsKey(authProviderFQN)) {
                 pluginLog.warn("Auth provider plugin type '{}' not found, use DEV ONLY one instead", authProviderFQN);

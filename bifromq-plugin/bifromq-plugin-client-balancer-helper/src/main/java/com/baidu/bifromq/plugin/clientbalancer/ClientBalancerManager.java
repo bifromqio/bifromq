@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023. The BifroMQ Authors. All Rights Reserved.
+ * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -11,14 +11,14 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.plugin.resourcethrottler;
+package com.baidu.bifromq.plugin.clientbalancer;
 
-import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
-import com.bifromq.plugin.resourcethrottler.TenantResourceType;
+import com.baidu.bifromq.type.ClientInfo;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Timer;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -26,75 +26,70 @@ import org.pf4j.PluginManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Manager for client balancer plugins.
+ */
 @Slf4j
-public class ResourceThrottlerManager implements IResourceThrottler {
+public class ClientBalancerManager implements IClientBalancer {
     private static final Logger pluginLog = LoggerFactory.getLogger("plugin.manager");
     private final AtomicBoolean stopped = new AtomicBoolean();
-    private final IResourceThrottler delegate;
+    private final IClientBalancer delegate;
     private final Timer callTimer;
     private final Counter callErrorCounter;
 
-    public ResourceThrottlerManager(String resourceThrottlerFQN, PluginManager pluginMgr) {
-        Map<String, IResourceThrottler> availResourceThrottlers =
-            pluginMgr.getExtensions(IResourceThrottler.class).stream()
+    public ClientBalancerManager(PluginManager pluginMgr) {
+        Map<String, IClientBalancer> loadedClientBalancers =
+            pluginMgr.getExtensions(IClientBalancer.class).stream()
                 .collect(Collectors.toMap(e -> e.getClass().getName(), e -> e));
-        if (availResourceThrottlers.isEmpty()) {
-            pluginLog.warn("No resource throttler plugin available, use DEV ONLY one instead");
-            delegate = new DevOnlyResourceThrottler();
+        if (loadedClientBalancers.isEmpty()) {
+            pluginLog.warn("No client balancer plugin available");
+            delegate = new DummyClientBalancer();
         } else {
-            if (resourceThrottlerFQN == null) {
-                pluginLog.warn("Resource throttler type class not specified, use DEV ONLY one instead");
-                delegate = new DevOnlyResourceThrottler();
-            } else if (!availResourceThrottlers.containsKey(resourceThrottlerFQN)) {
-                pluginLog.warn("Resource throttler type '{}' not found, use DEV ONLY one instead",
-                    resourceThrottlerFQN);
-                delegate = new DevOnlyResourceThrottler();
-            } else {
-                pluginLog.info("Resource throttler loaded: {}", resourceThrottlerFQN);
-                delegate = availResourceThrottlers.get(resourceThrottlerFQN);
+            if (loadedClientBalancers.size() > 1) {
+                pluginLog.warn("Multiple client balancer plugins available, use the first found");
             }
+            String clientBalancerFQN = loadedClientBalancers.keySet().iterator().next();
+            pluginLog.info("Client balancer loaded: {}", clientBalancerFQN);
+            delegate = loadedClientBalancers.get(clientBalancerFQN);
         }
         callTimer = Timer.builder("call.exec.timer")
-            .tag("method", "ResourceThrottler/hasResource")
+            .tag("method", "ClientBalancer/needRedirect")
             .tag("type", delegate.getClass().getName())
             .register(Metrics.globalRegistry);
         callErrorCounter = Counter.builder("call.exec.fail.count")
-            .tag("method", "ResourceThrottler/hasResource")
+            .tag("method", "ClientBalancer/needRedirect")
             .tag("type", delegate.getClass().getName())
             .register(Metrics.globalRegistry);
     }
 
+
     @Override
-    public boolean hasResource(String tenantId, TenantResourceType type) {
+    public Optional<Redirection> needRedirect(ClientInfo clientInfo) {
         assert !stopped.get();
         Timer.Sample sample = Timer.start();
         try {
-            boolean isEnough = delegate.hasResource(tenantId, type);
+            Optional<Redirection> redirection = delegate.needRedirect(clientInfo);
             sample.stop(callTimer);
-            return isEnough;
+            return redirection;
         } catch (Throwable e) {
-            pluginLog.error("Resource throttler throws exception: type={}", type, e);
+            pluginLog.error("Client balancer plugin error", e);
             callErrorCounter.increment();
-            return true;
+            return Optional.empty();
         }
-    }
-
-    IResourceThrottler getDelegate() {
-        return delegate;
     }
 
     @Override
     public void close() {
         if (stopped.compareAndSet(false, true)) {
-            log.debug("Closing resource throttler manager");
+            log.debug("Closing client balancer manager");
             try {
                 delegate.close();
             } catch (Throwable e) {
-                pluginLog.error("Failed to close resource throttler plugin", e);
+                pluginLog.error("Failed to close client balancer plugin", e);
             }
             Metrics.globalRegistry.remove(callTimer);
             Metrics.globalRegistry.remove(callErrorCounter);
-            log.debug("Resource throttler manager closed");
+            log.debug("Client balancer manager closed");
         }
     }
 }

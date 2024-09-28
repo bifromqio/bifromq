@@ -101,6 +101,7 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
             .authProvider(authProvider)
             .localSessionRegistry(localSessionRegistry)
             .sessionDictClient(sessionDictClient)
+            .clientBalancer(clientBalancer)
             .inboxClient(inboxClient)
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)

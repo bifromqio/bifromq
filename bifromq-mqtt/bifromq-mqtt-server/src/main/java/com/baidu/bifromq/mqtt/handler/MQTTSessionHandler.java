@@ -69,6 +69,7 @@ import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.IMQTTMessageSizer;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
+import com.baidu.bifromq.plugin.clientbalancer.Redirection;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
@@ -133,6 +134,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
@@ -234,6 +236,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     private LWT willMessage;
     private boolean isGoAway;
     private ScheduledFuture<?> idleTimeoutTask;
+    private ScheduledFuture<?> redirectTask;
     private ISessionRegistration sessionRegistration;
     private long lastActiveAtNanos;
     private final LinkedHashMap<Integer, ConfirmingMessage> unconfirmedPacketIds = new LinkedHashMap<>();
@@ -367,6 +370,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         lastActiveAtNanos = sessionCtx.nanoTime();
         idleTimeoutTask = ctx.executor()
             .scheduleAtFixedRate(this::checkIdle, idleTimeoutNanos, idleTimeoutNanos, TimeUnit.NANOSECONDS);
+        scheduleRedirectCheck();
         onInitialized.whenComplete((v, e) -> tenantMeter.recordCount(MqttConnectCount));
         memUsage.addAndGet(estMemSize());
     }
@@ -375,6 +379,9 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     public void channelInactive(ChannelHandlerContext ctx) {
         if (idleTimeoutTask != null) {
             idleTimeoutTask.cancel(true);
+        }
+        if (redirectTask != null) {
+            redirectTask.cancel(true);
         }
         if (resendTask != null) {
             resendTask.cancel(true);
@@ -1343,6 +1350,21 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         if (sessionCtx.nanoTime() - lastActiveAtNanos > idleTimeoutNanos) {
             idleTimeoutTask.cancel(true);
             handleProtocolResponse(helper().onIdleTimeout(keepAliveTimeSeconds));
+        }
+    }
+
+    private void scheduleRedirectCheck() {
+        long delay = ThreadLocalRandom.current().nextInt(60000);
+        redirectTask = ctx.executor().schedule(this::checkRedirect, delay, TimeUnit.MILLISECONDS);
+    }
+
+    private void checkRedirect() {
+        Optional<Redirection> redirection = sessionCtx.clientBalancer.needRedirect(clientInfo);
+        if (redirection.isPresent()) {
+            handleProtocolResponse(helper().onRedirect(redirection.get().permanentMove(),
+                redirection.get().serverReference().orElse(null)));
+        } else {
+            scheduleRedirectCheck();
         }
     }
 

@@ -28,6 +28,8 @@
     <modules>
         <module>bifromq-plugin-auth-provider</module>
         <module>bifromq-plugin-auth-provider-helper</module>
+        <module>bifromq-plugin-client-balancer</module>
+        <module>bifromq-plugin-client-balancer-helper</module>
         <module>bifromq-plugin-event-collector</module>
         <module>bifromq-plugin-event-collector-helper</module>
         <module>bifromq-plugin-resource-throttler</module>

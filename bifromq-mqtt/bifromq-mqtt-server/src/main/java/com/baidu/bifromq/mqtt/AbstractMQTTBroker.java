@@ -96,6 +96,7 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
                 .inboxClient(builder.inboxClient)
                 .retainClient(builder.retainClient)
                 .sessionDictClient(builder.sessionDictClient)
+                .clientBalancer(builder.clientBalancer)
                 .defaultKeepAliveTimeSeconds(builder.defaultKeepAliveSeconds)
                 .build();
             log.info("Starting MQTT broker");
@@ -262,4 +263,5 @@ abstract class AbstractMQTTBroker<T extends AbstractMQTTBrokerBuilder<T>> implem
         // Bind and start to accept incoming connections.
         return b.bind(builder.host, builder.port);
     }
+
 }

@@ -140,6 +140,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
             .localDistService(localDistService)
             .localSessionRegistry(localSessionRegistry)
             .sessionDictClient(sessionDictClient)
+            .clientBalancer(clientBalancer)
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)
             .settingProvider(settingProvider)

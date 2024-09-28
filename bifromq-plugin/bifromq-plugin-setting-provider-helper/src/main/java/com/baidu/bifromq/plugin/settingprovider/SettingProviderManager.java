@@ -35,7 +35,7 @@ public class SettingProviderManager implements ISettingProvider {
             provider = new MonitoredSettingProvider(new DevOnlySettingProvider());
         } else {
             if (settingProviderFQN == null) {
-                pluginLog.warn("Setting provider plugin type are not specified, use DEV ONLY one instead");
+                pluginLog.warn("Setting provider plugin type not specified, use DEV ONLY one instead");
                 provider = new MonitoredSettingProvider(new DevOnlySettingProvider());
             } else if (!availSettingProviders.containsKey(settingProviderFQN)) {
                 pluginLog.warn("Setting provider plugin type '{}' not found, use DEV ONLY one instead",

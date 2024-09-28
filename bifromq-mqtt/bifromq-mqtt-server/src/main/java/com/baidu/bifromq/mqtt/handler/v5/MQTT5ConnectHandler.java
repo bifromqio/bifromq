@@ -48,9 +48,11 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_QOS_NOT_SUPPORTED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_QUOTA_EXCEEDED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_RETAIN_NOT_SUPPORTED;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_MOVED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_TOPIC_NAME_INVALID;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNSPECIFIED_ERROR;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNSUPPORTED_PROTOCOL_VERSION;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_USE_ANOTHER_SERVER;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.SESSION_EXPIRY_INTERVAL;
 
 import com.baidu.bifromq.inbox.storage.proto.LWT;
@@ -71,6 +73,8 @@ import com.baidu.bifromq.plugin.authprovider.type.Failed;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthData;
 import com.baidu.bifromq.plugin.authprovider.type.Success;
+import com.baidu.bifromq.plugin.clientbalancer.IClientBalancer;
+import com.baidu.bifromq.plugin.clientbalancer.Redirection;
 import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.AuthError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.EnhancedAuthAbortByClient;
@@ -83,6 +87,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.Unauthen
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InboxTransientError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InvalidTopic;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Redirect;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.sysprops.props.MaxMqtt5ClientIdLength;
 import com.baidu.bifromq.type.ClientInfo;
@@ -110,6 +115,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
     public static final String NAME = "MQTT5ConnectHandler";
     private static final int MAX_CLIENT_ID_LEN = MaxMqtt5ClientIdLength.INSTANCE.get();
     private ChannelHandlerContext ctx;
+    private IClientBalancer clientBalancer;
     private IAuthProvider authProvider;
     private boolean isAuthing;
     private MqttConnectMessage connMsg = null;
@@ -122,6 +128,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
         super.handlerAdded(ctx);
         this.ctx = ctx;
         authProvider = ChannelAttrs.mqttSessionContext(ctx).authProvider(ctx);
+        clientBalancer = ChannelAttrs.mqttSessionContext(ctx).clientBalancer;
     }
 
     @Override
@@ -552,6 +559,24 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
             }
         }
         return null;
+    }
+
+    @Override
+    protected GoAway needRedirect(ClientInfo clientInfo) {
+        Optional<Redirection> redirection = clientBalancer.needRedirect(clientInfo);
+        return redirection.map(value -> new GoAway(MqttMessageBuilders
+                .connAck()
+                .properties(MQTT5MessageBuilders.connAckProperties()
+                    .serverReference(value.serverReference().orElse(null))
+                    .build())
+                .returnCode(value.permanentMove()
+                    ? CONNECTION_REFUSED_SERVER_MOVED : CONNECTION_REFUSED_USE_ANOTHER_SERVER) // [MQTT-4.13.1-1]
+                .build(),
+                getLocal(Redirect.class)
+                    .isPermanent(value.permanentMove())
+                    .serverReference(value.serverReference().orElse(null))
+                    .clientInfo(clientInfo)))
+            .orElse(null);
     }
 
     @Override

@@ -48,9 +48,9 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
 
-import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
+import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
@@ -76,6 +76,7 @@ import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.authprovider.type.Denied;
 import com.baidu.bifromq.plugin.authprovider.type.Granted;
+import com.baidu.bifromq.plugin.clientbalancer.IClientBalancer;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
@@ -105,6 +106,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -145,6 +147,8 @@ public class BaseSessionHandlerTest extends MockableTest {
     protected ITenantMeter tenantMeter;
     @Mock
     protected Condition oomCondition;
+    @Mock
+    protected IClientBalancer clientBalancer;
 
     protected final String tenantId = "tenantId";
     protected final String serverId = "serverId";
@@ -172,6 +176,7 @@ public class BaseSessionHandlerTest extends MockableTest {
         super.setup(method);
         when(tenantMeter.timer(any())).thenReturn(mock(Timer.class));
         when(oomCondition.meet()).thenReturn(false);
+        when(clientBalancer.needRedirect(any())).thenReturn(Optional.empty());
     }
 
 

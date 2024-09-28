@@ -38,12 +38,12 @@ import com.baidu.bifromq.plugin.authprovider.type.Failed;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.Success;
+import com.baidu.bifromq.plugin.clientbalancer.IClientBalancer;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
-import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.protobuf.ByteString;
 import io.netty.channel.Channel;
@@ -61,6 +61,7 @@ import io.netty.handler.codec.mqtt.MqttVersion;
 import io.netty.handler.traffic.ChannelTrafficShapingHandler;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
@@ -73,6 +74,8 @@ import org.testng.annotations.Test;
 public class EnhancedAuthTest extends MockableTest {
     private MQTTConnectHandler connectHandler;
     private EmbeddedChannel channel;
+    @Mock
+    private IClientBalancer clientBalancer;
     @Mock
     private IAuthProvider authProvider;
     @Mock
@@ -99,6 +102,7 @@ public class EnhancedAuthTest extends MockableTest {
             ExpireReply.newBuilder()
                 .setCode(ExpireReply.Code.OK)
                 .build()));
+        when(clientBalancer.needRedirect(any())).thenReturn(Optional.empty());
         sessionContext = MQTTSessionContext.builder()
             .serverId(serverId)
             .defaultKeepAliveTimeSeconds(keepAlive)
@@ -109,6 +113,7 @@ public class EnhancedAuthTest extends MockableTest {
             .authProvider(authProvider)
             .localSessionRegistry(localSessionRegistry)
             .sessionDictClient(sessionDictClient)
+            .clientBalancer(clientBalancer)
             .build();
         channel = new EmbeddedChannel(true, true, new ChannelInitializer<>() {
             @Override

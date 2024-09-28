@@ -192,4 +192,22 @@ public class MQTTConnectHandlerTest extends MockableTest {
         channel.runScheduledPendingTasks();
         assertFalse(channel.isOpen());
     }
+
+    @Test
+    public void needRedirect() {
+        MqttConnectMessage connMsg = MqttMessageBuilders.connect()
+            .clientId("client")
+            .protocolVersion(MqttVersion.MQTT_3_1_1)
+            .build();
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId("tenantId").build();
+        when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
+        when(connectHandler.sanityCheck(connMsg)).thenReturn(null);
+        when(connectHandler.authenticate(connMsg)).thenReturn(
+            CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
+        when(connectHandler.needRedirect(clientInfo)).thenReturn(new GoAway());
+        channel.writeInbound(connMsg);
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        assertFalse(channel.isOpen());
+    }
 }

@@ -40,6 +40,7 @@ import com.baidu.bifromq.mqtt.IMQTTBroker;
 import com.baidu.bifromq.mqtt.IMQTTBrokerBuilder;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.authprovider.AuthProviderManager;
+import com.baidu.bifromq.plugin.clientbalancer.ClientBalancerManager;
 import com.baidu.bifromq.plugin.eventcollector.EventCollectorManager;
 import com.baidu.bifromq.plugin.manager.BifroMQPluginManager;
 import com.baidu.bifromq.plugin.resourcethrottler.ResourceThrottlerManager;
@@ -100,6 +101,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private ExecutorService baseKVServerExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private AuthProviderManager authProviderMgr;
+    private ClientBalancerManager clientBalancerMgr;
     private ResourceThrottlerManager resourceThrottlerMgr;
     private EventCollectorManager eventCollectorMgr;
     private SettingProviderManager settingProviderMgr;
@@ -192,6 +194,8 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
         authProviderMgr = new AuthProviderManager(config.getAuthProviderFQN(),
             pluginMgr, settingProviderMgr, eventCollectorMgr);
+
+        clientBalancerMgr = new ClientBalancerManager(pluginMgr);
 
         AgentHostOptions agentHostOptions = AgentHostOptions.builder()
             .env(config.getClusterConfig().getEnv())
@@ -429,7 +433,9 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .rpcServerBuilder(sharedIORPCServerBuilder)
             .mqttBossELGThreads(mqttServerConfig.getBossELGThreads())
             .mqttWorkerELGThreads(mqttServerConfig.getWorkerELGThreads())
+            .crdtService(crdtService)
             .authProvider(authProviderMgr)
+            .clientBalancer(clientBalancerMgr)
             .eventCollector(eventCollectorMgr)
             .resourceThrottler(resourceThrottlerMgr)
             .settingProvider(settingProviderMgr)
@@ -574,6 +580,8 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         agentHost.shutdown();
 
         authProviderMgr.close();
+
+        clientBalancerMgr.close();
 
         eventCollectorMgr.close();
 

@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt;
 
+import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.mqtt.service.ILocalDistService;
@@ -22,6 +23,7 @@ import com.baidu.bifromq.mqtt.service.LocalDistService;
 import com.baidu.bifromq.mqtt.service.LocalSessionRegistry;
 import com.baidu.bifromq.mqtt.service.LocalTopicRouter;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
+import com.baidu.bifromq.plugin.clientbalancer.IClientBalancer;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
@@ -40,7 +42,9 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
     int maxBytesInMessage = 256 * 1024;
     int mqttBossELGThreads;
     int mqttWorkerELGThreads;
+    ICRDTService crdtService;
     IAuthProvider authProvider;
+    IClientBalancer clientBalancer;
     IResourceThrottler resourceThrottler;
     IEventCollector eventCollector;
     ISettingProvider settingProvider;
@@ -140,8 +144,18 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
         return thisT();
     }
 
+    public T crdtService(ICRDTService crdtService) {
+        this.crdtService = crdtService;
+        return thisT();
+    }
+
     public T authProvider(IAuthProvider authProvider) {
         this.authProvider = authProvider;
+        return thisT();
+    }
+
+    public T clientBalancer(IClientBalancer clientBalancer) {
+        this.clientBalancer = clientBalancer;
         return thisT();
     }
 

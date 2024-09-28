@@ -37,6 +37,7 @@ import com.baidu.bifromq.inbox.store.IInboxStore;
 import com.baidu.bifromq.mqtt.IMQTTBroker;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
+import com.baidu.bifromq.plugin.clientbalancer.IClientBalancer;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
@@ -84,9 +85,10 @@ public abstract class MQTTTest {
     protected IResourceThrottler resourceThrottler;
     @Mock
     protected ISettingProvider settingProvider;
+    @Mock
+    protected IClientBalancer clientBalancer;
     private IAgentHost agentHost;
-    private ICRDTService clientCrdtService;
-    private ICRDTService serverCrdtService;
+    private ICRDTService crdtService;
     private IRPCServer sharedRpcServer;
     private IMqttBrokerClient onlineInboxBrokerClient;
     private ISessionDictClient sessionDictClient;
@@ -134,24 +136,21 @@ public abstract class MQTTTest {
         agentHost.start();
         log.info("Agent host started");
 
-        clientCrdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        clientCrdtService.start(agentHost);
-
-        serverCrdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        serverCrdtService.start(agentHost);
+        crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
+        crdtService.start(agentHost);
         log.info("CRDT service started");
 
         RPCServerBuilder rpcServerBuilder = IRPCServer.newBuilder()
             .host("127.0.0.1")
-            .crdtService(serverCrdtService)
+            .crdtService(crdtService)
             .executor(MoreExecutors.directExecutor());
 
         onlineInboxBrokerClient = IMqttBrokerClient.newBuilder()
-            .crdtService(clientCrdtService)
+            .crdtService(crdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
         sessionDictClient = ISessionDictClient.newBuilder()
-            .crdtService(clientCrdtService)
+            .crdtService(crdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
         sessionDictServer = ISessionDictServer.nonStandaloneBuilder()
@@ -159,19 +158,19 @@ public abstract class MQTTTest {
             .mqttBrokerClient(onlineInboxBrokerClient)
             .build();
         inboxClient = IInboxClient.newBuilder()
-            .crdtService(clientCrdtService)
+            .crdtService(crdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
         inboxStoreKVStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
-            .crdtService(clientCrdtService)
+            .crdtService(crdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
         inboxStore = IInboxStore.nonStandaloneBuilder()
             .rpcServerBuilder(rpcServerBuilder)
             .bootstrap(true)
             .agentHost(agentHost)
-            .crdtService(serverCrdtService)
+            .crdtService(crdtService)
             .storeClient(inboxStoreKVStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
@@ -184,12 +183,12 @@ public abstract class MQTTTest {
                 .setWalEngineConfigurator(new InMemKVEngineConfigurator()))
             .build();
         distClient = IDistClient.newBuilder()
-            .crdtService(clientCrdtService)
+            .crdtService(crdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
         retainClient = IRetainClient
             .newBuilder()
-            .crdtService(clientCrdtService)
+            .crdtService(crdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
         inboxServer = IInboxServer.nonStandaloneBuilder()
@@ -205,14 +204,14 @@ public abstract class MQTTTest {
         retainStoreKVStoreClient = IBaseKVStoreClient
             .newBuilder()
             .clusterId(IRetainStore.CLUSTER_NAME)
-            .crdtService(clientCrdtService)
+            .crdtService(crdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
         retainStore = IRetainStore.nonStandaloneBuilder()
             .rpcServerBuilder(rpcServerBuilder)
             .bootstrap(true)
             .agentHost(agentHost)
-            .crdtService(serverCrdtService)
+            .crdtService(crdtService)
             .storeClient(retainStoreKVStoreClient)
             .queryExecutor(queryExecutor)
             .tickerThreads(tickerThreads)
@@ -225,7 +224,7 @@ public abstract class MQTTTest {
 
         distWorkerStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
-            .crdtService(clientCrdtService)
+            .crdtService(crdtService)
             .executor(MoreExecutors.directExecutor())
             .build();
 
@@ -241,7 +240,7 @@ public abstract class MQTTTest {
             .rpcServerBuilder(rpcServerBuilder)
             .bootstrap(true)
             .agentHost(agentHost)
-            .crdtService(serverCrdtService)
+            .crdtService(crdtService)
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)
             .distClient(distClient)
@@ -261,7 +260,7 @@ public abstract class MQTTTest {
             .distWorkerClient(distWorkerStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
-            .crdtService(serverCrdtService)
+            .crdtService(crdtService)
             .build();
 
         mqttBroker = IMQTTBroker.nonStandaloneBuilder()
@@ -269,6 +268,7 @@ public abstract class MQTTTest {
             .mqttBossELGThreads(1)
             .mqttWorkerELGThreads(4)
             .authProvider(authProvider)
+            .clientBalancer(clientBalancer)
             .resourceThrottler(resourceThrottler)
             .eventCollector(eventCollector)
             .settingProvider(settingProvider)
@@ -373,8 +373,7 @@ public abstract class MQTTTest {
         sessionDictServer.shutdown();
         log.info("Session dict server shut down");
 
-        clientCrdtService.stop();
-        serverCrdtService.stop();
+        crdtService.stop();
         log.info("CRDT service stopped");
         agentHost.shutdown();
         log.info("Agent host stopped");

@@ -133,6 +133,7 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
             .localDistService(localDistService)
             .localSessionRegistry(localSessionRegistry)
             .sessionDictClient(sessionDictClient)
+            .clientBalancer(clientBalancer)
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)
             .settingProvider(settingProvider)

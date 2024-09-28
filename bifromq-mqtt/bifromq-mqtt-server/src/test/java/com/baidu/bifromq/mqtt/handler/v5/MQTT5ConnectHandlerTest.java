@@ -23,6 +23,9 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_MALFORMED_PACKET;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PROTOCOL_ERROR;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_QUOTA_EXCEEDED;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_MOVED;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_USE_ANOTHER_SERVER;
+import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.SERVER_REFERENCE;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -30,6 +33,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.inbox.client.IInboxClient;
@@ -41,8 +45,12 @@ import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthData;
 import com.baidu.bifromq.plugin.authprovider.type.Success;
+import com.baidu.bifromq.plugin.clientbalancer.IClientBalancer;
+import com.baidu.bifromq.plugin.clientbalancer.Redirection;
+import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Redirect;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
@@ -58,6 +66,7 @@ import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessageBuilders;
 import io.netty.handler.codec.mqtt.MqttVersion;
 import java.net.InetSocketAddress;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.mockito.ArgumentCaptor;
@@ -69,6 +78,8 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
 
     private MQTT5ConnectHandler connectHandler;
     private EmbeddedChannel channel;
+    @Mock
+    private IClientBalancer clientBalancer;
     @Mock
     private IAuthProvider authProvider;
     @Mock
@@ -90,6 +101,7 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
     public void setup() {
         connectHandler = new MQTT5ConnectHandler();
         when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
+        when(clientBalancer.needRedirect(any())).thenReturn(Optional.empty());
         sessionContext = MQTTSessionContext.builder()
             .serverId(serverId)
             .defaultKeepAliveTimeSeconds(keepAlive)
@@ -98,6 +110,7 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)
             .settingProvider(settingProvider)
+            .clientBalancer(clientBalancer)
             .build();
         channel = new EmbeddedChannel(true, true, new ChannelInitializer<>() {
             @Override
@@ -232,7 +245,6 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         assertEquals(authData.getInitial().getAuthData(), ByteString.copyFromUtf8("authData"));
     }
 
-
     @Test
     public void noTotalConnectionResource() {
         MqttConnectMessage connMsg = MqttMessageBuilders.connect()
@@ -303,5 +315,54 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         verify(eventCollector).report(argThat(event -> event.type() == RESOURCE_THROTTLED &&
             ((ResourceThrottled) event).reason().equals(TenantResourceType.TotalConnectPerSecond.name())));
         assertFalse(channel.isOpen());
+    }
+
+    @Test
+    public void needMove() {
+        MqttConnectMessage connMsg = MqttMessageBuilders.connect()
+            .clientId("client")
+            .protocolVersion(MqttVersion.MQTT_5)
+            .build();
+        when(authProvider.auth(any(MQTT5AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT5AuthResult.newBuilder()
+                .setSuccess(Success.newBuilder().setTenantId("tenantId").build())
+                .build()));
+        when(clientBalancer.needRedirect(any())).thenReturn(
+            Optional.of(new Redirection(true, Optional.of("server1"))));
+        channel.writeInbound(connMsg);
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        MqttConnAckMessage connAckMessage = channel.readOutbound();
+        assertEquals(connAckMessage.variableHeader().connectReturnCode(),
+            CONNECTION_REFUSED_SERVER_MOVED);
+        assertEquals(connAckMessage.variableHeader().properties().getProperty(SERVER_REFERENCE.value()).value(),
+            "server1");
+        assertFalse(channel.isOpen());
+        verify(eventCollector).report(argThat(e -> e.type() == EventType.SERVER_REDIRECTED
+            && ((Redirect) e).isPermanent() && ((Redirect) e).serverReference().equals("server1")));
+    }
+
+    @Test
+    public void needUseAnotherServer() {
+        MqttConnectMessage connMsg = MqttMessageBuilders.connect()
+            .clientId("client")
+            .protocolVersion(MqttVersion.MQTT_5)
+            .build();
+        when(authProvider.auth(any(MQTT5AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT5AuthResult.newBuilder()
+                .setSuccess(Success.newBuilder().setTenantId("tenantId").build())
+                .build()));
+        when(clientBalancer.needRedirect(any())).thenReturn(
+            Optional.of(new Redirection(false, Optional.empty())));
+        channel.writeInbound(connMsg);
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        MqttConnAckMessage connAckMessage = channel.readOutbound();
+        assertEquals(connAckMessage.variableHeader().connectReturnCode(),
+            CONNECTION_REFUSED_USE_ANOTHER_SERVER);
+        assertNull(connAckMessage.variableHeader().properties().getProperty(SERVER_REFERENCE.value()));
+        assertFalse(channel.isOpen());
+        verify(eventCollector).report(argThat(e -> e.type() == EventType.SERVER_REDIRECTED
+            && !((Redirect) e).isPermanent() && ((Redirect) e).serverReference() == null));
     }
 }

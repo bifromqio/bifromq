@@ -22,6 +22,7 @@ import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.mqtt.service.ILocalDistService;
 import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
+import com.baidu.bifromq.plugin.clientbalancer.IClientBalancer;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
@@ -46,6 +47,7 @@ public final class MQTTSessionContext {
     public final IInboxClient inboxClient;
     public final IRetainClient retainClient;
     public final ISessionDictClient sessionDictClient;
+    public final IClientBalancer clientBalancer;
     public final String serverId;
     public final int defaultKeepAliveTimeSeconds;
     private final Ticker ticker;
@@ -62,6 +64,7 @@ public final class MQTTSessionContext {
                        IInboxClient inboxClient,
                        IRetainClient retainClient,
                        ISessionDictClient sessionDictClient,
+                       IClientBalancer clientBalancer,
                        int defaultKeepAliveTimeSeconds,
                        IEventCollector eventCollector,
                        IResourceThrottler resourceThrottler,
@@ -78,6 +81,7 @@ public final class MQTTSessionContext {
         this.inboxClient = inboxClient;
         this.retainClient = retainClient;
         this.sessionDictClient = sessionDictClient;
+        this.clientBalancer = clientBalancer;
         this.defaultKeepAliveTimeSeconds = defaultKeepAliveTimeSeconds;
         this.ticker = ticker == null ? Ticker.systemTicker() : ticker;
         this.tenantTransientSubNumGauge = new TenantGauge(MqttTransientSubCountGauge);
