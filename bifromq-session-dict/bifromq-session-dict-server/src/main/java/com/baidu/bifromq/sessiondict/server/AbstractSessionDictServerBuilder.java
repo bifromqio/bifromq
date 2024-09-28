@@ -14,7 +14,8 @@
 package com.baidu.bifromq.sessiondict.server;
 
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
@@ -22,9 +23,15 @@ import lombok.NoArgsConstructor;
 abstract class AbstractSessionDictServerBuilder<T extends AbstractSessionDictServerBuilder<T>>
     implements ISessionDictServerBuilder {
     IMqttBrokerClient mqttBrokerClient;
+    Map<String, String> attrs = new HashMap<>();
 
     public T mqttBrokerClient(IMqttBrokerClient mqttBrokerClient) {
         this.mqttBrokerClient = mqttBrokerClient;
+        return thisT();
+    }
+
+    public T attributes(Map<String, String> attrs) {
+        this.attrs = attrs;
         return thisT();
     }
 

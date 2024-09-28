@@ -22,6 +22,6 @@ final class NonStandaloneRetainServer extends AbstractRetainServer {
     NonStandaloneRetainServer(NonStandaloneRetainServerBuilder builder) {
         super(builder);
         Preconditions.checkNotNull(builder.rpcServerBuilder, "RPC Server Builder is null");
-        builder.rpcServerBuilder.bindService(retainService.bindService(), RPCBluePrint.INSTANCE);
+        builder.rpcServerBuilder.bindService(retainService.bindService(), RPCBluePrint.INSTANCE, builder.attrs);
     }
 }

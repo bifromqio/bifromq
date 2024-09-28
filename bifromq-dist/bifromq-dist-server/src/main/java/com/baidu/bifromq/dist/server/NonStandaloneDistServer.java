@@ -18,6 +18,6 @@ import com.baidu.bifromq.dist.RPCBluePrint;
 public class NonStandaloneDistServer extends AbstractDistServer {
     NonStandaloneDistServer(NonStandaloneDistServerBuilder builder) {
         super(builder);
-        builder.rpcServerBuilder.bindService(distService.bindService(), RPCBluePrint.INSTANCE);
+        builder.rpcServerBuilder.bindService(distService.bindService(), RPCBluePrint.INSTANCE, builder.attrs);
     }
 }

@@ -25,7 +25,7 @@ final class StandaloneInboxServer extends AbstractInboxServer {
     StandaloneInboxServer(StandaloneInboxServerBuilder builder) {
         super(builder);
         this.rpcServer = IRPCServer.newBuilder()
-            .bindService(inboxService.bindService(), RPCBluePrint.INSTANCE)
+            .bindService(inboxService.bindService(), RPCBluePrint.INSTANCE, builder.attrs)
             .host(builder.host)
             .port(builder.port)
             .bossEventLoopGroup(builder.bossEventLoopGroup)

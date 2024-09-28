@@ -16,11 +16,14 @@ package com.baidu.bifromq.retain.server;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
+import java.util.HashMap;
+import java.util.Map;
 
 abstract class AbstractRetainServerBuilder<T extends AbstractRetainServerBuilder<T>> implements IRetainServerBuilder {
     ISettingProvider settingProvider;
     ISubBrokerManager subBrokerManager;
     IBaseKVStoreClient retainStoreClient;
+    Map<String, String> attrs = new HashMap<>();
 
     public T subBrokerManager(ISubBrokerManager subBrokerManager) {
         this.subBrokerManager = subBrokerManager;
@@ -34,6 +37,11 @@ abstract class AbstractRetainServerBuilder<T extends AbstractRetainServerBuilder
 
     public T settingProvider(ISettingProvider settingProvider) {
         this.settingProvider = settingProvider;
+        return thisT();
+    }
+
+    public T attributes(Map<String, String> attrs) {
+        this.attrs = attrs;
         return thisT();
     }
 

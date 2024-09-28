@@ -25,7 +25,7 @@ final class StandaloneRetainServer extends AbstractRetainServer {
     StandaloneRetainServer(StandaloneRetainServerBuilder builder) {
         super(builder);
         this.rpcServer = IRPCServer.newBuilder()
-            .bindService(retainService.bindService(), RPCBluePrint.INSTANCE)
+            .bindService(retainService.bindService(), RPCBluePrint.INSTANCE, builder.attrs)
             .host(builder.host)
             .port(builder.port)
             .bossEventLoopGroup(builder.bossEventLoopGroup)

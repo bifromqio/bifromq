@@ -25,7 +25,7 @@ final class StandaloneSessionDictServer extends AbstractSessionDictServer {
     StandaloneSessionDictServer(StandaloneSessionDictServerBuilder builder) {
         super(builder);
         this.rpcServer = IRPCServer.newBuilder()
-            .bindService(service.bindService(), RPCBluePrint.INSTANCE)
+            .bindService(service.bindService(), RPCBluePrint.INSTANCE, builder.attrs)
             .host(builder.host)
             .port(builder.port)
             .bossEventLoopGroup(builder.bossEventLoopGroup)

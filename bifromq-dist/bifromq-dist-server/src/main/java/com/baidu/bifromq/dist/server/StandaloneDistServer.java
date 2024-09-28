@@ -26,7 +26,7 @@ final class StandaloneDistServer extends AbstractDistServer {
         super(builder);
         this.rpcServer = IRPCServer.newBuilder()
             .executor(builder.executor)
-            .bindService(distService.bindService(), RPCBluePrint.INSTANCE)
+            .bindService(distService.bindService(), RPCBluePrint.INSTANCE, builder.attrs)
             .host(builder.host)
             .port(builder.port)
             .bossEventLoopGroup(builder.bossEventLoopGroup)

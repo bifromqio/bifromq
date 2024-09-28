@@ -17,12 +17,15 @@ import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import java.util.HashMap;
+import java.util.Map;
 
 abstract class AbstractDistServerBuilder<T extends AbstractDistServerBuilder<T>> implements IDistServerBuilder {
     IBaseKVStoreClient distWorkerClient;
     ISettingProvider settingProvider;
     IEventCollector eventCollector;
     ICRDTService crdtService;
+    Map<String, String> attrs = new HashMap<>();
 
     public T distWorkerClient(IBaseKVStoreClient distWorkerClient) {
         this.distWorkerClient = distWorkerClient;
@@ -41,6 +44,11 @@ abstract class AbstractDistServerBuilder<T extends AbstractDistServerBuilder<T>>
 
     public T crdtService(ICRDTService crdtService) {
         this.crdtService = crdtService;
+        return thisT();
+    }
+
+    public T attributes(Map<String, String> attrs) {
+        this.attrs = attrs;
         return thisT();
     }
 
