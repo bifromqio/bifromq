@@ -24,7 +24,7 @@ import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
 import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
-import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillAllReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
@@ -53,7 +53,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/kill")
-public final class HTTPKillHandler implements IHTTPRequestHandler {
+public final class HTTPKillHandler extends HTTPTenantAwareHandler {
     private static final int MAX_SERVER_REFERENCE_LENGTH = 65535;
     private static final String SERVER_REDIRECT_VALUE_NO = "no";
     private static final String SERVER_REDIRECT_VALUE_MOVE = "move";
@@ -66,7 +66,8 @@ public final class HTTPKillHandler implements IHTTPRequestHandler {
         Unpooled.wrappedBuffer("Server reference exceeds 65535 bytes".getBytes());
     private final ISessionDictClient sessionDictClient;
 
-    public HTTPKillHandler(ISessionDictClient sessionDictClient) {
+    public HTTPKillHandler(ISettingProvider settingProvider, ISessionDictClient sessionDictClient) {
+        super(settingProvider);
         this.sessionDictClient = sessionDictClient;
     }
 

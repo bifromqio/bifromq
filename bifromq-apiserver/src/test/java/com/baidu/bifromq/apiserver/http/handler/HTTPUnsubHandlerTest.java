@@ -46,7 +46,7 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
     @Test
     public void missingHeaders() {
         DefaultFullHttpRequest req = buildRequest();
-        HTTPUnsubHandler handler = new HTTPUnsubHandler(sessionDictClient);
+        HTTPUnsubHandler handler = new HTTPUnsubHandler(settingProvider, sessionDictClient);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
@@ -68,7 +68,7 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPUnsubHandler handler = new HTTPUnsubHandler(sessionDictClient);
+        HTTPUnsubHandler handler = new HTTPUnsubHandler(settingProvider, sessionDictClient);
         when(sessionDictClient.unsub(any()))
             .thenReturn(CompletableFuture.completedFuture(UnsubReply.newBuilder()
                 .setResult(result)

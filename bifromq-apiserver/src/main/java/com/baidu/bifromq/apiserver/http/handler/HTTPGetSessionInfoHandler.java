@@ -20,7 +20,7 @@ import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERR
 import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
-import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetRequest;
 import com.baidu.bifromq.type.ClientInfo;
@@ -45,11 +45,11 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/session")
-public final class HTTPGetSessionInfoHandler implements IHTTPRequestHandler {
+public final class HTTPGetSessionInfoHandler extends HTTPTenantAwareHandler {
     private final ISessionDictClient sessionDictClient;
 
-    public HTTPGetSessionInfoHandler(ISessionDictClient sessionDictClient
-    ) {
+    public HTTPGetSessionInfoHandler(ISettingProvider settingProvider, ISessionDictClient sessionDictClient) {
+        super(settingProvider);
         this.sessionDictClient = sessionDictClient;
     }
 

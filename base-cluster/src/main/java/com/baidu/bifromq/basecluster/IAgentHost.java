@@ -25,7 +25,16 @@ import java.net.InetSocketAddress;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Agent host defines the interface for hosting agents and joining the cluster.
+ */
 public interface IAgentHost {
+    /**
+     * Create a new instance of agent host.
+     *
+     * @param options the options for creating the agent host
+     * @return a new instance of agent host
+     */
     static IAgentHost newInstance(AgentHostOptions options) {
         ITransport transport = Transport.builder()
             .env(options.env())
@@ -44,52 +53,47 @@ public interface IAgentHost {
         return new AgentHost(transport, resolver, options);
     }
 
+    String env();
+
     HostEndpoint local();
 
     /**
-     * Join the cluster as a running node by communicating with some existing running node of the cluster as the seeds
+     * Join the cluster as a running node by communicating with some existing running node of the cluster as the seeds.
      *
-     * @param seeds
-     * @return
+     * @param seeds the seeds of the cluster
+     * @return a future that completes when the node has successfully joined the cluster
      */
     CompletableFuture<Void> join(Set<InetSocketAddress> seeds);
 
     /**
-     * An observable of the live membership of host cluster
+     * Host an agent in local agent host.
      *
-     * @return
-     */
-    Observable<Set<HostEndpoint>> cluster();
-
-    /**
-     * Host an agent locally
-     *
-     * @param agentId
-     * @return
+     * @param agentId the agent id
+     * @return the hosted agent
      */
     IAgent host(String agentId);
 
     /**
-     * unhost the agent
+     * Stop hosting the agent from local agent host.
      *
-     * @param agentId
+     * @param agentId the agent id
      */
     CompletableFuture<Void> stopHosting(String agentId);
 
     /**
-     * An observable of agent host membership
+     * An observable of agent host membership.
      *
-     * @return
+     * @return an observable of agent host membership
      */
     Observable<Set<HostEndpoint>> membership();
 
     /**
-     * Start the host
+     * Start the agent host.
      */
     void start();
 
     /**
-     * Shutdown the host
+     * Shutdown the agent host.
      */
     void shutdown();
 }

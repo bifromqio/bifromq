@@ -19,6 +19,7 @@ import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainedBytes;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.retain.RPCBluePrint;
 import com.baidu.bifromq.retain.rpc.proto.ExpireAllReply;
@@ -40,6 +41,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 final class RetainClient implements IRetainClient {
     private final IRPCClient rpcClient;
+    private final IRPCServiceTrafficGovernor trafficGovernor;
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     RetainClient(RetainClientBuilder builder) {
@@ -50,6 +52,8 @@ final class RetainClient implements IRetainClient {
             .sslContext(builder.sslContext)
             .crdtService(builder.crdtService)
             .build();
+        trafficGovernor = IRPCServiceTrafficGovernor
+            .newInstance(RPCBluePrint.INSTANCE.serviceDescriptor().getName(), builder.crdtService);
     }
 
     @Override
@@ -59,12 +63,18 @@ final class RetainClient implements IRetainClient {
             log.debug("Stopping rpc client");
             rpcClient.stop();
             log.debug("Retain client stopped");
+            trafficGovernor.destroy();
         }
     }
 
     @Override
     public Observable<IRPCClient.ConnState> connState() {
         return rpcClient.connState();
+    }
+
+    @Override
+    public IRPCServiceTrafficGovernor trafficGovernor() {
+        return trafficGovernor;
     }
 
     @Override

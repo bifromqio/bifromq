@@ -31,7 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class HTTPRouteMap implements IHTTPRouteMap {
-    private static final IHTTPRequestHandler NO_ROUTE_HANDLER = (reqId, tenantId, httpRequest) ->
+    private static final IHTTPRequestHandler NO_ROUTE_HANDLER = (reqId, httpRequest) ->
         CompletableFuture.completedFuture(
             new DefaultFullHttpResponse(httpRequest.protocolVersion(), BAD_REQUEST, Unpooled.EMPTY_BUFFER));
     private final Map<String, Map<HttpMethod, IHTTPRequestHandler>> routeMap = new HashMap<>();

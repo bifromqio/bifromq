@@ -48,7 +48,7 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
     @Test
     public void missingHeaders() {
         DefaultFullHttpRequest req = buildRequest();
-        HTTPSubHandler handler = new HTTPSubHandler(sessionDictClient);
+        HTTPSubHandler handler = new HTTPSubHandler(settingProvider, sessionDictClient);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
@@ -72,7 +72,7 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPSubHandler handler = new HTTPSubHandler(sessionDictClient);
+        HTTPSubHandler handler = new HTTPSubHandler(settingProvider, sessionDictClient);
         when(sessionDictClient.sub(any()))
             .thenReturn(CompletableFuture.completedFuture(SubReply.newBuilder()
                 .setResult(subResult)

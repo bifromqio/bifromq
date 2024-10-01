@@ -46,7 +46,7 @@ public class HTTPExpireSessionHandlerTest extends AbstractHTTPRequestHandlerTest
     @Test
     public void missingHeaders() {
         DefaultFullHttpRequest req = buildRequest();
-        HTTPExpireSessionHandler handler = new HTTPExpireSessionHandler(inboxClient);
+        HTTPExpireSessionHandler handler = new HTTPExpireSessionHandler(settingProvider, inboxClient);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
@@ -57,7 +57,7 @@ public class HTTPExpireSessionHandlerTest extends AbstractHTTPRequestHandlerTest
         req.headers().set(HEADER_EXPIRY_SECONDS.header, "10");
         long reqId = 123;
         String tenantId = "bifromq_dev";
-        HTTPExpireSessionHandler handler = new HTTPExpireSessionHandler(inboxClient);
+        HTTPExpireSessionHandler handler = new HTTPExpireSessionHandler(settingProvider, inboxClient);
         when(inboxClient.expireAll(any())).thenReturn(CompletableFuture.completedFuture(
             ExpireAllReply.newBuilder()
                 .setCode(ExpireAllReply.Code.OK)
@@ -77,7 +77,7 @@ public class HTTPExpireSessionHandlerTest extends AbstractHTTPRequestHandlerTest
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPExpireSessionHandler handler = new HTTPExpireSessionHandler(inboxClient);
+        HTTPExpireSessionHandler handler = new HTTPExpireSessionHandler(settingProvider, inboxClient);
         when(inboxClient.expireAll(any())).thenReturn(CompletableFuture.completedFuture(
             ExpireAllReply.newBuilder()
                 .setCode(ERROR)

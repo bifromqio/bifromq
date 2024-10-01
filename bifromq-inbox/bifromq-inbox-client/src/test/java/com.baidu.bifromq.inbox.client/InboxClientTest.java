@@ -22,6 +22,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
@@ -54,6 +55,8 @@ import org.testng.annotations.Test;
 public class InboxClientTest {
     private AutoCloseable closeable;
     @Mock
+    private IRPCServiceTrafficGovernor trafficGovernor;
+    @Mock
     private IRPCClient rpcClient;
 
     private InboxClient inboxClient;
@@ -61,12 +64,12 @@ public class InboxClientTest {
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
-        inboxClient = new InboxClient(rpcClient);
+        inboxClient = new InboxClient(rpcClient, trafficGovernor);
     }
 
     @AfterMethod
     @SneakyThrows
-    public void teardown() {
+    public void tearDown() {
         closeable.close();
     }
 

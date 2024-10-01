@@ -18,8 +18,8 @@ import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader
 import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
-import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.basehlc.HLC;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.rpc.proto.ExpireAllReply;
 import com.baidu.bifromq.retain.rpc.proto.ExpireAllRequest;
@@ -42,10 +42,11 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/retain")
-public final class HTTPExpireRetainHandler implements IHTTPRequestHandler {
+public final class HTTPExpireRetainHandler extends HTTPTenantAwareHandler {
     private final IRetainClient retainClient;
 
-    public HTTPExpireRetainHandler(IRetainClient retainClient) {
+    public HTTPExpireRetainHandler(ISettingProvider settingProvider, IRetainClient retainClient) {
+        super(settingProvider);
         this.retainClient = retainClient;
     }
 

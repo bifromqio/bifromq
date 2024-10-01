@@ -626,9 +626,22 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         if (apiServerConfig.getHttpsListenerConfig().isEnable()) {
             sslContext = buildServerSslContext(apiServerConfig.getHttpsListenerConfig().getSslConfig());
         }
-        return new APIServer(apiHost, apiServerConfig.getHttpPort(), apiServerConfig.getHttpsListenerConfig().getPort(),
-            apiServerConfig.getMaxContentLength(), bossELG, workerELG, sslContext, distClient,
-            inboxClient, sessionDictClient, retainClient, settingProviderMgr);
+        return APIServer.builder()
+            .host(apiHost)
+            .port(apiServerConfig.getHttpPort())
+            .tlsPort(apiServerConfig.getHttpsListenerConfig().getPort())
+            .maxContentLength(apiServerConfig.getMaxContentLength())
+            .bossGroup(bossELG)
+            .workerGroup(workerELG)
+            .sslContext(sslContext)
+            .agentHost(agentHost)
+            .brokerClient(mqttBrokerClient)
+            .distClient(distClient)
+            .inboxClient(inboxClient)
+            .sessionDictClient(sessionDictClient)
+            .retainClient(retainClient)
+            .settingProvider(settingProviderMgr)
+            .build();
     }
 
     private void printConfigs(StandaloneConfig config) {

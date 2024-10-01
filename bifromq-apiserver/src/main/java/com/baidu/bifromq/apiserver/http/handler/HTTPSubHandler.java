@@ -24,7 +24,7 @@ import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpResponseStatus.UNAUTHORIZED;
 
-import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.sessiondict.rpc.proto.SubRequest;
 import com.baidu.bifromq.type.QoS;
@@ -47,11 +47,11 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/sub")
-public final class HTTPSubHandler implements IHTTPRequestHandler {
+public final class HTTPSubHandler extends HTTPTenantAwareHandler {
     private final ISessionDictClient sessionDictClient;
 
-    public HTTPSubHandler(ISessionDictClient sessionDictClient
-    ) {
+    public HTTPSubHandler(ISettingProvider settingProvider, ISessionDictClient sessionDictClient) {
+        super(settingProvider);
         this.sessionDictClient = sessionDictClient;
     }
 

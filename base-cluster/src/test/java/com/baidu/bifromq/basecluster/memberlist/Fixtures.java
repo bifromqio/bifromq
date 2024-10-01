@@ -39,11 +39,13 @@ public class Fixtures {
         .setId(ByteString.copyFromUtf8("zombie"))
         .setAddress(LOCAL_ADDR.getHostName())
         .setPort(LOCAL_ADDR.getPort())
+        .setPid(ProcessHandle.current().pid())
         .build();
     public static final HostEndpoint LOCAL_ENDPOINT = HostEndpoint.newBuilder()
         .setId(LOCAL_REPLICA_ID)
         .setAddress(LOCAL_ADDR.getHostName())
         .setPort(LOCAL_ADDR.getPort())
+        .setPid(ProcessHandle.current().pid())
         .build();
 
     public static final HostMember LOCAL = HostMember.newBuilder()

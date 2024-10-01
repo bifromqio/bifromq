@@ -15,8 +15,10 @@ package com.baidu.bifromq.apiserver.http.handler;
 
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandlersFactory;
+import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
+import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
@@ -27,19 +29,27 @@ import java.util.Map;
 public class HTTPRequestHandlersFactory implements IHTTPRequestHandlersFactory {
     private final Map<Class<? extends IHTTPRequestHandler>, IHTTPRequestHandler> handlers = new HashMap<>();
 
-    public HTTPRequestHandlersFactory(ISessionDictClient sessionDictClient,
+    public HTTPRequestHandlersFactory(IAgentHost agentHost,
+                                      IMqttBrokerClient brokerClient,
+                                      ISessionDictClient sessionDictClient,
                                       IDistClient distClient,
                                       IInboxClient inboxClient,
                                       IRetainClient retainClient,
                                       ISettingProvider settingProvider) {
-        register(new HTTPGetSessionInfoHandler(sessionDictClient));
-        register(new HTTPKillHandler(sessionDictClient));
-        register(new HTTPRetainHandler(retainClient, settingProvider));
-        register(new HTTPExpireRetainHandler(retainClient));
-        register(new HTTPPubHandler(distClient, settingProvider));
-        register(new HTTPSubHandler(sessionDictClient));
-        register(new HTTPUnsubHandler(sessionDictClient));
-        register(new HTTPExpireSessionHandler(inboxClient));
+        register(new HTTPBrokerServerLandscapeHandler(brokerClient));
+        register(new HTTPDictServerLandscapeHandler(sessionDictClient));
+        register(new HTTPDistServerLandscapeHandler(distClient));
+        register(new HTTPInboxServerLandscapeHandler(inboxClient));
+        register(new HTTPRetainServerLandscapeHandler(retainClient));
+        register(new HTTPGetClusterHandler(agentHost));
+        register(new HTTPGetSessionInfoHandler(settingProvider, sessionDictClient));
+        register(new HTTPKillHandler(settingProvider, sessionDictClient));
+        register(new HTTPRetainHandler(settingProvider, retainClient));
+        register(new HTTPExpireRetainHandler(settingProvider, retainClient));
+        register(new HTTPPubHandler(settingProvider, distClient));
+        register(new HTTPSubHandler(settingProvider, sessionDictClient));
+        register(new HTTPUnsubHandler(settingProvider, sessionDictClient));
+        register(new HTTPExpireSessionHandler(settingProvider, inboxClient));
     }
 
     @Override

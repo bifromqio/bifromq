@@ -52,7 +52,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class RPCServer implements IRPCServer {
     public interface ExecutorSupplier {
-        @NonNull Executor getExecutor(MethodDescriptor<?, ?> call);
+        @NonNull
+        Executor getExecutor(MethodDescriptor<?, ?> call);
     }
 
     private enum State {

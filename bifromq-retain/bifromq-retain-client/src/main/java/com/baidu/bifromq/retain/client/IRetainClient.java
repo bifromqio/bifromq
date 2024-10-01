@@ -14,6 +14,7 @@
 package com.baidu.bifromq.retain.client;
 
 import com.baidu.bifromq.baserpc.IConnectable;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.retain.rpc.proto.ExpireAllReply;
 import com.baidu.bifromq.retain.rpc.proto.ExpireAllRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
@@ -28,6 +29,8 @@ public interface IRetainClient extends IConnectable {
     static RetainClientBuilder newBuilder() {
         return new RetainClientBuilder();
     }
+
+    IRPCServiceTrafficGovernor trafficGovernor();
 
     CompletableFuture<MatchReply> match(MatchRequest request);
 

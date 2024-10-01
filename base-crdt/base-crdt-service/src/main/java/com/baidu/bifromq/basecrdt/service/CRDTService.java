@@ -17,15 +17,16 @@ import static java.lang.Long.toUnsignedString;
 import static java.util.concurrent.Executors.newSingleThreadExecutor;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
-import com.baidu.bifromq.logger.FormatableLogger;
 import com.baidu.bifromq.basecrdt.core.api.ICRDTOperation;
 import com.baidu.bifromq.basecrdt.core.api.ICausalCRDT;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.store.ICRDTStore;
 import com.baidu.bifromq.basecrdt.store.proto.CRDTStoreMessage;
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.logger.FormatableLogger;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
+import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.schedulers.Schedulers;
@@ -64,6 +65,12 @@ public class CRDTService implements ICRDTService {
     @Override
     public long id() {
         return store.id();
+    }
+
+    @Override
+    public ByteString agentHostId() {
+        checkState();
+        return agentHost.local().getId();
     }
 
     @Override

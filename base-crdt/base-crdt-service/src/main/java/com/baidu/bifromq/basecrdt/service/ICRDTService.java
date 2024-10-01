@@ -17,6 +17,7 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.core.api.ICRDTOperation;
 import com.baidu.bifromq.basecrdt.core.api.ICausalCRDT;
 import com.baidu.bifromq.basecrdt.proto.Replica;
+import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.Optional;
 import java.util.Set;
@@ -36,6 +37,13 @@ public interface ICRDTService {
     }
 
     long id();
+
+    /**
+     * The id of the local agent host.
+     *
+     * @return the id of the local agent host
+     */
+    ByteString agentHostId();
 
     Replica host(String uri);
 

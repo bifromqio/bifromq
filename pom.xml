@@ -89,7 +89,7 @@
         <caffeine.version>3.1.8</caffeine.version>
         <grpc.version>1.66.0</grpc.version>
         <guava.version>33.2.1-jre</guava.version>
-        <jackson.dataformat.yaml.version>2.15.2</jackson.dataformat.yaml.version>
+        <jackson.dataformat.version>2.15.2</jackson.dataformat.version>
         <javax.annotation.api.version>1.3.2</javax.annotation.api.version>
         <javax.ws.rs-api.version>2.1.1</javax.ws.rs-api.version>
         <lombok.version>1.18.34</lombok.version>
@@ -500,9 +500,14 @@
                 <version>${apache.commons.collections.version}</version>
             </dependency>
             <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson.dataformat.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>com.fasterxml.jackson.dataformat</groupId>
                 <artifactId>jackson-dataformat-yaml</artifactId>
-                <version>${jackson.dataformat.yaml.version}</version>
+                <version>${jackson.dataformat.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.rocksdb</groupId>

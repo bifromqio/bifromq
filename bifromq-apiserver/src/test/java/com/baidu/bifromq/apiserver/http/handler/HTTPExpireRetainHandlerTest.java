@@ -46,7 +46,7 @@ public class HTTPExpireRetainHandlerTest extends AbstractHTTPRequestHandlerTest<
     @Test
     public void missingHeaders() {
         DefaultFullHttpRequest req = buildRequest();
-        HTTPExpireRetainHandler handler = new HTTPExpireRetainHandler(retainClient);
+        HTTPExpireRetainHandler handler = new HTTPExpireRetainHandler(settingProvider, retainClient);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
@@ -57,7 +57,7 @@ public class HTTPExpireRetainHandlerTest extends AbstractHTTPRequestHandlerTest<
         req.headers().set(HEADER_EXPIRY_SECONDS.header, "10");
         long reqId = 123;
         String tenantId = "bifromq_dev";
-        HTTPExpireRetainHandler handler = new HTTPExpireRetainHandler(retainClient);
+        HTTPExpireRetainHandler handler = new HTTPExpireRetainHandler(settingProvider, retainClient);
         when(retainClient.expireAll(any())).thenReturn(CompletableFuture.completedFuture(
             ExpireAllReply.newBuilder()
                 .setResult(ExpireAllReply.Result.OK)
@@ -77,7 +77,7 @@ public class HTTPExpireRetainHandlerTest extends AbstractHTTPRequestHandlerTest<
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPExpireRetainHandler handler = new HTTPExpireRetainHandler(retainClient);
+        HTTPExpireRetainHandler handler = new HTTPExpireRetainHandler(settingProvider, retainClient);
         when(retainClient.expireAll(any())).thenReturn(CompletableFuture.completedFuture(
             ExpireAllReply.newBuilder()
                 .setResult(ERROR)

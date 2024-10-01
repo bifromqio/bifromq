@@ -42,6 +42,7 @@ final class RPCServiceServerRegister extends RPCServiceAnnouncer implements IRPC
         assert !stopped.get();
         if (started.compareAndSet(false, true)) {
             localServer = RPCServer.newBuilder()
+                .setAgentHostId(crdtService.agentHostId())
                 .setId(id)
                 .setHost(hostAddr.getAddress().getHostAddress())
                 .setPort(hostAddr.getPort())

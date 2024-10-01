@@ -14,10 +14,11 @@
 package com.baidu.bifromq.dist.client;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.dist.RPCBluePrint;
-import com.baidu.bifromq.dist.client.scheduler.PubCall;
 import com.baidu.bifromq.dist.client.scheduler.DistServerCallScheduler;
 import com.baidu.bifromq.dist.client.scheduler.IDistServerCallScheduler;
+import com.baidu.bifromq.dist.client.scheduler.PubCall;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceGrpc;
 import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
@@ -30,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 final class DistClient implements IDistClient {
+    private final IRPCServiceTrafficGovernor trafficGovernor;
     private final IDistServerCallScheduler reqScheduler;
     private final IRPCClient rpcClient;
     private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -42,12 +44,19 @@ final class DistClient implements IDistClient {
             .crdtService(builder.crdtService)
             .sslContext(builder.sslContext)
             .build();
+        this.trafficGovernor = IRPCServiceTrafficGovernor
+            .newInstance(RPCBluePrint.INSTANCE.serviceDescriptor().getName(), builder.crdtService);
         reqScheduler = new DistServerCallScheduler(rpcClient);
     }
 
     @Override
     public Observable<IRPCClient.ConnState> connState() {
         return rpcClient.connState();
+    }
+
+    @Override
+    public IRPCServiceTrafficGovernor trafficGovernor() {
+        return trafficGovernor;
     }
 
     @Override
@@ -123,6 +132,7 @@ final class DistClient implements IDistClient {
             log.debug("Stopping rpc client");
             rpcClient.stop();
             log.info("Dist client stopped");
+            trafficGovernor.destroy();
         }
     }
 }

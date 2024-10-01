@@ -15,6 +15,7 @@ package com.baidu.bifromq.sessiondict.client;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.sessiondict.RPCBluePrint;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
@@ -41,6 +42,7 @@ public final class SessionDictClientBuilder implements ISessionDictClientBuilder
             .eventLoopGroup(eventLoopGroup)
             .sslContext(sslContext)
             .crdtService(crdtService)
-            .build());
+            .build(),
+            IRPCServiceTrafficGovernor.newInstance(RPCBluePrint.INSTANCE.serviceDescriptor().getName(), crdtService));
     }
 }

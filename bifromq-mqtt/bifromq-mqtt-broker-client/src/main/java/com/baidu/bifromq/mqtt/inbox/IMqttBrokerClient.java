@@ -14,6 +14,7 @@
 package com.baidu.bifromq.mqtt.inbox;
 
 import com.baidu.bifromq.baserpc.IConnectable;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
@@ -24,6 +25,8 @@ public interface IMqttBrokerClient extends ISubBroker, IConnectable {
     static MqttBrokerClientBuilder newBuilder() {
         return new MqttBrokerClientBuilder();
     }
+
+    IRPCServiceTrafficGovernor trafficGovernor();
 
     CompletableFuture<SubReply> sub(long reqId,
                                     String tenantId,

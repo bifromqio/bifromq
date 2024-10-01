@@ -24,7 +24,6 @@ import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpResponseStatus.UNAUTHORIZED;
 
 import com.baidu.bifromq.apiserver.Headers;
-import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.apiserver.utils.TopicUtil;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
@@ -54,11 +53,12 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/retain")
-public final class HTTPRetainHandler implements IHTTPRequestHandler {
+public final class HTTPRetainHandler extends HTTPTenantAwareHandler {
     private final IRetainClient retainClient;
     private final ISettingProvider settingProvider;
 
-    public HTTPRetainHandler(IRetainClient retainClient, ISettingProvider settingProvider) {
+    public HTTPRetainHandler(ISettingProvider settingProvider, IRetainClient retainClient) {
+        super(settingProvider);
         this.retainClient = retainClient;
         this.settingProvider = settingProvider;
     }

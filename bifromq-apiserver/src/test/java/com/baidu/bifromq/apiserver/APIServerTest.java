@@ -20,9 +20,12 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.dist.client.PubResult;
+import com.baidu.bifromq.basecluster.IAgentHost;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
+import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
@@ -30,6 +33,7 @@ import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
+import io.reactivex.rxjava3.core.Observable;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -45,6 +49,12 @@ public class APIServerTest extends MockableTest {
     private final String host = "127.0.0.1";
     private APIServer apiServer;
     @Mock
+    private IAgentHost agentHost;
+    @Mock
+    private IRPCServiceTrafficGovernor trafficGovernor;
+    @Mock
+    private IMqttBrokerClient brokerClient;
+    @Mock
     private IDistClient distClient;
     @Mock
     private IInboxClient inboxClient;
@@ -57,11 +67,29 @@ public class APIServerTest extends MockableTest {
     @BeforeMethod(alwaysRun = true)
     public void setup() {
         super.setup();
+        when(trafficGovernor.serverList()).thenReturn(Observable.empty());
+        when(brokerClient.trafficGovernor()).thenReturn(trafficGovernor);
+        when(distClient.trafficGovernor()).thenReturn(trafficGovernor);
+        when(inboxClient.trafficGovernor()).thenReturn(trafficGovernor);
+        when(sessionDictClient.trafficGovernor()).thenReturn(trafficGovernor);
+        when(retainClient.trafficGovernor()).thenReturn(trafficGovernor);
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
         EventLoopGroup workerGroup = new NioEventLoopGroup(1);
-        apiServer = new APIServer(host, 0, 0, 1024 * 1024,
-            bossGroup, workerGroup, null, distClient, inboxClient,
-            sessionDictClient, retainClient, settingProvider);
+        apiServer = APIServer.builder()
+            .host(host)
+            .port(0)
+            .tlsPort(0)
+            .maxContentLength(1024 * 1024)
+            .bossGroup(bossGroup)
+            .workerGroup(workerGroup)
+            .agentHost(agentHost)
+            .brokerClient(brokerClient)
+            .distClient(distClient)
+            .inboxClient(inboxClient)
+            .sessionDictClient(sessionDictClient)
+            .retainClient(retainClient)
+            .settingProvider(settingProvider)
+            .build();
         apiServer.start();
     }
 

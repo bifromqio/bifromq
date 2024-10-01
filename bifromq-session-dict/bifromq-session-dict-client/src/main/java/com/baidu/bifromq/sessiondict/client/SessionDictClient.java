@@ -14,6 +14,7 @@
 package com.baidu.bifromq.sessiondict.client;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.sessiondict.SessionRegisterKeyUtil;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetRequest;
@@ -46,20 +47,27 @@ final class SessionDictClient implements ISessionDictClient {
     }
 
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final IRPCServiceTrafficGovernor trafficGovernor;
     private final IRPCClient rpcClient;
     private final LoadingCache<ManagerCacheKey, SessionRegister> tenantSessionRegisterManagers;
 
-    SessionDictClient(IRPCClient rpcClient) {
+    SessionDictClient(IRPCClient rpcClient, IRPCServiceTrafficGovernor trafficGovernor) {
         this.rpcClient = rpcClient;
         tenantSessionRegisterManagers = Caffeine.newBuilder()
             .weakValues()
             .executor(MoreExecutors.directExecutor())
             .build(key -> new SessionRegister(key.tenantId, key.registerKey, rpcClient));
+        this.trafficGovernor = trafficGovernor;
     }
 
     @Override
     public Observable<IRPCClient.ConnState> connState() {
         return rpcClient.connState();
+    }
+
+    @Override
+    public IRPCServiceTrafficGovernor trafficGovernor() {
+        return trafficGovernor;
     }
 
     @Override

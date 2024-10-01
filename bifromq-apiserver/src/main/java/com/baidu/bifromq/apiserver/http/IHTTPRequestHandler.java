@@ -21,5 +21,5 @@ import java.util.concurrent.CompletableFuture;
 
 @OpenAPIDefinition(info = @Info(title = "BifroMQ RESTful API", version = "${project.version}"))
 public interface IHTTPRequestHandler {
-    CompletableFuture<FullHttpResponse> handle(long reqId, String tenantId, FullHttpRequest req);
+    CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req);
 }

@@ -16,6 +16,7 @@ package com.baidu.bifromq.inbox.client;
 import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
@@ -50,11 +51,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 final class InboxClient implements IInboxClient {
     private final AtomicBoolean hasStopped = new AtomicBoolean();
+    private final IRPCServiceTrafficGovernor trafficGovernor;
     private final IRPCClient rpcClient;
     private final LoadingCache<FetchPipelineKey, InboxFetchPipeline> fetchPipelineCache;
 
-    InboxClient(IRPCClient rpcClient) {
+    InboxClient(IRPCClient rpcClient, IRPCServiceTrafficGovernor trafficGovernor) {
         this.rpcClient = rpcClient;
+        this.trafficGovernor = trafficGovernor;
         fetchPipelineCache = Caffeine.newBuilder()
             .weakValues()
             .executor(MoreExecutors.directExecutor())
@@ -88,6 +91,11 @@ final class InboxClient implements IInboxClient {
                     .setCode(CommitReply.Code.ERROR)
                     .build();
             });
+    }
+
+    @Override
+    public IRPCServiceTrafficGovernor trafficGovernor() {
+        return trafficGovernor;
     }
 
     @Override
@@ -202,6 +210,7 @@ final class InboxClient implements IInboxClient {
             fetchPipelineCache.invalidateAll();
             log.debug("Stopping rpc client");
             rpcClient.stop();
+            trafficGovernor.destroy();
             log.info("Inbox client closed");
         }
     }

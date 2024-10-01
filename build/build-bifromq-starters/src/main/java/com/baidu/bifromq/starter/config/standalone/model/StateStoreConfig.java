@@ -24,7 +24,6 @@ import lombok.Setter;
 @Getter
 @Setter
 public class StateStoreConfig {
-    private String overrideIdentity;
     private int tickerThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 20);
     private int bgWorkerThreads = Math.max(1, EnvProvider.INSTANCE.availableProcessors() / 4);
 

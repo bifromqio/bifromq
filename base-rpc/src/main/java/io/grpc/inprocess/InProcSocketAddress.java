@@ -33,20 +33,10 @@ public final class InProcSocketAddress extends SocketAddress {
         this.name = checkNotNull(name, "name");
     }
 
-    /**
-     * Gets the name of the inprocess server.
-     *
-     * @since 1.0.0
-     */
     public String getName() {
         return name;
     }
 
-    /**
-     * Returns {@link #getName}.
-     *
-     * @since 1.14.0
-     */
     @Override
     public String toString() {
         return name;
@@ -57,11 +47,6 @@ public final class InProcSocketAddress extends SocketAddress {
         return name.hashCode();
     }
 
-    /**
-     * Returns {@code true} if the object is of the same type and server names match.
-     *
-     * @since 1.15.0
-     */
     @Override
     public boolean equals(Object obj) {
         if (!(obj instanceof InProcSocketAddress)) {

@@ -53,7 +53,7 @@ abstract class RPCServiceAnnouncer {
     private static final ByteString TRAFFIC_DIRECTIVE_KEY = ByteString.copyFrom(new byte[] {0x01});
 
     protected final String serviceUniqueName;
-    private final ICRDTService crdtService;
+    protected final ICRDTService crdtService;
     private final Replica crdtReplica;
     private final IORMap rpcServiceCRDT;
     private final BehaviorSubject<Map<String, RPCServer>> svrSubject;

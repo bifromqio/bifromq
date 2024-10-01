@@ -102,6 +102,7 @@ public class HostMemberList implements IHostMemberList {
                 .setId(hostListCRDT.id().getId())
                 .setAddress(bindAddr)
                 .setPort(port)
+                .setPid(ProcessHandle.current().pid())
                 .build())
             .setIncarnation(0)
             .build();

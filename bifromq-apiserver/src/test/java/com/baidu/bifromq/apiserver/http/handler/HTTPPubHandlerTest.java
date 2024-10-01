@@ -18,6 +18,8 @@ import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_TYPE;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_EXPIRY_SECONDS;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_QOS;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_TOPIC;
+import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH;
+import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -29,8 +31,9 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertThrows;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.dist.client.PubResult;
+import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.type.QoS;
@@ -41,6 +44,7 @@ import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpVersion;
 import java.util.concurrent.CompletableFuture;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
@@ -59,7 +63,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
     public void missingHeaders() {
         DefaultFullHttpRequest req = buildRequest();
 
-        HTTPPubHandler handler = new HTTPPubHandler(distClient, settingProvider);
+        HTTPPubHandler handler = new HTTPPubHandler(settingProvider, distClient);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
@@ -74,7 +78,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPPubHandler handler = new HTTPPubHandler(distClient, settingProvider);
+        HTTPPubHandler handler = new HTTPPubHandler(settingProvider, distClient);
         handler.handle(reqId, tenantId, req);
         verify(distClient).pub(eq(reqId),
             eq(req.headers().get(HEADER_TOPIC.header)),
@@ -105,7 +109,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPPubHandler handler = new HTTPPubHandler(distClient, settingProvider);
+        HTTPPubHandler handler = new HTTPPubHandler(settingProvider, distClient);
 
         when(distClient.pub(anyLong(), anyString(), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(PubResult.OK));
@@ -126,7 +130,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPPubHandler handler = new HTTPPubHandler(distClient, settingProvider);
+        HTTPPubHandler handler = new HTTPPubHandler(settingProvider, distClient);
 
         when(distClient.pub(anyLong(), anyString(), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(PubResult.OK));
@@ -146,13 +150,38 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPPubHandler handler = new HTTPPubHandler(distClient, settingProvider);
+        HTTPPubHandler handler = new HTTPPubHandler(settingProvider, distClient);
 
         when(distClient.pub(anyLong(), anyString(), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(result));
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());
         assertEquals(response.status(), expectedStatus);
+    }
+
+    @Test
+    public void requestWithoutTenantId() {
+        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/fake");
+        long reqId = System.nanoTime();
+        req.headers().set(Headers.HEADER_REQ_ID.header, reqId);
+        HTTPPubHandler handler = new HTTPPubHandler(settingProvider, distClient);
+        FullHttpResponse response = handler.handle(reqId, req).join();
+        assertEquals(response.protocolVersion(), req.protocolVersion());
+        assertEquals(response.status(), BAD_REQUEST);
+    }
+
+
+    @Test
+    public void tooLargeRequest() {
+        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/fake");
+        long reqId = System.nanoTime();
+        req.headers().set(Headers.HEADER_REQ_ID.header, reqId);
+        req.headers().set(Headers.HEADER_TENANT_ID.header, "tenantId");
+        req.headers().set(CONTENT_LENGTH, 1024 * 2048);
+        HTTPPubHandler handler = new HTTPPubHandler(settingProvider, distClient);
+        FullHttpResponse response = handler.handle(reqId, req).join();
+        assertEquals(response.protocolVersion(), req.protocolVersion());
+        assertEquals(response.status(), HttpResponseStatus.REQUEST_ENTITY_TOO_LARGE);
     }
 
     private DefaultFullHttpRequest buildRequest() {

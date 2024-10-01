@@ -16,4 +16,5 @@ message RPCServer {
   map<string, string> attrs = 6;
   bytes announcerId = 7;
   uint64 announcedTS = 8;
+  bytes agentHostId = 9; // the id of the host that the server is running on
 }

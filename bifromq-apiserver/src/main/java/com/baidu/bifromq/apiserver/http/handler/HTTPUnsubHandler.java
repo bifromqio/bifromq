@@ -23,7 +23,7 @@ import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpResponseStatus.UNAUTHORIZED;
 
-import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
@@ -44,10 +44,11 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/unsub")
-public final class HTTPUnsubHandler implements IHTTPRequestHandler {
+public final class HTTPUnsubHandler extends HTTPTenantAwareHandler {
     private final ISessionDictClient sessionDictClient;
 
-    public HTTPUnsubHandler(ISessionDictClient sessionDictClient) {
+    public HTTPUnsubHandler(ISettingProvider settingProvider, ISessionDictClient sessionDictClient) {
+        super(settingProvider);
         this.sessionDictClient = sessionDictClient;
     }
 

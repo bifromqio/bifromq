@@ -127,6 +127,11 @@ final class AgentHost implements IAgentHost {
     }
 
     @Override
+    public String env() {
+        return options.env();
+    }
+
+    @Override
     public HostEndpoint local() {
         return memberList.local().getEndpoint();
     }
@@ -134,11 +139,6 @@ final class AgentHost implements IAgentHost {
     @Override
     public CompletableFuture<Void> join(Set<InetSocketAddress> seeds) {
         return seeder.join(seeds);
-    }
-
-    @Override
-    public Observable<Set<HostEndpoint>> cluster() {
-        return memberList.members().map(Map::keySet);
     }
 
     @Override

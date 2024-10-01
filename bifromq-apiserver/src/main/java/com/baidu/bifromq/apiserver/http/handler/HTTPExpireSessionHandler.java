@@ -18,11 +18,11 @@ import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader
 import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
-import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireAllReply;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireAllRequest;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -42,10 +42,11 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/session")
-public final class HTTPExpireSessionHandler implements IHTTPRequestHandler {
+public final class HTTPExpireSessionHandler extends HTTPTenantAwareHandler {
     private final IInboxClient inboxClient;
 
-    public HTTPExpireSessionHandler(IInboxClient inboxClient) {
+    public HTTPExpireSessionHandler(ISettingProvider settingProvider, IInboxClient inboxClient) {
+        super(settingProvider);
         this.inboxClient = inboxClient;
     }
 

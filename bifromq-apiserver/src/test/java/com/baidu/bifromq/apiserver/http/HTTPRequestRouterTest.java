@@ -18,11 +18,9 @@ import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpHeaderValues.CLOSE;
 import static io.netty.handler.codec.http.HttpHeaderValues.KEEP_ALIVE;
-import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
@@ -75,9 +73,8 @@ public class HTTPRequestRouterTest extends MockableTest {
     public void keepAliveHeaderForHTTP_1_0() {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/fake");
         req.headers().set(CONNECTION, KEEP_ALIVE);
-        req.headers().set(Headers.HEADER_TENANT_ID.header, tenantId);
         when(routeMap.getHandler(any())).thenReturn(requestHandler);
-        when(requestHandler.handle(anyLong(), anyString(), any()))
+        when(requestHandler.handle(anyLong(), any()))
             .thenReturn(CompletableFuture.completedFuture(
                 new DefaultFullHttpResponse(HttpVersion.HTTP_1_0, HttpResponseStatus.OK)));
 
@@ -90,9 +87,8 @@ public class HTTPRequestRouterTest extends MockableTest {
     @Test
     public void closeConnectionForHTTP_1_0() {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/fake");
-        req.headers().set(Headers.HEADER_TENANT_ID.header, tenantId);
         when(routeMap.getHandler(any())).thenReturn(requestHandler);
-        when(requestHandler.handle(anyLong(), anyString(), any()))
+        when(requestHandler.handle(anyLong(), any()))
             .thenReturn(CompletableFuture.completedFuture(
                 new DefaultFullHttpResponse(HttpVersion.HTTP_1_0, HttpResponseStatus.OK)));
 
@@ -109,9 +105,8 @@ public class HTTPRequestRouterTest extends MockableTest {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/fake");
         long reqId = System.nanoTime();
         req.headers().set(Headers.HEADER_REQ_ID.header, reqId);
-        req.headers().set(Headers.HEADER_TENANT_ID.header, tenantId);
         when(routeMap.getHandler(any())).thenReturn(requestHandler);
-        when(requestHandler.handle(anyLong(), anyString(), any()))
+        when(requestHandler.handle(anyLong(), any()))
             .thenReturn(CompletableFuture.completedFuture(
                 new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)));
 
@@ -124,31 +119,12 @@ public class HTTPRequestRouterTest extends MockableTest {
     }
 
     @Test
-    public void requestWithoutTenantId() {
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/fake");
-        req.headers().set(CONNECTION, CLOSE);
-        when(routeMap.getHandler(any())).thenReturn(requestHandler);
-        when(requestHandler.handle(anyLong(), anyString(), any()))
-            .thenReturn(CompletableFuture.completedFuture(
-                new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)));
-
-        channel.writeInbound(req);
-        HttpResponse resp = channel.readOutbound();
-        assertEquals(resp.protocolVersion(), req.protocolVersion());
-        assertEquals(resp.headers().get(CONNECTION), CLOSE.toString());
-        assertEquals(resp.status().code(), BAD_REQUEST.code());
-
-        assertFalse(channel.isOpen());
-    }
-
-    @Test
     public void handleException() {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/fake");
         long reqId = System.nanoTime();
         req.headers().set(Headers.HEADER_REQ_ID.header, reqId);
-        req.headers().set(Headers.HEADER_TENANT_ID.header, tenantId);
         when(routeMap.getHandler(any())).thenReturn(requestHandler);
-        when(requestHandler.handle(anyLong(), anyString(), any())).thenReturn(
+        when(requestHandler.handle(anyLong(), any())).thenReturn(
             CompletableFuture.failedFuture(new RuntimeException("Mocked Exception")));
 
         channel.writeInbound(req);
@@ -161,23 +137,4 @@ public class HTTPRequestRouterTest extends MockableTest {
         assertEquals(resp.headers().get(Headers.HEADER_REQ_ID.header), Long.toString(reqId));
     }
 
-    @Test
-    public void tooLargeRequest() {
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/fake");
-        long reqId = System.nanoTime();
-        req.headers().set(Headers.HEADER_REQ_ID.header, reqId);
-        req.headers().set(Headers.HEADER_TENANT_ID.header, tenantId);
-        req.headers().set(CONTENT_LENGTH, 1024 * 2048);
-        when(routeMap.getHandler(any())).thenReturn(requestHandler);
-        when(requestHandler.handle(anyLong(), anyString(), any()))
-            .thenReturn(CompletableFuture.completedFuture(
-                new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)));
-
-        channel.writeInbound(req);
-        HttpResponse resp = channel.readOutbound();
-        assertEquals(resp.protocolVersion(), req.protocolVersion());
-        assertEquals(resp.status(), HttpResponseStatus.REQUEST_ENTITY_TOO_LARGE);
-
-        assertFalse(channel.isOpen());
-    }
 }

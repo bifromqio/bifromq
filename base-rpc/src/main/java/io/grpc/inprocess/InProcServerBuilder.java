@@ -75,7 +75,7 @@ public final class InProcServerBuilder extends ForwardingServerBuilder<InProcSer
      * @return a new builder
      */
     public static InProcServerBuilder forName(String name) {
-        return forAddress(new InProcSocketAddress(checkNotNull(name, "name")));
+        return forAddress(new InProcSocketAddress(name));
     }
 
     /**

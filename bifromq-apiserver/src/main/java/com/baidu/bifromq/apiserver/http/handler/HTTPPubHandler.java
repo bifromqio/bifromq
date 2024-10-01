@@ -24,7 +24,6 @@ import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERR
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
 import com.baidu.bifromq.apiserver.Headers;
-import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.apiserver.utils.TopicUtil;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.dist.client.IDistClient;
@@ -57,14 +56,15 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/pub")
-public final class HTTPPubHandler implements IHTTPRequestHandler {
+public final class HTTPPubHandler extends HTTPTenantAwareHandler {
     private static final ByteBuf UNACCEPTED_TOPIC = Unpooled.wrappedBuffer("Unaccepted Topic".getBytes());
     private static final ByteBuf INVALID_QOS = Unpooled.wrappedBuffer("Invalid QoS".getBytes());
     private static final ByteBuf INVALID_EXPIRY_SECONDS = Unpooled.wrappedBuffer("Invalid expiry seconds".getBytes());
     private final IDistClient distClient;
     private final ISettingProvider settingProvider;
 
-    public HTTPPubHandler(IDistClient distClient, ISettingProvider settingProvider) {
+    public HTTPPubHandler(ISettingProvider settingProvider, IDistClient distClient) {
+        super(settingProvider);
         this.distClient = distClient;
         this.settingProvider = settingProvider;
     }

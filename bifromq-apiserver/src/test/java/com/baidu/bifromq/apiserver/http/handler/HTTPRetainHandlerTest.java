@@ -52,7 +52,7 @@ public class HTTPRetainHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPRe
     public void missingHeaders() {
         DefaultFullHttpRequest req = buildRequest();
 
-        HTTPRetainHandler handler = new HTTPRetainHandler(retainClient, settingProvider);
+        HTTPRetainHandler handler = new HTTPRetainHandler(settingProvider, retainClient);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
@@ -73,7 +73,7 @@ public class HTTPRetainHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPRe
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPRetainHandler handler = new HTTPRetainHandler(retainClient, settingProvider);
+        HTTPRetainHandler handler = new HTTPRetainHandler(settingProvider, retainClient);
 
         when(retainClient.retain(anyLong(), anyString(), any(), any(), anyInt(), any()))
             .thenReturn(CompletableFuture.completedFuture(RetainReply.newBuilder()

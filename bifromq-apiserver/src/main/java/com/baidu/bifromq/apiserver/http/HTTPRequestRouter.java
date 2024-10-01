@@ -14,9 +14,6 @@
 package com.baidu.bifromq.apiserver.http;
 
 import static com.baidu.bifromq.apiserver.Headers.HEADER_REQ_ID;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_TENANT_ID;
-import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
-import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
 import static io.netty.handler.codec.http.HttpHeaderNames.CONNECTION;
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
@@ -28,8 +25,6 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
 import com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.baidu.bifromq.plugin.settingprovider.Setting;
-import com.google.common.base.Strings;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFutureListener;
@@ -73,39 +68,26 @@ public class HTTPRequestRouter extends SimpleChannelInboundHandler<FullHttpReque
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest req) {
-        String tenantId = getHeader(HEADER_TENANT_ID, req, false);
-        if (Strings.isNullOrEmpty(tenantId)) {
-            FullHttpResponse response =
-                new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.BAD_REQUEST, EMPTY_BUFFER);
-            response.headers().set(CONTENT_TYPE, "text/plain; charset=UTF-8");
-            response.headers().setInt(CONTENT_LENGTH, response.content().readableBytes());
-            doResponse(ctx, req, response);
-        } else {
-            Integer maxUserPayloadBytes = settingProvider.provide(Setting.MaxUserPayloadBytes, tenantId);
-            if (HttpUtil.getContentLength(req, -1) > maxUserPayloadBytes) {
-                ctx.writeAndFlush(TOO_LARGE_CLOSE.retainedDuplicate()).addListener(ChannelFutureListener.CLOSE);
-                return;
-            }
-            req.retain();
-            long reqId = HTTPHeaderUtils.getOptionalReqId(req);
-            routeMap.getHandler(req)
-                .handle(reqId, tenantId, req)
-                .whenComplete((v, e) -> {
-                    FullHttpResponse response;
-                    if (e != null) {
-                        ByteBuf content = ctx.alloc().buffer();
-                        content.writeBytes(e.getMessage().getBytes());
-                        response = new DefaultFullHttpResponse(HTTP_1_1, INTERNAL_SERVER_ERROR, content);
-                        response.headers().set(CONTENT_TYPE, "text/plain; charset=UTF-8");
-                    } else {
-                        response = v;
-                    }
-                    response.headers().set(HEADER_REQ_ID.header, reqId);
-                    response.headers().setInt(CONTENT_LENGTH, response.content().readableBytes());
-                    doResponse(ctx, req, response);
-                    req.release();
-                });
-        }
+        long reqId = HTTPHeaderUtils.getOptionalReqId(req);
+        req.retain();
+        routeMap.getHandler(req)
+            .handle(reqId, req)
+            .whenComplete((v, e) -> {
+                FullHttpResponse response;
+                if (e != null) {
+                    ByteBuf content = ctx.alloc().buffer();
+                    content.writeBytes(e.getMessage().getBytes());
+                    response = new DefaultFullHttpResponse(HTTP_1_1, INTERNAL_SERVER_ERROR, content);
+                    response.headers().set(CONTENT_TYPE, "text/plain; charset=UTF-8");
+                } else {
+                    response = v;
+                }
+                response.headers().set(HEADER_REQ_ID.header, reqId);
+                response.headers().setInt(CONTENT_LENGTH, response.content().readableBytes());
+                doResponse(ctx, req, response);
+                req.release();
+            });
+
     }
 
     private void doResponse(ChannelHandlerContext ctx, FullHttpRequest req, FullHttpResponse response) {

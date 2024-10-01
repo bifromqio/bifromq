@@ -51,7 +51,7 @@ public class HTTPRouteMapTest extends MockableTest {
         FullHttpRequest httpRequest = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/fake");
         IHTTPRequestHandler handler =
             routeMap.getHandler(httpRequest);
-        FullHttpResponse response = handler.handle(123, "fakeTenant", httpRequest).join();
+        FullHttpResponse response = handler.handle(123, httpRequest).join();
         assertEquals(response.protocolVersion(), httpRequest.protocolVersion());
         assertEquals(response.status(), HttpResponseStatus.BAD_REQUEST);
         assertEquals(response.content().readableBytes(), 0);
@@ -59,7 +59,7 @@ public class HTTPRouteMapTest extends MockableTest {
 
     @Test
     public void getHandler() {
-        HTTPPubHandler pubHandler = new HTTPPubHandler(distClient, settingProvider);
+        HTTPPubHandler pubHandler = new HTTPPubHandler(settingProvider, distClient);
         Collection<IHTTPRequestHandler> ret = Collections.singleton(pubHandler);
         when(handlersFactory.build()).thenReturn(ret);
         HTTPRouteMap routeMap = new HTTPRouteMap(handlersFactory);

@@ -18,6 +18,7 @@ import static com.baidu.bifromq.baserpc.RPCContext.GPID;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baserpc.proto.RPCServer;
 import com.google.common.collect.Sets;
+import com.google.protobuf.ByteString;
 import io.grpc.inprocess.InProcSocketAddress;
 import io.reactivex.rxjava3.core.Observable;
 import java.net.InetSocketAddress;
@@ -33,18 +34,24 @@ public interface IRPCServiceTrafficDirector {
 
     @ToString
     class Server {
+        public final ByteString agentHostId;
         public final String id;
+        public final String address;
+        public final int port;
         public final SocketAddress hostAddr;
         public final Set<String> groupTags;
         public final Map<String, String> attrs;
         public final boolean inProc;
 
         public Server(RPCServer server) {
+            this.agentHostId = server.getAgentHostId();
             this.id = server.getId();
+            this.address = server.getHost();
+            this.port = server.getPort();
             this.attrs = server.getAttrsMap();
             this.groupTags = Sets.newHashSet(server.getGroupList());
-            this.hostAddr = GPID.equals(server.getGpid()) ?
-                new InProcSocketAddress(server.getId()) : new InetSocketAddress(server.getHost(), server.getPort());
+            this.hostAddr = GPID.equals(server.getGpid())
+                ? new InProcSocketAddress(server.getId()) : new InetSocketAddress(server.getHost(), server.getPort());
             this.inProc = GPID.equals(server.getGpid());
         }
     }

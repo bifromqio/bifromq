@@ -27,6 +27,7 @@ import com.baidu.bifromq.basecrdt.core.api.IORMap.ORMapKey;
 import com.baidu.bifromq.basecrdt.core.api.ORMapOperation;
 import com.baidu.bifromq.basecrdt.core.api.ORMapOperation.ORMapRemove;
 import com.baidu.bifromq.basecrdt.core.api.ORMapOperation.ORMapUpdate;
+import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.MockableTest;
@@ -68,6 +69,7 @@ public class KVRangeStoreDescriptorReporterTest extends MockableTest {
     protected void doSetup(Method method) {
         String uri = storeDescriptorMapCRDTURI("testCluster");
         when(crdtService.get(uri)).thenAnswer((Answer<Optional<IORMap>>) invocation -> Optional.of(storeDescriptorMap));
+        when(crdtService.host(uri)).thenReturn(Replica.newBuilder().setUri(uri).build());
         storeDescriptorReporter = new KVRangeStoreDescriptorReporter("testCluster", localStoreId, crdtService, 200L);
         storeDescriptor = KVRangeStoreDescriptor.newBuilder()
             .setId(localStoreId)

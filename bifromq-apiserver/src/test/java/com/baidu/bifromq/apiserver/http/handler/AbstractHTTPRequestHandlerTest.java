@@ -13,19 +13,46 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
+import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotNull;
 
+import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.apiserver.MockableTest;
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponse;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
+import java.util.concurrent.CompletableFuture;
 import javax.ws.rs.Path;
+import org.mockito.Mock;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public abstract class AbstractHTTPRequestHandlerTest<T> extends MockableTest {
+    @Mock
+    protected ISettingProvider settingProvider;
+
     protected abstract Class<T> handlerClass();
+
+    @BeforeMethod
+    @Override
+    public void setup() {
+        super.setup();
+        when(settingProvider.provide(any(), anyString())).thenAnswer(
+            invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
+    }
 
     @Test
     public final void annotationAttached() {

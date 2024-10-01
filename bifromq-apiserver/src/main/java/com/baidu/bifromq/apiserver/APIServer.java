@@ -16,9 +16,11 @@ package com.baidu.bifromq.apiserver;
 import com.baidu.bifromq.apiserver.http.HTTPRouteMap;
 import com.baidu.bifromq.apiserver.http.IHTTPRouteMap;
 import com.baidu.bifromq.apiserver.http.handler.HTTPRequestHandlersFactory;
+import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
+import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
@@ -37,6 +39,7 @@ import io.netty.handler.ssl.SslContext;
 import java.net.InetSocketAddress;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
+import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -52,30 +55,35 @@ public class APIServer implements IAPIServer {
     private final ChannelFuture tlsServerChannel;
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
 
-    public APIServer(String host,
-                     int port,
-                     int tlsPort,
-                     int maxContentLength,
-                     EventLoopGroup bossGroup,
-                     EventLoopGroup workerGroup,
-                     SslContext sslContext,
-                     IDistClient distClient,
-                     IInboxClient inboxClient,
-                     ISessionDictClient sessionDictClient,
-                     IRetainClient retainClient,
-                     ISettingProvider settingProvider) {
+    @Builder
+    private APIServer(String host,
+                      int port,
+                      int tlsPort,
+                      int maxContentLength,
+                      EventLoopGroup bossGroup,
+                      EventLoopGroup workerGroup,
+                      SslContext sslContext,
+                      IAgentHost agentHost,
+                      IMqttBrokerClient brokerClient,
+                      IDistClient distClient,
+                      IInboxClient inboxClient,
+                      ISessionDictClient sessionDictClient,
+                      IRetainClient retainClient,
+                      ISettingProvider settingProvider) {
         Preconditions.checkArgument(port >= 0);
         Preconditions.checkArgument(tlsPort >= 0);
         this.host = host;
         this.bossGroup = bossGroup;
         this.workerGroup = workerGroup;
-        IHTTPRouteMap routeMap = new HTTPRouteMap(new HTTPRequestHandlersFactory(sessionDictClient,
-            distClient, inboxClient, retainClient, settingProvider));
+        IHTTPRouteMap routeMap =
+            new HTTPRouteMap(new HTTPRequestHandlersFactory(agentHost, brokerClient, sessionDictClient,
+                distClient, inboxClient, retainClient, settingProvider));
         this.serverChannel =
             buildServerChannel(port, new NonTLSServerInitializer(routeMap, settingProvider, maxContentLength));
         if (sslContext != null) {
             this.tlsServerChannel =
-                buildServerChannel(tlsPort, new TLSServerInitializer(sslContext, routeMap, settingProvider, maxContentLength));
+                buildServerChannel(tlsPort,
+                    new TLSServerInitializer(sslContext, routeMap, settingProvider, maxContentLength));
         } else {
             this.tlsServerChannel = null;
         }
