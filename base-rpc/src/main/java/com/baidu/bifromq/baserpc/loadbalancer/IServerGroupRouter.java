@@ -16,6 +16,8 @@ package com.baidu.bifromq.baserpc.loadbalancer;
 import java.util.Optional;
 
 interface IServerGroupRouter {
+    boolean exists(String serverId);
+
     Optional<String> random();
 
     Optional<String> roundRobin();

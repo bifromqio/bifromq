@@ -36,13 +36,28 @@ public class HTTPRequestHandlersFactory implements IHTTPRequestHandlersFactory {
                                       IInboxClient inboxClient,
                                       IRetainClient retainClient,
                                       ISettingProvider settingProvider) {
-        register(new HTTPBrokerServerLandscapeHandler(brokerClient));
-        register(new HTTPDictServerLandscapeHandler(sessionDictClient));
-        register(new HTTPDistServerLandscapeHandler(distClient));
-        register(new HTTPInboxServerLandscapeHandler(inboxClient));
-        register(new HTTPRetainServerLandscapeHandler(retainClient));
+        register(new HTTPGetDictTrafficDirective(sessionDictClient));
+        register(new HTTPGetDistTrafficDirective(distClient));
+        register(new HTTPGetInboxTrafficDirective(inboxClient));
+        register(new HTTPGetRetainTrafficDirective(retainClient));
+
+        register(new HTTPSetDictTrafficDirective(sessionDictClient));
+        register(new HTTPSetDistTrafficDirective(distClient));
+        register(new HTTPSetInboxTrafficDirective(inboxClient));
+        register(new HTTPSetRetainTrafficDirective(retainClient));
+
+        register(new HTTPGetBrokerServerLandscapeHandler(brokerClient));
+        register(new HTTPGetDictServerLandscapeHandler(sessionDictClient));
+        register(new HTTPGetDistServerLandscapeHandler(distClient));
+        register(new HTTPGetInboxServerLandscapeHandler(inboxClient));
+        register(new HTTPGetRetainServerLandscapeHandler(retainClient));
         register(new HTTPGetClusterHandler(agentHost));
         register(new HTTPGetSessionInfoHandler(settingProvider, sessionDictClient));
+        register(new HTTPSetDistServerGroupsHandler(distClient));
+        register(new HTTPSetInboxServerGroupsHandler(inboxClient));
+        register(new HTTPSetRetainServerGroupsHandler(retainClient));
+        register(new HTTPSetDictServerGroupsHandler(sessionDictClient));
+
         register(new HTTPKillHandler(settingProvider, sessionDictClient));
         register(new HTTPRetainHandler(settingProvider, retainClient));
         register(new HTTPExpireRetainHandler(settingProvider, retainClient));

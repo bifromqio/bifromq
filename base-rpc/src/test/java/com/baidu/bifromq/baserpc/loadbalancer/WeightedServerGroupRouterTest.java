@@ -14,6 +14,7 @@
 package com.baidu.bifromq.baserpc.loadbalancer;
 
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertTrue;
 
 import java.util.Map;
@@ -22,6 +23,19 @@ import java.util.Set;
 import org.testng.annotations.Test;
 
 public class WeightedServerGroupRouterTest {
+    @Test
+    void exists() {
+        Map<String, Integer> trafficAssignment = Map.of("group1", 5);
+        Map<String, Set<String>> groupAssignment = Map.of(
+            "group1", Set.of("server1", "server2", "server3")
+        );
+
+        WeightedServerGroupRouter router = new WeightedServerGroupRouter(trafficAssignment, groupAssignment, null);
+        assertTrue(router.exists("server1"));
+        assertTrue(router.exists("server2"));
+        assertTrue(router.exists("server3"));
+    }
+
     @Test
     void randomRouting() {
         Map<String, Integer> trafficAssignment = Map.of("group1", 5);
@@ -49,6 +63,25 @@ public class WeightedServerGroupRouterTest {
         assertTrue(server.isPresent());
         assertEquals("server1", server.get());
     }
+
+    @Test
+    void inProcIgnored() {
+        Map<String, Integer> trafficAssignment = Map.of("group1", 5);
+        Map<String, Set<String>> groupAssignment = Map.of(
+            "group1", Set.of("server1", "server2", "server3")
+        );
+
+        WeightedServerGroupRouter router = new WeightedServerGroupRouter(trafficAssignment, groupAssignment, "server4");
+
+        Optional<String> server = router.random();
+        assertTrue(server.isPresent());
+        assertNotEquals("server4", server.get());
+
+        server = router.roundRobin();
+        assertTrue(server.isPresent());
+        assertNotEquals("server4", server.get());
+    }
+
 
     @Test
     void roundRobinRouting() {

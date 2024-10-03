@@ -13,19 +13,10 @@
 
 package com.baidu.bifromq.baserpc.loadbalancer;
 
-import io.grpc.MethodDescriptor;
-import java.util.Optional;
-
-public interface IUpdateListener {
-    interface IServerSelector {
-        boolean direct(String tenantId, String serverId, MethodDescriptor<?, ?> methodDescriptor);
-
-        Optional<String> hashing(String tenantId, String key, MethodDescriptor<?, ?> methodDescriptor);
-
-        Optional<String> roundRobin(String tenantId, MethodDescriptor<?, ?> methodDescriptor);
-
-        Optional<String> random(String tenantId, MethodDescriptor<?, ?> methodDescriptor);
-    }
+/**
+ * Callback listener for server selector update.
+ */
+public interface IServerSelectorUpdateListener {
 
     void onUpdate(IServerSelector selector);
 }

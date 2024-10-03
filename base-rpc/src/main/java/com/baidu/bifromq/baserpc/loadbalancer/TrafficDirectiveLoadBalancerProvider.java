@@ -21,7 +21,7 @@ import lombok.AllArgsConstructor;
 @AllArgsConstructor
 public class TrafficDirectiveLoadBalancerProvider extends LoadBalancerProvider {
     private final BluePrint bluePrint;
-    private final IUpdateListener updateListener;
+    private final IServerSelectorUpdateListener updateListener;
 
     @Override
     public boolean isAvailable() {

@@ -14,7 +14,7 @@
 package com.baidu.bifromq.apiserver.http.handler;
 
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficDirector;
-import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
+import com.baidu.bifromq.dist.client.IDistClient;
 import io.reactivex.rxjava3.core.Single;
 import java.util.Collections;
 import java.util.Set;
@@ -22,12 +22,12 @@ import javax.ws.rs.Path;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@Path("/server/broker")
-public class HTTPBrokerServerLandscapeHandler extends HTTPServerLandscapeHandler {
+@Path("/server/dist")
+public class HTTPGetDistServerLandscapeHandler extends HTTPGetServerLandscapeHandler {
     private final Single<Set<IRPCServiceTrafficDirector.Server>> landscapeSingle;
 
-    public HTTPBrokerServerLandscapeHandler(IMqttBrokerClient brokerClient) {
-        landscapeSingle = brokerClient.trafficGovernor().serverList().first(Collections.emptySet());
+    public HTTPGetDistServerLandscapeHandler(IDistClient distClient) {
+        landscapeSingle = distClient.trafficGovernor().serverList().first(Collections.emptySet());
     }
 
     @Override

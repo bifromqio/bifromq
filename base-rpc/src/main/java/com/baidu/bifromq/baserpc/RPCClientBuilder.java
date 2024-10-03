@@ -16,7 +16,7 @@ package com.baidu.bifromq.baserpc;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.baserpc.interceptor.TenantAwareClientInterceptor;
-import com.baidu.bifromq.baserpc.loadbalancer.IUpdateListener;
+import com.baidu.bifromq.baserpc.loadbalancer.IServerSelector;
 import com.baidu.bifromq.baserpc.loadbalancer.TrafficDirectiveLoadBalancerProvider;
 import com.baidu.bifromq.baserpc.nameresolver.TrafficGovernorNameResolverProvider;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficDirector;
@@ -99,8 +99,7 @@ public final class RPCClientBuilder {
         final String serviceUniqueName = bluePrint.serviceDescriptor().getName();
         RPCClient.ChannelHolder channelHolder = new RPCClient.ChannelHolder() {
             private final ManagedChannel internalChannel;
-            private final BehaviorSubject<IUpdateListener.IServerSelector> serverSelectorSubject =
-                BehaviorSubject.create();
+            private final BehaviorSubject<IServerSelector> serverSelectorSubject = BehaviorSubject.create();
             private final BehaviorSubject<IRPCClient.ConnState> connStateSubject = BehaviorSubject.create();
             // key: server id, value: server attributes
             private final Observable<Map<String, Map<String, String>>> serverListSubject;
@@ -181,7 +180,7 @@ public final class RPCClientBuilder {
             }
 
             @Override
-            public Observable<IUpdateListener.IServerSelector> serverSelectorObservable() {
+            public Observable<IServerSelector> serverSelectorObservable() {
                 return serverSelectorSubject;
             }
 

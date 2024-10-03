@@ -21,7 +21,7 @@ import static com.baidu.bifromq.baserpc.RPCContext.WCH_HASH_KEY_CTX_KEY;
 import static io.grpc.stub.ClientCalls.asyncUnaryCall;
 
 import com.baidu.bifromq.baserpc.loadbalancer.Constants;
-import com.baidu.bifromq.baserpc.loadbalancer.IUpdateListener;
+import com.baidu.bifromq.baserpc.loadbalancer.IServerSelector;
 import com.baidu.bifromq.baserpc.metrics.RPCMeter;
 import com.baidu.bifromq.baserpc.metrics.RPCMetric;
 import com.google.common.collect.Maps;
@@ -212,7 +212,7 @@ final class RPCClient implements IRPCClient {
 
         Observable<Map<String, Map<String, String>>> serverList();
 
-        Observable<IUpdateListener.IServerSelector> serverSelectorObservable();
+        Observable<IServerSelector> serverSelectorObservable();
 
         boolean shutdown(long timeout, TimeUnit unit);
     }

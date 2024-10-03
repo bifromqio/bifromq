@@ -28,7 +28,7 @@ public enum Headers {
     HEADER_RETAIN("retain"),
     HEADER_QOS("qos"),
     HEADER_EXPIRY_SECONDS("expiry_seconds"),
-    HEADER_SERVICE_NAME("service_name");
+    HEADER_SERVER_ID("server_id");
 
     public final String header;
 

@@ -28,8 +28,7 @@ import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implements
-    IUpdateListener.IServerSelector {
+class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implements IServerSelector {
     private final BluePrint bluePrint;
 
     private final AtomicReference<ITrafficRouter> currentMatcher =
@@ -42,8 +41,8 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
 
     public void refresh(Map<String, Map<String, Integer>> trafficDirective,
                         Map<TrafficDirectiveLoadBalancer.ServerKey, List<LoadBalancer.Subchannel>> subchannelMap,
-                        Map<String, Set<String>> lbGroupAssighment) {
-        currentMatcher.set(new TrafficRouter(trafficDirective, subchannelMap, lbGroupAssighment));
+                        Map<String, Set<String>> serverGroupTags) {
+        currentMatcher.set(new TrafficRouter(trafficDirective, subchannelMap, serverGroupTags));
     }
 
     @Override
@@ -99,9 +98,15 @@ class TrafficDirectiveAwarePicker extends LoadBalancer.SubchannelPicker implemen
     }
 
     @Override
-    public boolean direct(String tenantId, String serverId, MethodDescriptor<?, ?> methodDescriptor) {
+    public boolean exists(String tenantId, String serverId, MethodDescriptor<?, ?> methodDescriptor) {
         assert bluePrint.semantic(methodDescriptor.getFullMethodName()).mode() == BluePrint.BalanceMode.DDBalanced;
         return currentMatcher.get().exists(serverId);
+    }
+
+    @Override
+    public boolean isBalancable(String tenantId, String serverId, MethodDescriptor<?, ?> methodDescriptor) {
+        IServerGroupRouter selector = currentMatcher.get().get(tenantId);
+        return selector.exists(serverId);
     }
 
     @Override

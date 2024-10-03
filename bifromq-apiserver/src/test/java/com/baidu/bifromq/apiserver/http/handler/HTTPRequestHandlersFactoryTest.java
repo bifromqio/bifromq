@@ -52,6 +52,7 @@ public class HTTPRequestHandlersFactoryTest extends MockableTest {
     @Test
     public void build() {
         when(trafficGovernor.serverList()).thenReturn(Observable.empty());
+        when(trafficGovernor.trafficDirective()).thenReturn(Observable.empty());
         when(brokerClient.trafficGovernor()).thenReturn(trafficGovernor);
         when(distClient.trafficGovernor()).thenReturn(trafficGovernor);
         when(inboxClient.trafficGovernor()).thenReturn(trafficGovernor);
@@ -61,6 +62,6 @@ public class HTTPRequestHandlersFactoryTest extends MockableTest {
             new HTTPRequestHandlersFactory(agentHost, brokerClient, sessionDictClient,
                 distClient, inboxClient, retainClient, settingProvider);
         Collection<IHTTPRequestHandler> handlers = handlersFactory.build();
-        assertEquals(handlers.size(), 14);
+        assertEquals(handlers.size(), 26);
     }
 }

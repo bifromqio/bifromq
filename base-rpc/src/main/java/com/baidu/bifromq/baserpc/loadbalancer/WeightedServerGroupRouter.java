@@ -14,6 +14,7 @@
 package com.baidu.bifromq.baserpc.loadbalancer;
 
 import com.google.common.collect.Maps;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -25,15 +26,15 @@ class WeightedServerGroupRouter implements IServerGroupRouter {
     private final List<String> weightedServerLists;
     private final WCHRouter<String> chRouter;
     private final AtomicInteger rrIndex = new AtomicInteger(0);
-    private final String inProcServerId;
+    private final Optional<String> inProcServerId;
 
-    WeightedServerGroupRouter(Map<String, Integer> trafficAssignment,
-                              Map<String, Set<String>> groupAssignment,
+    WeightedServerGroupRouter(Map<String, Integer> groupWeights,
+                              Map<String, Set<String>> serverGroups,
                               String inProcServerId) {
         Map<String, Integer> weightedServers = Maps.newHashMap();
-        for (String group : trafficAssignment.keySet()) {
-            int weight = Math.abs(trafficAssignment.get(group)) % 11; // weight range: 0-10
-            groupAssignment.get(group).forEach(serverId ->
+        for (String group : groupWeights.keySet()) {
+            int weight = Math.abs(groupWeights.get(group)) % 11; // weight range: 0-10
+            serverGroups.getOrDefault(group, Collections.emptySet()).forEach(serverId ->
                 weightedServers.compute(serverId, (k, w) -> {
                     if (w == null) {
                         w = 0;
@@ -44,7 +45,17 @@ class WeightedServerGroupRouter implements IServerGroupRouter {
         }
         weightedServerLists = LBUtils.toWeightedRRSequence(weightedServers);
         chRouter = new WCHRouter<>(weightedServers.keySet(), serverId -> serverId, weightedServers::get, 100);
-        this.inProcServerId = inProcServerId;
+        // if inproc server is not in the weightedServers, it will be ignored
+        if (weightedServers.containsKey(inProcServerId)) {
+            this.inProcServerId = Optional.of(inProcServerId);
+        } else {
+            this.inProcServerId = Optional.empty();
+        }
+    }
+
+    @Override
+    public boolean exists(String serverId) {
+        return weightedServerLists.contains(serverId);
     }
 
     @Override
@@ -53,8 +64,8 @@ class WeightedServerGroupRouter implements IServerGroupRouter {
             return Optional.empty();
         }
         // prefer in-proc server
-        if (inProcServerId != null) {
-            return Optional.of(inProcServerId);
+        if (inProcServerId.isPresent()) {
+            return inProcServerId;
         }
         return Optional.of(weightedServerLists.get(ThreadLocalRandom.current().nextInt(0, weightedServerLists.size())));
     }
@@ -65,10 +76,9 @@ class WeightedServerGroupRouter implements IServerGroupRouter {
         if (size == 0) {
             return Optional.empty();
         }
-        String selected;
         // prefer in-proc server
-        if (inProcServerId != null) {
-            selected = inProcServerId;
+        if (inProcServerId.isPresent()) {
+            return inProcServerId;
         } else {
             int i = rrIndex.incrementAndGet();
             if (i >= size) {
@@ -76,9 +86,8 @@ class WeightedServerGroupRouter implements IServerGroupRouter {
                 i %= size;
                 rrIndex.compareAndSet(oldi, i);
             }
-            selected = weightedServerLists.get(i);
+            return Optional.of(weightedServerLists.get(i));
         }
-        return Optional.of(selected);
     }
 
     @Override

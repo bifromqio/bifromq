@@ -121,7 +121,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                     }
                     switch (semantic.mode()) {
                         case DDBalanced -> {
-                            boolean available = selector.direct(tenantId, desiredServerId.get(),
+                            boolean available = selector.exists(tenantId, desiredServerId.get(),
                                 methodDescriptor);
                             if (available) {
                                 state.set(State.Normal);
@@ -193,7 +193,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                             if (newServer.isEmpty()) {
                                 state.set(State.ServiceUnavailable);
                                 if (selectedServerId.get() != null) {
-                                    log.debug("ReqPipeline@{} stop targeting to server[{}]",
+                                    log.debug("ReqPipeline@{} stop targeting to WR-selected server[{}]",
                                         this.hashCode(), selectedServerId.get());
                                     requester.getAndSet(null).onCompleted();
                                     selectedServerId.set(null);
@@ -204,7 +204,8 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                                 }
                             } else {
                                 state.set(State.Normal);
-                                if (selectedServerId.get() == null) {
+                                if (selectedServerId.get() == null
+                                    || !selector.isBalancable(tenantId, selectedServerId.get(), methodDescriptor)) {
                                     target();
                                 }
                             }
@@ -214,7 +215,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                             if (newServer.isEmpty()) {
                                 state.set(State.ServiceUnavailable);
                                 if (selectedServerId.get() != null) {
-                                    log.debug("ReqPipeline@{} of {} stop targeting to server[{}]",
+                                    log.debug("ReqPipeline@{} of {} stop targeting WRR-selected server[{}]",
                                         this.hashCode(),
                                         methodDescriptor.getBareMethodName(),
                                         selectedServerId.get());
@@ -227,7 +228,8 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                                 }
                             } else {
                                 state.set(State.Normal);
-                                if (selectedServerId.get() == null) {
+                                if (selectedServerId.get() == null
+                                    || !selector.isBalancable(tenantId, selectedServerId.get(), methodDescriptor)) {
                                     target();
                                 }
                             }
@@ -505,7 +507,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                 }
                 if (semantic.mode() == BluePrint.BalanceMode.DDBalanced) {
                     if (selectedServerId.get() != null) {
-                        log.trace("ReqPipeline@{} of {} schedule targeting to server[{}]",
+                        log.trace("ReqPipeline@{} of {} schedule targeting to DD-selected server[{}]",
                             ManagedRequestPipeline.this.hashCode(),
                             methodDescriptor.getBareMethodName(),
                             selectedServerId.get());
@@ -514,7 +516,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                     }
                 } else if (semantic.mode() == BluePrint.BalanceMode.WCHBalanced) {
                     if (desiredServerId.get() != null) {
-                        log.trace("ReqPipeline@{} of {} schedule targeting to server[{}]",
+                        log.trace("ReqPipeline@{} of {} schedule targeting to WCH-selected server[{}]",
                             ManagedRequestPipeline.this.hashCode(),
                             methodDescriptor.getBareMethodName(),
                             desiredServerId.get());
@@ -523,7 +525,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                     }
                 } else if (semantic.mode() == BluePrint.BalanceMode.WRBalanced) {
                     if (selectedServerId.get() != null) {
-                        log.trace("ReqPipeline@{} of {} schedule targeting to random server",
+                        log.trace("ReqPipeline@{} of {} schedule targeting to WR-selected server",
                             ManagedRequestPipeline.this.hashCode(),
                             methodDescriptor.getBareMethodName());
                         selectedServerId.set(null);
@@ -531,7 +533,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                     }
                 } else if (semantic.mode() == BluePrint.BalanceMode.WRRBalanced) {
                     if (selectedServerId.get() != null) {
-                        log.trace("ReqPipeline@{} of {} schedule targeting to next server",
+                        log.trace("ReqPipeline@{} of {} schedule targeting to WRR-selected server",
                             ManagedRequestPipeline.this.hashCode(), methodDescriptor.getBareMethodName());
                         selectedServerId.set(null);
                         scheduleSignal();
@@ -555,10 +557,9 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                     return;
                 }
                 switch (semantic.mode()) {
-
                     case DDBalanced -> {
                         if (selectedServerId.get() != null) {
-                            log.trace("ReqPipeline@{} of {} schedule targeting to server[{}]",
+                            log.trace("ReqPipeline@{} of {} schedule targeting to DD-selected server[{}]",
                                 ManagedRequestPipeline.this.hashCode(),
                                 methodDescriptor.getBareMethodName(),
                                 selectedServerId.get());
@@ -568,7 +569,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                     }
                     case WCHBalanced -> {
                         if (desiredServerId.get() != null) {
-                            log.trace("ReqPipeline@{} of {} schedule targeting to server[{}]",
+                            log.trace("ReqPipeline@{} of {} schedule targeting to WCH-selected server[{}]",
                                 ManagedRequestPipeline.this.hashCode(),
                                 methodDescriptor.getBareMethodName(),
                                 desiredServerId.get());
@@ -578,7 +579,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                     }
                     case WRBalanced -> {
                         if (selectedServerId.get() != null) {
-                            log.trace("ReqPipeline@{} of {} schedule targeting to random server",
+                            log.trace("ReqPipeline@{} of {} schedule targeting to WR-selected server",
                                 ManagedRequestPipeline.this.hashCode(),
                                 methodDescriptor.getBareMethodName());
                             selectedServerId.set(null);
@@ -587,7 +588,7 @@ class ManagedRequestPipeline<ReqT, RespT> implements IRPCClient.IRequestPipeline
                     }
                     case WRRBalanced -> {
                         if (selectedServerId.get() != null) {
-                            log.trace("ReqPipeline@{} of {} schedule targeting to next server",
+                            log.trace("ReqPipeline@{} of {} schedule targeting to WCH-selected server",
                                 ManagedRequestPipeline.this.hashCode(),
                                 methodDescriptor.getBareMethodName());
                             selectedServerId.set(null);

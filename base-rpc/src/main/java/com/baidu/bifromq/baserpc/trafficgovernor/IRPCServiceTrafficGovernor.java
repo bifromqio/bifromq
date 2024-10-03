@@ -16,6 +16,7 @@ package com.baidu.bifromq.baserpc.trafficgovernor;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * The interface for the traffic governor of a RPC service.
@@ -31,12 +32,12 @@ public interface IRPCServiceTrafficGovernor extends IRPCServiceTrafficDirector {
      * @param serverId  the serverId of the server
      * @param groupTags the groupTags to be assigned
      */
-    void assignLBGroups(String serverId, Set<String> groupTags);
+    CompletableFuture<Void> setServerGroups(String serverId, Set<String> groupTags);
 
     /**
      * Update the traffic directive in the form of mapping tenantIdPrefix to a set of weighted group tags.
      *
      * @param trafficDirective the traffic directive
      */
-    void updateTrafficDirective(Map<String, Map<String, Integer>> trafficDirective);
+    CompletableFuture<Void> updateTrafficDirective(Map<String, Map<String, Integer>> trafficDirective);
 }

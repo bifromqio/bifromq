@@ -23,10 +23,10 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/server/inbox")
-public class HTTPInboxServerLandscapeHandler extends HTTPServerLandscapeHandler {
+public class HTTPGetInboxServerLandscapeHandler extends HTTPGetServerLandscapeHandler {
     private final Single<Set<IRPCServiceTrafficDirector.Server>> landscapeSingle;
 
-    public HTTPInboxServerLandscapeHandler(IInboxClient inboxClient) {
+    public HTTPGetInboxServerLandscapeHandler(IInboxClient inboxClient) {
         landscapeSingle = inboxClient.trafficGovernor().serverList().first(Collections.emptySet());
     }
 

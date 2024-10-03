@@ -31,10 +31,10 @@ class TrafficRouter implements ITrafficRouter {
     private final Map<String, List<LoadBalancer.Subchannel>> subchannelMap;
 
     // trafficDirective: tenantIdPrefix -> groupTag -> weight
-    // serverGroups: serverId -> groupTags
+    // serverGroupTags: serverId -> groupTags
     TrafficRouter(Map<String, Map<String, Integer>> trafficDirective,
                   Map<TrafficDirectiveLoadBalancer.ServerKey, List<LoadBalancer.Subchannel>> subchannelMap,
-                  Map<String, Set<String>> serverGroups) {
+                  Map<String, Set<String>> serverGroupTags) {
         this.subchannelMap = new HashMap<>();
         String inProcServerId = null;
         for (TrafficDirectiveLoadBalancer.ServerKey serverKey : subchannelMap.keySet()) {
@@ -46,13 +46,13 @@ class TrafficRouter implements ITrafficRouter {
 
         Set<String> defaultLBGroup = Sets.newHashSet();
         Map<String, Set<String>> lbGroups = Maps.newHashMap();
-        for (String serverId : serverGroups.keySet()) {
-            Set<String> lbGroupTags = serverGroups.get(serverId);
-            if (lbGroupTags.isEmpty()) {
+        for (String serverId : serverGroupTags.keySet()) {
+            Set<String> groupTags = serverGroupTags.get(serverId);
+            if (groupTags.isEmpty()) {
                 // no group tag assigned, add it to default group
                 defaultLBGroup.add(serverId);
             } else {
-                lbGroupTags.forEach(lbGroupTag ->
+                groupTags.forEach(lbGroupTag ->
                     lbGroups.computeIfAbsent(lbGroupTag, l -> Sets.newHashSet()).add(serverId));
             }
         }
@@ -61,6 +61,9 @@ class TrafficRouter implements ITrafficRouter {
         prepareMatcher("", singletonMap("", 1), singletonMap("", defaultLBGroup), inProcServerId);
 
         for (String tenantIdPrefix : trafficDirective.keySet()) {
+            if (tenantIdPrefix.isEmpty()) {
+                continue;
+            }
             prepareMatcher(tenantIdPrefix, trafficDirective.get(tenantIdPrefix), lbGroups, inProcServerId);
         }
     }

@@ -20,6 +20,7 @@ import com.google.common.collect.Sets;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 final class RPCServiceTrafficGovernor extends RPCServiceTrafficDirector implements IRPCServiceTrafficGovernor {
 
@@ -28,20 +29,25 @@ final class RPCServiceTrafficGovernor extends RPCServiceTrafficDirector implemen
     }
 
     @Override
-    public void assignLBGroups(String serverId, Set<String> groupTags) {
+    public CompletableFuture<Void> setServerGroups(String serverId, Set<String> groupTags) {
         Optional<RPCServer> announced = announcedServer(serverId);
-        if (announced.isPresent() && !groupTags.equals(Sets.newHashSet(announced.get().getGroupList()))) {
-            RPCServer updated = announced.get().toBuilder()
-                .clearGroup()
-                .addAllGroup(groupTags)
-                .setAnnouncedTS(HLC.INST.get())
-                .build();
-            announce(updated);
+        if (announced.isPresent()) {
+            if (!groupTags.equals(Sets.newHashSet(announced.get().getGroupList()))) {
+                RPCServer updated = announced.get().toBuilder()
+                    .clearGroup()
+                    .addAllGroup(groupTags)
+                    .setAnnouncedTS(HLC.INST.get())
+                    .build();
+                return announce(updated);
+            } else {
+                return CompletableFuture.completedFuture(null);
+            }
         }
+        return CompletableFuture.failedFuture(new RuntimeException("Server not found: " + serverId));
     }
 
     @Override
-    public void updateTrafficDirective(Map<String, Map<String, Integer>> trafficDirective) {
-        announce(trafficDirective);
+    public CompletableFuture<Void> updateTrafficDirective(Map<String, Map<String, Integer>> trafficDirective) {
+        return announce(trafficDirective);
     }
 }

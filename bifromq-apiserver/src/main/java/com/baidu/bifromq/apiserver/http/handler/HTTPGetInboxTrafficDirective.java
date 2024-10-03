@@ -13,25 +13,26 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficDirector;
-import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.inbox.client.IInboxClient;
+import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import io.reactivex.rxjava3.core.Single;
 import java.util.Collections;
-import java.util.Set;
+import java.util.Map;
 import javax.ws.rs.Path;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@Path("/server/dist")
-public class HTTPDistServerLandscapeHandler extends HTTPServerLandscapeHandler {
-    private final Single<Set<IRPCServiceTrafficDirector.Server>> landscapeSingle;
+@Path("/td/inbox")
+public class HTTPGetInboxTrafficDirective extends HTTPGetTrafficDirective {
+    private final Single<Map<String, Map<String, Integer>>> trafficDirectiveSingle;
 
-    public HTTPDistServerLandscapeHandler(IDistClient distClient) {
-        landscapeSingle = distClient.trafficGovernor().serverList().first(Collections.emptySet());
+    public HTTPGetInboxTrafficDirective(IInboxClient inboxClient) {
+        this.trafficDirectiveSingle = inboxClient.trafficGovernor().trafficDirective().first(Collections.emptyMap());
+
     }
 
     @Override
-    protected Single<Set<IRPCServiceTrafficDirector.Server>> landscapeSingle() {
-        return landscapeSingle;
+    protected Single<Map<String, Map<String, Integer>>> trafficDirective() {
+        return trafficDirectiveSingle;
     }
 }

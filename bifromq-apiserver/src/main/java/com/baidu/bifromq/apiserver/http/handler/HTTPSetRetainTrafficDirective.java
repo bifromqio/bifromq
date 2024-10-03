@@ -13,25 +13,23 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficDirector;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.retain.client.IRetainClient;
-import io.reactivex.rxjava3.core.Single;
-import java.util.Collections;
-import java.util.Set;
+import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import javax.ws.rs.Path;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
-@Path("/server/retain")
-public class HTTPRetainServerLandscapeHandler extends HTTPServerLandscapeHandler {
-    private final Single<Set<IRPCServiceTrafficDirector.Server>> landscapeSingle;
+@Path("/td/retain")
+public class HTTPSetRetainTrafficDirective extends HTTPSetTrafficDirective {
+    private final IRPCServiceTrafficGovernor trafficGovernor;
 
-    public HTTPRetainServerLandscapeHandler(IRetainClient retainClient) {
-        landscapeSingle = retainClient.trafficGovernor().serverList().first(Collections.emptySet());
+    public HTTPSetRetainTrafficDirective(IRetainClient retainClient) {
+        this.trafficGovernor = retainClient.trafficGovernor();
     }
 
     @Override
-    protected Single<Set<IRPCServiceTrafficDirector.Server>> landscapeSingle() {
-        return landscapeSingle;
+    protected CompletableFuture<Void> trafficDirective(Map<String, Map<String, Integer>> td) {
+        return trafficGovernor.updateTrafficDirective(td);
     }
 }

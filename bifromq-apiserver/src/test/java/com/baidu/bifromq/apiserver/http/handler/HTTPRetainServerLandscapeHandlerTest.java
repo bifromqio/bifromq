@@ -36,15 +36,15 @@ import org.mockito.Mock;
 import org.testng.annotations.Test;
 
 public class HTTPRetainServerLandscapeHandlerTest
-    extends AbstractHTTPRequestHandlerTest<HTTPRetainServerLandscapeHandler> {
+    extends AbstractHTTPRequestHandlerTest<HTTPGetRetainServerLandscapeHandler> {
     @Mock
     private IRPCServiceTrafficGovernor trafficGovernor;
     @Mock
     private IRetainClient retainClient;
 
     @Override
-    protected Class<HTTPRetainServerLandscapeHandler> handlerClass() {
-        return HTTPRetainServerLandscapeHandler.class;
+    protected Class<HTTPGetRetainServerLandscapeHandler> handlerClass() {
+        return HTTPGetRetainServerLandscapeHandler.class;
     }
 
     @SneakyThrows
@@ -63,7 +63,7 @@ public class HTTPRetainServerLandscapeHandlerTest
         when(trafficGovernor.serverList()).thenReturn(
             Observable.just(Set.of(new IRPCServiceTrafficDirector.Server(rpcServer))));
 
-        HTTPRetainServerLandscapeHandler handler = new HTTPRetainServerLandscapeHandler(retainClient);
+        HTTPGetRetainServerLandscapeHandler handler = new HTTPGetRetainServerLandscapeHandler(retainClient);
         DefaultFullHttpRequest req = buildRequest(HttpMethod.GET);
         FullHttpResponse resp = handler.handle(111, req).join();
         assertEquals(resp.protocolVersion(), req.protocolVersion());

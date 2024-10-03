@@ -75,7 +75,7 @@ public class RPCServiceTrafficGovernorTest extends RPCServiceAnnouncerTest {
         IRPCServiceTrafficDirector trafficDirector = IRPCServiceTrafficDirector.newInstance(service, tdCrdtService);
         await().until(() -> !trafficGovernor.serverList().blockingFirst().isEmpty());
 
-        trafficGovernor.assignLBGroups(server, Sets.newHashSet(lbGroup));
+        trafficGovernor.setServerGroups(server, Sets.newHashSet(lbGroup)).join();
 
         await().until(() -> trafficGovernor.serverList().blockingFirst().stream()
             .anyMatch(s -> s.groupTags.contains(lbGroup)) &&

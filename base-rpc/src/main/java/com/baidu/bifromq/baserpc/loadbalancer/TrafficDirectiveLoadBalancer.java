@@ -53,18 +53,18 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
 
     private final Helper helper;
 
-    private final IUpdateListener updateListener;
+    private final IServerSelectorUpdateListener updateListener;
 
     private final TrafficDirectiveAwarePicker currentPicker;
 
     private final AtomicBoolean balancingStateUpdateScheduled = new AtomicBoolean(false);
 
-    private volatile Map<String, Map<String, Integer>> currentTrafficDirective;
+    private volatile Map<String, Set<String>> currentServerGroupTags = Maps.newHashMap();
+    private volatile Map<String, Map<String, Integer>> currentTrafficDirective = Maps.newHashMap();
     private final Map<ServerKey, List<Subchannel>> subChannelRegistry = Maps.newHashMap();
-    private final Map<String, Set<String>> lbGroupAssignment = Maps.newHashMap();
 
     TrafficDirectiveLoadBalancer(Helper helper, BluePrint bluePrint,
-                                 IUpdateListener updateListener) {
+                                 IServerSelectorUpdateListener updateListener) {
         this.helper = checkNotNull(helper, "helper");
         this.updateListener = updateListener;
         this.currentPicker = new TrafficDirectiveAwarePicker(bluePrint);
@@ -85,14 +85,17 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
                     eag -> eag
                 )
             );
-        lbGroupAssignment.clear();
+        Map<String, Set<String>> newServerGroupTags = Maps.newHashMap();
         for (EquivalentAddressGroup addressGroup : resolvedAddresses.getAddresses()) {
-            lbGroupAssignment.put(addressGroup.getAttributes().get(SERVER_ID_ATTR_KEY),
+            newServerGroupTags.put(addressGroup.getAttributes().get(SERVER_ID_ATTR_KEY),
                 addressGroup.getAttributes().get(SERVER_GROUP_TAG_ATTR_KEY));
         }
-        boolean updatePicker = (!resolvedAddresses.getAttributes()
-            .get(Constants.TRAFFIC_DIRECTIVE_ATTR_KEY).equals(currentTrafficDirective));
-        currentTrafficDirective = resolvedAddresses.getAttributes().get(Constants.TRAFFIC_DIRECTIVE_ATTR_KEY);
+        Map<String, Map<String, Integer>> newTrafficDirective = resolvedAddresses.getAttributes()
+            .get(Constants.TRAFFIC_DIRECTIVE_ATTR_KEY);
+        boolean updatePicker = !currentTrafficDirective.equals(newTrafficDirective)
+            || !currentServerGroupTags.equals(newServerGroupTags);
+        currentServerGroupTags = newServerGroupTags;
+        currentTrafficDirective = newTrafficDirective;
         int requested = Math.min(5, EnvProvider.INSTANCE.availableProcessors());
         Set<ServerKey> currentServers = subChannelRegistry.keySet();
         Set<ServerKey> latestServers = newResolved.keySet();
@@ -181,7 +184,7 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
         ConnectivityState newState = determineChannelState();
         if (newState != SHUTDOWN) {
             log.debug("Update balancing state to {}", newState);
-            currentPicker.refresh(currentTrafficDirective, subChannelRegistry, lbGroupAssignment);
+            currentPicker.refresh(currentTrafficDirective, subChannelRegistry, currentServerGroupTags);
             helper.updateBalancingState(newState, currentPicker);
             updateListener.onUpdate(currentPicker);
         }

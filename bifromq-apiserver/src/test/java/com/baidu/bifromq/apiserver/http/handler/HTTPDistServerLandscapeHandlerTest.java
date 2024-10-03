@@ -35,15 +35,16 @@ import lombok.SneakyThrows;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
 
-public class HTTPDistServerLandscapeHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPDistServerLandscapeHandler> {
+public class HTTPDistServerLandscapeHandlerTest
+    extends AbstractHTTPRequestHandlerTest<HTTPGetDistServerLandscapeHandler> {
     @Mock
     private IRPCServiceTrafficGovernor trafficGovernor;
     @Mock
     private IDistClient distClient;
 
     @Override
-    protected Class<HTTPDistServerLandscapeHandler> handlerClass() {
-        return HTTPDistServerLandscapeHandler.class;
+    protected Class<HTTPGetDistServerLandscapeHandler> handlerClass() {
+        return HTTPGetDistServerLandscapeHandler.class;
     }
 
     @SneakyThrows
@@ -62,7 +63,7 @@ public class HTTPDistServerLandscapeHandlerTest extends AbstractHTTPRequestHandl
         when(trafficGovernor.serverList()).thenReturn(
             Observable.just(Set.of(new IRPCServiceTrafficDirector.Server(rpcServer))));
 
-        HTTPDistServerLandscapeHandler handler = new HTTPDistServerLandscapeHandler(distClient);
+        HTTPGetDistServerLandscapeHandler handler = new HTTPGetDistServerLandscapeHandler(distClient);
         DefaultFullHttpRequest req = buildRequest(HttpMethod.GET);
         FullHttpResponse resp = handler.handle(111, req).join();
         assertEquals(resp.protocolVersion(), req.protocolVersion());

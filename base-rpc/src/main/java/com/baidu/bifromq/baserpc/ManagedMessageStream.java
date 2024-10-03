@@ -118,12 +118,12 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
                     }
                     switch (semantic.mode()) {
                         case DDBalanced -> {
-                            boolean available = selector.direct(tenantId, desiredServerId.get(),
+                            boolean available = selector.exists(tenantId, desiredServerId.get(),
                                 methodDescriptor);
                             if (available) {
                                 state.set(State.Normal);
                                 if (selectedServerId.get() == null) {
-                                    log.debug("MsgStream@{} targeting to server[{}]",
+                                    log.debug("MsgStream@{} targeting to DD-selected server[{}]",
                                         this.hashCode(), desiredServerId.get());
                                     target();
                                 } else {
@@ -132,7 +132,7 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
                             } else {
                                 state.set(State.ServerNotFound);
                                 if (selectedServerId.get() != null) {
-                                    log.debug("MsgStream@{} stop targeting to server[{}]",
+                                    log.debug("MsgStream@{} stop targeting to DD-selected server[{}]",
                                         this.hashCode(), selectedServerId.get());
                                     requester.getAndSet(null).onCompleted();
                                     selectedServerId.set(null);
@@ -174,14 +174,15 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
                             if (newServer.isEmpty()) {
                                 state.set(State.ServiceUnavailable);
                                 if (selectedServerId.get() != null) {
-                                    log.debug("MsgStream@{} stop targeting to server[{}]",
+                                    log.debug("MsgStream@{} stop targeting to WR-selected server[{}]",
                                         this.hashCode(), selectedServerId.get());
                                     requester.getAndSet(null).onCompleted();
                                     selectedServerId.set(null);
                                 }
                             } else {
                                 state.set(State.Normal);
-                                if (selectedServerId.get() == null) {
+                                if (selectedServerId.get() == null
+                                    || !selector.isBalancable(tenantId, selectedServerId.get(), methodDescriptor)) {
                                     target();
                                 }
                             }
@@ -191,14 +192,15 @@ class ManagedMessageStream<MsgT, AckT> implements IRPCClient.IMessageStream<MsgT
                             if (newServer.isEmpty()) {
                                 state.set(State.ServiceUnavailable);
                                 if (selectedServerId.get() != null) {
-                                    log.debug("MsgStream@{} stop targeting to server[{}]",
+                                    log.debug("MsgStream@{} stop targeting to WRR-selected server[{}]",
                                         this.hashCode(), selectedServerId.get());
                                     requester.getAndSet(null).onCompleted();
                                     selectedServerId.set(null);
                                 }
                             } else {
                                 state.set(State.Normal);
-                                if (selectedServerId.get() == null) {
+                                if (selectedServerId.get() == null
+                                    || !selector.isBalancable(tenantId, selectedServerId.get(), methodDescriptor)) {
                                     target();
                                 }
                             }

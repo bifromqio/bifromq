@@ -16,9 +16,7 @@ package com.baidu.bifromq.apiserver.http.handler;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficDirector;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
@@ -33,22 +31,17 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import java.util.Base64;
-import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import javax.ws.rs.GET;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public abstract class HTTPServerLandscapeHandler implements IHTTPRequestHandler {
-
-    public HTTPServerLandscapeHandler() {
-    }
-
-    protected abstract Single<Set<IRPCServiceTrafficDirector.Server>> landscapeSingle();
+public abstract class HTTPGetTrafficDirective implements IHTTPRequestHandler {
+    protected abstract Single<Map<String, Map<String, Integer>>> trafficDirective();
 
     @GET
-    @Operation(summary = "Get the server landscape information")
+    @Operation(summary = "Get the traffic directive")
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER,
             description = "optional caller provided request id", schema = @Schema(implementation = Long.class))
@@ -60,41 +53,29 @@ public abstract class HTTPServerLandscapeHandler implements IHTTPRequestHandler 
     @Override
     public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
         log.trace("Handling http get server landscape request: {}", req);
-        return landscapeSingle()
+        return trafficDirective()
             .toCompletionStage()
             .toCompletableFuture()
-            .thenApply(landscape -> {
+            .thenApply(trafficDirective -> {
                 DefaultFullHttpResponse
                     resp = new DefaultFullHttpResponse(req.protocolVersion(), OK,
-                    Unpooled.wrappedBuffer(toJSON(landscape).getBytes()));
+                    Unpooled.wrappedBuffer(toJSON(trafficDirective).getBytes()));
                 resp.headers().set("Content-Type", "application/json");
                 return resp;
             });
     }
 
-    private String toJSON(Set<IRPCServiceTrafficDirector.Server> landscape) {
+    private String toJSON(Map<String, Map<String, Integer>> trafficDirective) {
         ObjectMapper mapper = new ObjectMapper();
-        ArrayNode rootObject = mapper.createArrayNode();
-        for (IRPCServiceTrafficDirector.Server server : landscape) {
-            ObjectNode serverObject = mapper.createObjectNode();
-            serverObject.put("agentHostId", Base64.getEncoder().encodeToString(server.agentHostId.toByteArray()));
-            serverObject.put("id", server.id);
-            serverObject.put("address", server.address);
-            serverObject.put("port", server.port);
-
-            ObjectNode attrsObject = mapper.createObjectNode();
-            for (String attrName : server.attrs.keySet()) {
-                attrsObject.put(attrName, server.attrs.get(attrName));
+        ObjectNode rootObject = mapper.createObjectNode();
+        for (String tenantIdPrefix : trafficDirective.keySet()) {
+            Map<String, Integer> groupWeights = trafficDirective.get(tenantIdPrefix);
+            ObjectNode groupWeightsObject = mapper.createObjectNode();
+            for (String group : groupWeights.keySet()) {
+                groupWeightsObject.put(group, groupWeights.get(group));
             }
-            serverObject.set("attributes", attrsObject);
-            ArrayNode groupTagsArray = mapper.createArrayNode();
-            for (String groupTag : server.groupTags) {
-                groupTagsArray.add(groupTag);
-            }
-            serverObject.set("groups", groupTagsArray);
-            rootObject.add(serverObject);
+            rootObject.set(tenantIdPrefix, groupWeightsObject);
         }
         return rootObject.toString();
     }
-
 }

@@ -68,6 +68,7 @@ public class APIServerTest extends MockableTest {
     public void setup() {
         super.setup();
         when(trafficGovernor.serverList()).thenReturn(Observable.empty());
+        when(trafficGovernor.trafficDirective()).thenReturn(Observable.empty());
         when(brokerClient.trafficGovernor()).thenReturn(trafficGovernor);
         when(distClient.trafficGovernor()).thenReturn(trafficGovernor);
         when(inboxClient.trafficGovernor()).thenReturn(trafficGovernor);

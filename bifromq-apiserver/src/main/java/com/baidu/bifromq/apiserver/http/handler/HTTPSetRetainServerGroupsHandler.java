@@ -13,25 +13,23 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficDirector;
-import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
-import io.reactivex.rxjava3.core.Single;
-import java.util.Collections;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
+import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.retain.client.IRetainClient;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import javax.ws.rs.Path;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
-@Path("/server/dict")
-public class HTTPDictServerLandscapeHandler extends HTTPServerLandscapeHandler {
-    private final Single<Set<IRPCServiceTrafficDirector.Server>> landscapeSingle;
+@Path("/groups/server/retain")
+public class HTTPSetRetainServerGroupsHandler extends HTTPSetServerGroupsHandler {
+    private final IRPCServiceTrafficGovernor trafficGovernor;
 
-    public HTTPDictServerLandscapeHandler(ISessionDictClient dictClient) {
-        landscapeSingle = dictClient.trafficGovernor().serverList().first(Collections.emptySet());
+    public HTTPSetRetainServerGroupsHandler(IRetainClient retainClient) {
+        this.trafficGovernor = retainClient.trafficGovernor();
     }
 
     @Override
-    protected Single<Set<IRPCServiceTrafficDirector.Server>> landscapeSingle() {
-        return landscapeSingle;
+    protected CompletableFuture<Void> setServerGroups(String serverId, Set<String> groupTags) {
+        return trafficGovernor.setServerGroups(serverId, groupTags);
     }
 }
