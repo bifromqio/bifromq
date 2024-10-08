@@ -33,58 +33,58 @@ import lombok.experimental.Accessors;
 public class AgentHostOptions {
 
     /**
-     * Agent host under same env can communicate with each other
+     * Agent host under same env can communicate with each other.
      */
     @Builder.Default
     private String env = "";
 
     /**
-     * The advertised address of the store, must be IP or hostname
+     * The advertised address of the store, must be IP or hostname.
      */
     private String addr;
 
     /**
-     * The advertised port
+     * The advertised port.
      */
     @Builder.Default
     private int port = 0;
 
     /**
-     * The sslContext to build TLS transport
+     * The sslContext to build TLS transport.
      */
     private SslContext serverSslContext;
 
     /**
-     * The sslContext to build TLS client
+     * The sslContext to build TLS client.
      */
     private SslContext clientSslContext;
 
     /**
-     * The UDP DatagramPacket size limit in bytes
+     * The UDP DatagramPacket size limit in bytes.
      */
     @Builder.Default
     private int udpPacketLimit = 1400;
 
     /**
-     * maxChannelsPerHost is the max TCP channels for one remote host
+     * maxChannelsPerHost is the max TCP channels for one remote host.
      */
     @Builder.Default
     private int maxChannelsPerHost = 5;
 
     /**
-     * TCP channel's idle time before close
+     * TCP channel's idle time before close.
      */
     @Builder.Default
     private int idleTimeoutInSec = 5;
 
     /**
-     * TCP channel's connection timeout
+     * TCP channel's connection timeout.
      */
     @Builder.Default
     private int connTimeoutInMS = 5000;
 
     /**
-     * the number of peers that will be asked to perform indirect probes in the case that a direct probe failed
+     * the number of peers that will be asked to perform indirect probes in the case that a direct probe failed.
      */
     @Builder.Default
     private Integer indirectProbes = 3;
@@ -207,7 +207,7 @@ public class AgentHostOptions {
     private Duration addressRefreshInterval = Duration.ofMinutes(1);
 
     /**
-     * The options for internal used CRDT store
+     * The options for internal used CRDT store.
      */
     @Builder.Default
     private CRDTStoreOptions crdtStoreOptions = new CRDTStoreOptions();

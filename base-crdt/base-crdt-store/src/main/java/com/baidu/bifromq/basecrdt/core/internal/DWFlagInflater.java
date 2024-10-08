@@ -13,22 +13,32 @@
 
 package com.baidu.bifromq.basecrdt.core.internal;
 
+import com.baidu.bifromq.basecrdt.core.api.CausalCRDTType;
 import com.baidu.bifromq.basecrdt.core.api.DWFlagOperation;
 import com.baidu.bifromq.basecrdt.core.api.IDWFlag;
+import com.baidu.bifromq.basecrdt.core.api.IDWFlagInflater;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import java.time.Duration;
 import java.util.concurrent.ScheduledExecutorService;
 
-class DWFlagInflater extends CausalCRDTInflater<IDotSet, DWFlagOperation, IDWFlag> {
-    DWFlagInflater(long id, Replica replica, IReplicaStateLattice stateLattice,
-                   ScheduledExecutorService executor, Duration inflationInterval) {
-        super(id, replica, stateLattice, executor, inflationInterval);
+class DWFlagInflater extends CausalCRDTInflater<IDotSet, DWFlagOperation, IDWFlag> implements IDWFlagInflater {
+    DWFlagInflater(Replica replica,
+                   IReplicaStateLattice stateLattice,
+                   ScheduledExecutorService executor,
+                   Duration inflationInterval,
+                   String... tags) {
+        super(replica, stateLattice, executor, inflationInterval, tags);
     }
 
     @Override
     protected IDWFlag newCRDT(Replica replica, IDotSet dotStore,
                               CausalCRDT.CRDTOperationExecutor<DWFlagOperation> executor) {
         return new DWFlag(replica, () -> dotStore, executor);
+    }
+
+    @Override
+    public CausalCRDTType type() {
+        return CausalCRDTType.dwflag;
     }
 
     @Override

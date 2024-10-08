@@ -34,7 +34,6 @@ import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -59,7 +58,6 @@ public final class Agent implements IAgent {
     private final IAgentMessenger messenger;
     private final Scheduler scheduler;
     private final ICRDTStore store;
-    private final IAgentHostProvider hostProvider;
     private final IORMap agentCRDT;
     private final Map<AgentMemberAddr, AgentMember> localMemberRegistry = new ConcurrentHashMap<>();
     private final BehaviorSubject<Map<AgentMemberAddr, AgentMemberMetadata>> agentMembersSubject =
@@ -80,11 +78,11 @@ public final class Agent implements IAgent {
         this.messenger = messenger;
         this.scheduler = scheduler;
         this.store = store;
-        this.hostProvider = hostProvider;
-        Replica replica = store.host(CRDTUtil.toAgentURI(agentId), hostEndpoint.toByteString());
-        Optional<IORMap> orMapOpt = store.get(replica.getUri());
-        assert orMapOpt.isPresent();
-        agentCRDT = orMapOpt.get();
+        // using hostEndpoint as replicaId and localAddress
+        agentCRDT = store.host(Replica.newBuilder()
+            .setUri(CRDTUtil.toAgentURI(agentId))
+            .setId(hostEndpoint.toByteString())
+            .build(), hostEndpoint.toByteString());
         disposables.add(agentCRDT.inflation()
             .observeOn(scheduler)
             .subscribe(this::sync));
@@ -147,7 +145,7 @@ public final class Agent implements IAgent {
                     .thenCompose(v -> {
                         disposables.dispose();
                         agentMembersSubject.onComplete();
-                        return store.stopHosting(CRDTUtil.toAgentURI(agentId));
+                        return store.stopHosting(agentCRDT.id());
                     })
                     .whenComplete((v, e) -> state.set(State.QUITED));
             } else if (state.get() == State.QUITTING) {
@@ -191,7 +189,7 @@ public final class Agent implements IAgent {
             }
             // update landscape
             currentEndpoints = newEndpoints;
-            store.join(agentCRDT.id().getUri(), hostEndpoint.toByteString(),
+            store.join(agentCRDT.id(),
                 currentEndpoints.stream().map(AbstractMessageLite::toByteString).collect(Collectors.toSet()));
         });
     }

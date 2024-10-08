@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basecrdt.core.internal;
 
-import static com.baidu.bifromq.basecrdt.core.internal.EventHistoryUtil.remembering;
+import static com.baidu.bifromq.basecrdt.core.internal.EventHistoryUtil.isRemembering;
 import static com.baidu.bifromq.basecrdt.core.internal.ProtoUtils.dot;
 import static com.baidu.bifromq.basecrdt.core.internal.ProtoUtils.replacement;
 import static com.baidu.bifromq.basecrdt.core.internal.ProtoUtils.replacements;
@@ -370,10 +370,10 @@ public class InMemReplicaStateLatticeTest {
         );
         testLattice.join(states);
         // l(1)
-        assertTrue(remembering(testLattice.latticeIndex(), replicaA, 1));
+        assertTrue(isRemembering(testLattice.latticeIndex(), replicaA, 1));
         Thread.sleep(1100);
         assertFalse(testLattice.compact());
-        assertTrue(remembering(testLattice.latticeIndex(), replicaA, 1));
+        assertTrue(isRemembering(testLattice.latticeIndex(), replicaA, 1));
     }
 
     @Test
@@ -383,12 +383,12 @@ public class InMemReplicaStateLatticeTest {
         );
         testLattice.join(states);
         // h(1)
-        assertFalse(remembering(testLattice.latticeIndex(), replicaA, 1));
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 1));
+        assertFalse(isRemembering(testLattice.latticeIndex(), replicaA, 1));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 1));
         Thread.sleep(1100);
         // h(1,exp)
         assertFalse(testLattice.compact());
-        assertFalse(remembering(testLattice.historyIndex(), replicaA, 1));
+        assertFalse(isRemembering(testLattice.historyIndex(), replicaA, 1));
     }
 
     @Test
@@ -406,14 +406,14 @@ public class InMemReplicaStateLatticeTest {
         // h(2) -> h(1,exp)
         assertTrue(testLattice.compact());
         // h(2) -> h(1,exp)
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 1));
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 2));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 1));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 2));
 
         Thread.sleep(1100);
         // h(2,exp) -> h(1,exp)
         assertFalse(testLattice.compact());
-        assertFalse(remembering(testLattice.historyIndex(), replicaA, 1));
-        assertFalse(remembering(testLattice.historyIndex(), replicaA, 2));
+        assertFalse(isRemembering(testLattice.historyIndex(), replicaA, 1));
+        assertFalse(isRemembering(testLattice.historyIndex(), replicaA, 2));
     }
 
     @Test
@@ -424,14 +424,14 @@ public class InMemReplicaStateLatticeTest {
 
         testLattice.join(states);
         // l(2) -> h(1)
-        assertTrue(remembering(testLattice.latticeIndex(), replicaA, 2));
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 1));
+        assertTrue(isRemembering(testLattice.latticeIndex(), replicaA, 2));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 1));
         Thread.sleep(1100);
         // l(2) -> h(1,exp)
         assertFalse(testLattice.compact());
         // l(2) -> h(1,exp)
-        assertTrue(remembering(testLattice.latticeIndex(), replicaA, 2));
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 1));
+        assertTrue(isRemembering(testLattice.latticeIndex(), replicaA, 2));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 1));
     }
 
     @Test
@@ -441,16 +441,16 @@ public class InMemReplicaStateLatticeTest {
         );
         testLattice.join(states);
         // l(3) -> h(2) -> h(1)
-        assertTrue(remembering(testLattice.latticeIndex(), replicaA, 3));
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 2));
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 1));
+        assertTrue(isRemembering(testLattice.latticeIndex(), replicaA, 3));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 2));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 1));
         Thread.sleep(1100);
         // l(3) -> h(2,exp) -> h(1,exp)
         assertFalse(testLattice.compact());
         // l(3) -> h(2,exp)
-        assertTrue(remembering(testLattice.latticeIndex(), replicaA, 3));
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 2));
-        assertFalse(remembering(testLattice.historyIndex(), replicaA, 1));
+        assertTrue(isRemembering(testLattice.latticeIndex(), replicaA, 3));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 2));
+        assertFalse(isRemembering(testLattice.historyIndex(), replicaA, 1));
     }
 
     @Test
@@ -465,27 +465,27 @@ public class InMemReplicaStateLatticeTest {
         testLattice.join(states);
 
         // h(3) -> h(2,exp) -> h(1,exp)
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 3));
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 2));
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 1));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 3));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 2));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 1));
 
         assertTrue(testLattice.compact());
         // h(3) -> h(2,exp)
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 3));
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 2));
-        assertFalse(remembering(testLattice.historyIndex(), replicaA, 1));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 3));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 2));
+        assertFalse(isRemembering(testLattice.historyIndex(), replicaA, 1));
 
         // h(3) -> h(2,exp)
         assertTrue(testLattice.compact());
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 3));
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 2));
-        assertFalse(remembering(testLattice.historyIndex(), replicaA, 1));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 3));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 2));
+        assertFalse(isRemembering(testLattice.historyIndex(), replicaA, 1));
 
         Thread.sleep(1100);
         // h(3,exp) -> h(2,exp)
         assertFalse(testLattice.compact());
-        assertFalse(remembering(testLattice.historyIndex(), replicaA, 3));
-        assertFalse(remembering(testLattice.historyIndex(), replicaA, 2));
+        assertFalse(isRemembering(testLattice.historyIndex(), replicaA, 3));
+        assertFalse(isRemembering(testLattice.historyIndex(), replicaA, 2));
     }
 
     @Test
@@ -496,18 +496,18 @@ public class InMemReplicaStateLatticeTest {
         testLattice.join(states);
         // l(4) -> h(3) -> h(1)
         //         h(2) -> h(1)
-        assertTrue(remembering(testLattice.latticeIndex(), replicaA, 4));
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 3));
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 2));
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 1));
+        assertTrue(isRemembering(testLattice.latticeIndex(), replicaA, 4));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 3));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 2));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 1));
         Thread.sleep(1100);
         // l(4) -> h(3,exp) -> h(1,exp)
         //         h(2,exp) -> h(1,exp)
         assertFalse(testLattice.compact());
         // l(4) -> h(3,exp)
-        assertTrue(remembering(testLattice.latticeIndex(), replicaA, 4));
-        assertTrue(remembering(testLattice.historyIndex(), replicaA, 3));
-        assertFalse(remembering(testLattice.historyIndex(), replicaA, 2));
-        assertFalse(remembering(testLattice.historyIndex(), replicaA, 1));
+        assertTrue(isRemembering(testLattice.latticeIndex(), replicaA, 4));
+        assertTrue(isRemembering(testLattice.historyIndex(), replicaA, 3));
+        assertFalse(isRemembering(testLattice.historyIndex(), replicaA, 2));
+        assertFalse(isRemembering(testLattice.historyIndex(), replicaA, 1));
     }
 }

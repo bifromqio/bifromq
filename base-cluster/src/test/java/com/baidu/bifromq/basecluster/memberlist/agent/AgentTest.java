@@ -43,7 +43,6 @@ import io.reactivex.rxjava3.subjects.PublishSubject;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -52,7 +51,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.mockito.stubbing.Answer;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -71,7 +69,7 @@ public class AgentTest {
         .setAddress("localhost")
         .setPort(2222)
         .build();
-    private Replica replica = Replica.newBuilder().setUri(CRDTUtil.toAgentURI(agentId)).build();
+    private Replica replica;
     @Mock
     private IAgentMessenger agentMessenger;
     private Scheduler scheduler; // make test more deterministic
@@ -93,9 +91,11 @@ public class AgentTest {
         inflationSubject = PublishSubject.create();
         hostsSubjects = PublishSubject.create();
         messageSubject = PublishSubject.create();
-        when(crdtStore.host(CRDTUtil.toAgentURI(agentId), endpoint1.toByteString())).thenReturn(replica);
-        when(crdtStore.get(CRDTUtil.toAgentURI(agentId)))
-            .thenAnswer((Answer<Optional<IORMap>>) invocation -> Optional.of(orMap));
+        replica = Replica.newBuilder()
+            .setUri(CRDTUtil.toAgentURI(agentId))
+            .setId(endpoint1.toByteString())
+            .build();
+        when(crdtStore.host(replica, endpoint1.toByteString())).thenReturn(orMap);
         when(orMap.execute(any())).thenReturn(CompletableFuture.completedFuture(null));
         when(orMap.id()).thenReturn(replica);
         when(orMap.inflation()).thenReturn(inflationSubject);
@@ -182,9 +182,7 @@ public class AgentTest {
         Set<HostEndpoint> endpoints = Sets.newHashSet(endpoint1, endpoint2);
         hostsSubjects.onNext(endpoints);
 
-        verify(crdtStore).join(replica.getUri(), endpoint1.toByteString(),
-            endpoints.stream().map(HostEndpoint::toByteString).collect(
-                Collectors.toSet()));
+        verify(crdtStore).join(replica, endpoints.stream().map(HostEndpoint::toByteString).collect(Collectors.toSet()));
     }
 
     @SneakyThrows
@@ -215,16 +213,15 @@ public class AgentTest {
         assertEquals(key.getName(), agentMember2);
         assertEquals(key.getEndpoint(), endpoint2);
 
-        verify(crdtStore).join(replica.getUri(), endpoint1.toByteString(),
-            endpoints.stream().map(HostEndpoint::toByteString).collect(
-                Collectors.toSet()));
+        verify(crdtStore).join(replica, endpoints.stream().map(HostEndpoint::toByteString).collect(
+            Collectors.toSet()));
     }
 
     @Test
     public void quit() {
         Agent agent = new Agent(agentId, endpoint1, agentMessenger, scheduler, crdtStore, hostProvider);
         IAgentMember agentMember = agent.register("agentMember");
-        when(crdtStore.stopHosting(replica.getUri())).thenReturn(CompletableFuture.completedFuture(null));
+        when(crdtStore.stopHosting(replica)).thenReturn(CompletableFuture.completedFuture(null));
         TestObserver membersObserver = new TestObserver();
         agent.membership().subscribe(membersObserver);
         agent.quit().join();

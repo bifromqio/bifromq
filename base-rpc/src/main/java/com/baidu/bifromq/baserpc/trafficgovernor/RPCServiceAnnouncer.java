@@ -64,10 +64,8 @@ abstract class RPCServiceAnnouncer {
         assert crdtService.isStarted();
         this.serviceUniqueName = serviceUniqueName;
         this.crdtService = crdtService;
-        this.crdtReplica = crdtService.host(CRDTURI.toURI(CausalCRDTType.ormap, "RPC:" + serviceUniqueName));
-        Optional<IORMap> crdtOpt = crdtService.get(crdtReplica.getUri());
-        assert crdtOpt.isPresent();
-        this.rpcServiceCRDT = crdtOpt.get();
+        this.rpcServiceCRDT = crdtService.host(CRDTURI.toURI(CausalCRDTType.ormap, "RPC:" + serviceUniqueName));
+        this.crdtReplica = rpcServiceCRDT.id();
         Map<String, RPCServer> serverMap = buildAnnouncedServers(HLC.INST.get());
         svrSubject = serverMap.isEmpty() ? BehaviorSubject.create() : BehaviorSubject.createDefault(serverMap);
         tdSubject = BehaviorSubject.createDefault(buildAnnouncedTrafficDirective(HLC.INST.get())

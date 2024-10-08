@@ -43,7 +43,7 @@ public class AWORSetTest extends CRDTTest {
     @Test
     public void testOperation() {
         AWORSetInflater aworSetInflater =
-            new AWORSetInflater(0, leftReplica, newStateLattice(leftReplica, 1000),
+            new AWORSetInflater(leftReplica, newStateLattice(leftReplica, 1000),
                 executor, Duration.ofMillis(100));
         IAWORSet aworSet = aworSetInflater.getCRDT();
         assertEquals(aworSet.id(), leftReplica);
@@ -76,11 +76,11 @@ public class AWORSetTest extends CRDTTest {
 
     @Test
     public void testJoin() {
-        AWORSetInflater leftInflater = new AWORSetInflater(0, leftReplica,
+        AWORSetInflater leftInflater = new AWORSetInflater(leftReplica,
             newStateLattice(leftReplica, 1000), executor, Duration.ofMillis(100));
         IAWORSet left = leftInflater.getCRDT();
 
-        AWORSetInflater rightInflater = new AWORSetInflater(1, rightReplica,
+        AWORSetInflater rightInflater = new AWORSetInflater(rightReplica,
             newStateLattice(rightReplica, 1000), executor, Duration.ofMillis(100));
         IAWORSet right = rightInflater.getCRDT();
 

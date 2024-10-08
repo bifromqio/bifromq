@@ -16,7 +16,6 @@ package com.baidu.bifromq.basecrdt.core.internal;
 import com.baidu.bifromq.basecrdt.proto.Replacement;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -26,7 +25,7 @@ import java.util.concurrent.TimeUnit;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 
-public abstract class CRDTTest {
+abstract class CRDTTest {
     protected ScheduledExecutorService executor;
 
     @BeforeMethod
@@ -35,7 +34,7 @@ public abstract class CRDTTest {
     }
 
     @AfterMethod
-    public void teardown() {
+    public void tearDown() {
         MoreExecutors.shutdownAndAwaitTermination(executor, 5, TimeUnit.SECONDS);
     }
 
@@ -45,7 +44,7 @@ public abstract class CRDTTest {
             Duration.ofMillis(200));
     }
 
-    protected void sync(CausalCRDTInflater left, CausalCRDTInflater right) {
+    protected void sync(CausalCRDTInflater<?, ?, ?> left, CausalCRDTInflater<?, ?, ?> right) {
         CompletableFuture<Optional<Iterable<Replacement>>> deltaProto =
             left.delta(right.latticeEvents(), right.historyEvents(), 1024);
         if (deltaProto.join().isPresent()) {

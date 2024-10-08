@@ -13,8 +13,11 @@
 
 package com.baidu.bifromq.basecrdt.store;
 
-import com.baidu.bifromq.basecrdt.core.api.CRDTEngineOptions;
+import com.baidu.bifromq.baseenv.EnvProvider;
+import java.time.Duration;
+import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -31,11 +34,20 @@ import lombok.experimental.Accessors;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class CRDTStoreOptions {
     @Builder.Default
-    int maxEventsInDelta = 1024;
+    private String id = UUID.randomUUID().toString();
     @Builder.Default
-    CRDTEngineOptions engineOptions = new CRDTEngineOptions();
+    private int maxEventsInDelta = 1024;
     @Builder.Default
-    CompressAlgorithm compressAlgorithm = CompressAlgorithm.GZIP;
+    private CompressAlgorithm compressAlgorithm = CompressAlgorithm.GZIP;
+    @Builder.Default
+    private Duration orHistoryExpireTime = Duration.ofSeconds(20);
+    @Builder.Default
+    private Duration inflationInterval = Duration.ofMillis(200);
+    @Builder.Default
+    private Duration maxCompactionTime = Duration.ofMillis(200);
 
-    ScheduledExecutorService storeExecutor;
+    @Builder.Default
+    private ScheduledExecutorService storeExecutor =
+        new ScheduledThreadPoolExecutor(Math.max(2, EnvProvider.INSTANCE.availableProcessors() / 20),
+            EnvProvider.INSTANCE.newThreadFactory("crdt-executor", true));
 }

@@ -19,15 +19,17 @@ import com.baidu.bifromq.basecrdt.core.api.ICausalCRDT;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
 
+/**
+ * The CRDT service with decentralized membership management based on base-cluster.
+ */
 public interface ICRDTService {
 
     /**
-     * Construct a new instance
+     * Construct a new instance.
      *
      * @param options the service options
      * @return the CRDT service object
@@ -36,7 +38,12 @@ public interface ICRDTService {
         return new CRDTService(options);
     }
 
-    long id();
+    /**
+     * The id of the underlying CRDT store.
+     *
+     * @return the id of the store
+     */
+    String id();
 
     /**
      * The id of the local agent host.
@@ -45,24 +52,39 @@ public interface ICRDTService {
      */
     ByteString agentHostId();
 
-    Replica host(String uri);
+    /**
+     * host a CRDT replica of given uri.
+     *
+     * @param uri the uri of the CRDT
+     * @return the hosted CRDT replica object
+     */
+    <O extends ICRDTOperation, C extends ICausalCRDT<O>> C host(String uri);
 
-    <O extends ICRDTOperation, C extends ICausalCRDT<O>> Optional<C> get(String uri);
-
+    /**
+     * Stop hosting the CRDT replica of given uri.
+     *
+     * @param uri the uri of the CRDT
+     * @return a future of the operation
+     */
     CompletableFuture<Void> stopHosting(String uri);
 
+    /**
+     * Get the membership observable of hosted CRDT.
+     *
+     * @param uri the uri of the CRDT
+     * @return the observable of alive replicas
+     */
     Observable<Set<Replica>> aliveReplicas(String uri);
 
     boolean isStarted();
 
     /**
-     * Start the store by providing agentHost
+     * Start the store by providing agentHost.
      */
     void start(IAgentHost agentHost);
 
     /**
-     * Stop the store
+     * Stop the store.
      */
     void stop();
-
 }

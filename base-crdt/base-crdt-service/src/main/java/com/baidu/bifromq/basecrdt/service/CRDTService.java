@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basecrdt.service;
 
-import static java.lang.Long.toUnsignedString;
 import static java.util.concurrent.Executors.newSingleThreadExecutor;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
@@ -33,7 +32,6 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import io.reactivex.rxjava3.subjects.Subject;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -50,7 +48,7 @@ public class CRDTService implements ICRDTService {
     private final ICRDTStore store;
     private IAgentHost agentHost;
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
-    private final Map<String, CRDTContext<?, ?>> hostedCRDT = Maps.newConcurrentMap(); // key is the uri of crdt
+    private final Map<String, CRDTCluster<?, ?>> hostedCRDT = Maps.newConcurrentMap(); // key is the uri of crdt
     private final Subject<CRDTStoreMessage> incomingStoreMessages;
     private final ExecutorService executor =
         newSingleThreadExecutor(EnvProvider.INSTANCE.newThreadFactory("crdt-service-scheduler"));
@@ -63,7 +61,7 @@ public class CRDTService implements ICRDTService {
     }
 
     @Override
-    public long id() {
+    public String id() {
         return store.id();
     }
 
@@ -74,18 +72,12 @@ public class CRDTService implements ICRDTService {
     }
 
     @Override
-    public Replica host(String uri) {
-        checkState();
-        CRDTContext<?, ?> crdtContext = hostedCRDT.computeIfAbsent(uri,
-            k -> new CRDTContext<>(k, store, agentHost, scheduler, incomingStoreMessages));
-        return crdtContext.id();
-    }
-
-    @Override
     @SuppressWarnings("unchecked")
-    public <O extends ICRDTOperation, C extends ICausalCRDT<O>> Optional<C> get(String uri) {
+    public <O extends ICRDTOperation, C extends ICausalCRDT<O>> C host(String uri) {
         checkState();
-        return Optional.ofNullable((C) hostedCRDT.get(uri).crdt());
+        CRDTCluster<?, ?> crdtContext = hostedCRDT.computeIfAbsent(uri,
+            k -> new CRDTCluster<>(k, store, agentHost, scheduler, incomingStoreMessages));
+        return (C) crdtContext.crdt();
     }
 
     @Override
@@ -98,6 +90,7 @@ public class CRDTService implements ICRDTService {
     @Override
     public Observable<Set<Replica>> aliveReplicas(String uri) {
         checkState();
+        assert hostedCRDT.containsKey(uri);
         return hostedCRDT.get(uri).aliveReplicas();
     }
 
@@ -116,7 +109,7 @@ public class CRDTService implements ICRDTService {
             this.agentHost = agentHost;
             store.start(incomingStoreMessages);
             state.set(State.STARTED);
-            log.debug("Started CRDT service[{}]", toUnsignedString(store.id()));
+            log.debug("Started CRDT service[{}]", store.id());
         }
     }
 
@@ -127,7 +120,7 @@ public class CRDTService implements ICRDTService {
             log.debug("Stop hosting CRDTs");
             CompletableFuture.allOf(hostedCRDT.values()
                     .stream()
-                    .map(CRDTContext::close)
+                    .map(CRDTCluster::close)
                     .toArray(CompletableFuture[]::new))
                 .join();
             log.debug("Stopping CRDT store");

@@ -36,12 +36,12 @@ interface IReplicaStateLattice {
     /**
      * The next event which could be used to construct state lattice.
      *
-     * @return
+     * @return the version for next event
      */
     long nextEvent();
 
     /**
-     * The state-addition events contributed by the provided replica
+     * The state-addition events contributed by the provided replica.
      *
      * @return
      */
@@ -50,9 +50,9 @@ interface IReplicaStateLattice {
 
     /**
      * Join a lattice into current state and return the essential diff made to the previous state, and memoize removed
-     * events until exceed history duration
+     * events until exceed history duration.
      *
-     * @param state
+     * @param state the lattice to join
      * @return
      */
     JoinDiff join(Iterable<Replacement> state);
@@ -72,21 +72,21 @@ interface IReplicaStateLattice {
         int maxEvents);
 
     /**
-     * Get the summarized history of events contributing to current state
+     * Get the summarized history of events contributing to current state.
      *
      * @return
      */
     Map<ByteString, NavigableMap<Long, Long>> latticeIndex();
 
     /**
-     * Get the summarized history of events which were contributing to local state
+     * Get the summarized history of events which were contributing to local state.
      *
      * @return
      */
     Map<ByteString, NavigableMap<Long, Long>> historyIndex();
 
     /**
-     * Compact to free some memory occupied by obsolete history
+     * Compact to free some memory occupied by obsolete history.
      *
      * @return if next compaction should be scheduled
      */

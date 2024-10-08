@@ -20,7 +20,6 @@ import com.baidu.bifromq.basecrdt.core.api.CausalCRDTType;
 import com.baidu.bifromq.basecrdt.core.api.IORMap;
 import com.baidu.bifromq.basecrdt.core.api.MVRegOperation;
 import com.baidu.bifromq.basecrdt.core.api.ORMapOperation;
-import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
@@ -54,10 +53,7 @@ public class KVRangeStoreDescriptorReporter implements IKVRangeStoreDescriptorRe
         this.crdtService = crdtService;
         this.deadStoreCleanupInMillis = deadStoreCleanupInMillis;
         log = SiftLogger.getLogger(KVRangeStoreDescriptorReporter.class, "clusterId", clusterId, "storeId", storeId);
-        Replica replica = crdtService.host(storeDescriptorMapCRDTURI(clusterId));
-        Optional<IORMap> crdtOpt = crdtService.get(replica.getUri());
-        assert crdtOpt.isPresent();
-        storeDescriptorMap = crdtOpt.get();
+        storeDescriptorMap = crdtService.host(storeDescriptorMapCRDTURI(clusterId));
     }
 
     @Override

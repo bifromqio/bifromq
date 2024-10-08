@@ -17,6 +17,7 @@ import static com.baidu.bifromq.basecluster.memberlist.CRDTUtil.AGENT_HOST_MAP_U
 import static com.baidu.bifromq.basecluster.memberlist.CRDTUtil.getHostMember;
 import static com.baidu.bifromq.basecluster.memberlist.CRDTUtil.iterate;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.mvreg;
+import static com.baidu.bifromq.basecrdt.store.ReplicaIdGenerator.generate;
 
 import com.baidu.bifromq.basecluster.memberlist.agent.Agent;
 import com.baidu.bifromq.basecluster.memberlist.agent.AgentHostProvider;
@@ -33,11 +34,13 @@ import com.baidu.bifromq.basecluster.proto.ClusterMessage;
 import com.baidu.bifromq.basecrdt.core.api.IORMap;
 import com.baidu.bifromq.basecrdt.core.api.MVRegOperation;
 import com.baidu.bifromq.basecrdt.core.api.ORMapOperation;
+import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.store.ICRDTStore;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.protobuf.AbstractMessageLite;
+import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Metrics;
@@ -93,19 +96,17 @@ public class HostMemberList implements IHostMemberList {
         this.addressResolver = addressResolver;
         this.tags = tags;
         // setup an ORMap for syncing host list
-        store.host(AGENT_HOST_MAP_URI);
-        Optional<IORMap> orMapOpt = store.get(AGENT_HOST_MAP_URI);
-        assert orMapOpt.isPresent();
-        hostListCRDT = orMapOpt.get();
+        Replica replicaId = generate(AGENT_HOST_MAP_URI, ByteString.copyFromUtf8(store.id()));
         local = HostMember.newBuilder()
             .setEndpoint(HostEndpoint.newBuilder()
-                .setId(hostListCRDT.id().getId())
+                .setId(replicaId.getId())
                 .setAddress(bindAddr)
                 .setPort(port)
                 .setPid(ProcessHandle.current().pid())
                 .build())
             .setIncarnation(0)
             .build();
+        hostListCRDT = store.host(replicaId, local.getEndpoint().toByteString());
         join(local);
         disposables.add(hostListCRDT.inflation().observeOn(scheduler).subscribe(this::sync));
         disposables.add(messenger.receive()
@@ -133,10 +134,9 @@ public class HostMemberList implements IHostMemberList {
                 hostListCRDT.execute(ORMapOperation.update(member.getEndpoint().toByteString())
                     .with(MVRegOperation.write(member.toByteString())));
                 // update crdt landscape
-                store.join(AGENT_HOST_MAP_URI, local.getEndpoint().toByteString(),
-                    currentMembers().keySet().stream()
-                        .map(AbstractMessageLite::toByteString)
-                        .collect(Collectors.toSet()));
+                store.join(hostListCRDT.id(), currentMembers().keySet().stream()
+                    .map(AbstractMessageLite::toByteString)
+                    .collect(Collectors.toSet()));
             }
             return joined;
         }
@@ -149,10 +149,9 @@ public class HostMemberList implements IHostMemberList {
             hostListCRDT.execute(ORMapOperation.remove(memberEndpoint.toByteString()).of(mvreg));
             if (removed) {
                 // update crdt landscape
-                store.join(AGENT_HOST_MAP_URI, local.getEndpoint().toByteString(),
-                    currentMembers().keySet().stream()
-                        .map(AbstractMessageLite::toByteString)
-                        .collect(Collectors.toSet()));
+                store.join(hostListCRDT.id(), currentMembers().keySet().stream()
+                    .map(AbstractMessageLite::toByteString)
+                    .collect(Collectors.toSet()));
             }
         }
     }
@@ -195,7 +194,7 @@ public class HostMemberList implements IHostMemberList {
                         return messenger.spread(quit)
                             .handle((v, e) -> null);
                     })
-                    .thenCompose(v -> store.stopHosting(AGENT_HOST_MAP_URI))
+                    .thenCompose(v -> store.stopHosting(hostListCRDT.id()))
                     .whenComplete((v, e) -> {
                         membershipSubject.onComplete();
                         metricManager.close();

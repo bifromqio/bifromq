@@ -20,9 +20,9 @@ import com.baidu.bifromq.basecrdt.core.api.CCounterOperation;
 import com.baidu.bifromq.basecrdt.core.api.ICCounter;
 import com.baidu.bifromq.basecrdt.core.api.IORMap;
 import com.baidu.bifromq.basecrdt.proto.Replica;
+import com.baidu.bifromq.basecrdt.store.ReplicaIdGenerator;
 import com.google.protobuf.ByteString;
 import java.util.ArrayList;
-import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
@@ -43,10 +43,11 @@ public class CCounterMapBenchmark extends CRDTBenchmarkTemplate {
 
     @Override
     protected void doSetup() {
-        replica = engine.host(toURI(ormap, "cctr"));
-        Optional<IORMap> counterMap = engine.get(replica.getUri());
+        IORMap counterMap =
+            (IORMap) inflaterFactory.create(ReplicaIdGenerator.generate(toURI(ormap, "cctr"))).getCRDT();
+        replica = counterMap.id();
         for (int i = 0; i < 1000; i++) {
-            counters.add(counterMap.get().getCCounter(ByteString.copyFromUtf8("c-" + i)));
+            counters.add(counterMap.getCCounter(ByteString.copyFromUtf8("c-" + i)));
         }
     }
 

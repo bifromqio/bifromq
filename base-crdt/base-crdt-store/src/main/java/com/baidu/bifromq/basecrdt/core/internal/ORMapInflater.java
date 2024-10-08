@@ -13,21 +13,32 @@
 
 package com.baidu.bifromq.basecrdt.core.internal;
 
+import com.baidu.bifromq.basecrdt.core.api.CausalCRDTType;
+import com.baidu.bifromq.basecrdt.core.api.IORMap;
+import com.baidu.bifromq.basecrdt.core.api.IORMapInflater;
 import com.baidu.bifromq.basecrdt.core.api.ORMapOperation;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import java.time.Duration;
 import java.util.concurrent.ScheduledExecutorService;
 
-class ORMapInflater extends CausalCRDTInflater<IDotMap, ORMapOperation, ORMap> {
-    ORMapInflater(long id, Replica replica, IReplicaStateLattice stateLattice,
-                  ScheduledExecutorService executor, Duration inflationInterval) {
-        super(id, replica, stateLattice, executor, inflationInterval);
+class ORMapInflater extends CausalCRDTInflater<IDotMap, ORMapOperation, IORMap> implements IORMapInflater {
+    ORMapInflater(Replica replica,
+                  IReplicaStateLattice stateLattice,
+                  ScheduledExecutorService executor,
+                  Duration inflationInterval,
+                  String... tags) {
+        super(replica, stateLattice, executor, inflationInterval, tags);
     }
 
     @Override
-    protected ORMap newCRDT(Replica replica, IDotMap dotStore,
-                            CausalCRDT.CRDTOperationExecutor<ORMapOperation> executor) {
+    protected IORMap newCRDT(Replica replica, IDotMap dotStore,
+                             CausalCRDT.CRDTOperationExecutor<ORMapOperation> executor) {
         return new ORMap(replica, () -> dotStore, executor);
+    }
+
+    @Override
+    public CausalCRDTType type() {
+        return CausalCRDTType.ormap;
     }
 
     @Override

@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.basecrdt.service;
 
+import static com.baidu.bifromq.basecrdt.store.ReplicaIdGenerator.generate;
+
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberAddr;
 import com.baidu.bifromq.basecluster.memberlist.agent.IAgent;
@@ -31,7 +33,6 @@ import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.functions.Consumer;
 import io.reactivex.rxjava3.subjects.Subject;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -41,39 +42,37 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 
-class CRDTContext<O extends ICRDTOperation, C extends ICausalCRDT<O>> {
+class CRDTCluster<O extends ICRDTOperation, C extends ICausalCRDT<O>> {
     private final Logger log;
     private final AtomicBoolean stopped = new AtomicBoolean(false);
     private final AgentMemberAddr endpoint;
     private final ReadWriteLock shutdownLock = new ReentrantReadWriteLock();
-    private final Replica replica;
+    private final Replica replicaId;
     private final C crdt;
     private final ICRDTStore store;
-    private final IAgent replicaAgent;
-    private final IAgentMember replicaAgentMember;
+    private final IAgent membershipAgent;
+    private final IAgentMember localMembership;
     private final Subject<CRDTStoreMessage> storeMsgSubject;
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final CompletableFuture<Void> quitSignal = new CompletableFuture<>();
 
-    CRDTContext(String uri,
+    CRDTCluster(String uri,
                 ICRDTStore store,
                 IAgentHost host,
                 Scheduler scheduler,
                 Subject<CRDTStoreMessage> storeMsgSubject) {
-        replica = store.host(uri);
-        log = new ReplicaLogger(replica, CRDTContext.class);
-        replicaAgent = host.host(replica.getUri());
-        endpoint = AgentMemberAddr.newBuilder()
-            .setName(AgentUtil.toAgentMemberName(replica))
-            .setEndpoint(replicaAgent.endpoint())
-            .build();
         this.store = store;
-        Optional<C> crdtOpt = store.get(uri);
-        assert crdtOpt.isPresent();
-        this.crdt = crdtOpt.get();
-        this.replicaAgentMember = replicaAgent.register(endpoint.getName());
+        replicaId = generate(uri);
+        log = new ReplicaLogger(replicaId, CRDTCluster.class);
+        membershipAgent = host.host(replicaId.getUri());
+        endpoint = AgentMemberAddr.newBuilder()
+            .setName(AgentUtil.toAgentMemberName(replicaId))
+            .setEndpoint(membershipAgent.endpoint())
+            .build();
+        this.localMembership = membershipAgent.register(endpoint.getName());
         this.storeMsgSubject = storeMsgSubject;
-        disposables.add(replicaAgent.membership()
+        crdt = store.host(replicaId, endpoint.toByteString());
+        disposables.add(membershipAgent.membership()
             .observeOn(scheduler)
             .subscribe(withLock(shutdownLock.readLock(), agentMembers -> {
                 if (stopped.get()) {
@@ -82,9 +81,9 @@ class CRDTContext<O extends ICRDTOperation, C extends ICausalCRDT<O>> {
                 Set<ByteString> peers = agentMembers.keySet().stream()
                     .map(AbstractMessageLite::toByteString)
                     .collect(Collectors.toSet());
-                store.join(replica.getUri(), endpoint.toByteString(), peers);
+                store.join(replicaId, peers);
             })));
-        disposables.add(replicaAgentMember.receive()
+        disposables.add(localMembership.receive()
             .observeOn(scheduler)
             .subscribe(withLock(shutdownLock.readLock(), agentMessage -> {
                 if (stopped.get()) {
@@ -104,7 +103,7 @@ class CRDTContext<O extends ICRDTOperation, C extends ICausalCRDT<O>> {
                     return;
                 }
                 AgentMemberAddr target = AgentMemberAddr.parseFrom(msg.getReceiver());
-                replicaAgentMember.send(target, msg.toByteString(), true)
+                localMembership.send(target, msg.toByteString(), true)
                     .whenComplete((v, e) -> {
                         if (e != null) {
                             log.debug("Failed to send store message, uri={}, sender={}, receiver={}",
@@ -119,16 +118,12 @@ class CRDTContext<O extends ICRDTOperation, C extends ICausalCRDT<O>> {
             })));
     }
 
-    Replica id() {
-        return replica;
-    }
-
     C crdt() {
         return crdt;
     }
 
     Observable<Set<Replica>> aliveReplicas() {
-        return replicaAgent.membership()
+        return membershipAgent.membership()
             .map(agentMembers -> agentMembers.keySet().stream()
                 .map(agentMemberAddr -> AgentUtil.toReplica(agentMemberAddr.getName()))
                 .collect(Collectors.toSet()));
@@ -140,8 +135,8 @@ class CRDTContext<O extends ICRDTOperation, C extends ICausalCRDT<O>> {
             lock.lock();
             if (stopped.compareAndSet(false, true)) {
                 disposables.dispose();
-                replicaAgent.deregister(replicaAgentMember)
-                    .thenCompose(v -> store.stopHosting(replica.getUri()))
+                membershipAgent.deregister(localMembership)
+                    .thenCompose(v -> store.stopHosting(replicaId))
                     .whenComplete((v, e) -> {
                         if (e != null) {
                             log.warn("Error during close", e);

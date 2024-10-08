@@ -17,23 +17,28 @@ import com.baidu.bifromq.basecrdt.proto.Replica;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * The interface of a Causal CRDT.
+ *
+ * @param <O> the type of the CRDT operation
+ */
 public interface ICausalCRDT<O extends ICRDTOperation> {
     /**
-     * The identity of the CRDT replica
+     * The identity of the CRDT replica.
      *
      * @return the id
      */
     Replica id();
 
     /**
-     * The type of the replica
+     * The type of the replica.
      *
      * @return the CRDT type
      */
     CausalCRDTType type();
 
     /**
-     * Execute an CRDT operation asynchronously
+     * Execute an CRDT operation asynchronously.
      *
      * @param op the operation
      * @return a future of the execution
@@ -41,7 +46,7 @@ public interface ICausalCRDT<O extends ICRDTOperation> {
     CompletableFuture<Void> execute(O op);
 
     /**
-     * The observable of inflation happens to the CRDT state overtime
+     * The observable of inflation happens to the CRDT state overtime.
      *
      * @return an observable of inflation event
      */

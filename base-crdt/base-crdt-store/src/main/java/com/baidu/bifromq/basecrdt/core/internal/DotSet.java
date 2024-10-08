@@ -48,8 +48,6 @@ class DotSet extends DotStore implements IDotSet {
 
     @Override
     public String toString() {
-        return "DotSet{" +
-            "dots=" + dots +
-            '}';
+        return "DotSet{dots=" + dots + '}';
     }
 }

@@ -16,7 +16,7 @@ package com.baidu.bifromq.basecrdt.core.util;
 import com.google.protobuf.ByteString;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.TreeMap;
 
 public class LatticeIndexUtil {
     public static void remember(Map<ByteString, NavigableMap<Long, Long>> historyMap,
@@ -24,7 +24,7 @@ public class LatticeIndexUtil {
         // handle history before n
         historyMap.compute(replicaId, (k, history) -> {
             if (history == null) {
-                history = new ConcurrentSkipListMap<>();
+                history = new TreeMap<>();
             }
             if (history.containsKey(ver)) {
                 return history;
@@ -39,7 +39,7 @@ public class LatticeIndexUtil {
         // handle history before n
         historyMap.compute(replicaId, (k, history) -> {
             if (history == null) {
-                history = new ConcurrentSkipListMap<>();
+                history = new TreeMap<>();
             }
             remember(history, startVer, endVer);
             return history;
@@ -62,11 +62,7 @@ public class LatticeIndexUtil {
         }
         Long endKey = ranges.floorKey(endVer);
         if (endKey == null) {
-            if (ranges.containsKey(endVer + 1)) {
-                endKey = ranges.get(endVer + 1);
-            } else {
-                endKey = endVer;
-            }
+            endKey = ranges.getOrDefault(endVer + 1, endVer);
         } else {
             endKey = Math.max(endVer, ranges.get(endKey));
             if (ranges.containsKey(endKey + 1)) {

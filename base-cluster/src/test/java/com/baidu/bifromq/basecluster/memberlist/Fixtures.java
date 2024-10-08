@@ -29,9 +29,9 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.TimeUnit;
 
 public class Fixtures {
-    public static final ByteString LOCAL_REPLICA_ID = ByteString.copyFromUtf8("hostListCRDTReplicaId");
+    public static final ByteString LOCAL_STORE_ID = ByteString.copyFromUtf8("hostListCRDTReplicaId");
     public static final Replica LOCAL_REPLICA = Replica.newBuilder()
-        .setUri(CRDTUtil.AGENT_HOST_MAP_URI).setId(LOCAL_REPLICA_ID).build();
+        .setUri(CRDTUtil.AGENT_HOST_MAP_URI).setId(LOCAL_STORE_ID).build();
     public static final InetSocketAddress LOCAL_ADDR = new InetSocketAddress("localhost", 1111);
     public static final InetSocketAddress REMOTE_ADDR_1 = new InetSocketAddress("localhost", 2222);
 
@@ -42,7 +42,7 @@ public class Fixtures {
         .setPid(ProcessHandle.current().pid())
         .build();
     public static final HostEndpoint LOCAL_ENDPOINT = HostEndpoint.newBuilder()
-        .setId(LOCAL_REPLICA_ID)
+        .setId(LOCAL_STORE_ID)
         .setAddress(LOCAL_ADDR.getHostName())
         .setPort(LOCAL_ADDR.getPort())
         .setPid(ProcessHandle.current().pid())

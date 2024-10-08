@@ -43,7 +43,7 @@ public class MVRegTest extends CRDTTest {
 
     @Test
     public void testOperation() {
-        MVRegInflater mvRegInflater = new MVRegInflater(0, leftReplica,
+        MVRegInflater mvRegInflater = new MVRegInflater(leftReplica,
             newStateLattice(leftReplica, 1000), executor, Duration.ofMillis(100));
         IMVReg mvReg = mvRegInflater.getCRDT();
         assertEquals(mvReg.id(), leftReplica);
@@ -61,11 +61,11 @@ public class MVRegTest extends CRDTTest {
 
     @Test
     public void testJoin() {
-        MVRegInflater leftInflater = new MVRegInflater(0, leftReplica, newStateLattice(leftReplica, 10000),
+        MVRegInflater leftInflater = new MVRegInflater(leftReplica, newStateLattice(leftReplica, 10000),
             executor, Duration.ofMillis(100));
         IMVReg left = leftInflater.getCRDT();
 
-        MVRegInflater rightInflater = new MVRegInflater(1, rightReplica, newStateLattice(rightReplica, 10000),
+        MVRegInflater rightInflater = new MVRegInflater(rightReplica, newStateLattice(rightReplica, 10000),
             executor, Duration.ofMillis(100));
         IMVReg right = rightInflater.getCRDT();
 
@@ -90,11 +90,11 @@ public class MVRegTest extends CRDTTest {
 
     @Test
     public void testJoin1() throws InterruptedException {
-        MVRegInflater leftInflater = new MVRegInflater(0, leftReplica, newStateLattice(leftReplica, 1000),
+        MVRegInflater leftInflater = new MVRegInflater(leftReplica, newStateLattice(leftReplica, 1000),
             executor, Duration.ofMillis(100));
         IMVReg left = leftInflater.getCRDT();
 
-        MVRegInflater rightInflater = new MVRegInflater(1, rightReplica, newStateLattice(rightReplica, 1000),
+        MVRegInflater rightInflater = new MVRegInflater(rightReplica, newStateLattice(rightReplica, 1000),
             executor, Duration.ofMillis(100));
         IMVReg right = rightInflater.getCRDT();
 

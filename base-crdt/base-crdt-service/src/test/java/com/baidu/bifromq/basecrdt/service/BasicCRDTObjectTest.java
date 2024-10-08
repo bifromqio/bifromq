@@ -17,10 +17,8 @@ import com.baidu.bifromq.basecrdt.core.api.CCounterOperation;
 import com.baidu.bifromq.basecrdt.core.api.CRDTURI;
 import com.baidu.bifromq.basecrdt.core.api.CausalCRDTType;
 import com.baidu.bifromq.basecrdt.core.api.ICCounter;
-import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.service.annotation.ServiceCfg;
 import com.baidu.bifromq.basecrdt.service.annotation.ServiceCfgs;
-import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -38,15 +36,11 @@ public class BasicCRDTObjectTest extends CRDTServiceTestTemplate {
         ICRDTService service1 = testCluster.getService("s1");
         ICRDTService service2 = testCluster.getService("s2");
         String uri = CRDTURI.toURI(CausalCRDTType.cctr, "test");
-        service1.host(uri);
-        service2.host(uri);
+        ICCounter counter1 = service1.host(uri);
+        ICCounter counter2 = service2.host(uri);
         awaitUntilTrue(() -> service1.aliveReplicas(uri).blockingFirst().size() == 2);
         awaitUntilTrue(() -> service2.aliveReplicas(uri).blockingFirst().size() == 2);
 
-        Optional<ICCounter> counter1Opt = service1.get(uri);
-        Optional<ICCounter> counter2Opt = service1.get(uri);
-        ICCounter counter1 = counter1Opt.get();
-        ICCounter counter2 = counter2Opt.get();
         counter1.execute(CCounterOperation.add(1)).join();
         counter2.execute(CCounterOperation.add(2)).join();
         awaitUntilTrue(() -> counter1.read() == counter2.read());
@@ -66,15 +60,11 @@ public class BasicCRDTObjectTest extends CRDTServiceTestTemplate {
         ICRDTService service1 = testCluster.getService("s1");
         ICRDTService service2 = testCluster.getService("s2");
         String uri = CRDTURI.toURI(CausalCRDTType.cctr, "test");
-        service1.host(uri);
-        Replica counter2Id = service2.host(uri);
+        ICCounter counter1 = service1.host(uri);
+        ICCounter counter2 = service2.host(uri);
         awaitUntilTrue(() -> service1.aliveReplicas(uri).blockingFirst().size() == 2);
         awaitUntilTrue(() -> service2.aliveReplicas(uri).blockingFirst().size() == 2);
 
-        Optional<ICCounter> counter1Opt = service1.get(uri);
-        Optional<ICCounter> counter2Opt = service2.get(uri);
-        ICCounter counter1 = counter1Opt.get();
-        ICCounter counter2 = counter2Opt.get();
         counter1.execute(CCounterOperation.add(1)).join();
         counter2.execute(CCounterOperation.add(2)).join();
         awaitUntilTrue(() -> counter1.read() == counter2.read());
@@ -84,7 +74,7 @@ public class BasicCRDTObjectTest extends CRDTServiceTestTemplate {
         awaitUntilTrue(() -> service1.aliveReplicas(uri).blockingFirst().size() == 1);
         Assert.assertEquals(3, counter1.read());
 
-        counter1.execute(CCounterOperation.zeroOut(counter2Id.getId())).join();
+        counter1.execute(CCounterOperation.zeroOut(counter2.id().getId())).join();
         Assert.assertEquals(1, counter1.read());
 
         service1.stopHosting(uri).join();

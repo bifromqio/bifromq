@@ -6,20 +6,25 @@ package basecrdt;
 option java_multiple_files = true;
 option java_package = "com.baidu.bifromq.basecrdt.store.proto";
 option optimize_for = SPEED;
-message DeltaMessage{
-  uint64 seqNo = 1;
-  repeated Replacement replacement = 2;
-}
 
 message EventIndex{
   bytes replicaId = 1;
   map<uint64, uint64> ranges = 2;
 }
 
+message DeltaMessage{
+  uint64 seqNo = 1;
+  repeated Replacement replacement = 2;
+  repeated EventIndex latticeEvents = 3; // the local lattice index
+  repeated EventIndex historyEvents = 4; // the local history index
+  uint64 ver = 5;
+}
+
 message AckMessage{
   uint64 seqNo = 1;
-  repeated EventIndex latticeEvents = 2; // the index of covered lattice events
-  repeated EventIndex historyEvents = 3; // the index of covered history events
+  repeated EventIndex latticeEvents = 2; // the neighbor lattice index
+  repeated EventIndex historyEvents = 3; // the neighbor history index
+  uint64 ver = 4;
 }
 
 message MessagePayload {

@@ -61,8 +61,6 @@ class DotFunc extends DotStore implements IDotFunc {
 
     @Override
     public String toString() {
-        return "DotFunc{" +
-            "dots=" + dots +
-            '}';
+        return "DotFunc{dots=" + dots + '}';
     }
 }

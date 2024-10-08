@@ -13,21 +13,32 @@
 
 package com.baidu.bifromq.basecrdt.core.internal;
 
+import com.baidu.bifromq.basecrdt.core.api.CausalCRDTType;
+import com.baidu.bifromq.basecrdt.core.api.IRWORSet;
+import com.baidu.bifromq.basecrdt.core.api.IRWORSetInflater;
 import com.baidu.bifromq.basecrdt.core.api.RWORSetOperation;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import java.time.Duration;
 import java.util.concurrent.ScheduledExecutorService;
 
-class RWORSetInflater extends CausalCRDTInflater<IDotMap, RWORSetOperation, RWORSet> {
-    RWORSetInflater(long id, Replica replica, IReplicaStateLattice stateLattice,
-                    ScheduledExecutorService executor, Duration inflationInterval) {
-        super(id, replica, stateLattice, executor, inflationInterval);
+class RWORSetInflater extends CausalCRDTInflater<IDotMap, RWORSetOperation, IRWORSet> implements IRWORSetInflater {
+    RWORSetInflater(Replica replica,
+                    IReplicaStateLattice stateLattice,
+                    ScheduledExecutorService executor,
+                    Duration inflationInterval,
+                    String... tags) {
+        super(replica, stateLattice, executor, inflationInterval, tags);
     }
 
     @Override
-    protected RWORSet newCRDT(Replica replica, IDotMap dotStore,
-                              CausalCRDT.CRDTOperationExecutor<RWORSetOperation> executor) {
+    protected IRWORSet newCRDT(Replica replica, IDotMap dotStore,
+                               CausalCRDT.CRDTOperationExecutor<RWORSetOperation> executor) {
         return new RWORSet(replica, () -> dotStore, executor);
+    }
+
+    @Override
+    public CausalCRDTType type() {
+        return CausalCRDTType.rworset;
     }
 
     @Override

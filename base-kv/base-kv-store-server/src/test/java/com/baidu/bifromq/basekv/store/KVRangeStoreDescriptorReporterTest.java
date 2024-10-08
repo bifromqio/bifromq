@@ -27,7 +27,6 @@ import com.baidu.bifromq.basecrdt.core.api.IORMap.ORMapKey;
 import com.baidu.bifromq.basecrdt.core.api.ORMapOperation;
 import com.baidu.bifromq.basecrdt.core.api.ORMapOperation.ORMapRemove;
 import com.baidu.bifromq.basecrdt.core.api.ORMapOperation.ORMapUpdate;
-import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.MockableTest;
@@ -39,11 +38,9 @@ import io.reactivex.rxjava3.subjects.PublishSubject;
 import io.reactivex.rxjava3.subjects.Subject;
 import java.lang.reflect.Method;
 import java.util.Collections;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
-import org.mockito.stubbing.Answer;
 import org.testng.annotations.Test;
 
 @Slf4j
@@ -68,8 +65,7 @@ public class KVRangeStoreDescriptorReporterTest extends MockableTest {
     @Override
     protected void doSetup(Method method) {
         String uri = storeDescriptorMapCRDTURI("testCluster");
-        when(crdtService.get(uri)).thenAnswer((Answer<Optional<IORMap>>) invocation -> Optional.of(storeDescriptorMap));
-        when(crdtService.host(uri)).thenReturn(Replica.newBuilder().setUri(uri).build());
+        when(crdtService.host(uri)).thenReturn(storeDescriptorMap);
         storeDescriptorReporter = new KVRangeStoreDescriptorReporter("testCluster", localStoreId, crdtService, 200L);
         storeDescriptor = KVRangeStoreDescriptor.newBuilder()
             .setId(localStoreId)

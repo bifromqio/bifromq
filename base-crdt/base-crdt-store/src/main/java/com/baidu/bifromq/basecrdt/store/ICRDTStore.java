@@ -19,18 +19,20 @@ import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.store.proto.CRDTStoreMessage;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
-import java.util.Iterator;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
 
+/**
+ * The CRDT store is a distributed store that hosts CRDT replicas and provides the ability to synchronize the replicas.
+ */
 public interface ICRDTStore {
+
     /**
-     * Construct a new instance
+     * Construct a new instance.
      *
-     * @param options
-     * @return
+     * @param options the options
+     * @return the new instance
      */
     static ICRDTStore newInstance(@NonNull CRDTStoreOptions options) {
         return new CRDTStore(options);
@@ -38,94 +40,45 @@ public interface ICRDTStore {
 
     /**
      * The global unique id of the store.
-     * <br>
-     * NOTE. To ensure the uniqueness in distributed deployment, make sure the time is synchronized with each
-     * other(clock skew below 1S), and start the stores in serial with sufficient delay(at least 1 second).
      *
-     * @return
+     * @return the id
      */
-    long id();
+    String id();
 
     /**
-     * Host a CRDT replica if not host yet. The replica will be assigned a internal generated globally unique id.
+     * Host a CRDT replicaId using the specified replicaId. It's caller's duty to ensure the uniqueness of the provided
+     * id within the external managed cluster.
      *
-     * @param crdtURI the name of the CRDT
-     * @return the logical address
+     * @param replicaId the replicaId to host
+     * @param localAddr the logical address for the local replicaId
+     * @return the hosted CRDT replicaId
      */
-    Replica host(String crdtURI);
+    <O extends ICRDTOperation, T extends ICausalCRDT<O>> T host(Replica replicaId, ByteString localAddr);
 
     /**
-     * Host a CRDT replica using the specified replicaId. It's caller's duty to ensure the uniqueness of the provided id
-     * within the external managed cluster.
+     * Stop hosting the replicaId for given uri.
      *
-     * @param crdtURI
-     * @param replicaId
-     * @return
+     * @param replicaId the replicaId to stop hosting
      */
-    Replica host(String crdtURI, ByteString replicaId);
+    CompletableFuture<Void> stopHosting(Replica replicaId);
 
     /**
-     * Stop hosting the replica for given uri
+     * Join a memberAddrs from specified local address. Some remote memberAddrs will be selected to be the neighbors
+     * with which the local replica keeps synchronizing.
      *
-     * @param uri
+     * @param memberAddrs the list of member address
      */
-    CompletableFuture<Void> stopHosting(String uri);
+    void join(Replica replicaId, Set<ByteString> memberAddrs);
 
     /**
-     * Returns an iterator to iterate all CRDT replicas currently hosting
+     * An observable of messages generated from current store.
      *
-     * @return the iterator from CRDTName to a set of logical replica addresses
-     */
-    Iterator<Replica> hosting();
-
-    /**
-     * Get the live replica
-     *
-     * @param uri the id of the hosted replica
-     * @return the replica object of the CRDT
-     */
-    <O extends ICRDTOperation, T extends ICausalCRDT<O>> Optional<T> get(String uri);
-
-    /**
-     * Join a cluster from specified local address. Some remote members will be selected to be the neighbors with which
-     * the local replica keeps synchronizing.
-     *
-     * @param localAddr the local addr
-     * @param cluster   the list of member address
-     */
-    void join(String uri, ByteString localAddr, Set<ByteString> cluster);
-
-    /**
-     * Currently bind address of hosted replica in join cluster
-     *
-     * @return
-     */
-    Optional<ByteString> localAddr(String uri);
-
-    /**
-     * Currently joined cluster of given hosted replica
-     *
-     * @return
-     */
-    Optional<Set<ByteString>> cluster(String uri);
-
-    /**
-     * If the peer addr is the neighbor of the local replica in current cluster landscape, trigger a full sync with it
-     *
-     * @param uri
-     * @param peerAddr
-     */
-    void sync(String uri, ByteString peerAddr);
-
-    /**
-     * An observable of messages originated from current store
-     *
-     * @return
+     * @return the observable of messages to be sent
      */
     Observable<CRDTStoreMessage> storeMessages();
 
     /**
-     * Start the store by providing observable of incoming store messages
+     * Start the store by providing observable of incoming store messages.
      * <br>
      * NOTE: the messages with toStoreId set to '0' is used for broadcast, and will be accepted by every CRDTStore
      *
@@ -134,7 +87,7 @@ public interface ICRDTStore {
     void start(Observable<CRDTStoreMessage> replicaMessages);
 
     /**
-     * Stop the store
+     * Stop the store.
      */
     void stop();
 }

@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basecrdt.core.internal;
 
 import static com.baidu.bifromq.basecrdt.core.internal.EventHistoryUtil.diff;
+import static com.baidu.bifromq.basecrdt.core.internal.EventHistoryUtil.forget;
 import static com.baidu.bifromq.basecrdt.core.util.LatticeIndexUtil.remember;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.testng.Assert.assertEquals;
@@ -24,6 +25,7 @@ import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.TreeMap;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Test;
 
@@ -137,14 +139,20 @@ public class EventHistoryUtilTest {
         remember(historyMap, replicaA, 8);
         remember(historyMap, replicaB, 1);
 
-        EventHistoryUtil.forget(historyMap, replicaB, 0);
+        forget(historyMap, replicaB, 0);
         assertTrue(historyMap.containsKey(replicaB));
 
-        EventHistoryUtil.forget(historyMap, replicaB, 1);
+        forget(historyMap, replicaB, 1);
         assertFalse(historyMap.containsKey(replicaB));
 
-        EventHistoryUtil.forget(historyMap, replicaA, 1);
+        forget(historyMap, replicaA, 1);
         assertFalse(historyMap.get(replicaA).containsKey(1L));
+
+        TreeMap<Long, Long> expected = new TreeMap<>();
+        expected.put(2L, 3L);
+        expected.put(5L, 5L);
+        expected.put(7L, 8L);
+        assertEquals(historyMap.get(replicaA), expected);
     }
 
     @Test

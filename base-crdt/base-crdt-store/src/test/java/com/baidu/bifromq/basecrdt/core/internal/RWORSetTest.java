@@ -43,7 +43,7 @@ public class RWORSetTest extends CRDTTest {
     @Test
     public void testOperation() {
         RWORSetInflater rworSetInflater =
-            new RWORSetInflater(0, leftReplica, newStateLattice(leftReplica, 1000),
+            new RWORSetInflater(leftReplica, newStateLattice(leftReplica, 1000),
                 executor, Duration.ofMillis(100));
         IRWORSet rworSet = rworSetInflater.getCRDT();
         assertEquals(rworSet.id(), leftReplica);
@@ -76,11 +76,11 @@ public class RWORSetTest extends CRDTTest {
 
     @Test
     public void testJoin() {
-        RWORSetInflater leftInflater = new RWORSetInflater(0, leftReplica,
+        RWORSetInflater leftInflater = new RWORSetInflater(leftReplica,
             newStateLattice(leftReplica, 1000), executor, Duration.ofMillis(100));
         IRWORSet left = leftInflater.getCRDT();
 
-        RWORSetInflater rightInflater = new RWORSetInflater(1, rightReplica,
+        RWORSetInflater rightInflater = new RWORSetInflater(rightReplica,
             newStateLattice(rightReplica, 1000), executor, Duration.ofMillis(100));
         IRWORSet right = rightInflater.getCRDT();
 

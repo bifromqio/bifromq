@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basecrdt.core.internal;
 
 import static com.baidu.bifromq.basecrdt.core.api.CRDTURI.toURI;
+import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.mvreg;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.ormap;
 import static java.util.Collections.emptySet;
 import static org.testng.Assert.assertEquals;
@@ -69,7 +70,7 @@ public class ORMapTest extends CRDTTest {
 
     @Test
     public void testOperation() {
-        ORMapInflater orMapInflater = new ORMapInflater(0, leftReplica, newStateLattice(leftReplica, 1000),
+        ORMapInflater orMapInflater = new ORMapInflater(leftReplica, newStateLattice(leftReplica, 1000),
             executor, Duration.ofMillis(100));
         IORMap ormap = orMapInflater.getCRDT();
         assertEquals(ormap.id(), leftReplica);
@@ -184,11 +185,11 @@ public class ORMapTest extends CRDTTest {
 
     @Test
     public void testJoin() {
-        ORMapInflater leftInflater = new ORMapInflater(0, leftReplica,
+        ORMapInflater leftInflater = new ORMapInflater(leftReplica,
             newStateLattice(leftReplica, 1000), executor, Duration.ofMillis(100));
         IORMap leftMap = leftInflater.getCRDT();
 
-        ORMapInflater rightInflater = new ORMapInflater(1, rightReplica,
+        ORMapInflater rightInflater = new ORMapInflater(rightReplica,
             newStateLattice(rightReplica, 1000), executor, Duration.ofMillis(100));
         IORMap rightMap = rightInflater.getCRDT();
 
@@ -278,8 +279,40 @@ public class ORMapTest extends CRDTTest {
     }
 
     @Test
+    public void testJoinAfterCompaction() throws InterruptedException {
+        ORMapInflater leftInflater = new ORMapInflater(leftReplica,
+            newStateLattice(leftReplica, 1000), executor, Duration.ofMillis(100));
+        IORMap leftMap = leftInflater.getCRDT();
+
+        ORMapInflater rightInflater = new ORMapInflater(rightReplica,
+            newStateLattice(rightReplica, 100), executor, Duration.ofMillis(100));
+        IORMap rightMap = rightInflater.getCRDT();
+
+        leftMap.execute(ORMapOperation.update(key1, key1_1).with(MVRegOperation.write(elem1))).join();
+        IMVReg leftMVReg = leftMap.getMVReg(key1, key1_1);
+        IMVReg rightMVReg = rightMap.getMVReg(key1, key1_1);
+
+        assertTrue(Sets.newHashSet(leftMVReg.read()).contains(elem1));
+        assertFalse(Sets.newHashSet(rightMVReg.read()).contains(elem1));
+
+        sync(leftInflater, rightInflater);
+        assertTrue(Sets.newHashSet(leftMVReg.read()).contains(elem1));
+        assertTrue(Sets.newHashSet(rightMVReg.read()).contains(elem1));
+
+        rightMap.execute(ORMapOperation.remove(key1, key1_1).of(mvreg)).join();
+        assertFalse(Sets.newHashSet(rightMVReg.read()).contains(elem1));
+
+        // wait until rightMap is compacted
+        Thread.sleep(1000);
+
+        sync(leftInflater, rightInflater);
+        assertTrue(Sets.newHashSet(leftMVReg.read()).contains(elem1));
+        assertTrue(Sets.newHashSet(rightMVReg.read()).contains(elem1));
+    }
+
+    @Test
     public void testSubCRDTGC() {
-        ORMapInflater orMapInflater = new ORMapInflater(0, leftReplica, newStateLattice(leftReplica, 1000),
+        ORMapInflater orMapInflater = new ORMapInflater(leftReplica, newStateLattice(leftReplica, 1000),
             executor, Duration.ofMillis(100));
         IORMap orMap = orMapInflater.getCRDT();
 
@@ -304,8 +337,8 @@ public class ORMapTest extends CRDTTest {
     }
 
     @Test
-    public void testInflationSubscriptionWhenGC() throws InterruptedException {
-        ORMapInflater orMapInflater = new ORMapInflater(0, leftReplica, newStateLattice(leftReplica, 1000),
+    public void testInflationSubscriptionWhenGC() {
+        ORMapInflater orMapInflater = new ORMapInflater(leftReplica, newStateLattice(leftReplica, 1000),
             executor, Duration.ofMillis(100));
         IORMap orMap = orMapInflater.getCRDT();
         AtomicInteger inflationCount = new AtomicInteger();

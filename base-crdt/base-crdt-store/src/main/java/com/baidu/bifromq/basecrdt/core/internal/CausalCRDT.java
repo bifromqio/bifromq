@@ -65,7 +65,7 @@ abstract class CausalCRDT<T extends IDotStore, O extends ICRDTOperation> impleme
     }
 
     /**
-     * A notification from inflater about the batch changes made to the dot store
+     * A notification from inflater about the batch changes made to the dot store.
      *
      * @param addEvents    add events happened
      * @param removeEvents remove events happened

@@ -13,21 +13,32 @@
 
 package com.baidu.bifromq.basecrdt.core.internal;
 
+import com.baidu.bifromq.basecrdt.core.api.CausalCRDTType;
+import com.baidu.bifromq.basecrdt.core.api.IMVReg;
+import com.baidu.bifromq.basecrdt.core.api.IMVRegInflater;
 import com.baidu.bifromq.basecrdt.core.api.MVRegOperation;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import java.time.Duration;
 import java.util.concurrent.ScheduledExecutorService;
 
-class MVRegInflater extends CausalCRDTInflater<IDotFunc, MVRegOperation, MVReg> {
-    MVRegInflater(long id, Replica replica, IReplicaStateLattice stateLattice,
-                  ScheduledExecutorService executor, Duration inflationInterval) {
-        super(id, replica, stateLattice, executor, inflationInterval);
+class MVRegInflater extends CausalCRDTInflater<IDotFunc, MVRegOperation, IMVReg> implements IMVRegInflater {
+    MVRegInflater(Replica replica,
+                  IReplicaStateLattice stateLattice,
+                  ScheduledExecutorService executor,
+                  Duration inflationInterval,
+                  String... tags) {
+        super(replica, stateLattice, executor, inflationInterval, tags);
     }
 
     @Override
-    protected MVReg newCRDT(Replica replica, IDotFunc dotStore,
-                            CausalCRDT.CRDTOperationExecutor<MVRegOperation> executor) {
+    protected IMVReg newCRDT(Replica replica, IDotFunc dotStore,
+                             CausalCRDT.CRDTOperationExecutor<MVRegOperation> executor) {
         return new MVReg(replica, () -> dotStore, executor);
+    }
+
+    @Override
+    public CausalCRDTType type() {
+        return CausalCRDTType.mvreg;
     }
 
     @Override

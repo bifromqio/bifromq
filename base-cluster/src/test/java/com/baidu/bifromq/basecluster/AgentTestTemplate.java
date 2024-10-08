@@ -15,7 +15,6 @@ package com.baidu.bifromq.basecluster;
 
 import com.baidu.bifromq.basecluster.annotation.StoreCfg;
 import com.baidu.bifromq.basecluster.annotation.StoreCfgs;
-import com.baidu.bifromq.basecrdt.core.api.CRDTEngineOptions;
 import com.baidu.bifromq.basecrdt.store.CRDTStoreOptions;
 import java.lang.reflect.Method;
 import java.time.Duration;
@@ -67,7 +66,7 @@ public abstract class AgentTestTemplate {
     @AfterMethod()
     public void teardown(Method method) {
         log.info("Test case[{}.{}] finished, doing teardown",
-                method.getDeclaringClass().getName(), method.getName());
+            method.getDeclaringClass().getName(), method.getName());
 
         if (storeMgr != null) {
             log.info("Shutting down test cluster");
@@ -88,9 +87,7 @@ public abstract class AgentTestTemplate {
             .baseProbeInterval(Duration.ofMillis(cfg.baseProbeIntervalMillis()))
             .gossipPeriod(Duration.ofMillis(cfg.baseGossipIntervalMillis()))
             .crdtStoreOptions(CRDTStoreOptions.builder()
-                .engineOptions(CRDTEngineOptions.builder()
-                    .orHistoryExpireTime(Duration.ofSeconds(cfg.compactDelayInSec()))
-                    .build())
+                .orHistoryExpireTime(Duration.ofSeconds(cfg.compactDelayInSec()))
                 .maxEventsInDelta(100)
                 .build()
             ).build();

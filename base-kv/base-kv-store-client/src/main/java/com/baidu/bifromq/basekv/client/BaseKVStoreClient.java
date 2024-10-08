@@ -157,10 +157,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
             .keepAliveInSec(builder.keepAliveInSec)
             .crdtService(crdtService)
             .build();
-        crdtService.host(storeDescriptorMapCRDTURI(clusterId));
-        Optional<IORMap> crdtOpt = crdtService.get(storeDescriptorMapCRDTURI(clusterId));
-        assert crdtOpt.isPresent();
-        storeDescriptorCRDT = crdtOpt.get();
+        storeDescriptorCRDT = crdtService.host(storeDescriptorMapCRDTURI(clusterId));
         clusterInfoObservable = Observable.combineLatest(
                 storeDescriptorCRDT.inflation().map(this::currentStoreDescriptors),
                 rpcClient.serverList()

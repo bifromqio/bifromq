@@ -14,9 +14,8 @@
 package com.baidu.bifromq.basecrdt.store;
 
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static org.testng.Assert.assertEquals;
+import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecrdt.core.api.AWORSetOperation;
 import com.baidu.bifromq.basecrdt.core.api.CCounterOperation;
@@ -38,8 +37,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -54,19 +51,6 @@ import org.testng.annotations.Test;
 
 @Slf4j
 public class CRDTStoreTest extends CRDTStoreTestTemplate {
-
-    @StoreCfgs(stores = {@StoreCfg(id = "s1")})
-    @Test(groups = "integration")
-    public void testHosting() {
-        ICRDTStore store = storeMgr.getStore("s1");
-        String awseturi = CRDTURI.toURI(CausalCRDTType.aworset, "set");
-        Replica awset = store.host(awseturi);
-        ByteString id = awset.getId();
-        Set<Replica> hosted = Sets.newHashSet(store.hosting());
-        assertEquals(hosted, Sets.newHashSet(awset));
-        assertTrue(store.get(awseturi).isPresent());
-    }
-
     @StoreCfgs(stores = {
         @StoreCfg(id = "s1"),
         @StoreCfg(id = "s2"),
@@ -75,40 +59,37 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
     @Test(groups = "integration")
     public void testAntiEntropy() {
         String setId = CRDTURI.toURI(CausalCRDTType.aworset, "set");
-        Replica setR1 = storeMgr.host("s1", setId);
-        Replica setR2 = storeMgr.host("s2", setId);
-        Replica setR3 = storeMgr.host("s3", setId);
-        Optional<IAWORSet> set1 = storeMgr.getStore("s1").get(setId);
-        Optional<IAWORSet> set2 = storeMgr.getStore("s2").get(setId);
-        Optional<IAWORSet> set3 = storeMgr.getStore("s3").get(setId);
+        IAWORSet set1 = storeMgr.host("s1", setId);
+        IAWORSet set2 = storeMgr.host("s2", setId);
+        IAWORSet set3 = storeMgr.host("s3", setId);
         ByteString value1 = copyFromUtf8("Value1");
         ByteString value2 = copyFromUtf8("Value2");
         ByteString value3 = copyFromUtf8("Value3");
 
         // build network
-        storeMgr.join("s1", setId, setR1.getId(), setR1.getId(), setR2.getId(), setR3.getId());
-        storeMgr.join("s2", setId, setR2.getId(), setR1.getId(), setR2.getId(), setR3.getId());
-        storeMgr.join("s3", setId, setR3.getId(), setR1.getId(), setR2.getId(), setR3.getId());
+        storeMgr.join("s1", set1.id(), set1.id(), set2.id(), set3.id());
+        storeMgr.join("s2", set2.id(), set1.id(), set2.id(), set3.id());
+        storeMgr.join("s3", set3.id(), set1.id(), set2.id(), set3.id());
 
-        set1.get().execute(AWORSetOperation.add(value1)).join();
-        awaitUntilTrue(() -> set1.get().contains(value1), 5000);
-        awaitUntilTrue(() -> set2.get().contains(value1), 5000);
-        awaitUntilTrue(() -> set3.get().contains(value1), 5000);
+        set1.execute(AWORSetOperation.add(value1)).join();
+        await().atMost(Duration.ofSeconds(5)).until(() -> set1.contains(value1));
+        await().atMost(Duration.ofSeconds(5)).until(() -> set2.contains(value1));
+        await().atMost(Duration.ofSeconds(5)).until(() -> set3.contains(value1));
 
-        set2.get().execute(AWORSetOperation.add(value2)).join();
-        awaitUntilTrue(() -> set1.get().contains(value2), 5000);
-        awaitUntilTrue(() -> set2.get().contains(value2), 5000);
-        awaitUntilTrue(() -> set3.get().contains(value2), 5000);
+        set2.execute(AWORSetOperation.add(value2)).join();
+        await().atMost(Duration.ofSeconds(5)).until(() -> set1.contains(value2));
+        await().atMost(Duration.ofSeconds(5)).until(() -> set2.contains(value2));
+        await().atMost(Duration.ofSeconds(5)).until(() -> set3.contains(value2));
 
-        set3.get().execute(AWORSetOperation.add(value3)).join();
-        awaitUntilTrue(() -> set1.get().contains(value3), 5000);
-        awaitUntilTrue(() -> set2.get().contains(value3), 5000);
-        awaitUntilTrue(() -> set3.get().contains(value3), 5000);
+        set3.execute(AWORSetOperation.add(value3)).join();
+        await().atMost(Duration.ofSeconds(5)).until(() -> set1.contains(value3));
+        await().atMost(Duration.ofSeconds(5)).until(() -> set2.contains(value3));
+        await().atMost(Duration.ofSeconds(5)).until(() -> set3.contains(value3));
 
-        set1.get().execute(AWORSetOperation.clear()).join();
-        awaitUntilTrue(() -> set1.get().isEmpty(), 5000);
-        awaitUntilTrue(() -> set2.get().isEmpty(), 5000);
-        awaitUntilTrue(() -> set3.get().isEmpty(), 5000);
+        set1.execute(AWORSetOperation.clear()).join();
+        await().atMost(Duration.ofSeconds(5)).until(set1::isEmpty);
+        await().atMost(Duration.ofSeconds(5)).until(set2::isEmpty);
+        await().atMost(Duration.ofSeconds(5)).until(set3::isEmpty);
     }
 
     @StoreCfgs(stores = {
@@ -140,23 +121,23 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
         int countPerCounter = 100;
         CountDownLatch latch = new CountDownLatch(countPerCounter * countersPerMap * size);
         ScheduledExecutorService executor = Executors.newScheduledThreadPool(4);
-        String counterMap = CRDTURI.toURI(CausalCRDTType.ormap, "counter");
-        ByteString[] replicaIds = new ByteString[size];
+        String counterORMap = CRDTURI.toURI(CausalCRDTType.ormap, "counter");
+        Replica[] replicaIds = new Replica[size];
         long[][] reads = new long[size][countersPerMap];
-        Map<ByteString, List<ICCounter>> ctrMap = Maps.newHashMap();
+        Map<Replica, List<ICCounter>> ctrMap = Maps.newHashMap();
         AtomicBoolean inverseHappened = new AtomicBoolean();
         for (int i = 0; i < size; i++) {
-            Replica ctrMapR = storeMgr.host("s" + i, counterMap);
-            replicaIds[i] = ctrMapR.getId();
+            IORMap map = storeMgr.host("s" + i, counterORMap);
+            Replica ctrMapR = map.id();
+            replicaIds[i] = ctrMapR;
             reads[i] = new long[countersPerMap];
-            Optional<IORMap> map = storeMgr.getStore("s" + i).get(counterMap);
-            ctrMap.computeIfAbsent(ctrMapR.getId(), k -> Lists.newArrayList());
+            ctrMap.computeIfAbsent(ctrMapR, k -> Lists.newArrayList());
             for (int c = 0; c < countersPerMap; c++) {
-                ctrMap.get(ctrMapR.getId()).add(map.get().getCCounter(ByteString.copyFromUtf8("c_" + c)));
+                ctrMap.get(ctrMapR).add(map.getCCounter(ByteString.copyFromUtf8("c_" + c)));
             }
         }
         for (int i = 0; i < size; i++) {
-            storeMgr.join("s" + i, counterMap, replicaIds[i], replicaIds);
+            storeMgr.join("s" + i, replicaIds[i], replicaIds);
         }
         long start = System.nanoTime();
         for (int i = 0; i < size; i++) {
@@ -196,8 +177,8 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
         }
 
         latch.await();
-        log.info("Finish counting in {} ms", Duration.ofNanos(System.nanoTime() - start).toMillis());
-        awaitUntilTrue(() -> {
+        log.debug("Finish counting in {} ms", Duration.ofNanos(System.nanoTime() - start).toMillis());
+        await().atMost(Duration.ofMillis(200000)).until(() -> {
             boolean pass = true;
             for (int i = 0; i < size; i++) {
                 for (int j = 0; j < ctrMap.get(replicaIds[i]).size(); j++) {
@@ -213,9 +194,9 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
                 }
             }
             return pass;
-        }, 200000);
+        });
         assertFalse(inverseHappened.get());
-        log.info("Pass test in {} ms", Duration.ofNanos(System.nanoTime() - start).toMillis());
+        log.debug("Pass test in {} ms", Duration.ofNanos(System.nanoTime() - start).toMillis());
 //        Thread.sleep(10000);
         executor.shutdownNow();
     }
@@ -260,33 +241,33 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
         CountDownLatch latch = new CountDownLatch(countPerCounter * storeIds.size());
         ScheduledExecutorService executor = Executors.newScheduledThreadPool(4);
         String ctrId = CRDTURI.toURI(CausalCRDTType.cctr, "counter");
-        ByteString[] replicaIds = new ByteString[storeIds.size()];
-        List<Optional<ICCounter>> counters = new ArrayList<>(storeIds.size());
+        Replica[] replicaIds = new Replica[storeIds.size()];
+        List<ICCounter> counters = new ArrayList<>(storeIds.size());
         AtomicInteger[] counts = new AtomicInteger[storeIds.size()];
         AtomicLong[] lastReads = new AtomicLong[storeIds.size()];
         for (int i = 0; i < storeIds.size(); i++) {
-            Replica ctrR = storeMgr.host(storeIds.get(i), ctrId);
-            replicaIds[i] = ctrR.getId();
-            counters.add(storeMgr.getStore(storeIds.get(i)).get(ctrId));
+            ICCounter ctr = storeMgr.host(storeIds.get(i), ctrId);
+            replicaIds[i] = ctr.id();
+            counters.add(ctr);
             counts[i] = new AtomicInteger();
             lastReads[i] = new AtomicLong();
         }
         for (int i = 0; i < storeIds.size(); i++) {
-            storeMgr.join(storeIds.get(i), ctrId, replicaIds[i], replicaIds);
+            storeMgr.join(storeIds.get(i), replicaIds[i], replicaIds);
         }
         AtomicBoolean inverse = new AtomicBoolean(false);
         for (int i = 0; i < storeIds.size(); i++) {
             int j = i;
             executor.scheduleAtFixedRate(() -> {
                 if (counts[j].getAndIncrement() < countPerCounter) {
-                    counters.get(j).get().execute(CCounterOperation.add(1));
+                    counters.get(j).execute(CCounterOperation.add(1));
                     latch.countDown();
                     long r = lastReads[j].get();
-                    lastReads[j].set(counters.get(j).get().read());
+                    lastReads[j].set(counters.get(j).read());
                     if (r > lastReads[j].get()) {
                         inverse.set(true);
-                        log.info("Counter {}: last={}, now={}, diff={}, inverse={}",
-                            counters.get(j).get().id(), r, lastReads[j].get(), lastReads[j].get() - r,
+                        log.debug("Counter {}: last={}, now={}, diff={}, inverse={}",
+                            counters.get(j).id(), r, lastReads[j].get(), lastReads[j].get() - r,
                             r > lastReads[j].get());
                     }
                 }
@@ -294,18 +275,18 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
         }
 
         latch.await();
-        log.info("Finish counting");
-        awaitUntilTrue(() -> {
+        log.debug("Finish counting");
+        await().atMost(Duration.ofMillis(150000)).until(() -> {
             boolean pass = true;
             for (int i = 0; i < storeIds.size(); i++) {
-                if (counters.get(i).get().read() != countPerCounter * storeIds.size()) {
-                    log.info("Counter[{}] reads:{}",
-                        counters.get(i).get().id(), counters.get(i).get().read());
+                if (counters.get(i).read() != countPerCounter * storeIds.size()) {
+                    log.debug("Counter[{}] reads:{}",
+                        counters.get(i).id(), counters.get(i).read());
                     pass = false;
                 }
             }
             return pass;
-        }, 150000);
+        });
         Assert.assertFalse(inverse.get());
         executor.shutdownNow();
     }
@@ -317,43 +298,42 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
     })
     @Test(groups = "integration")
     public void testNewReplicaJoin() {
-        String setId = CRDTURI.toURI(CausalCRDTType.aworset, "set");
-        Replica setR1 = storeMgr.host("s1", setId);
-        Replica setR2 = storeMgr.host("s2", setId);
-        Replica setR3 = storeMgr.host("s3", setId);
-        Optional<IAWORSet> set1 = storeMgr.getStore("s1").get(setId);
-        Optional<IAWORSet> set2 = storeMgr.getStore("s2").get(setId);
-        Optional<IAWORSet> set3 = storeMgr.getStore("s3").get(setId);
+        String crdtCRDT = CRDTURI.toURI(CausalCRDTType.aworset, "set");
+        IAWORSet set1 = storeMgr.host("s1", crdtCRDT);
+        Replica setR1 = set1.id();
+        IAWORSet set2 = storeMgr.host("s2", crdtCRDT);
+        Replica setR2 = set2.id();
+        IAWORSet set3 = storeMgr.host("s3", crdtCRDT);
+        Replica setR3 = set3.id();
+
         ByteString value1 = copyFromUtf8("Value1");
         ByteString value2 = copyFromUtf8("Value2");
         ByteString value3 = copyFromUtf8("Value3");
 
         // build two members network
-        storeMgr.join("s1", setId, setR1.getId(), setR1.getId(), setR2.getId());
-        storeMgr.join("s2", setId, setR2.getId(), setR1.getId(), setR2.getId());
+        storeMgr.join("s1", setR1, setR1, setR2);
+        storeMgr.join("s2", setR2, setR1, setR2);
 
-        set1.get().execute(AWORSetOperation.add(value1)).join();
-        awaitUntilTrue(() -> set1.get().contains(value1));
-        awaitUntilTrue(() -> set2.get().contains(value1));
+        set1.execute(AWORSetOperation.add(value1)).join();
+        await().until(() -> set1.contains(value1));
+        await().until(() -> set2.contains(value1));
 
-        set2.get().execute(AWORSetOperation.add(value2)).join();
-        awaitUntilTrue(() -> set1.get().contains(value2));
-        awaitUntilTrue(() -> set2.get().contains(value2));
+        set2.execute(AWORSetOperation.add(value2)).join();
+        await().until(() -> set1.contains(value2));
+        await().until(() -> set2.contains(value2));
 
-        set3.get().execute(AWORSetOperation.add(value3)).join();
-        awaitUntilTrue(() -> set3.get().contains(value3));
-
+        set3.execute(AWORSetOperation.add(value3)).join();
+        await().until(() -> set3.contains(value3));
 
         // build three members network
-        storeMgr.join("s1", setId, setR1.getId(), setR1.getId(), setR2.getId(), setR3.getId());
-        storeMgr.join("s2", setId, setR2.getId(), setR1.getId(), setR2.getId(), setR3.getId());
-        storeMgr.join("s3", setId, setR3.getId(), setR1.getId(), setR2.getId(), setR3.getId());
+        storeMgr.join("s1", setR1, setR1, setR2, setR3);
+        storeMgr.join("s2", setR2, setR1, setR2, setR3);
+        storeMgr.join("s3", setR3, setR1, setR2, setR3);
+        await().until(() -> set1.contains(value3));
+        await().until(() -> set2.contains(value3));
 
-        awaitUntilTrue(() -> set1.get().contains(value3));
-        awaitUntilTrue(() -> set2.get().contains(value3));
-
-        awaitUntilTrue(() -> set3.get().contains(value1));
-        awaitUntilTrue(() -> set3.get().contains(value2));
+        await().until(() -> set3.contains(value1));
+        await().until(() -> set3.contains(value2));
     }
 
     @StoreCfgs(stores = {
@@ -364,23 +344,23 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
     @Test(groups = "integration")
     public void testMemberLeave() throws InterruptedException {
         String ctrId = CRDTURI.toURI(CausalCRDTType.cctr, "cctr");
-        Replica ctrR1 = storeMgr.host("s1", ctrId);
-        Replica ctrR2 = storeMgr.host("s2", ctrId);
-        Replica ctrR3 = storeMgr.host("s3", ctrId);
-        Optional<ICCounter> c1 = storeMgr.getStore("s1").get(ctrId);
-        Optional<ICCounter> c2 = storeMgr.getStore("s2").get(ctrId);
-        Optional<ICCounter> c3 = storeMgr.getStore("s3").get(ctrId);
+        ICCounter c1 = storeMgr.host("s1", ctrId);
+        Replica ctrR1 = c1.id();
+        ICCounter c2 = storeMgr.host("s2", ctrId);
+        Replica ctrR2 = c2.id();
+        ICCounter c3 = storeMgr.host("s3", ctrId);
+        Replica ctrR3 = c3.id();
 
-        storeMgr.join("s1", ctrId, ctrR1.getId(), ctrR1.getId(), ctrR2.getId(), ctrR3.getId());
-        storeMgr.join("s2", ctrId, ctrR2.getId(), ctrR1.getId(), ctrR2.getId(), ctrR3.getId());
-        storeMgr.join("s3", ctrId, ctrR3.getId(), ctrR1.getId(), ctrR2.getId(), ctrR3.getId());
+        storeMgr.join("s1", ctrR1, ctrR1, ctrR2, ctrR3);
+        storeMgr.join("s2", ctrR2, ctrR1, ctrR2, ctrR3);
+        storeMgr.join("s3", ctrR3, ctrR1, ctrR2, ctrR3);
 
-        c1.get().execute(CCounterOperation.add(10)).join();
-        c2.get().execute(CCounterOperation.add(10)).join();
-        c3.get().execute(CCounterOperation.add(10)).join();
-        awaitUntilTrue(() -> c1.get().read() == 30);
-        awaitUntilTrue(() -> c2.get().read() == 30);
-        awaitUntilTrue(() -> c3.get().read() == 30);
+        c1.execute(CCounterOperation.add(10)).join();
+        c2.execute(CCounterOperation.add(10)).join();
+        c3.execute(CCounterOperation.add(10)).join();
+        await().until(() -> c1.read() == 30);
+        await().until(() -> c2.read() == 30);
+        await().until(() -> c3.read() == 30);
 
         // s3 stopped gracefully
         storeMgr.stopStore("s3");
@@ -388,18 +368,17 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
         Thread.sleep(1000);
 
         // reset the cluster landscape of s1, s2
-        storeMgr.join("s1", ctrId, ctrR1.getId(), ctrR1.getId(), ctrR2.getId());
-        storeMgr.join("s2", ctrId, ctrR2.getId(), ctrR1.getId(), ctrR2.getId());
+        storeMgr.join("s1", ctrR1, ctrR1, ctrR2);
+        storeMgr.join("s2", ctrR2, ctrR1, ctrR2);
 
         // partition the state of s3 as well
 //        storeMgr.partition("s1", ctrId, ctrR3.getId()).join();
-        c1.get().execute(CCounterOperation.zeroOut(ctrR3.getId())).join();
+        c1.execute(CCounterOperation.zeroOut(ctrR3.getId())).join();
 //        storeMgr.partition("s2", ctrId, ctrR3.getId()).join();
-        c2.get().execute(CCounterOperation.zeroOut(ctrR3.getId())).join();
-        awaitUntilTrue(() -> c1.get().read() == 20);
-        awaitUntilTrue(() -> c2.get().read() == 20);
+        c2.execute(CCounterOperation.zeroOut(ctrR3.getId())).join();
+        await().until(() -> c1.read() == 20);
+        await().until(() -> c2.read() == 20);
     }
-
 
     @StoreCfgs(stores = {
         @StoreCfg(id = "s1"),
@@ -409,26 +388,26 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
     @Test(groups = "integration")
     public void testAutoHealWhenFalsePositiveNetworkPartition() throws InterruptedException {
         String clusterId = CRDTURI.toURI(CausalCRDTType.ormap, "ormap");
-        Replica clusterR1 = storeMgr.host("s1", clusterId);
-        Replica clusterR2 = storeMgr.host("s2", clusterId);
-        Replica clusterR3 = storeMgr.host("s3", clusterId);
-        Optional<IORMap> c1 = storeMgr.getStore("s1").get(clusterId);
-        Optional<IORMap> c2 = storeMgr.getStore("s2").get(clusterId);
-        Optional<IORMap> c3 = storeMgr.getStore("s3").get(clusterId);
+        IORMap c1 = storeMgr.host("s1", clusterId);
+        Replica clusterR1 = c1.id();
+        IORMap c2 = storeMgr.host("s2", clusterId);
+        Replica clusterR2 = c2.id();
+        IORMap c3 = storeMgr.host("s3", clusterId);
+        Replica clusterR3 = c3.id();
         ByteString c1Addr = copyFromUtf8("ipaddr1");
         ByteString c2Addr = copyFromUtf8("ipaddr2");
         ByteString c3Addr = copyFromUtf8("ipaddr3");
 
-        storeMgr.join("s1", clusterId, clusterR1.getId(), clusterR1.getId(), clusterR2.getId(), clusterR3.getId());
-        storeMgr.join("s2", clusterId, clusterR2.getId(), clusterR1.getId(), clusterR2.getId(), clusterR3.getId());
-        storeMgr.join("s3", clusterId, clusterR3.getId(), clusterR1.getId(), clusterR2.getId(), clusterR3.getId());
+        storeMgr.join("s1", clusterR1, clusterR1, clusterR2, clusterR3);
+        storeMgr.join("s2", clusterR2, clusterR1, clusterR2, clusterR3);
+        storeMgr.join("s3", clusterR3, clusterR1, clusterR2, clusterR3);
 
-        c1.get().execute(ORMapOperation.update(clusterR1.getId()).with(MVRegOperation.write(c1Addr))).join();
-        c2.get().execute(ORMapOperation.update(clusterR2.getId()).with(MVRegOperation.write(c2Addr))).join();
-        c3.get().execute(ORMapOperation.update(clusterR3.getId()).with(MVRegOperation.write(c3Addr))).join();
-        awaitUntilTrue(() -> Sets.newHashSet(c1.get().keys()).size() == 3);
-        awaitUntilTrue(() -> Sets.newHashSet(c2.get().keys()).size() == 3);
-        awaitUntilTrue(() -> Sets.newHashSet(c3.get().keys()).size() == 3);
+        c1.execute(ORMapOperation.update(clusterR1.getId()).with(MVRegOperation.write(c1Addr))).join();
+        c2.execute(ORMapOperation.update(clusterR2.getId()).with(MVRegOperation.write(c2Addr))).join();
+        c3.execute(ORMapOperation.update(clusterR3.getId()).with(MVRegOperation.write(c3Addr))).join();
+        await().until(() -> Sets.newHashSet(c1.keys()).size() == 3);
+        await().until(() -> Sets.newHashSet(c2.keys()).size() == 3);
+        await().until(() -> Sets.newHashSet(c3.keys()).size() == 3);
 
         // sleep for a while to let anti-entropy between s1 and s2 become quiescent,
         // otherwise partition operation may not succeed within s1, s2
@@ -436,23 +415,23 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
         // simulate s3 is detected unreachable wrongly from s1, s2's failure detector,
         // partition s3's state from their respective local state proactively
 //        storeMgr.partition("s1", clusterId, clusterR3.getId()).join();
-        c1.get().execute(ORMapOperation.remove(clusterR3.getId()).of(CausalCRDTType.mvreg)).join();
+        c1.execute(ORMapOperation.remove(clusterR3.getId()).of(CausalCRDTType.mvreg)).join();
 //        storeMgr.partition("s2", clusterId, clusterR3.getId()).join();
-        c2.get().execute(ORMapOperation.remove(clusterR3.getId()).of(CausalCRDTType.mvreg)).join();
-        awaitUntilTrue(() -> Sets.newHashSet(c1.get().keys()).size() == 2);
-        awaitUntilTrue(() -> Sets.newHashSet(c2.get().keys()).size() == 2);
+        c2.execute(ORMapOperation.remove(clusterR3.getId()).of(CausalCRDTType.mvreg)).join();
+        await().until(() -> Sets.newHashSet(c1.keys()).size() == 2);
+        await().until(() -> Sets.newHashSet(c2.keys()).size() == 2);
 
         // and add s3 to local-split-brain resolve list and initialize split-brain resolving process
-        storeMgr.join("s1", clusterId, clusterR1.getId(), clusterR1.getId(), clusterR2.getId());
-        storeMgr.join("s1", clusterId, clusterR1.getId(), clusterR1.getId(), clusterR2.getId(), clusterR3.getId());
+        storeMgr.join("s1", clusterR1, clusterR1, clusterR2);
+        storeMgr.join("s1", clusterR1, clusterR1, clusterR2, clusterR3);
 
-        storeMgr.join("s2", clusterId, clusterR2.getId(), clusterR1.getId(), clusterR2.getId());
-        storeMgr.join("s2", clusterId, clusterR2.getId(), clusterR1.getId(), clusterR2.getId(), clusterR3.getId());
+        storeMgr.join("s2", clusterR2, clusterR1, clusterR2);
+        storeMgr.join("s2", clusterR2, clusterR1, clusterR2, clusterR3);
         // changes to s1, s2 will propagate to s3
-        awaitUntilTrue(() -> Sets.newHashSet(c3.get().keys()).size() == 2);
+        await().until(() -> Sets.newHashSet(c3.keys()).size() == 2);
 
         // s3 acknowledged it's been detected as a failed member in the current cluster, so it refutes
-        c3.get().execute(ORMapOperation.update(clusterR3.getId()).with(MVRegOperation.write(c3Addr))).join();
+        c3.execute(ORMapOperation.update(clusterR3.getId()).with(MVRegOperation.write(c3Addr))).join();
 
         // by either forcing sync with detecting members or
 //        storeMgr.sync("s3", clusterId, clusterR1.getId());
@@ -464,8 +443,8 @@ public class CRDTStoreTest extends CRDTStoreTestTemplate {
 //        storeMgr.join("s3", clusterId, clusterR3.getId(), clusterR1.getId(), clusterR2.getId(), clusterR3.getId());
         // NOTE:
         // state from s3 is recovered in s1, s2, split brain healed
-        awaitUntilTrue(() -> Sets.newHashSet(c1.get().keys()).size() == 3);
-        awaitUntilTrue(() -> Sets.newHashSet(c2.get().keys()).size() == 3);
-        awaitUntilTrue(() -> Sets.newHashSet(c3.get().keys()).size() == 3);
+        await().until(() -> Sets.newHashSet(c1.keys()).size() == 3);
+        await().until(() -> Sets.newHashSet(c2.keys()).size() == 3);
+        await().until(() -> Sets.newHashSet(c3.keys()).size() == 3);
     }
 }

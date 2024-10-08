@@ -132,17 +132,17 @@ class EventHistoryUtil {
         return historyA;
     }
 
-    static boolean remembering(Map<ByteString, NavigableMap<Long, Long>> eventIndex, ByteString replicaId, long ver) {
+    static boolean isRemembering(Map<ByteString, NavigableMap<Long, Long>> eventIndex, ByteString replicaId, long ver) {
         NavigableMap<Long, Long> ranges = eventIndex.getOrDefault(replicaId, emptyNavigableMap());
         Long key = ranges.floorKey(ver);
         return key != null && ranges.get(key) >= ver;
     }
 
-    static void forget(Map<ByteString, NavigableMap<Long, Long>> historyMap,
-                       ByteString replicaId, long ver) {
+    static void forget(Map<ByteString, NavigableMap<Long, Long>> historyMap, ByteString replicaId, long ver) {
         historyMap.computeIfPresent(replicaId, (k, v) -> {
             Map.Entry<Long, Long> b = v.floorEntry(ver);
             if (b != null) {
+                // ver <= maxVer
                 if (ver <= b.getValue()) {
                     v.remove(b.getKey());
                     if (b.getKey() <= ver - 1) {
@@ -154,6 +154,7 @@ class EventHistoryUtil {
                 }
             }
             if (v.isEmpty()) {
+                // no dot from replicaId, remove the entry
                 v = null;
             }
             return v;

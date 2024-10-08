@@ -13,15 +13,16 @@
 
 package com.baidu.bifromq.basecluster.memberlist;
 
+import static com.baidu.bifromq.basecluster.memberlist.CRDTUtil.AGENT_HOST_MAP_URI;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.LOCAL_ADDR;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.LOCAL_ENDPOINT;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.LOCAL_REPLICA;
-import static com.baidu.bifromq.basecluster.memberlist.Fixtures.LOCAL_REPLICA_ID;
+import static com.baidu.bifromq.basecluster.memberlist.Fixtures.LOCAL_STORE_ID;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_ADDR_1;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_HOST_1_ENDPOINT;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.ZOMBIE_ENDPOINT;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -53,7 +54,6 @@ import io.reactivex.rxjava3.schedulers.Timed;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import java.net.InetSocketAddress;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
@@ -61,7 +61,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedConstruction;
 import org.mockito.MockitoAnnotations;
-import org.mockito.stubbing.Answer;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -84,9 +83,10 @@ public class HostMemberListTest {
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
-        when(store.host(CRDTUtil.AGENT_HOST_MAP_URI)).thenReturn(LOCAL_REPLICA);
-        when(store.get(CRDTUtil.AGENT_HOST_MAP_URI))
-            .thenAnswer((Answer<Optional<IORMap>>) invocation -> Optional.of(hostListCRDT));
+        when(store.id()).thenReturn(LOCAL_STORE_ID.toStringUtf8());
+        when(store.host(any(), any())).thenReturn(hostListCRDT);
+        when(store.host(argThat(uri -> uri.getUri().equals(CRDTUtil.AGENT_HOST_MAP_URI)), any()))
+            .thenReturn(hostListCRDT);
         when(hostListCRDT.id()).thenReturn(LOCAL_REPLICA);
         when(hostListCRDT.inflation()).thenReturn(inflationSubject);
         when(messenger.receive()).thenReturn(messageSubject);
@@ -102,7 +102,7 @@ public class HostMemberListTest {
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
         HostMember local = memberList.local();
-        assertEquals(local.getEndpoint().getId(), LOCAL_REPLICA_ID);
+        assertEquals(local.getEndpoint().getId(), LOCAL_STORE_ID);
         assertEquals(local.getEndpoint().getAddress(), LOCAL_ADDR.getHostName());
         assertEquals(local.getEndpoint().getPort(), LOCAL_ADDR.getPort());
         assertTrue(local.getIncarnation() >= 0);
@@ -176,7 +176,8 @@ public class HostMemberListTest {
 
         ArgumentCaptor<ORMapOperation> opCap = ArgumentCaptor.forClass(ORMapOperation.class);
         verify(hostListCRDT, times(2)).execute(opCap.capture());
-        verify(store, times(2)).join(anyString(), any(), any());
+        verify(store, times(2)).join(
+            argThat(r -> r.getUri().equals(AGENT_HOST_MAP_URI) && r.getId().equals(LOCAL_STORE_ID)), any());
     }
 
     @Test
@@ -286,7 +287,8 @@ public class HostMemberListTest {
         messageSubject.onNext(quitMsg(ZOMBIE_ENDPOINT, 1));
         // nothing will happen
         verify(hostListCRDT, times(0)).execute(any(ORMapOperation.ORMapRemove.class));
-        verify(store, times(1)).join(anyString(), any(), any());
+        verify(store, times(1)).join(
+            argThat(r -> r.getUri().equals(AGENT_HOST_MAP_URI) && r.getId().equals(LOCAL_STORE_ID)), any());
     }
 
     @Test
@@ -296,7 +298,8 @@ public class HostMemberListTest {
         messageSubject.onNext(quitMsg(REMOTE_HOST_1_ENDPOINT, 1));
         // nothing will happen
         verify(hostListCRDT, times(1)).execute(any(ORMapOperation.ORMapRemove.class));
-        verify(store, times(1)).join(anyString(), any(), any());
+        verify(store, times(1)).join(
+            argThat(r -> r.getUri().equals(AGENT_HOST_MAP_URI) && r.getId().equals(LOCAL_STORE_ID)), any());
     }
 
     @Test
@@ -306,7 +309,8 @@ public class HostMemberListTest {
         messageSubject.onNext(quitMsg(LOCAL_ENDPOINT, 0));
         // nothing will happen
         verify(hostListCRDT, times(0)).execute(any(ORMapOperation.ORMapRemove.class));
-        verify(store, times(1)).join(anyString(), any(), any());
+        verify(store, times(1)).join(
+            argThat(r -> r.getUri().equals(AGENT_HOST_MAP_URI) && r.getId().equals(LOCAL_STORE_ID)), any());
     }
 
     @Test
@@ -323,7 +327,8 @@ public class HostMemberListTest {
         verify(hostListCRDT, times(3)).execute(opCap.capture());
         assertTrue(opCap.getAllValues().get(2) instanceof ORMapOperation.ORMapRemove);
 
-        verify(store, times(3)).join(anyString(), any(), any());
+        verify(store, times(3)).join(
+            argThat(r -> r.getUri().equals(AGENT_HOST_MAP_URI) && r.getId().equals(LOCAL_STORE_ID)), any());
     }
 
     @Test

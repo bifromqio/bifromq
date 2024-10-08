@@ -14,9 +14,12 @@
 package com.baidu.bifromq.basecrdt.store;
 
 
+import static com.baidu.bifromq.basecrdt.store.ReplicaIdGenerator.generate;
+
+import com.baidu.bifromq.basecrdt.core.api.ICRDTOperation;
+import com.baidu.bifromq.basecrdt.core.api.ICausalCRDT;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.store.proto.CRDTStoreMessage;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -26,7 +29,6 @@ import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import io.reactivex.rxjava3.subjects.Subject;
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
@@ -39,7 +41,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class CRDTStoreTestCluster {
     @AllArgsConstructor
-    static class CRDTStoreMeta {
+    public static class CRDTStoreMeta {
         final CRDTStoreOptions options;
         final double packetLossPercent;
         final long packetDelayTime;
@@ -47,58 +49,49 @@ public class CRDTStoreTestCluster {
     }
 
     private final Map<String, CRDTStoreMeta> storeOptionsMap = Maps.newConcurrentMap();
-    private final Map<String, Long> storeIdMap = Maps.newConcurrentMap();
-    private final Map<Long, ICRDTStore> storeMap = Maps.newConcurrentMap();
-    private final Map<Long, Subject<CRDTStoreMessage>> storeReceiverMap = Maps.newConcurrentMap();
+    private final Map<String, ICRDTStore> storeMap = Maps.newConcurrentMap();
+    private final Map<String, Subject<CRDTStoreMessage>> storeReceiverMap = Maps.newConcurrentMap();
     private final CompositeDisposable disposables = new CompositeDisposable();
 
     public List<String> stores() {
-        return Lists.newArrayList(storeIdMap.keySet());
+        return Lists.newArrayList(storeMap.keySet());
     }
 
-    public String newStore(String storeId, CRDTStoreMeta meta) {
-        storeOptionsMap.computeIfAbsent(storeId, k -> {
-            loadStore(storeId, meta);
+    public String newStore(CRDTStoreMeta meta) {
+        storeOptionsMap.computeIfAbsent(meta.options.id(), k -> {
+            loadStore(meta);
             return meta;
         });
-        return storeId;
+        return meta.options.id();
     }
 
     public void stopStore(String storeId) {
-        checkStore(storeId);
-        storeMap.remove(storeIdMap.remove(storeId)).stop();
+        storeMap.remove(storeId).stop();
         storeReceiverMap.remove(storeId);
     }
 
-    public Replica host(String storeId, String uri) {
-        checkStore(storeId);
-        Replica replica = getStore(storeId).host(uri);
+    public <O extends ICRDTOperation, T extends ICausalCRDT<O>> T host(String storeId, String uri) {
+        Replica replicaId = generate(uri, ByteString.copyFromUtf8(storeId));
+        T replica = getStore(storeId).host(replicaId, replicaId.getId());
         NavigableSet<ByteString> members = Sets.newTreeSet(ByteString.unsignedLexicographicalComparator());
-        members.add(replica.getId());
-        getStore(storeId).join(uri, replica.getId(), members);
+        members.add(replica.id().getId());
+        getStore(storeId).join(replica.id(), members);
         return replica;
     }
 
-    public void join(String storeId, String uri, ByteString localAddr, ByteString... memberAddrs) {
-        checkStore(storeId);
-        Set<ByteString> membership = Sets.newHashSet();
-        for (ByteString memberAddr : memberAddrs) {
-            membership.add(memberAddr);
+    public void join(String storeId, Replica replicaId, Replica... members) {
+        Set<ByteString> memberAddrs = Sets.newHashSet();
+        for (Replica replica : members) {
+            memberAddrs.add(replica.getId());
         }
-        getStore(storeId).join(uri, localAddr, membership);
-    }
-
-    public void sync(String storeId, String uri, ByteString peerAddr) {
-        checkStore(storeId);
-        getStore(storeId).sync(uri, peerAddr);
+        getStore(storeId).join(replicaId, memberAddrs);
     }
 
     public ICRDTStore getStore(String storeId) {
-        checkStore(storeId);
-        return storeMap.get(storeIdMap.get(storeId));
+        return storeMap.get(storeId);
     }
 
-    private long loadStore(String storeKey, CRDTStoreMeta meta) {
+    private String loadStore(CRDTStoreMeta meta) {
         Subject<CRDTStoreMessage> receiverSubject = PublishSubject.<CRDTStoreMessage>create().toSerialized();
         Observable<CRDTStoreMessage> receiver = receiverSubject;
         if (meta.packetLossPercent > 0) {
@@ -115,13 +108,12 @@ public class CRDTStoreTestCluster {
         }
         ICRDTStore store = ICRDTStore.newInstance(meta.options);
         store.start(receiver);
-        storeIdMap.put(storeKey, store.id());
         storeMap.put(store.id(), store);
         storeReceiverMap.put(store.id(), receiverSubject);
         disposables.add(store.storeMessages()
             .observeOn(Schedulers.io())
             .subscribe(msg -> {
-                long storeId = hostStoreId(msg.getReceiver());
+                String storeId = msg.getReceiver().toStringUtf8();
                 if (storeReceiverMap.containsKey(storeId)) {
 //                        log.trace("Forward message {} to target store[{}]", msg, storeId);
 //                        Log.info(log, "Store[{}] forward {} message[size:{}] to target store[{}]:\n{}",
@@ -153,7 +145,7 @@ public class CRDTStoreTestCluster {
 //                                });
                     storeReceiverMap.get(storeId).onNext(msg);
                 } else {
-                    log.debug("Drop message {} from store[{}]", msg, hostStoreId(msg.getSender()));
+                    log.debug("Drop message {} from store[{}]", msg, msg.getSender().toStringUtf8());
                 }
             }));
         return store.id();
@@ -161,20 +153,6 @@ public class CRDTStoreTestCluster {
 
     public void shutdown() {
         disposables.dispose();
-        storeIdMap.keySet().forEach(this::stopStore);
-    }
-
-    public long hostStoreId(ByteString replicaAddr) {
-        return toLong(replicaAddr.substring(0, Long.BYTES));
-    }
-
-    public long toLong(ByteString b) {
-        assert b.size() == Long.BYTES;
-        ByteBuffer buffer = b.asReadOnlyByteBuffer();
-        return buffer.getLong();
-    }
-
-    private void checkStore(String storeId) {
-        Preconditions.checkArgument(storeIdMap.containsKey(storeId));
+        storeMap.keySet().forEach(this::stopStore);
     }
 }

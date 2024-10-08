@@ -33,8 +33,8 @@ public class CRDTServiceTestCluster {
 
     private final Map<String, CRDTServiceMeta> serviceMetaMap = Maps.newConcurrentMap();
     private final Map<String, IAgentHost> serviceHostMap = Maps.newConcurrentMap();
-    private final Map<String, Long> serviceIdMap = Maps.newConcurrentMap();
-    private final Map<Long, ICRDTService> serviceMap = Maps.newConcurrentMap();
+    private final Map<String, String> serviceIdMap = Maps.newConcurrentMap();
+    private final Map<String, ICRDTService> serviceMap = Maps.newConcurrentMap();
 
     public void newService(String serviceId, AgentHostOptions hostOptions, CRDTServiceOptions serviceOptions) {
         serviceMetaMap.computeIfAbsent(serviceId, k -> {
@@ -70,7 +70,7 @@ public class CRDTServiceTestCluster {
         Preconditions.checkArgument(serviceIdMap.containsKey(serviceId));
     }
 
-    private long loadService(String serviceId, AgentHostOptions hostOptions, CRDTServiceOptions serviceOptions) {
+    private String loadService(String serviceId, AgentHostOptions hostOptions, CRDTServiceOptions serviceOptions) {
         log.info("Load service {}", serviceId);
         IAgentHost host = serviceHostMap.computeIfAbsent(serviceId, id -> {
             IAgentHost newHost = IAgentHost.newInstance(hostOptions);

@@ -15,37 +15,37 @@ package com.baidu.bifromq.basecrdt.core.benchmark;
 
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 
-import com.baidu.bifromq.basecrdt.core.api.CRDTEngineOptions;
-import com.baidu.bifromq.basecrdt.core.api.ICRDTEngine;
+import com.baidu.bifromq.basecrdt.core.internal.CausalCRDTInflaterFactory;
 import com.google.protobuf.ByteString;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-
+import java.time.Duration;
+import java.util.concurrent.Executors;
 import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.Ignore;
-import org.testng.annotations.Test;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
+import org.testng.annotations.Ignore;
+import org.testng.annotations.Test;
 
 @Slf4j
 public abstract class CRDTBenchmarkTemplate {
-    protected ICRDTEngine engine;
+    protected CausalCRDTInflaterFactory inflaterFactory;
 
     @Setup
     public void setup() throws IOException {
-        engine = ICRDTEngine.newInstance(new CRDTEngineOptions());
-        engine.start();
+        inflaterFactory = new CausalCRDTInflaterFactory(
+            Duration.ofMillis(200), Duration.ofSeconds(20), Duration.ofMillis(200),
+            Executors.newSingleThreadScheduledExecutor());
         doSetup();
     }
 
     @TearDown
     public void tearDown() {
         log.info("Stop engine");
-        engine.stop();
     }
 
     protected abstract void doSetup();

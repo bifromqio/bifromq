@@ -14,8 +14,10 @@
 package com.baidu.bifromq.basecrdt.core.internal;
 
 import com.baidu.bifromq.basecrdt.ReplicaLogger;
+import com.baidu.bifromq.basecrdt.core.api.CausalCRDTType;
 import com.baidu.bifromq.basecrdt.core.api.ICRDTOperation;
 import com.baidu.bifromq.basecrdt.core.api.ICausalCRDT;
+import com.baidu.bifromq.basecrdt.core.api.ICausalCRDTInflater;
 import com.baidu.bifromq.basecrdt.core.exception.CRDTCloseException;
 import com.baidu.bifromq.basecrdt.proto.Replacement;
 import com.baidu.bifromq.basecrdt.proto.Replica;
@@ -42,7 +44,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 
-abstract class CausalCRDTInflater<D extends IDotStore, O extends ICRDTOperation, C extends ICausalCRDT<O>> {
+abstract class CausalCRDTInflater<D extends IDotStore, O extends ICRDTOperation, C extends ICausalCRDT<O>>
+    implements ICausalCRDTInflater<O, C> {
     private final Logger log;
     private final AtomicBoolean inflationScheduled = new AtomicBoolean(false);
     private final AtomicBoolean compactionScheduled = new AtomicBoolean(false);
@@ -61,39 +64,46 @@ abstract class CausalCRDTInflater<D extends IDotStore, O extends ICRDTOperation,
     private volatile OperationExecTask currentOp = null;
     private volatile JoinTask currentJoin = null;
 
-    CausalCRDTInflater(long engineId, Replica replica, IReplicaStateLattice stateLattice,
+    CausalCRDTInflater(Replica replica, IReplicaStateLattice stateLattice,
                        ScheduledExecutorService executor,
-                       Duration inflationInterval) {
+                       Duration inflationInterval, String... tags) {
         this.replica = replica;
         this.log = new ReplicaLogger(replica, CausalCRDTInflater.class);
         this.replicaStateLattice = stateLattice;
         this.executor = executor;
         this.inflationInterval = inflationInterval;
-        this.metricManager = new MetricManager(Tags.of("store.id", Long.toUnsignedString(engineId))
+        this.metricManager = new MetricManager(Tags.of(tags)
             .and("replica.uri", replica.getUri())
             .and("replica.id", Base64.getEncoder().encodeToString(replica.getId().toByteArray())));
         try {
             dotStore = dotStoreType().getDeclaredConstructor().newInstance();
             crdt = newCRDT(replica, dotStore, this::execute);
-        } catch (InstantiationException | IllegalAccessException |
-                 InvocationTargetException | NoSuchMethodException e) {
+        } catch (InstantiationException
+                 | IllegalAccessException
+                 | InvocationTargetException
+                 | NoSuchMethodException e) {
             throw new IllegalStateException("Unknown dot store implementation", e);
         }
         // build aggregated view of existing events
         stateLattice.lattices().forEachRemaining(causalState -> ((DotStore) dotStore).add(causalState));
     }
 
-    protected abstract C newCRDT(Replica replica, D dotStore, CausalCRDT.CRDTOperationExecutor<O> executor);
 
-    final C getCRDT() {
+    @Override
+    public abstract CausalCRDTType type();
+
+    @Override
+    public final C getCRDT() {
         return crdt;
     }
 
-    final Replica id() {
+    @Override
+    public final Replica id() {
         return replica;
     }
 
-    final CompletableFuture<Void> stop() {
+    @Override
+    public final CompletableFuture<Void> stop() {
         CompletableFuture<Void> onStop = stopSignal.updateAndGet(current -> {
             if (current == null) {
                 return new CompletableFuture<>();
@@ -105,7 +115,8 @@ abstract class CausalCRDTInflater<D extends IDotStore, O extends ICRDTOperation,
         return onStop;
     }
 
-    final CompletableFuture<Void> join(Iterable<Replacement> delta) {
+    @Override
+    public final CompletableFuture<Void> join(Iterable<Replacement> delta) {
         if (stopSignal.get() != null) {
             // silently drop the request
             return CompletableFuture.completedFuture(null);
@@ -123,31 +134,35 @@ abstract class CausalCRDTInflater<D extends IDotStore, O extends ICRDTOperation,
         return ret;
     }
 
-    CompletableFuture<Optional<Iterable<Replacement>>> delta(
+    @Override
+    public final CompletableFuture<Optional<Iterable<Replacement>>> delta(
         Map<ByteString, NavigableMap<Long, Long>> coveredLatticeEvents,
         Map<ByteString, NavigableMap<Long, Long>> coveredHistoryEvents,
         int maxEvents) {
         CompletableFuture<Optional<Iterable<Replacement>>> onDone = new CompletableFuture<>();
         submitTask(() -> {
             Timer.Sample sample = Timer.start();
-            onDone.complete(replicaStateLattice
-                .delta(coveredLatticeEvents, coveredHistoryEvents, maxEvents));
+            onDone.complete(replicaStateLattice.delta(coveredLatticeEvents, coveredHistoryEvents, maxEvents));
             sample.stop(metricManager.deltaTimer);
         });
         return onDone;
     }
 
-    Map<ByteString, NavigableMap<Long, Long>> latticeEvents() {
+    @Override
+    public final Map<ByteString, NavigableMap<Long, Long>> latticeEvents() {
         return replicaStateLattice.latticeIndex();
     }
 
-    Map<ByteString, NavigableMap<Long, Long>> historyEvents() {
+    @Override
+    public final Map<ByteString, NavigableMap<Long, Long>> historyEvents() {
         return replicaStateLattice.historyIndex();
     }
 
-    protected abstract ICoalesceOperation<D, O> startCoalescing(O op);
+    abstract C newCRDT(Replica replica, D dotStore, CausalCRDT.CRDTOperationExecutor<O> executor);
 
-    protected abstract Class<? extends D> dotStoreType();
+    abstract ICoalesceOperation<D, O> startCoalescing(O op);
+
+    abstract Class<? extends D> dotStoreType();
 
     private CompletableFuture<Void> execute(O op) {
         if (stopSignal.get() != null) {

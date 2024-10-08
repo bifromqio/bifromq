@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023. The BifroMQ Authors. All Rights Reserved.
+ * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -11,24 +11,10 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basecrdt.core.api;
+package com.baidu.bifromq.basecrdt.store;
 
+import com.baidu.bifromq.basecrdt.store.proto.DeltaMessage;
 import com.google.protobuf.ByteString;
-import java.util.Iterator;
 
-/**
- * Interface for AWORSet.
- */
-public interface IAWORSet extends ICausalCRDT<AWORSetOperation> {
-    default CausalCRDTType type() {
-        return CausalCRDTType.aworset;
-    }
-
-    default boolean isEmpty() {
-        return !elements().hasNext();
-    }
-
-    boolean contains(ByteString element);
-
-    Iterator<ByteString> elements();
+public record NeighborMessage(DeltaMessage deltaMsg, ByteString neighborAddress) {
 }

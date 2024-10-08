@@ -13,6 +13,9 @@
 
 package com.baidu.bifromq.basecrdt.core.internal;
 
+import static com.baidu.bifromq.basecrdt.core.internal.EventHistoryUtil.diff;
+import static com.baidu.bifromq.basecrdt.core.internal.EventHistoryUtil.forget;
+import static com.baidu.bifromq.basecrdt.core.internal.EventHistoryUtil.isRemembering;
 import static com.baidu.bifromq.basecrdt.core.util.LatticeIndexUtil.remember;
 import static java.util.Collections.emptyNavigableMap;
 import static java.util.Collections.singleton;
@@ -130,17 +133,21 @@ class InMemReplicaStateLattice implements IReplicaStateLattice {
                 eventInfo = EventInfo.from(dot);
                 eventDAG.put(event, eventInfo);
                 if (dot.hasLattice()) {
+                    // observed new lattice
                     adds.add(dot.getLattice());
                     remember(latticeIndex, dot.getReplicaId(), dot.getVer());
                 } else {
+                    // observed removal
                     remember(historyIndex, dot.getReplicaId(), dot.getVer());
                 }
             } else if (eventInfo.lattice.isPresent()) {
                 if (!dot.hasLattice()) {
                     rems.add(eventInfo.lattice.get());
-                    eventInfo.eol();
-                    EventHistoryUtil.forget(latticeIndex, dot.getReplicaId(), dot.getVer());
+                    eventInfo.eol(); // in-place update
+                    forget(latticeIndex, dot.getReplicaId(), dot.getVer());
                     remember(historyIndex, dot.getReplicaId(), dot.getVer());
+                } else {
+                    assert eventInfo.lattice.get().equals(dot.getLattice()) : "Inconsistent lattice";
                 }
             }
             // update the relation
@@ -156,9 +163,10 @@ class InMemReplicaStateLattice implements IReplicaStateLattice {
                     eventDAG.put(currentEvent, currentInfo);
                     remember(historyIndex, currentEvent.replicaId, currentEvent.ver);
                 } else if (currentInfo.lattice.isPresent()) {
+                    // current lattice is replaced
                     rems.add(currentInfo.lattice.get());
-                    currentInfo.eol();
-                    EventHistoryUtil.forget(latticeIndex, currentEvent.replicaId, currentEvent.ver);
+                    currentInfo.eol(); // in-place update
+                    forget(latticeIndex, currentEvent.replicaId, currentEvent.ver);
                     remember(historyIndex, currentEvent.replicaId, currentEvent.ver);
                 }
                 prevInfo.replacing.add(currentEvent);
@@ -180,7 +188,7 @@ class InMemReplicaStateLattice implements IReplicaStateLattice {
 
             // excludes lattices already removed by peer
             NavigableMap<Long, Long> newLatticeRanges =
-                EventHistoryUtil.diff(EventHistoryUtil.diff(latticeRanges, coveredLattices), coveredHistory);
+                diff(diff(latticeRanges, coveredLattices), coveredHistory);
             Iterator<Event> itr = from(replicaId, newLatticeRanges);
             while (itr.hasNext()) {
                 Event event = itr.next();
@@ -199,7 +207,7 @@ class InMemReplicaStateLattice implements IReplicaStateLattice {
             ByteString replicaId = entry.getKey();
             NavigableMap<Long, Long> coveredLattices = entry.getValue();
             NavigableMap<Long, Long> latticeRanges = latticeIndex.getOrDefault(replicaId, emptyNavigableMap());
-            NavigableMap<Long, Long> remLatticeRanges = EventHistoryUtil.diff(coveredLattices, latticeRanges);
+            NavigableMap<Long, Long> remLatticeRanges = diff(coveredLattices, latticeRanges);
             Iterator<Event> itr = from(replicaId, remLatticeRanges);
             while (itr.hasNext()) {
                 Event event = itr.next();
@@ -237,16 +245,11 @@ class InMemReplicaStateLattice implements IReplicaStateLattice {
         try {
             boolean nextCompactNeeded = false;
             long start = System.nanoTime();
-//            int total = eventDAG.size();
             for (ByteString replicaId : historyIndex.keySet()) {
                 if (historyIndex.containsKey(replicaId)) {
                     Iterator<Event> eventItr = from(replicaId, Maps.newTreeMap(historyIndex.get(replicaId)));
                     while (eventItr.hasNext()) {
                         Event event = eventItr.next();
-                        EventInfo eventInfo = eventDAG.get(event);
-                        if (eventInfo == null) {
-                            continue;
-                        }
                         if (truncate(event)) {
                             nextCompactNeeded = true;
                         }
@@ -278,9 +281,9 @@ class InMemReplicaStateLattice implements IReplicaStateLattice {
         if (!truncatable(event)) {
             return false;
         }
-        if (eventInfo.ts < System.nanoTime() - historyExpire.toNanos()) {
+        if (System.nanoTime() - eventInfo.ts > historyExpire.toNanos()) {
             eventDAG.remove(event);
-            EventHistoryUtil.forget(historyIndex, event.replicaId, event.ver);
+            forget(historyIndex, event.replicaId, event.ver);
             List<Event> relateEvents = new ArrayList<>();
             boolean moreToTruncate = false;
             for (Event replacedByEvent : eventInfo.replacedBy) {
@@ -333,7 +336,7 @@ class InMemReplicaStateLattice implements IReplicaStateLattice {
                         Map<ByteString, NavigableMap<Long, Long>> coveredLatticeIndex,
                         Map<ByteString, NavigableMap<Long, Long>> coveredHistoryIndex) {
         LinkedList<Event> toVisits = Lists.newLinkedList(singleton(event));
-        LinkedList<Event> events = Lists.newLinkedList();// events in replacing order
+        LinkedList<Event> events = Lists.newLinkedList(); // events in replacing order
         while (!toVisits.isEmpty()) {
             Event current = toVisits.remove(0);
             EventInfo eventInfo = eventDAG.get(current);
@@ -341,8 +344,8 @@ class InMemReplicaStateLattice implements IReplicaStateLattice {
             events.add(current);
 
             if (eventInfo.replacing.isEmpty()
-                || EventHistoryUtil.remembering(coveredLatticeIndex, current.replicaId, current.ver)
-                || EventHistoryUtil.remembering(coveredHistoryIndex, current.replicaId, current.ver)) {
+                || isRemembering(coveredLatticeIndex, current.replicaId, current.ver)
+                || isRemembering(coveredHistoryIndex, current.replicaId, current.ver)) {
                 // build path
                 replacements.add(Replacement.newBuilder()
                     .addAllDots(events.stream().map(e -> {

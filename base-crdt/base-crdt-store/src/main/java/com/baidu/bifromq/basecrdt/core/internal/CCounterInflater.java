@@ -14,20 +14,31 @@
 package com.baidu.bifromq.basecrdt.core.internal;
 
 import com.baidu.bifromq.basecrdt.core.api.CCounterOperation;
+import com.baidu.bifromq.basecrdt.core.api.CausalCRDTType;
+import com.baidu.bifromq.basecrdt.core.api.ICCounter;
+import com.baidu.bifromq.basecrdt.core.api.ICCounterInflater;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import java.time.Duration;
 import java.util.concurrent.ScheduledExecutorService;
 
-class CCounterInflater extends CausalCRDTInflater<IDotMap, CCounterOperation, CCounter> {
-    CCounterInflater(long id, Replica replica, IReplicaStateLattice stateLattice,
-                     ScheduledExecutorService executor, Duration inflationInterval) {
-        super(id, replica, stateLattice, executor, inflationInterval);
+class CCounterInflater extends CausalCRDTInflater<IDotMap, CCounterOperation, ICCounter> implements ICCounterInflater {
+    CCounterInflater(Replica replica,
+                     IReplicaStateLattice stateLattice,
+                     ScheduledExecutorService executor,
+                     Duration inflationInterval,
+                     String... tags) {
+        super(replica, stateLattice, executor, inflationInterval, tags);
     }
 
     @Override
-    protected CCounter newCRDT(Replica replica, IDotMap dotStore,
-                               CausalCRDT.CRDTOperationExecutor<CCounterOperation> executor) {
+    protected ICCounter newCRDT(Replica replica, IDotMap dotStore,
+                                CausalCRDT.CRDTOperationExecutor<CCounterOperation> executor) {
         return new CCounter(replica, () -> dotStore, executor);
+    }
+
+    @Override
+    public CausalCRDTType type() {
+        return CausalCRDTType.cctr;
     }
 
     @Override

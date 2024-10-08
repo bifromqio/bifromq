@@ -20,7 +20,7 @@ import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.cctr;
 import com.baidu.bifromq.basecrdt.core.api.CCounterOperation;
 import com.baidu.bifromq.basecrdt.core.api.ICCounter;
 import com.baidu.bifromq.basecrdt.proto.Replica;
-import java.util.Optional;
+import com.baidu.bifromq.basecrdt.store.ReplicaIdGenerator;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -40,9 +40,8 @@ public class CCounterBenchmark extends CRDTBenchmarkTemplate {
 
     @Override
     protected void doSetup() {
-        replica = engine.host(toURI(cctr, "cctr"));
-        Optional<ICCounter> counterOpt = engine.get(replica.getUri());
-        counter = counterOpt.get();
+        counter = (ICCounter) inflaterFactory.create(ReplicaIdGenerator.generate(toURI(cctr, "cctr"))).getCRDT();
+        replica = counter.id();
     }
 
     @Benchmark
