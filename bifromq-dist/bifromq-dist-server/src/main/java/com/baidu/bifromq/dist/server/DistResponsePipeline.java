@@ -27,6 +27,7 @@ import com.baidu.bifromq.dist.server.scheduler.IDistWorkerCallScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DistError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.Disted;
+import com.baidu.bifromq.sysprops.props.DistWorkerCallQueueNum;
 import com.baidu.bifromq.sysprops.props.IngressSlowDownDirectMemoryUsage;
 import com.baidu.bifromq.sysprops.props.IngressSlowDownHeapMemoryUsage;
 import com.baidu.bifromq.sysprops.props.MaxSlowDownTimeoutSeconds;
@@ -34,8 +35,8 @@ import com.baidu.bifromq.type.PublisherMessagePack;
 import io.grpc.stub.StreamObserver;
 import java.time.Duration;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -43,7 +44,7 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
     private static final double SLOWDOWN_DIRECT_MEM_USAGE = IngressSlowDownDirectMemoryUsage.INSTANCE.get();
     private static final double SLOWDOWN_HEAP_MEM_USAGE = IngressSlowDownHeapMemoryUsage.INSTANCE.get();
     private static final Duration SLOWDOWN_TIMEOUT = Duration.ofSeconds(MaxSlowDownTimeoutSeconds.INSTANCE.get());
-    private final String id = UUID.randomUUID().toString();
+    private final int callQueueIdx = DistQueueAllocator.allocate();
     private final IEventCollector eventCollector;
     private final IDistWorkerCallScheduler distCallScheduler;
 
@@ -58,7 +59,7 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
 
     @Override
     protected CompletableFuture<DistReply> handleRequest(String tenantId, DistRequest request) {
-        return distCallScheduler.schedule(new DistServerCall(tenantId, request.getMessagesList(), id))
+        return distCallScheduler.schedule(new DistServerCall(tenantId, request.getMessagesList(), callQueueIdx))
             .handle((v, e) -> {
                 DistReply.Builder replyBuilder = DistReply.newBuilder().setReqId(request.getReqId());
                 if (e != null) {
@@ -111,5 +112,14 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
                 }
                 return replyBuilder.build();
             });
+    }
+
+    private static class DistQueueAllocator {
+        private static final int QUEUE_NUMS = DistWorkerCallQueueNum.INSTANCE.get();
+        private static final AtomicInteger IDX = new AtomicInteger(0);
+
+        public static int allocate() {
+            return IDX.getAndIncrement() % QUEUE_NUMS;
+        }
     }
 }

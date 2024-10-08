@@ -16,5 +16,5 @@ package com.baidu.bifromq.dist.server.scheduler;
 import com.baidu.bifromq.type.PublisherMessagePack;
 import java.util.List;
 
-public record DistServerCall(String tenantId, List<PublisherMessagePack> publisherMessagePacks, String callerId) {
+public record DistServerCall(String tenantId, List<PublisherMessagePack> publisherMessagePacks, int callQueueIdx) {
 }

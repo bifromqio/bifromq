@@ -19,7 +19,6 @@ import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
 import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
-import com.baidu.bifromq.sysprops.props.DistWorkerCallQueueNum;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
@@ -60,7 +59,6 @@ public class DistWorkerCallScheduler
 
     @Override
     protected Optional<DistServerCallBatcherKey> find(DistServerCall request) {
-        return Optional.of(new DistServerCallBatcherKey(request.tenantId(),
-            Math.abs(request.callerId().hashCode()) % DistWorkerCallQueueNum.INSTANCE.get()));
+        return Optional.of(new DistServerCallBatcherKey(request.tenantId(), request.callQueueIdx()));
     }
 }

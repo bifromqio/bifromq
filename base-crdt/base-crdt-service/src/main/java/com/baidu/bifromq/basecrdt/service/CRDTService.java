@@ -116,7 +116,7 @@ public class CRDTService implements ICRDTService {
     @Override
     public void stop() {
         if (state.compareAndSet(State.STARTED, State.STOPPING)) {
-            log.info("Stopping CRDT service[{}]", id());
+            log.debug("Stopping CRDT service[{}]", id());
             log.debug("Stop hosting CRDTs");
             CompletableFuture.allOf(hostedCRDT.values()
                     .stream()
@@ -125,7 +125,7 @@ public class CRDTService implements ICRDTService {
                 .join();
             log.debug("Stopping CRDT store");
             store.stop();
-            log.info("CRDT service[{}] stopped", id());
+            log.debug("CRDT service[{}] stopped", id());
             executor.shutdown();
             state.set(State.SHUTDOWN);
         }
