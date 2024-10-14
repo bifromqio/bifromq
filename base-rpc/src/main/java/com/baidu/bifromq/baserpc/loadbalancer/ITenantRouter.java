@@ -13,18 +13,7 @@
 
 package com.baidu.bifromq.baserpc.loadbalancer;
 
-import io.grpc.LoadBalancer;
-import java.util.Optional;
-
-interface ITrafficRouter {
-    /**
-     * If the server exists.
-     *
-     * @param serverId server id
-     * @return true if exists
-     */
-    boolean exists(String serverId);
-
+interface ITenantRouter {
     /**
      * Get the server group router for the tenant.
      *
@@ -32,6 +21,4 @@ interface ITrafficRouter {
      * @return server group router
      */
     IServerGroupRouter get(String tenantId);
-
-    Optional<LoadBalancer.Subchannel> getSubchannel(String serverId);
 }

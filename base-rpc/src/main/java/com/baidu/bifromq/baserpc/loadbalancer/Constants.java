@@ -42,10 +42,6 @@ public class Constants {
         Metadata.Key.of("tenant_id", Metadata.ASCII_STRING_MARSHALLER);
     public static final Metadata.Key<String> DESIRED_SERVER_META_KEY =
         Metadata.Key.of("desired_server_id", Metadata.ASCII_STRING_MARSHALLER);
-    public static final Metadata.Key<String> WCH_KEY_META_KEY =
-        Metadata.Key.of("wch_hash_key", Metadata.ASCII_STRING_MARSHALLER);
-    public static final Metadata.Key<String> COLLECT_SELECTION_METADATA_META_KEY =
-        Metadata.Key.of("collect_selection", Metadata.ASCII_STRING_MARSHALLER);
     public static final Metadata.Key<byte[]> CUSTOM_METADATA_META_KEY =
         Metadata.Key.of("custom_metadata-bin", Metadata.BINARY_BYTE_MARSHALLER);
 

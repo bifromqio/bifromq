@@ -19,8 +19,6 @@ import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
 import com.baidu.bifromq.sessiondict.rpc.proto.Session;
 import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictServiceGrpc;
 import com.baidu.bifromq.type.ClientInfo;
-import io.reactivex.rxjava3.annotations.NonNull;
-import io.reactivex.rxjava3.observers.DisposableObserver;
 import java.lang.ref.Cleaner;
 import java.lang.ref.Cleaner.Cleanable;
 import java.util.Collections;
@@ -41,7 +39,8 @@ class SessionRegister {
         this.messageStream = rpcClient.createMessageStream(tenantId, null, registerKey,
             Collections.emptyMap(), SessionDictServiceGrpc.getDictMethod());
         this.cleanable = CLEANER.register(this, new PipelineCloseAction(messageStream));
-        new QuitObserver(messageStream, sessions).initObserve();
+        this.messageStream.onMessage(new QuitListener(sessions));
+        this.messageStream.onRetarget(new RetargetListener(sessions, messageStream));
     }
 
     public void sendRegInfo(ClientInfo owner, boolean keep) {
@@ -66,58 +65,32 @@ class SessionRegister {
         }
     }
 
-    private static class QuitObserver {
-        private final IRPCClient.IMessageStream<Quit, Session> stream;
-        private final Map<ClientInfo, Consumer<Quit>> sessions;
-
-        public QuitObserver(IRPCClient.IMessageStream<Quit, Session> stream,
-                            Map<ClientInfo, Consumer<Quit>> sessions) {
-            this.stream = stream;
-            this.sessions = sessions;
+    private record QuitListener(Map<ClientInfo, Consumer<Quit>> sessions) implements Consumer<Quit> {
+        @Override
+        public void accept(Quit quit) {
+            sessions.computeIfPresent(quit.getOwner(), (k, v) -> {
+                v.accept(quit);
+                return v;
+            });
         }
+    }
 
-        private void initObserve() {
-            if (!stream.isClosed()) {
-                for (ClientInfo owner : sessions.keySet()) {
-                    stream.ack(Session.newBuilder()
-                        .setReqId(System.nanoTime())
-                        .setOwner(owner)
-                        .setKeep(true)
-                        .build());
-                }
-                stream.msg()
-                    .subscribeWith(new DisposableObserver<Quit>() {
-                        @Override
-                        public void onNext(@NonNull Quit quit) {
-                            sessions.computeIfPresent(quit.getOwner(), (k, v) -> {
-                                v.accept(quit);
-                                return v;
-                            });
-                        }
+    private record RetargetListener(Map<ClientInfo, Consumer<Quit>> sessions,
+                                    IRPCClient.IMessageStream<Quit, Session> messageStream) implements Consumer<Long> {
 
-                        @Override
-                        public void onError(@NonNull Throwable e) {
-                            dispose();
-                            initObserve();
-                        }
-
-                        @Override
-                        public void onComplete() {
-                            dispose();
-                            initObserve();
-                        }
-                    });
+        @Override
+        public void accept(Long ts) {
+            for (ClientInfo owner : sessions.keySet()) {
+                this.messageStream.ack(Session.newBuilder()
+                    .setReqId(System.nanoTime())
+                    .setOwner(owner)
+                    .setKeep(true)
+                    .build());
             }
         }
     }
 
-    private static class PipelineCloseAction implements Runnable {
-        private final IMessageStream<Quit, Session> messageStream;
-
-        private PipelineCloseAction(IMessageStream<Quit, Session> messageStream) {
-            this.messageStream = messageStream;
-        }
-
+    private record PipelineCloseAction(IMessageStream<Quit, Session> messageStream) implements Runnable {
         @Override
         public void run() {
             messageStream.close();

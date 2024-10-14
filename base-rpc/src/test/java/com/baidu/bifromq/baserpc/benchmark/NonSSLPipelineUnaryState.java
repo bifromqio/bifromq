@@ -130,7 +130,7 @@ public class NonSSLPipelineUnaryState {
             .setId(reqId)
             .setValue(reqId + "_value")
             .setBin(ByteString.copyFromUtf8("Hello: " + reqId))
-            .build()).join();
+            .build()).toCompletableFuture().join();
         if (resp.getId() != reqId) {
             log.error("ReqId mismatch: send={}, recv={}", reqId, resp.getId());
         }

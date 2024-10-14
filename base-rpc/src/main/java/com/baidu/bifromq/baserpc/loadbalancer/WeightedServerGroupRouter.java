@@ -15,6 +15,7 @@ package com.baidu.bifromq.baserpc.loadbalancer;
 
 import com.google.common.collect.Maps;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -23,15 +24,16 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 
 class WeightedServerGroupRouter implements IServerGroupRouter {
-    private final List<String> weightedServerLists;
+    private final Map<String, Integer> weightedServers;
+    private final List<String> weightedServerRRSequence;
     private final WCHRouter<String> chRouter;
     private final AtomicInteger rrIndex = new AtomicInteger(0);
-    private final Optional<String> inProcServerId;
+    private final Set<String> inProcServers = new HashSet<>();
 
-    WeightedServerGroupRouter(Map<String, Integer> groupWeights,
-                              Map<String, Set<String>> serverGroups,
-                              String inProcServerId) {
-        Map<String, Integer> weightedServers = Maps.newHashMap();
+    WeightedServerGroupRouter(Map<String, Boolean> allServers,
+                              Map<String, Integer> groupWeights,
+                              Map<String, Set<String>> serverGroups) {
+        weightedServers = Maps.newHashMap();
         for (String group : groupWeights.keySet()) {
             int weight = Math.abs(groupWeights.get(group)) % 11; // weight range: 0-10
             serverGroups.getOrDefault(group, Collections.emptySet()).forEach(serverId ->
@@ -43,42 +45,46 @@ class WeightedServerGroupRouter implements IServerGroupRouter {
                     return w;
                 }));
         }
-        weightedServerLists = LBUtils.toWeightedRRSequence(weightedServers);
+        weightedServerRRSequence = LBUtils.toWeightedRRSequence(weightedServers);
         chRouter = new WCHRouter<>(weightedServers.keySet(), serverId -> serverId, weightedServers::get, 100);
         // if inproc server is not in the weightedServers, it will be ignored
-        if (weightedServers.containsKey(inProcServerId)) {
-            this.inProcServerId = Optional.of(inProcServerId);
-        } else {
-            this.inProcServerId = Optional.empty();
+        for (String serverId : weightedServers.keySet()) {
+            if (allServers.getOrDefault(serverId, false)) {
+                inProcServers.add(serverId);
+            }
         }
     }
 
     @Override
-    public boolean exists(String serverId) {
-        return weightedServerLists.contains(serverId);
+    public boolean isSameGroup(IServerGroupRouter other) {
+        if (other instanceof WeightedServerGroupRouter otherRouter) {
+            return weightedServers.equals(otherRouter.weightedServers);
+        }
+        return false;
     }
 
     @Override
     public Optional<String> random() {
-        if (weightedServerLists.isEmpty()) {
+        if (weightedServerRRSequence.isEmpty()) {
             return Optional.empty();
         }
         // prefer in-proc server
-        if (inProcServerId.isPresent()) {
-            return inProcServerId;
+        if (!inProcServers.isEmpty()) {
+            return inProcServers.stream().findFirst();
         }
-        return Optional.of(weightedServerLists.get(ThreadLocalRandom.current().nextInt(0, weightedServerLists.size())));
+        return Optional.of(
+            weightedServerRRSequence.get(ThreadLocalRandom.current().nextInt(0, weightedServerRRSequence.size())));
     }
 
     @Override
     public Optional<String> roundRobin() {
-        int size = weightedServerLists.size();
+        int size = weightedServerRRSequence.size();
         if (size == 0) {
             return Optional.empty();
         }
         // prefer in-proc server
-        if (inProcServerId.isPresent()) {
-            return inProcServerId;
+        if (!inProcServers.isEmpty()) {
+            return inProcServers.stream().findFirst();
         } else {
             int i = rrIndex.incrementAndGet();
             if (i >= size) {
@@ -86,7 +92,25 @@ class WeightedServerGroupRouter implements IServerGroupRouter {
                 i %= size;
                 rrIndex.compareAndSet(oldi, i);
             }
-            return Optional.of(weightedServerLists.get(i));
+            return Optional.of(weightedServerRRSequence.get(i));
+        }
+    }
+
+    @Override
+    public Optional<String> tryRoundRobin() {
+        int size = weightedServerRRSequence.size();
+        if (size == 0) {
+            return Optional.empty();
+        }
+        // prefer in-proc server
+        if (!inProcServers.isEmpty()) {
+            return inProcServers.stream().findFirst();
+        } else {
+            int i = rrIndex.get() + 1;
+            if (i >= size) {
+                i %= size;
+            }
+            return Optional.of(weightedServerRRSequence.get(i));
         }
     }
 

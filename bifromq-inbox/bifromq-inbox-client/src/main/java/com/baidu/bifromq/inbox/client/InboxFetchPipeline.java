@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.inbox.client;
 
+import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_DELIVERERKEY;
 import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_ID;
-import static java.util.Collections.singletonMap;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.baserpc.IRPCClient.IMessageStream;
@@ -22,8 +22,6 @@ import com.baidu.bifromq.inbox.rpc.proto.InboxFetchHint;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetched;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import io.reactivex.rxjava3.annotations.NonNull;
-import io.reactivex.rxjava3.observers.DisposableObserver;
 import java.lang.ref.Cleaner;
 import java.lang.ref.Cleaner.Cleanable;
 import java.util.Map;
@@ -44,10 +42,11 @@ class InboxFetchPipeline {
     InboxFetchPipeline(String tenantId, String delivererKey, IRPCClient rpcClient) {
         this.tenantId = tenantId;
         this.messageStream = rpcClient.createMessageStream(tenantId, null, delivererKey,
-            singletonMap(PIPELINE_ATTR_KEY_ID, UUID.randomUUID().toString()),
+            Map.of(PIPELINE_ATTR_KEY_ID, UUID.randomUUID().toString(), PIPELINE_ATTR_KEY_DELIVERERKEY, delivererKey),
             InboxServiceGrpc.getFetchMethod());
         this.cleanable = CLEANER.register(this, new PipelineCloseAction(messageStream));
-        new FetchObserver(messageStream, fetcherMap).observe();
+        this.messageStream.onMessage(new MessageListener(fetcherMap));
+        this.messageStream.onRetarget(new RetargetListener(fetcherMap));
     }
 
     public void fetch(long sessionId, String inboxId, long incarnation, Consumer<Fetched> consumer) {
@@ -82,48 +81,33 @@ class InboxFetchPipeline {
         }
     }
 
-    private record FetchObserver(IMessageStream<InboxFetched, InboxFetchHint> stream,
-                                 Map<InboxFetchSessionId, Consumer<Fetched>> fetcherMap) {
-        private void observe() {
-            if (!stream.isClosed()) {
-                stream.msg()
-                    .subscribeWith(new DisposableObserver<InboxFetched>() {
-                        @Override
-                        public void onNext(@NonNull InboxFetched inboxFetched) {
-                            Consumer<Fetched> fetcher = fetcherMap.get(
-                                new InboxFetchSessionId(inboxFetched.getSessionId(),
-                                    inboxFetched.getInboxId(),
-                                    inboxFetched.getIncarnation()));
-                            if (fetcher != null) {
-                                Fetched fetched = inboxFetched.getFetched();
-                                fetcher.accept(fetched);
-                            }
-                        }
+    private record MessageListener(Map<InboxFetchSessionId, Consumer<Fetched>> fetcherMap)
+        implements Consumer<InboxFetched> {
 
-                        @Override
-                        public void onError(@NonNull Throwable e) {
-                            dispose();
-                            fetcherMap.values().forEach(consumer -> consumer.accept(Fetched.newBuilder()
-                                .setResult(Fetched.Result.ERROR)
-                                .build()));
-                            observe();
-                        }
-
-                        @Override
-                        public void onComplete() {
-                            dispose();
-                            fetcherMap.values().forEach(consumer -> consumer.accept(Fetched.newBuilder()
-                                .setResult(Fetched.Result.ERROR)
-                                .build()));
-                            observe();
-                        }
-                    });
+        @Override
+        public void accept(InboxFetched inboxFetched) {
+            Consumer<Fetched> fetcher = fetcherMap.get(
+                new InboxFetchSessionId(inboxFetched.getSessionId(),
+                    inboxFetched.getInboxId(),
+                    inboxFetched.getIncarnation()));
+            if (fetcher != null) {
+                Fetched fetched = inboxFetched.getFetched();
+                fetcher.accept(fetched);
             }
         }
     }
 
-    private record PipelineCloseAction(IMessageStream<InboxFetched, InboxFetchHint> messageStream)
-        implements Runnable {
+    private record RetargetListener(Map<InboxFetchSessionId, Consumer<Fetched>> fetcherMap) implements Consumer<Long> {
+
+        @Override
+        public void accept(Long ts) {
+            fetcherMap.values().forEach(consumer -> consumer.accept(Fetched.newBuilder()
+                .setResult(Fetched.Result.ERROR)
+                .build()));
+        }
+    }
+
+    private record PipelineCloseAction(IMessageStream<InboxFetched, InboxFetchHint> messageStream) implements Runnable {
         @Override
         public void run() {
             messageStream.close();

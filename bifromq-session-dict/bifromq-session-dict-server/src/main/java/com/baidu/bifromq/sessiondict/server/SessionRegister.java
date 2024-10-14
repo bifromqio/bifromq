@@ -13,30 +13,21 @@
 
 package com.baidu.bifromq.sessiondict.server;
 
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
-
 import com.baidu.bifromq.baserpc.AckStream;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
 import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
 import com.baidu.bifromq.sessiondict.rpc.proto.Session;
 import com.baidu.bifromq.type.ClientInfo;
+import com.google.common.collect.Sets;
 import io.grpc.stub.StreamObserver;
 import io.reactivex.rxjava3.disposables.Disposable;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class SessionRegister extends AckStream<Session, Quit> implements ISessionRegister {
-    private static final ServerRedirection NO_MOVE =
-        ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build();
     // keep the session registered via this stream
-    private final Map<String, Map<ClientKey, ClientInfo>> registeredSession = new ConcurrentHashMap<>();
+    private final Set<ClientInfo> sessionOwners = Sets.newConcurrentHashSet();
     private final IRegistrationListener regListener;
     private final Disposable disposable;
 
@@ -44,100 +35,45 @@ class SessionRegister extends AckStream<Session, Quit> implements ISessionRegist
         super(responseObserver);
         this.regListener = listener;
         disposable = ack()
-            .doFinally(() -> registeredSession.forEach((tenantId, clientKeys) ->
-                clientKeys.values().forEach(clientInfo -> regListener.on(clientInfo, false, this))))
+            .doFinally(() -> {
+                log.debug("SessionRegister@{} closed: sessions={}", this.hashCode(), sessionOwners.size());
+                sessionOwners.forEach(sessionOwner -> regListener.on(sessionOwner, false, this));
+            })
             .subscribe(session -> {
                 ClientInfo owner = session.getOwner();
                 String tenantId = owner.getTenantId();
-                ClientKey clientKey = new ClientKey(owner.getMetadataOrDefault(MQTT_USER_ID_KEY, ""),
-                    owner.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""));
+                assert this.tenantId.equals(tenantId);
                 if (session.getKeep()) {
-                    try {
-                        KickResult kickResult = doKick(tenantId, clientKey, owner, NO_MOVE);
-                        if (kickResult == KickResult.IGNORED_SELF_KICK) {
-                            return;
-                        }
-                        registeredSession.compute(tenantId, (t, m) -> {
-                            if (m == null) {
-                                m = new HashMap<>();
-                            }
-                            m.put(clientKey, session.getOwner());
-                            return m;
-                        });
+                    if (sessionOwners.add(owner)) {
                         listener.on(owner, true, this);
-                    } catch (Throwable e) {
-                        log.debug("Failed to kick", e);
                     }
                 } else {
-                    AtomicBoolean found = new AtomicBoolean();
-                    registeredSession.compute(owner.getTenantId(), (t, m) -> {
-                        if (m == null) {
-                            return null;
-                        } else {
-                            found.set(m.remove(clientKey, owner));
-                            if (m.isEmpty()) {
-                                m = null;
-                            }
-                            return m;
-                        }
-                    });
-                    if (found.get()) {
+                    if (sessionOwners.remove(owner)) {
                         listener.on(owner, false, this);
                     }
                 }
             });
+        log.debug("SessionRegister@{} created", this.hashCode());
     }
 
     @Override
-    public boolean kick(String tenantId, ClientKey clientKey, ClientInfo kicker, ServerRedirection serverRedirection) {
-        return doKick(tenantId, clientKey, kicker, serverRedirection) == KickResult.KICKED;
-    }
-
-    private enum KickResult {
-        KICKED, NOT_FOUND, IGNORED_SELF_KICK
-    }
-
-    private KickResult doKick(String tenantId,
-                              ClientKey clientKey,
-                              ClientInfo kicker,
-                              ServerRedirection serverRedirection) {
-        AtomicReference<KickResult> result = new AtomicReference<>(KickResult.NOT_FOUND);
-        AtomicReference<ClientInfo> toKick = new AtomicReference<>();
-        registeredSession.computeIfPresent(tenantId, (k, v) -> {
-            if (v.containsKey(clientKey)) {
-                if (!v.get(clientKey).equals(kicker)) {
-                    toKick.set(v.remove(clientKey));
-                    result.set(KickResult.KICKED);
-                } else {
-                    result.set(KickResult.IGNORED_SELF_KICK);
-                }
-            } else {
-                result.set(KickResult.NOT_FOUND);
-            }
-            if (v.isEmpty()) {
-                v = null;
-            }
-            return v;
-        });
-        if (toKick.get() != null) {
+    public void kick(String tenantId,
+                     ClientInfo sessionOwner,
+                     ClientInfo kicker,
+                     ServerRedirection serverRedirection) {
+        if (sessionOwners.remove(sessionOwner)) {
             send(Quit.newBuilder()
                 .setReqId(System.nanoTime())
-                .setOwner(toKick.get())
+                .setOwner(sessionOwner)
                 .setKiller(kicker)
                 .setServerRedirection(serverRedirection).build());
-            regListener.on(toKick.get(), false, this);
+            regListener.on(sessionOwner, false, this);
         }
-        return result.get();
     }
 
     @Override
-    public ClientInfo owner(String tenantId, ClientKey clientKey) {
-        return registeredSession.getOrDefault(tenantId, Collections.emptyMap()).get(clientKey);
-    }
-
-    @Override
-    public void stop() {
+    public void close() {
+        super.close();
         disposable.dispose();
-        close();
     }
 }

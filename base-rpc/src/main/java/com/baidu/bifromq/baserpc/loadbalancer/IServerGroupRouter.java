@@ -15,12 +15,14 @@ package com.baidu.bifromq.baserpc.loadbalancer;
 
 import java.util.Optional;
 
-interface IServerGroupRouter {
-    boolean exists(String serverId);
+public interface IServerGroupRouter {
+    boolean isSameGroup(IServerGroupRouter other);
 
     Optional<String> random();
 
     Optional<String> roundRobin();
+
+    Optional<String> tryRoundRobin();
 
     Optional<String> hashing(String key);
 }

@@ -13,14 +13,15 @@
 
 package com.baidu.bifromq.inbox.server;
 
+import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_DELIVERERKEY;
+import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_ID;
+
 import com.baidu.bifromq.baserpc.AckStream;
-import com.baidu.bifromq.baserpc.RPCContext;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetchHint;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetched;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxFetchScheduler;
 import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import com.baidu.bifromq.inbox.util.PipelineUtil;
 import io.grpc.stub.StreamObserver;
 import io.reactivex.rxjava3.disposables.Disposable;
 import java.util.Collections;
@@ -50,8 +51,8 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
                               Fetcher fetcher,
                               InboxFetcherRegistry registry) {
         super(responseObserver);
-        this.id = metadata.get(PipelineUtil.PIPELINE_ATTR_KEY_ID);
-        this.delivererKey = RPCContext.WCH_HASH_KEY_CTX_KEY.get();
+        this.id = metadata(PIPELINE_ATTR_KEY_ID);
+        this.delivererKey = metadata(PIPELINE_ATTR_KEY_DELIVERERKEY);
 
         inboxFetchSessions = new ConcurrentHashMap<>();
         this.fetcher = fetcher;

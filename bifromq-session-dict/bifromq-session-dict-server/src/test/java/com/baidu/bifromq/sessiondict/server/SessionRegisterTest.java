@@ -19,9 +19,9 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.testng.Assert.assertEquals;
@@ -61,13 +61,6 @@ public class SessionRegisterTest {
         .putMetadata(MQTT_CHANNEL_ID_KEY, UUID.randomUUID().toString())
         .build();
 
-    private final ClientInfo owner2 = ClientInfo.newBuilder()
-        .setTenantId(tenantId)
-        .setType(MQTT_TYPE_VALUE)
-        .putMetadata(MQTT_USER_ID_KEY, userId)
-        .putMetadata(MQTT_CLIENT_ID_KEY, clientId)
-        .putMetadata(MQTT_CHANNEL_ID_KEY, UUID.randomUUID().toString())
-        .build();
     private final ClientInfo killer = ClientInfo.newBuilder().setTenantId(tenantId).setType("killer").build();
 
     @Mock
@@ -132,82 +125,6 @@ public class SessionRegisterTest {
     }
 
     @Test
-    public void stop() {
-        test(() -> {
-            SessionRegister register = new SessionRegister(listener, responseObserver);
-            register.onNext(Session.newBuilder()
-                .setReqId(System.nanoTime())
-                .setOwner(owner)
-                .setKeep(true)
-                .build());
-            register.stop();
-            ArgumentCaptor<ClientInfo> ownerCaptor = ArgumentCaptor.forClass(ClientInfo.class);
-            ArgumentCaptor<Boolean> keepCaptor = ArgumentCaptor.forClass(Boolean.class);
-            ArgumentCaptor<ISessionRegister> registerCaptor = ArgumentCaptor.forClass(ISessionRegister.class);
-            verify(listener, times(2))
-                .on(ownerCaptor.capture(), keepCaptor.capture(), registerCaptor.capture());
-            assertEquals(ownerCaptor.getAllValues().get(1), owner);
-            assertFalse(keepCaptor.getAllValues().get(1));
-            assertEquals(registerCaptor.getAllValues().get(1), register);
-
-            verify(responseObserver, times(0)).onNext(any());
-        });
-    }
-
-    @Test
-    public void localKick() {
-        test(() -> {
-            SessionRegister register = new SessionRegister(listener, responseObserver);
-            register.onNext(Session.newBuilder()
-                .setReqId(System.nanoTime())
-                .setOwner(owner)
-                .setKeep(true)
-                .build());
-            verify(listener, times(1)).on(eq(owner), eq(true), eq(register));
-            reset(listener);
-            register.onNext(Session.newBuilder()
-                .setReqId(System.nanoTime())
-                .setOwner(owner2)
-                .setKeep(true)
-                .build());
-            ArgumentCaptor<ClientInfo> ownerCaptor = ArgumentCaptor.forClass(ClientInfo.class);
-            ArgumentCaptor<Boolean> regFlagCaptor = ArgumentCaptor.forClass(Boolean.class);
-            verify(listener, times(2)).on(ownerCaptor.capture(), regFlagCaptor.capture(), eq(register));
-            assertEquals(ownerCaptor.getAllValues().get(0), owner);
-            assertEquals(ownerCaptor.getAllValues().get(1), owner2);
-            assertFalse(regFlagCaptor.getAllValues().get(0));
-            assertTrue(regFlagCaptor.getAllValues().get(1));
-
-            ArgumentCaptor<Quit> quitCaptor = ArgumentCaptor.forClass(Quit.class);
-            verify(responseObserver).onNext(quitCaptor.capture());
-            Quit quit = quitCaptor.getValue();
-            assertEquals(quit.getOwner(), owner);
-            assertEquals(quit.getKiller(), owner2);
-        });
-    }
-
-    @Test
-    public void ignoreSelfLocalKick() {
-        test(() -> {
-            SessionRegister register = new SessionRegister(listener, responseObserver);
-            register.onNext(Session.newBuilder()
-                .setReqId(System.nanoTime())
-                .setOwner(owner)
-                .setKeep(true)
-                .build());
-            verify(listener, times(1)).on(eq(owner), eq(true), eq(register));
-            reset(listener);
-            register.onNext(Session.newBuilder()
-                .setReqId(System.nanoTime())
-                .setOwner(owner)
-                .setKeep(true)
-                .build());
-            verify(listener, never()).on(any(), anyBoolean(), any());
-            verify(responseObserver, never()).onNext(any());
-        });
-    }
-
-    @Test
     public void kick() {
         test(() -> {
             SessionRegister register = new SessionRegister(listener, responseObserver);
@@ -216,78 +133,28 @@ public class SessionRegisterTest {
                 .setOwner(owner)
                 .setKeep(true)
                 .build());
-            verify(listener).on(eq(owner), eq(true), eq(register));
-            reset(listener);
-            assertTrue(register.kick(tenantId, new ISessionRegister.ClientKey(userId, clientId), killer,
-                ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build()));
-            ArgumentCaptor<Quit> quitCaptor = ArgumentCaptor.forClass(Quit.class);
-            verify(responseObserver).onNext(quitCaptor.capture());
+            ServerRedirection redirection =
+                ServerRedirection.newBuilder().setType(ServerRedirection.Type.PERMANENT_MOVE).build();
+            register.kick(tenantId, owner, killer, redirection);
+            verify(responseObserver).onNext(argThat(quit -> quit.getOwner().equals(owner)
+                && quit.getKiller().equals(killer)
+                && quit.getServerRedirection().equals(redirection)));
             verify(listener).on(eq(owner), eq(false), eq(register));
-            Quit quit = quitCaptor.getValue();
-            assertEquals(quit.getOwner(), owner);
-            assertEquals(quit.getKiller(), killer);
-            assertEquals(quit.getServerRedirection().getType(), ServerRedirection.Type.NO_MOVE);
         });
     }
 
     @Test
-    public void serverRedirect() {
+    public void kickNonExist() {
         test(() -> {
             SessionRegister register = new SessionRegister(listener, responseObserver);
-            register.onNext(Session.newBuilder()
-                .setReqId(System.nanoTime())
-                .setOwner(owner)
-                .setKeep(true)
-                .build());
-            verify(listener).on(eq(owner), eq(true), eq(register));
-            reset(listener);
-            ServerRedirection serverRedirection = ServerRedirection.newBuilder()
-                .setType(ServerRedirection.Type.PERMANENT_MOVE)
-                .setServerReference("serverId")
-                .build();
-            assertTrue(
-                register.kick(tenantId, new ISessionRegister.ClientKey(userId, clientId), killer, serverRedirection));
-            ArgumentCaptor<Quit> quitCaptor = ArgumentCaptor.forClass(Quit.class);
-            verify(responseObserver).onNext(quitCaptor.capture());
-            verify(listener).on(eq(owner), eq(false), eq(register));
-            Quit quit = quitCaptor.getValue();
-            assertEquals(quit.getOwner(), owner);
-            assertEquals(quit.getKiller(), killer);
-            assertEquals(serverRedirection, quit.getServerRedirection());
+            ServerRedirection redirection =
+                ServerRedirection.newBuilder().setType(ServerRedirection.Type.PERMANENT_MOVE).build();
+            register.kick(tenantId, owner, killer, redirection);
+            verify(responseObserver, never()).onNext(any());
+            verify(listener, never()).on(any(), anyBoolean(), any());
         });
     }
 
-
-    @Test
-    public void ignoreKick() {
-        test(() -> {
-            SessionRegister register = new SessionRegister(listener, responseObserver);
-            register.onNext(Session.newBuilder()
-                .setReqId(System.nanoTime())
-                .setOwner(owner)
-                .setKeep(true)
-                .build());
-            assertFalse(register.kick(tenantId, new ISessionRegister.ClientKey(userId, "FakeClientId"), killer,
-                ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build()));
-            verify(responseObserver, times(0)).onNext(any());
-        });
-    }
-
-    @Test
-    public void ignoreSelfKick() {
-        test(() -> {
-            SessionRegister register = new SessionRegister(listener, responseObserver);
-            register.onNext(Session.newBuilder()
-                .setReqId(System.nanoTime())
-                .setOwner(owner)
-                .setKeep(true)
-                .build());
-            assertFalse(register.kick(tenantId,
-                new ISessionRegister.ClientKey(userId, owner.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, clientId)),
-                owner, ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build()));
-            verify(responseObserver, times(0)).onNext(any());
-        });
-    }
 
     private void test(Runnable runnable) {
         Context ctx = Context.ROOT

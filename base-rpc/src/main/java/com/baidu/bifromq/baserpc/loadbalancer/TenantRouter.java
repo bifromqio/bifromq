@@ -13,36 +13,28 @@
 
 package com.baidu.bifromq.baserpc.loadbalancer;
 
-import static io.grpc.ConnectivityState.READY;
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import io.grpc.LoadBalancer;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ThreadLocalRandom;
 
-class TrafficRouter implements ITrafficRouter {
+class TenantRouter implements ITenantRouter {
+    private final Map<String, Boolean> allServers;
     private final TrieMap<WeightedServerGroupRouter> matcher = new TrieMap<>();
-    private final Map<String, List<LoadBalancer.Subchannel>> subchannelMap;
+
+    TenantRouter() {
+        this(emptyMap(), emptyMap(), emptyMap());
+    }
 
     // trafficDirective: tenantIdPrefix -> groupTag -> weight
     // serverGroupTags: serverId -> groupTags
-    TrafficRouter(Map<String, Map<String, Integer>> trafficDirective,
-                  Map<TrafficDirectiveLoadBalancer.ServerKey, List<LoadBalancer.Subchannel>> subchannelMap,
-                  Map<String, Set<String>> serverGroupTags) {
-        this.subchannelMap = new HashMap<>();
-        String inProcServerId = null;
-        for (TrafficDirectiveLoadBalancer.ServerKey serverKey : subchannelMap.keySet()) {
-            this.subchannelMap.put(serverKey.serverId(), subchannelMap.get(serverKey));
-            if (serverKey.inProc()) {
-                inProcServerId = serverKey.serverId();
-            }
-        }
+    TenantRouter(Map<String, Boolean> allServers,
+                 Map<String, Map<String, Integer>> trafficDirective,
+                 Map<String, Set<String>> serverGroupTags) {
+        this.allServers = allServers;
 
         Set<String> defaultLBGroup = Sets.newHashSet();
         Map<String, Set<String>> lbGroups = Maps.newHashMap();
@@ -58,39 +50,23 @@ class TrafficRouter implements ITrafficRouter {
         }
         // default group is used as fallback assignment
         // make sure there is always a matcher for any tenantId
-        prepareMatcher("", singletonMap("", 1), singletonMap("", defaultLBGroup), inProcServerId);
+        prepareMatcher("", singletonMap("", 1), singletonMap("", defaultLBGroup));
 
         for (String tenantIdPrefix : trafficDirective.keySet()) {
             if (tenantIdPrefix.isEmpty()) {
                 continue;
             }
-            prepareMatcher(tenantIdPrefix, trafficDirective.get(tenantIdPrefix), lbGroups, inProcServerId);
+            prepareMatcher(tenantIdPrefix, trafficDirective.get(tenantIdPrefix), lbGroups);
         }
     }
 
     private void prepareMatcher(String tenantIdPrefix,
                                 Map<String, Integer> serverWeights,
-                                Map<String, Set<String>> serverGroups,
-                                String inProcServerId) {
-        matcher.put(tenantIdPrefix, new WeightedServerGroupRouter(serverWeights, serverGroups, inProcServerId));
-    }
-
-    @Override
-    public boolean exists(String serverId) {
-        return subchannelMap.containsKey(serverId);
+                                Map<String, Set<String>> serverGroups) {
+        matcher.put(tenantIdPrefix, new WeightedServerGroupRouter(allServers, serverWeights, serverGroups));
     }
 
     public IServerGroupRouter get(String tenantId) {
         return matcher.bestMatch(tenantId);
-    }
-
-    public Optional<LoadBalancer.Subchannel> getSubchannel(String serverId) {
-        List<LoadBalancer.Subchannel> subChannels = subchannelMap.get(serverId).stream()
-            .filter(sc -> sc.getAttributes().get(Constants.STATE_INFO).get().getState() == READY)
-            .toList();
-        if (subChannels.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.of(subChannels.get(ThreadLocalRandom.current().nextInt(subChannels.size())));
     }
 }

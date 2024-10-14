@@ -22,14 +22,17 @@ import java.util.concurrent.CompletionStage;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
+/**
+ * Utility for handling unary request.
+ */
 public final class UnaryResponse {
-    public static <Resp> void response(Function<String, CompletionStage<Resp>> reqHandler,
-                                       StreamObserver<Resp> observer) {
+    public static <RespT> void response(Function<String, CompletionStage<RespT>> reqHandler,
+                                        StreamObserver<RespT> observer) {
         response((tenantId, metadata) -> reqHandler.apply(tenantId), observer);
     }
 
-    public static <Resp> void response(BiFunction<String, Map<String, String>, CompletionStage<Resp>> reqHandler,
-                                       StreamObserver<Resp> observer) {
+    public static <RespT> void response(BiFunction<String, Map<String, String>, CompletionStage<RespT>> reqHandler,
+                                        StreamObserver<RespT> observer) {
         IRPCMeter.IRPCMethodMeter meter = RPCContext.METER_KEY_CTX_KEY.get();
         String tenantId = RPCContext.TENANT_ID_CTX_KEY.get();
         Map<String, String> metadata = RPCContext.CUSTOM_METADATA_CTX_KEY.get();

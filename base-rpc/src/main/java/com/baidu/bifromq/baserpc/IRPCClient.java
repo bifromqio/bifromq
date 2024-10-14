@@ -20,14 +20,19 @@ import io.reactivex.rxjava3.core.Observable;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
+/**
+ * The RPC client interface.
+ */
 public interface IRPCClient extends IConnectable {
 
     static RPCClientBuilder newBuilder() {
         return new RPCClientBuilder();
     }
+
 
     interface IRequestPipeline<ReqT, RespT> {
         boolean isClosed();
@@ -37,18 +42,44 @@ public interface IRPCClient extends IConnectable {
         void close();
     }
 
+    /**
+     * The interface for managed bi-di message stream, which will automatically handle load balance change.
+     *
+     * @param <MsgT> the message received from server
+     * @param <AckT> the ack send to server
+     */
     interface IMessageStream<MsgT, AckT> {
         boolean isClosed();
 
-        void ack(AckT msg);
+        /**
+         * Send ack to server.
+         *
+         * @param ack the ack
+         */
+        void ack(AckT ack);
 
-        Observable<MsgT> msg();
+        /**
+         * Register a message consumer.
+         *
+         * @param consumer the consumer
+         */
+        void onMessage(Consumer<MsgT> consumer);
 
+        /**
+         * Register a retarget event consumer.
+         *
+         * @param consumer the consumer
+         */
+        void onRetarget(Consumer<Long> consumer);
+
+        /**
+         * Close the stream.
+         */
         void close();
     }
 
     /**
-     * The observable of live servers
+     * The observable of live servers.
      *
      * @return an observable of connectable servers with a map of metadata attached
      */
@@ -69,7 +100,7 @@ public interface IRPCClient extends IConnectable {
                                                   MethodDescriptor<ReqT, RespT> methodDesc);
 
     /**
-     * Create a caller-managed auto-rebalanced request-response pipeline
+     * Create a caller-managed request-response pipeline.
      *
      * @param tenantId        the tenant id
      * @param desiredServerId the desired server id
@@ -98,7 +129,7 @@ public interface IRPCClient extends IConnectable {
 
 
     /**
-     * Create a caller-managed auto-rebalanced request-response pipeline with default executor
+     * Create a caller-managed request-response pipeline with default executor.
      *
      * @param tenantId         the tenant id
      * @param desiredServerId  the desired server id
@@ -114,7 +145,7 @@ public interface IRPCClient extends IConnectable {
                                                                       MethodDescriptor<ReqT, RespT> methodDesc);
 
     /**
-     * Create a caller-managed auto-rebalanced request-response pipeline with specified executor
+     * Create a caller-managed request-response pipeline with specified executor.
      *
      * @param tenantId         the tenant id
      * @param desiredServerId  the desired server id

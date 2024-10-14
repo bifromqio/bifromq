@@ -35,15 +35,11 @@ import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
 import com.baidu.bifromq.sessiondict.rpc.proto.Session;
 import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictServiceGrpc;
 import com.baidu.bifromq.type.ClientInfo;
-import io.reactivex.rxjava3.core.Observable;
-import io.reactivex.rxjava3.subjects.PublishSubject;
-import io.reactivex.rxjava3.subjects.Subject;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import lombok.SneakyThrows;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.mockito.stubbing.Answer;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -67,17 +63,12 @@ public class SessionRegisterTest {
         .putMetadata(MQTT_USER_ID_KEY, userId)
         .putMetadata(MQTT_CLIENT_ID_KEY, clientId)
         .build();
-    private final AtomicReference<Subject<Quit>> quitSubject = new AtomicReference<>();
 
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
         when(rpcClient.createMessageStream(eq(tenantId), any(), eq(registryKey), anyMap(),
             eq(SessionDictServiceGrpc.getDictMethod()))).thenReturn(messageStream);
-        when(messageStream.msg()).thenAnswer((Answer<Observable<Quit>>) invocation -> {
-            quitSubject.set(PublishSubject.create());
-            return quitSubject.get();
-        });
         regPipeline = new SessionRegister(tenantId, registryKey, rpcClient);
     }
 
@@ -97,19 +88,13 @@ public class SessionRegisterTest {
     }
 
     @Test
-    public void reRegAfterError() {
+    public void reRegAfterRetarget() {
         new SessionRegistration(owner, killListener, regPipeline);
-        quitSubject.get().onError(new RuntimeException("Test Exception"));
-        ArgumentCaptor<Session> argCaptor = ArgumentCaptor.forClass(Session.class);
-        verify(messageStream, times(2)).ack(argCaptor.capture());
-        assertEquals(argCaptor.getValue().getOwner(), owner);
-        assertTrue(argCaptor.getValue().getKeep());
-    }
+        ArgumentCaptor<Consumer<Long>> consumerCaptor = ArgumentCaptor.forClass(Consumer.class);
 
-    @Test
-    public void reRegAfterComplete() {
-        new SessionRegistration(owner, killListener, regPipeline);
-        quitSubject.get().onComplete();
+        verify(messageStream).onRetarget(consumerCaptor.capture());
+        consumerCaptor.getValue().accept(System.nanoTime());
+
         ArgumentCaptor<Session> argCaptor = ArgumentCaptor.forClass(Session.class);
         verify(messageStream, times(2)).ack(argCaptor.capture());
         assertEquals(argCaptor.getValue().getOwner(), owner);
@@ -119,12 +104,15 @@ public class SessionRegisterTest {
     @Test
     public void quitAndStop() {
         new SessionRegistration(owner, killListener, regPipeline);
+        ArgumentCaptor<Consumer<Quit>> consumerCaptor = ArgumentCaptor.forClass(Consumer.class);
         Quit quit = Quit.newBuilder()
             .setReqId(System.nanoTime())
             .setOwner(owner)
             .setKiller(ClientInfo.newBuilder().setTenantId(tenantId).setType("MockKiller").build())
             .build();
-        quitSubject.get().onNext(quit);
+        verify(messageStream).onMessage(consumerCaptor.capture());
+        consumerCaptor.getValue().accept(quit);
+
         ArgumentCaptor<ClientInfo> killerCaptor = ArgumentCaptor.forClass(ClientInfo.class);
         verify(killListener).onKill(killerCaptor.capture(),
             argThat(r -> r.getType() == ServerRedirection.Type.NO_MOVE));
@@ -134,12 +122,15 @@ public class SessionRegisterTest {
     @Test
     public void ignoreQuit() {
         new SessionRegistration(owner, killListener, regPipeline);
+        ArgumentCaptor<Consumer<Quit>> consumerCaptor = ArgumentCaptor.forClass(Consumer.class);
         Quit quit = Quit.newBuilder()
             .setReqId(System.nanoTime())
             .setOwner(owner.toBuilder().putMetadata(MQTT_CLIENT_ID_KEY, "FakeClient").build())
             .setKiller(ClientInfo.newBuilder().setTenantId(tenantId).setType("MockKiller").build())
             .build();
-        quitSubject.get().onNext(quit);
+        verify(messageStream).onMessage(consumerCaptor.capture());
+        consumerCaptor.getValue().accept(quit);
+
         verify(killListener, times(0)).onKill(any(), isNull());
         verify(messageStream, times(1)).ack(any());
     }

@@ -49,11 +49,6 @@ public class TenantAwareServerInterceptor implements ServerInterceptor {
             assert headers.containsKey(Constants.TENANT_ID_META_KEY);
             String tenantId = headers.get(Constants.TENANT_ID_META_KEY);
             ctx = ctx.withValue(RPCContext.TENANT_ID_CTX_KEY, tenantId);
-
-            if (headers.containsKey(Constants.WCH_KEY_META_KEY)) {
-                ctx = ctx.withValue(RPCContext.WCH_HASH_KEY_CTX_KEY, headers.get(Constants.WCH_KEY_META_KEY));
-            }
-
             if (headers.containsKey(Constants.CUSTOM_METADATA_META_KEY)) {
                 PipelineMetadata metadata = PipelineMetadata.parseFrom(headers.get(Constants.CUSTOM_METADATA_META_KEY));
                 ctx = ctx.withValue(RPCContext.CUSTOM_METADATA_CTX_KEY, metadata.getEntryMap());

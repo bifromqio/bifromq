@@ -48,18 +48,9 @@ public class TenantAwareClientInterceptor implements ClientInterceptor {
                 if (RPCContext.DESIRED_SERVER_ID_CTX_KEY.get() != null) {
                     headers.put(Constants.DESIRED_SERVER_META_KEY, RPCContext.DESIRED_SERVER_ID_CTX_KEY.get());
                 }
-                if (RPCContext.WCH_HASH_KEY_CTX_KEY.get() != null) {
-                    headers.put(Constants.WCH_KEY_META_KEY, RPCContext.WCH_HASH_KEY_CTX_KEY.get());
-                }
                 if (RPCContext.CUSTOM_METADATA_CTX_KEY.get() != null) {
                     headers.put(Constants.CUSTOM_METADATA_META_KEY, PipelineMetadata.newBuilder()
                         .putAllEntry(RPCContext.CUSTOM_METADATA_CTX_KEY.get()).build().toByteArray());
-                }
-                headers.put(Constants.COLLECT_SELECTION_METADATA_META_KEY,
-                    Boolean.toString(RPCContext.SELECTED_SERVER_ID_CTX_KEY.get() != null));
-                if (RPCContext.SELECTED_SERVER_ID_CTX_KEY.get() != null && serviceUniqueName != null) {
-                    // in-process mode will bypass lb
-                    RPCContext.SELECTED_SERVER_ID_CTX_KEY.get().setServerId(serviceUniqueName);
                 }
                 super.start(responseListener, headers);
             }

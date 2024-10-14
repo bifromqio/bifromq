@@ -15,4 +15,5 @@ package com.baidu.bifromq.inbox.util;
 
 public class PipelineUtil {
     public static final String PIPELINE_ATTR_KEY_ID = "0";
+    public static final String PIPELINE_ATTR_KEY_DELIVERERKEY = "1";
 }

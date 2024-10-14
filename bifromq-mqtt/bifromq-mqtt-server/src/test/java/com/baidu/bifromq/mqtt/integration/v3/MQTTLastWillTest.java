@@ -32,6 +32,7 @@ import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.testng.annotations.Test;
@@ -155,7 +156,7 @@ public class MQTTLastWillTest extends MQTTTest {
 
         doAnswer(invocationOnMock -> {
             Event event = invocationOnMock.getArgument(0);
-            log.info("event: {}", event.type());
+            log.info("event: {}", event);
             return null;
         }).when(eventCollector).report(any(Event.class));
 
@@ -176,7 +177,7 @@ public class MQTTLastWillTest extends MQTTTest {
 
         kill(deviceKey, "lwtPubclient").join();
 
-        MqttMsg msg = topicSub.blockingFirst();
+        MqttMsg msg = topicSub.timeout(5, TimeUnit.SECONDS).blockingFirst();
         assertEquals(msg.topic, willTopic);
         assertEquals(msg.qos, 2);
         assertEquals(msg.payload, willPayload);

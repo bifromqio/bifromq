@@ -14,26 +14,14 @@
 package com.baidu.bifromq.baserpc;
 
 import com.baidu.bifromq.baserpc.metrics.IRPCMeter;
-import com.baidu.bifromq.baserpc.metrics.RPCMeter;
 import io.grpc.Context;
 import java.util.Map;
 import java.util.UUID;
-import lombok.Getter;
-import lombok.Setter;
 
 public class RPCContext {
     public static final String GPID = UUID.randomUUID().toString();
-
-    public static class ServerSelection {
-        @Getter
-        @Setter
-        private String serverId;
-    }
-
     public static final Context.Key<String> TENANT_ID_CTX_KEY = Context.key("TenantId");
     public static final Context.Key<IRPCMeter.IRPCMethodMeter> METER_KEY_CTX_KEY = Context.key("MeterKey");
     public static final Context.Key<String> DESIRED_SERVER_ID_CTX_KEY = Context.key("DesiredServerId");
-    public static final Context.Key<ServerSelection> SELECTED_SERVER_ID_CTX_KEY = Context.key("SelectedServerId");
-    public static final Context.Key<String> WCH_HASH_KEY_CTX_KEY = Context.key("WeightConsistentHashKey");
     public static final Context.Key<Map<String, String>> CUSTOM_METADATA_CTX_KEY = Context.key("CustomMetadata");
 }

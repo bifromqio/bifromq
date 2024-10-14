@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023. The BifroMQ Authors. All Rights Reserved.
+ * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -11,18 +11,22 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.sessiondict.server;
+package com.baidu.bifromq.baserpc;
 
-import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
-import com.baidu.bifromq.type.ClientInfo;
+import io.reactivex.rxjava3.core.Observable;
 
-public interface ISessionRegister {
-    interface IRegistrationListener {
-        void on(ClientInfo sessionOwner, boolean reg, ISessionRegister register);
-    }
+interface IBiDiStream<InT, OutT> {
+    Observable<OutT> onNext();
 
-    void kick(String tenantId,
-              ClientInfo sessionOwner,
-              ClientInfo kicker,
-              ServerRedirection serverRedirection);
+    Observable<Long> onReady();
+
+    String serverId();
+
+    boolean isReady();
+
+    void cancel(String message);
+
+    void send(InT in);
+
+    void close();
 }

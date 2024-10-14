@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.client;
 
-import static java.util.Collections.emptyMap;
+import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_DELIVERERKEY;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
@@ -22,6 +22,7 @@ import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 class InboxDeliverPipeline implements IDeliverer {
@@ -29,7 +30,7 @@ class InboxDeliverPipeline implements IDeliverer {
 
     InboxDeliverPipeline(String delivererKey, IRPCClient rpcClient) {
         ppln = rpcClient.createRequestPipeline("", null, delivererKey,
-            emptyMap(), InboxServiceGrpc.getReceiveMethod());
+            Map.of(PIPELINE_ATTR_KEY_DELIVERERKEY, delivererKey), InboxServiceGrpc.getReceiveMethod());
     }
 
     @Override

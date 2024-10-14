@@ -24,8 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-abstract class AbstractResponsePipeline<RequestT, ResponseT>
-    extends AbstractStreamObserver<RequestT, ResponseT> {
+abstract class AbstractResponsePipeline<RequestT, ResponseT> extends AbstractStreamObserver<RequestT, ResponseT> {
     private final AtomicBoolean closed = new AtomicBoolean();
     // used to keep track of opening response futures returned from handleRequest which associated with current
     // ResponsePipeline
@@ -39,12 +38,16 @@ abstract class AbstractResponsePipeline<RequestT, ResponseT>
 
     @Override
     public final void onError(Throwable t) {
-        close(t);
+        if (closed.compareAndSet(false, true)) {
+            cleanup();
+        }
     }
 
     @Override
     public final void onCompleted() {
-        close();
+        if (closed.compareAndSet(false, true)) {
+            cleanup();
+        }
     }
 
     public final boolean isClosed() {
@@ -90,7 +93,6 @@ abstract class AbstractResponsePipeline<RequestT, ResponseT>
             sample.stop(meter.timer(RPCMetric.PipelineReqProcessTime));
             // untrack current response future
             if (e != null) {
-                log.error("Request handling with error in pipeline@{}", this.hashCode(), e);
                 meter.recordCount(RPCMetric.PipelineReqFailCount);
                 // any handling exception will cause pipeline close
                 fail(e);

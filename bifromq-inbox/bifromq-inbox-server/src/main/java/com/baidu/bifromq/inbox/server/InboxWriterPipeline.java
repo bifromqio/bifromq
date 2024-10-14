@@ -13,8 +13,9 @@
 
 package com.baidu.bifromq.inbox.server;
 
+import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_DELIVERERKEY;
+
 import com.baidu.bifromq.baseenv.MemUsage;
-import com.baidu.bifromq.baserpc.RPCContext;
 import com.baidu.bifromq.baserpc.ResponsePipeline;
 import com.baidu.bifromq.inbox.records.ScopedInbox;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
@@ -53,7 +54,7 @@ class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply> {
             || MemUsage.local().heapMemoryUsage() > SLOWDOWN_HEAP_MEM_USAGE, SLOWDOWN_TIMEOUT);
         this.writeCallback = writeCallback;
         this.handler = handler;
-        this.delivererKey = RPCContext.WCH_HASH_KEY_CTX_KEY.get();
+        this.delivererKey = metadata(PIPELINE_ATTR_KEY_DELIVERERKEY);
     }
 
     @Override

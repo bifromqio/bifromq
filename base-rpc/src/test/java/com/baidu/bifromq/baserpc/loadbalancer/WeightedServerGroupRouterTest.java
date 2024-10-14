@@ -14,6 +14,7 @@
 package com.baidu.bifromq.baserpc.loadbalancer;
 
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertTrue;
 
@@ -24,26 +25,40 @@ import org.testng.annotations.Test;
 
 public class WeightedServerGroupRouterTest {
     @Test
-    void exists() {
+    void isSameGroup() {
+        Map<String, Boolean> allServers = Map.of("server1", false, "server2", false, "server3", false);
         Map<String, Integer> trafficAssignment = Map.of("group1", 5);
         Map<String, Set<String>> groupAssignment = Map.of(
             "group1", Set.of("server1", "server2", "server3")
         );
+        Map<String, Set<String>> groupAssignment1 = Map.of(
+            "group1", Set.of("server1", "server2")
+        );
+        WeightedServerGroupRouter router1 =
+            new WeightedServerGroupRouter(allServers, trafficAssignment, groupAssignment);
+        WeightedServerGroupRouter router2 =
+            new WeightedServerGroupRouter(allServers, trafficAssignment, groupAssignment);
+        assertTrue(router1.isSameGroup(router1));
+        assertTrue(router1.isSameGroup(router2));
+        assertTrue(router2.isSameGroup(router1));
 
-        WeightedServerGroupRouter router = new WeightedServerGroupRouter(trafficAssignment, groupAssignment, null);
-        assertTrue(router.exists("server1"));
-        assertTrue(router.exists("server2"));
-        assertTrue(router.exists("server3"));
+        WeightedServerGroupRouter router3 =
+            new WeightedServerGroupRouter(allServers, trafficAssignment, groupAssignment1);
+        assertFalse(router1.isSameGroup(router3));
+        assertFalse(router3.isSameGroup(router1));
     }
 
     @Test
     void randomRouting() {
+        Map<String, Boolean> allServers = Map.of("server1", false, "server2", false, "server3", false);
+
         Map<String, Integer> trafficAssignment = Map.of("group1", 5);
         Map<String, Set<String>> groupAssignment = Map.of(
             "group1", Set.of("server1", "server2", "server3")
         );
 
-        WeightedServerGroupRouter router = new WeightedServerGroupRouter(trafficAssignment, groupAssignment, null);
+        WeightedServerGroupRouter router =
+            new WeightedServerGroupRouter(allServers, trafficAssignment, groupAssignment);
 
         Optional<String> server = router.random();
         assertTrue(server.isPresent());
@@ -52,12 +67,14 @@ public class WeightedServerGroupRouterTest {
 
     @Test
     void randomRoutingPreferInProc() {
+        Map<String, Boolean> allServers = Map.of("server1", true, "server2", false, "server3", false);
+
         Map<String, Integer> trafficAssignment = Map.of("group1", 5);
         Map<String, Set<String>> groupAssignment = Map.of(
             "group1", Set.of("server1", "server2", "server3")
         );
-
-        WeightedServerGroupRouter router = new WeightedServerGroupRouter(trafficAssignment, groupAssignment, "server1");
+        WeightedServerGroupRouter router =
+            new WeightedServerGroupRouter(allServers, trafficAssignment, groupAssignment);
 
         Optional<String> server = router.random();
         assertTrue(server.isPresent());
@@ -66,12 +83,15 @@ public class WeightedServerGroupRouterTest {
 
     @Test
     void inProcIgnored() {
+        Map<String, Boolean> allServers = Map.of("server1", true, "server2", false, "server3", false, "server4", false);
+
         Map<String, Integer> trafficAssignment = Map.of("group1", 5);
         Map<String, Set<String>> groupAssignment = Map.of(
             "group1", Set.of("server1", "server2", "server3")
         );
 
-        WeightedServerGroupRouter router = new WeightedServerGroupRouter(trafficAssignment, groupAssignment, "server4");
+        WeightedServerGroupRouter router =
+            new WeightedServerGroupRouter(allServers, trafficAssignment, groupAssignment);
 
         Optional<String> server = router.random();
         assertTrue(server.isPresent());
@@ -85,12 +105,15 @@ public class WeightedServerGroupRouterTest {
 
     @Test
     void roundRobinRouting() {
+        Map<String, Boolean> allServers = Map.of("server1", false, "server2", false, "server3", false);
+
         Map<String, Integer> trafficAssignment = Map.of("group1", 5);
         Map<String, Set<String>> groupAssignment = Map.of(
             "group1", Set.of("server1", "server2")
         );
 
-        WeightedServerGroupRouter router = new WeightedServerGroupRouter(trafficAssignment, groupAssignment, null);
+        WeightedServerGroupRouter router =
+            new WeightedServerGroupRouter(allServers, trafficAssignment, groupAssignment);
 
         // First round-robin call should return server1, then server2
         assertEquals("server1", router.roundRobin().get());
@@ -100,12 +123,15 @@ public class WeightedServerGroupRouterTest {
 
     @Test
     void roundRobinPreferInProc() {
+        Map<String, Boolean> allServers = Map.of("server1", true, "server2", false, "server3", false);
+
         Map<String, Integer> trafficAssignment = Map.of("group1", 5);
         Map<String, Set<String>> groupAssignment = Map.of(
             "group1", Set.of("server1", "server2")
         );
 
-        WeightedServerGroupRouter router = new WeightedServerGroupRouter(trafficAssignment, groupAssignment, "server1");
+        WeightedServerGroupRouter router =
+            new WeightedServerGroupRouter(allServers, trafficAssignment, groupAssignment);
 
         assertEquals("server1", router.roundRobin().get());
         assertEquals("server1", router.roundRobin().get());
@@ -114,12 +140,15 @@ public class WeightedServerGroupRouterTest {
 
     @Test
     void hashingRouting() {
+        Map<String, Boolean> allServers = Map.of("server1", false, "server2", false, "server3", false);
+
         Map<String, Integer> trafficAssignment = Map.of("group1", 5);
         Map<String, Set<String>> groupAssignment = Map.of(
             "group1", Set.of("server1", "server2", "server3")
         );
 
-        WeightedServerGroupRouter router = new WeightedServerGroupRouter(trafficAssignment, groupAssignment, null);
+        WeightedServerGroupRouter router =
+            new WeightedServerGroupRouter(allServers, trafficAssignment, groupAssignment);
 
         String key = "myKey";
         Optional<String> server = router.hashing(key);

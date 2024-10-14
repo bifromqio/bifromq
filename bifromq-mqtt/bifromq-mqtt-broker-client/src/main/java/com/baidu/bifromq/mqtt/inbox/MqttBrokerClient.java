@@ -124,8 +124,8 @@ final class MqttBrokerClient implements IMqttBrokerClient {
     private class DeliveryPipeline implements IDeliverer {
         private final IRPCClient.IRequestPipeline<WriteRequest, WriteReply> ppln;
 
-        DeliveryPipeline(String deliveryGroupKey) {
-            ppln = rpcClient.createRequestPipeline("", DelivererKeyUtil.parseServerId(deliveryGroupKey), "",
+        DeliveryPipeline(String delivererKey) {
+            ppln = rpcClient.createRequestPipeline("", DelivererKeyUtil.parseServerId(delivererKey), "",
                 emptyMap(), OnlineInboxBrokerGrpc.getWriteMethod());
         }
 

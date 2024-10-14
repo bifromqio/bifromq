@@ -13,9 +13,6 @@
 
 package com.baidu.bifromq.baserpc.loadbalancer;
 
-import io.grpc.MethodDescriptor;
-import java.util.Optional;
-
 /**
  * The interface for choosing server for load balancing.
  */
@@ -23,48 +20,16 @@ public interface IServerSelector {
     /**
      * If the server exists.
      *
-     * @param tenantId         the tenant id
-     * @param serverId         the server id
-     * @param methodDescriptor the method descriptor
+     * @param serverId the server id
      * @return true if can be selected
      */
-    boolean exists(String tenantId, String serverId, MethodDescriptor<?, ?> methodDescriptor);
+    boolean exists(String serverId);
 
     /**
-     * If the server can be selected via balancing strategy.
+     * Get the server group router for the tenant.
      *
-     * @param tenantId         the tenant id
-     * @param serverId         the server id
-     * @param methodDescriptor the method descriptor
-     * @return true if can be selected
+     * @param tenantId the tenant id
+     * @return server group router
      */
-    boolean isBalancable(String tenantId, String serverId, MethodDescriptor<?, ?> methodDescriptor);
-
-    /**
-     * Select server based on hash key.
-     *
-     * @param tenantId         the tenant id
-     * @param key              the key
-     * @param methodDescriptor the method descriptor
-     * @return the server id
-     */
-    Optional<String> hashing(String tenantId, String key, MethodDescriptor<?, ?> methodDescriptor);
-
-    /**
-     * Select server based on round-robin strategy.
-     *
-     * @param tenantId         the tenant id
-     * @param methodDescriptor the method descriptor
-     * @return the server id
-     */
-    Optional<String> roundRobin(String tenantId, MethodDescriptor<?, ?> methodDescriptor);
-
-    /**
-     * Select server randomly.
-     *
-     * @param tenantId         the tenant id
-     * @param methodDescriptor the method descriptor
-     * @return the server id
-     */
-    Optional<String> random(String tenantId, MethodDescriptor<?, ?> methodDescriptor);
+    IServerGroupRouter get(String tenantId);
 }

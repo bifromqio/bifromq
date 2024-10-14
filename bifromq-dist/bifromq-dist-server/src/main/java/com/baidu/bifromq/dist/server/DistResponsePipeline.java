@@ -94,7 +94,10 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
                         DistReply.Result.Builder resultBuilder = DistReply.Result.newBuilder();
                         for (PublisherMessagePack.TopicPack topicPack : publisherMsgPack.getMessagePackList()) {
                             Optional<Integer> fanout = v.get(topicPack.getTopic());
-                            if (fanout.isPresent()) {
+                            if (fanout == null) {
+                                log.warn("Illegal state: no fanout for topic: {}", topicPack.getTopic());
+                                resultBuilder.putTopic(topicPack.getTopic(), DistReply.Code.ERROR);
+                            } else if (fanout.isPresent()) {
                                 resultBuilder.putTopic(topicPack.getTopic(),
                                     fanout.get() > 0 ? DistReply.Code.OK : DistReply.Code.NO_MATCH);
                                 totalFanout += fanout.get();

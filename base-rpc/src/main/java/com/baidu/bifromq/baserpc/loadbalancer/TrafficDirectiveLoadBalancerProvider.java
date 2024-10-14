@@ -40,6 +40,6 @@ public class TrafficDirectiveLoadBalancerProvider extends LoadBalancerProvider {
 
     @Override
     public LoadBalancer newLoadBalancer(LoadBalancer.Helper helper) {
-        return new TrafficDirectiveLoadBalancer(helper, bluePrint, updateListener);
+        return new TrafficDirectiveLoadBalancer(helper, updateListener);
     }
 }

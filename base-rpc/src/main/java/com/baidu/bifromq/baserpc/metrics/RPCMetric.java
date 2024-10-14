@@ -32,6 +32,8 @@ public enum RPCMetric {
     ReqPipelineCreateCount("ppln.create.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
     ReqPipelineErrorCount("ppln.error.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
     ReqPipelineCompleteCount("ppln.complete.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
+
+
     ReqPipelineDepth("ppln.depth.summary", Meter.Type.DISTRIBUTION_SUMMARY, BluePrint.MethodType.PIPELINE_UNARY),
     PipelineReqAcceptCount("ppln.req.enqueue.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
     PipelineReqSendCount("ppln.req.send.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
@@ -40,15 +42,18 @@ public enum RPCMetric {
     PipelineReqDropCount("ppln.req.drop.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
     PipelineReqQueueTime("ppln.req.queue.time", Meter.Type.TIMER, BluePrint.MethodType.PIPELINE_UNARY),
     PipelineReqLatency("ppln.req.finish.time", Meter.Type.TIMER, BluePrint.MethodType.PIPELINE_UNARY),
+
     PipelineReqReceivedCount("ppln.req.recv.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
     PipelineReqFulfillCount("ppln.req.fulfil.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
     PipelineReqFailCount("ppln.req.fail.count", Meter.Type.COUNTER, BluePrint.MethodType.PIPELINE_UNARY),
     PipelineReqProcessTime("ppln.req.process.time", Meter.Type.TIMER, BluePrint.MethodType.PIPELINE_UNARY),
 
-    MsgStreamCreateCount("stream.create.count", Meter.Type.COUNTER, BluePrint.MethodType.STREAMING),
-    MsgStreamErrorCount("stream.error.count", Meter.Type.COUNTER, BluePrint.MethodType.STREAMING),
+    StreamCreateCount("stream.create.count", Meter.Type.COUNTER, BluePrint.MethodType.STREAMING),
+    StreamCompleteCount("stream.complete.count", Meter.Type.COUNTER, BluePrint.MethodType.STREAMING),
+    StreamErrorCount("stream.error.count", Meter.Type.COUNTER, BluePrint.MethodType.STREAMING),
 
     StreamAckAcceptCount("stream.ack.enqueue.count", Meter.Type.COUNTER, BluePrint.MethodType.STREAMING),
+    StreamAckDropCount("stream.ack.drop.count", Meter.Type.COUNTER, BluePrint.MethodType.STREAMING),
     StreamAckSendCount("stream.ack.send.count", Meter.Type.COUNTER, BluePrint.MethodType.STREAMING),
     StreamMsgReceiveCount("stream.msg.recv.count", Meter.Type.COUNTER, BluePrint.MethodType.STREAMING),
 

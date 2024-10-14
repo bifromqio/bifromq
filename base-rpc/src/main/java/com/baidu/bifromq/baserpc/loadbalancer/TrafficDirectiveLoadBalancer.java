@@ -24,7 +24,6 @@ import static io.grpc.ConnectivityState.SHUTDOWN;
 import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
-import com.baidu.bifromq.baserpc.BluePrint;
 import com.google.common.collect.Maps;
 import io.grpc.Attributes;
 import io.grpc.ConnectivityState;
@@ -34,57 +33,49 @@ import io.grpc.LoadBalancer;
 import io.grpc.Status;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class TrafficDirectiveLoadBalancer extends LoadBalancer {
 
-    record ServerKey(String serverId, boolean inProc) {
-    }
-
     private final Helper helper;
 
     private final IServerSelectorUpdateListener updateListener;
 
-    private final TrafficDirectiveAwarePicker currentPicker;
+    private final SubChannelPicker currentPicker;
+
+    private final Map<String, ChannelList> serverChannels = Maps.newHashMap();
 
     private final AtomicBoolean balancingStateUpdateScheduled = new AtomicBoolean(false);
 
-    private volatile Map<String, Set<String>> currentServerGroupTags = Maps.newHashMap();
-    private volatile Map<String, Map<String, Integer>> currentTrafficDirective = Maps.newHashMap();
-    private final Map<ServerKey, List<Subchannel>> subChannelRegistry = Maps.newHashMap();
+    private Map<String, Boolean> currentServers = Maps.newHashMap();
+    private Map<String, Set<String>> currentServerGroupTags = Maps.newHashMap();
+    private Map<String, Map<String, Integer>> currentTrafficDirective = Maps.newHashMap();
 
-    TrafficDirectiveLoadBalancer(Helper helper, BluePrint bluePrint,
-                                 IServerSelectorUpdateListener updateListener) {
+    TrafficDirectiveLoadBalancer(Helper helper, IServerSelectorUpdateListener updateListener) {
         this.helper = checkNotNull(helper, "helper");
         this.updateListener = updateListener;
-        this.currentPicker = new TrafficDirectiveAwarePicker(bluePrint);
+        this.currentPicker = new SubChannelPicker();
     }
 
     @Override
     public void handleResolvedAddresses(ResolvedAddresses resolvedAddresses) {
         log.debug("Handle traffic change: resolvedAddresses={}", resolvedAddresses);
-        Map<ServerKey, EquivalentAddressGroup> newResolved = resolvedAddresses
-            .getAddresses()
-            .stream()
-            .collect(Collectors
-                .toMap(
-                    eag -> new ServerKey(
-                        eag.getAttributes().get(SERVER_ID_ATTR_KEY),
-                        eag.getAttributes().get(IN_PROC_SERVER_ATTR_KEY)
-                    ),
-                    eag -> eag
-                )
-            );
+        Map<String, EquivalentAddressGroup> newResolved = new HashMap<>();
+        Map<String, Boolean> newServers = new HashMap<>();
+        for (EquivalentAddressGroup addressGroup : resolvedAddresses.getAddresses()) {
+            String serverId = addressGroup.getAttributes().get(SERVER_ID_ATTR_KEY);
+            newResolved.put(serverId, addressGroup);
+            newServers.put(serverId, addressGroup.getAttributes().get(IN_PROC_SERVER_ATTR_KEY));
+        }
         Map<String, Set<String>> newServerGroupTags = Maps.newHashMap();
         for (EquivalentAddressGroup addressGroup : resolvedAddresses.getAddresses()) {
             newServerGroupTags.put(addressGroup.getAttributes().get(SERVER_ID_ATTR_KEY),
@@ -94,49 +85,48 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
             .get(Constants.TRAFFIC_DIRECTIVE_ATTR_KEY);
         boolean updatePicker = !currentTrafficDirective.equals(newTrafficDirective)
             || !currentServerGroupTags.equals(newServerGroupTags);
+        currentServers = newServers;
         currentServerGroupTags = newServerGroupTags;
         currentTrafficDirective = newTrafficDirective;
         int requested = Math.min(5, EnvProvider.INSTANCE.availableProcessors());
-        Set<ServerKey> currentServers = subChannelRegistry.keySet();
-        Set<ServerKey> latestServers = newResolved.keySet();
-        Set<ServerKey> addedServers = difference(latestServers, currentServers);
-        Set<ServerKey> removedServers = difference(currentServers, latestServers);
+        Set<String> currentServers = serverChannels.keySet();
+        Set<String> latestServers = newResolved.keySet();
+        Set<String> addedServers = difference(latestServers, currentServers);
+        Set<String> removedServers = difference(currentServers, latestServers);
 
         // make sure enough subchannelRegistry opened for existing servers.
-        for (ServerKey serverKey : currentServers) {
-            if (!removedServers.contains(serverKey)) {
-                int openNow = subChannelRegistry.get(serverKey).size();
+        for (String serverId : currentServers) {
+            if (!removedServers.contains(serverId)) {
+                int openNow = serverChannels.get(serverId).subChannels.size();
                 if (requested > openNow) {
                     updatePicker = true;
                     IntStream.range(0, requested - openNow).forEach(
-                        i -> subChannelRegistry.get(serverKey)
-                            .add(setupSubchannel(serverKey, newResolved.get(serverKey))));
+                        i -> serverChannels.get(serverId).subChannels
+                            .add(setupSubchannel(serverId, newResolved.get(serverId), newServers.get(serverId))));
                 }
             }
         }
 
         // Create new subchannelRegistry for new servers.
-        for (ServerKey serverKey : addedServers) {
-            subChannelRegistry.compute(serverKey, (k, v) -> {
-                if (v != null) {
-                    log.error("Illegal state: new server already exists: serverId={}", serverKey);
-                    return v;
-                } else {
-                    return IntStream.range(0, requested)
-                        .mapToObj(i -> setupSubchannel(serverKey, newResolved.get(serverKey)))
-                        .collect(Collectors.toList());
-                }
+        for (String serverId : addedServers) {
+            serverChannels.computeIfAbsent(serverId, k -> {
+                ChannelList scList = new ChannelList(newServers.get(serverId));
+                IntStream.range(0, requested).forEach(i -> scList.subChannels.add(
+                    setupSubchannel(serverId, newResolved.get(serverId), newServers.get(serverId))));
+                return scList;
             });
         }
 
-        ArrayList<Subchannel> removedSubchannels = new ArrayList<>();
-        for (ServerKey serverKey : removedServers) {
-            removedSubchannels.addAll(subChannelRegistry.remove(serverKey));
+        ArrayList<ChannelList> removedSubchannels = new ArrayList<>();
+        for (String serverId : removedServers) {
+            removedSubchannels.add(serverChannels.remove(serverId));
         }
 
         // Shutdown removed subchannelRegistry
-        for (Subchannel removedSubchannel : removedSubchannels) {
-            shutdownSubChannel(removedSubchannel);
+        for (ChannelList subChannelList : removedSubchannels) {
+            for (Subchannel subchannel : subChannelList.subChannels) {
+                shutdownSubChannel(subchannel);
+            }
         }
 
         if (updatePicker) {
@@ -155,8 +145,8 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
     @Override
     public void shutdown() {
         log.debug("Shutting down all subchannels");
-        for (List<Subchannel> subchannels : subChannelRegistry.values()) {
-            for (Subchannel subchannel : subchannels) {
+        for (ChannelList subChannelList : serverChannels.values()) {
+            for (Subchannel subchannel : subChannelList.subChannels) {
                 shutdownSubChannel(subchannel);
             }
         }
@@ -184,9 +174,23 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
         ConnectivityState newState = determineChannelState();
         if (newState != SHUTDOWN) {
             log.debug("Update balancing state to {}", newState);
-            currentPicker.refresh(currentTrafficDirective, subChannelRegistry, currentServerGroupTags);
+
+            currentPicker.refresh(serverChannels);
             helper.updateBalancingState(newState, currentPicker);
-            updateListener.onUpdate(currentPicker);
+            Map<String, Boolean> allServers = currentServers;
+            ITenantRouter tenantRouter =
+                new TenantRouter(currentServers, currentTrafficDirective, currentServerGroupTags);
+            updateListener.onUpdate(new IServerSelector() {
+                @Override
+                public boolean exists(String serverId) {
+                    return allServers.containsKey(serverId);
+                }
+
+                @Override
+                public IServerGroupRouter get(String tenantId) {
+                    return tenantRouter.get(tenantId);
+                }
+            });
         }
         balancingStateUpdateScheduled.set(false);
     }
@@ -199,17 +203,21 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
         // if all subchannel shutdown, the final state is SHUTDOWN
         // otherwise state is READY
         ConnectivityState connectivityState = READY;
-        if (subChannelRegistry.isEmpty() || subChannelRegistry.values().stream().flatMap(Collection::stream)
+        if (serverChannels.isEmpty() || serverChannels.values().stream()
+            .map(scList -> scList.subChannels)
+            .flatMap(Collection::stream)
             .map(this::getSubChannelState)
             .allMatch(state -> state.getState() == TRANSIENT_FAILURE)) {
             connectivityState = TRANSIENT_FAILURE;
         } else {
-            if (subChannelRegistry.values().stream()
+            if (serverChannels.values().stream()
+                .map(scList -> scList.subChannels)
                 .flatMap(Collection::stream)
                 .map(this::getSubChannelState)
                 .allMatch(state -> state.getState() == SHUTDOWN)) {
                 connectivityState = SHUTDOWN;
-            } else if (subChannelRegistry.values().stream()
+            } else if (serverChannels.values().stream()
+                .map(scList -> scList.subChannels)
                 .flatMap(Collection::stream)
                 .map(this::getSubChannelState)
                 .allMatch(state -> state.getState() != READY)) {
@@ -219,15 +227,17 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
         return connectivityState;
     }
 
-    private Subchannel setupSubchannel(ServerKey serverKey, EquivalentAddressGroup equivalentAddressGroup) {
+    private Subchannel setupSubchannel(String serverId,
+                                       EquivalentAddressGroup equivalentAddressGroup,
+                                       boolean inProc) {
         final Subchannel subchannel = checkNotNull(
             helper.createSubchannel(CreateSubchannelArgs.newBuilder()
                 .setAddresses(equivalentAddressGroup)
                 .setAttributes(Attributes.newBuilder()
                     .set(Constants.STATE_INFO,
                         new AtomicReference<>(ConnectivityStateInfo.forNonError(IDLE)))
-                    .set(IN_PROC_SERVER_ATTR_KEY, serverKey.inProc)
-                    .set(SERVER_ID_ATTR_KEY, serverKey.serverId)
+                    .set(IN_PROC_SERVER_ATTR_KEY, inProc)
+                    .set(SERVER_ID_ATTR_KEY, serverId)
                     .build())
                 .build()),
             "subchannel");

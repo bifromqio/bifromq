@@ -188,11 +188,7 @@ public class MQTTRetainTest extends MQTTTest {
                 .build()));
 
 
-        lenient().doAnswer(invocationOnMock -> {
-            Event event = invocationOnMock.getArgument(0);
-            log.info("event: {}", event);
-            return null;
-        }).when(eventCollector).report(any(Event.class));
+        lenient().doAnswer(invocationOnMock -> null).when(eventCollector).report(any(Event.class));
 
         clearRetained(0, 0);
         clearRetained(0, 1);

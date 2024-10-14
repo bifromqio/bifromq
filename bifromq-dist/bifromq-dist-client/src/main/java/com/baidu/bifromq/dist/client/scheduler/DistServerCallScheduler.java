@@ -43,8 +43,8 @@ public class DistServerCallScheduler extends BatchCallScheduler<PubCall, PubResu
                                                                         long burstLatencyNanos,
                                                                         PubCallBatcherKey batcherKey) {
         return new PubCallBatcher(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos,
-            rpcClient.createRequestPipeline(batcherKey.tenantId(), null,
-                batcherKey.tenantId() + batcherKey.threadId(), emptyMap(), DistServiceGrpc.getDistMethod()));
+            rpcClient.createRequestPipeline(batcherKey.tenantId(), null, null, emptyMap(),
+                DistServiceGrpc.getDistMethod()));
     }
 
     @Override

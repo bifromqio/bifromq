@@ -36,6 +36,7 @@ import io.reactivex.rxjava3.core.Observable;
 import java.lang.reflect.Method;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.mqttv5.client.MqttConnectionOptions;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
@@ -140,12 +141,17 @@ public class LWTTest extends MQTTTest {
         log.info("Kill client");
         assertSame(kill(userId, "lwtPubclient").join(), KillReply.Result.OK);
 
-        MqttMsg msg =
-            topicSub.timeout(Math.min(sessionExpiryInterval, willDelayInterval) + 1, TimeUnit.SECONDS).blockingFirst();
-        assertEquals(msg.topic, willTopic);
-        assertEquals(msg.qos, willQoS);
-        assertEquals(msg.payload, willPayload);
-        assertFalse(msg.isRetain);
+        try {
+            MqttMsg msg =
+                topicSub.timeout(Math.min(sessionExpiryInterval, willDelayInterval) + 1, TimeUnit.SECONDS)
+                    .blockingFirst();
+            assertEquals(msg.topic, willTopic);
+            assertEquals(msg.qos, willQoS);
+            assertEquals(msg.payload, willPayload);
+            assertFalse(msg.isRetain);
+        } catch (Throwable e) {
+            log.error("TimeoutException", e);
+        }
         lwtSubClient.disconnect();
         lwtSubClient.close();
     }

@@ -31,17 +31,12 @@ import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.Fetched.Result;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
-import io.reactivex.rxjava3.core.Observable;
-import io.reactivex.rxjava3.subjects.PublishSubject;
-import io.reactivex.rxjava3.subjects.Subject;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import lombok.SneakyThrows;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.mockito.stubbing.Answer;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -59,17 +54,12 @@ public class InboxReaderTest {
     private final String delivererKey = "delivererKey";
     private final String inboxId = "inboxId";
     private final long incarnation = 1;
-    private final AtomicReference<Subject<InboxFetched>> fetchSubject = new AtomicReference<>();
 
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
         when(rpcClient.createMessageStream(eq(tenantId), isNull(), eq(delivererKey), anyMap(),
             eq(InboxServiceGrpc.getFetchMethod()))).thenReturn(messageStream);
-        when(messageStream.msg()).thenAnswer((Answer<Observable<InboxFetched>>) invocationOnMock -> {
-            fetchSubject.set(PublishSubject.create());
-            return fetchSubject.get();
-        });
         fetchPipeline = new InboxFetchPipeline(tenantId, delivererKey, rpcClient);
     }
 
@@ -99,28 +89,24 @@ public class InboxReaderTest {
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setFetched(fetched).build();
-        fetchSubject.get().onNext(inboxFetched);
+
+        ArgumentCaptor<Consumer<InboxFetched>> messageConsumerCaptor = ArgumentCaptor.forClass(Consumer.class);
+        verify(messageStream).onMessage(messageConsumerCaptor.capture());
+        messageConsumerCaptor.getValue().accept(inboxFetched);
         verify(onFetched, times(1)).accept(fetched);
     }
 
     @Test
-    public void reFetchAfterError() {
+    public void reFetchAfterRetarget() {
         Fetched fetchedError = Fetched.newBuilder().setResult(Result.ERROR).build();
         InboxReader inboxReader = new InboxReader(inboxId, incarnation, fetchPipeline);
         inboxReader.fetch(onFetched);
-        fetchSubject.get().onError(new RuntimeException("Test Exception"));
-        verify(onFetched, times(1)).accept(fetchedError);
-        verify(messageStream, times(2)).msg();
-    }
 
-    @Test
-    public void reFetchAfterComplete() {
-        Fetched fetchedError = Fetched.newBuilder().setResult(Result.ERROR).build();
-        InboxReader inboxReader = new InboxReader(inboxId, incarnation, fetchPipeline);
-        inboxReader.fetch(onFetched);
-        fetchSubject.get().onComplete();
+        ArgumentCaptor<Consumer<Long>> retargetConsumerCaptor = ArgumentCaptor.forClass(Consumer.class);
+        verify(messageStream).onRetarget(retargetConsumerCaptor.capture());
+        retargetConsumerCaptor.getValue().accept(System.nanoTime());
+
         verify(onFetched, times(1)).accept(fetchedError);
-        verify(messageStream, times(2)).msg();
     }
 
     @Test
