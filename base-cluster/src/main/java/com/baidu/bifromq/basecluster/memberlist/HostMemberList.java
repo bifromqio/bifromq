@@ -313,14 +313,17 @@ public class HostMemberList implements IHostMemberList {
 
     private void handleJoin(Join join) {
         HostMember joinMember = join.getMember();
-        if (!join.hasExpectedHost() || join.getExpectedHost().equals(local.getEndpoint())) {
-            if (join(joinMember)) {
-                if (join.hasExpectedHost()) {
-                    // send back a join to prove I'm still alive
-                    messenger.send(ClusterMessage.newBuilder()
-                        .setJoin(Join.newBuilder().setMember(local).build())
-                        .build(), getMemberAddress(joinMember.getEndpoint()), true);
+        if ((!join.hasExpectedHost() && !isZombie(joinMember.getEndpoint()))
+            || join.getExpectedHost().equals(local.getEndpoint())) {
+            boolean newMember = join(joinMember);
+            if (join.hasExpectedHost()) {
+                if (!newMember) {
+                    renew(local.getIncarnation());
                 }
+                // send back a join to prove I'm still alive
+                messenger.send(ClusterMessage.newBuilder()
+                    .setJoin(Join.newBuilder().setMember(local).build())
+                    .build(), getMemberAddress(joinMember.getEndpoint()), true);
             }
         } else {
             clearZombie(join.getExpectedHost());

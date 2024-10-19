@@ -22,13 +22,16 @@ import static com.baidu.bifromq.basecluster.memberlist.Fixtures.endorseMsg;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.failMsg;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.joinMsg;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.quitMsg;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecluster.membership.proto.HostEndpoint;
 import com.baidu.bifromq.basecluster.membership.proto.HostMember;
@@ -44,13 +47,13 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
-
+import lombok.SneakyThrows;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
 
 public class AutoHealerTest {
     @Mock
@@ -65,6 +68,7 @@ public class AutoHealerTest {
     private Duration healingTimeout = Duration.ofSeconds(1);
     private Duration healingInterval = Duration.ofMillis(100);
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -164,14 +168,19 @@ public class AutoHealerTest {
         assertNoMoreHealingMessages();
     }
 
+    @SneakyThrows
     @Test
     public void handleJoin() {
         handleHealingMsg(joinMsg(HostMember.newBuilder()
             .setIncarnation(1)
             .setEndpoint(REMOTE_HOST_1_ENDPOINT)
             .build()));
+        reset(messenger);
+        Thread.sleep(500);
+        verify(messenger, never()).send(any(), any(), anyBoolean());
     }
 
+    @SneakyThrows
     @Test
     public void handleObsoleteJoin() {
         handleObsoleteHealingMsg(joinMsg(HostMember.newBuilder()
@@ -182,6 +191,9 @@ public class AutoHealerTest {
             .setIncarnation(1) // same incarnation
             .setEndpoint(REMOTE_HOST_1_ENDPOINT)
             .build()));
+        reset(messenger);
+        Thread.sleep(500);
+        verify(messenger, atLeastOnce()).send(any(), any(), anyBoolean());
     }
 
     @Test
@@ -189,9 +201,13 @@ public class AutoHealerTest {
         handleHealingMsg(quitMsg(REMOTE_HOST_1_ENDPOINT, 1));
     }
 
+    @SneakyThrows
     @Test
     public void handleObsoleteQuit() {
         handleObsoleteHealingMsg(quitMsg(REMOTE_HOST_1_ENDPOINT, 0));
+        reset(messenger);
+        Thread.sleep(500);
+        verify(messenger, atLeastOnce()).send(any(), any(), anyBoolean());
     }
 
     @Test
@@ -199,14 +215,18 @@ public class AutoHealerTest {
         handleHealingMsg(endorseMsg(REMOTE_HOST_1_ENDPOINT, 1));
     }
 
+    @SneakyThrows
     @Test
     public void handleObsoleteEndorse() {
         handleObsoleteHealingMsg(endorseMsg(REMOTE_HOST_1_ENDPOINT, 0));
+        reset(messenger);
+        Thread.sleep(500);
+        verify(messenger, atLeastOnce()).send(any(), any(), anyBoolean());
     }
 
     private void handleHealingMsg(Timed<MessageEnvelope> msg) {
         AutoHealer healer =
-            new AutoHealer(messenger, scheduler, memberList, addressResolver, Duration.ofSeconds(2), healingInterval);
+            new AutoHealer(messenger, scheduler, memberList, addressResolver, Duration.ofSeconds(20), healingInterval);
         membersSubject.onNext(new HashMap<>() {{
             put(LOCAL_ENDPOINT, 0);
             put(REMOTE_HOST_1_ENDPOINT, 0);
@@ -226,7 +246,7 @@ public class AutoHealerTest {
 
     private void handleObsoleteHealingMsg(Timed<MessageEnvelope> msg) {
         AutoHealer healer =
-            new AutoHealer(messenger, scheduler, memberList, addressResolver, healingTimeout, healingInterval);
+            new AutoHealer(messenger, scheduler, memberList, addressResolver, Duration.ofSeconds(20), healingInterval);
         membersSubject.onNext(new HashMap<>() {{
             put(LOCAL_ENDPOINT, 0);
             put(REMOTE_HOST_1_ENDPOINT, 1);

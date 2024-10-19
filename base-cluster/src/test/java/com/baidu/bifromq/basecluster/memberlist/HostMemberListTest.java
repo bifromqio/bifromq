@@ -226,6 +226,35 @@ public class HostMemberListTest {
     }
 
     @Test
+    public void handleJoinFromDuplicatedHealing() {
+        IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
+            messenger, scheduler, store, addressResolver);
+        when(addressResolver.resolve(REMOTE_HOST_1_ENDPOINT)).thenReturn(REMOTE_ADDR_1);
+        messageSubject.onNext(joinMsg(HostMember.newBuilder()
+            .setEndpoint(REMOTE_HOST_1_ENDPOINT)
+            .setIncarnation(1)
+            .build(), LOCAL_ENDPOINT));
+
+        messageSubject.onNext(joinMsg(HostMember.newBuilder()
+            .setEndpoint(REMOTE_HOST_1_ENDPOINT)
+            .setIncarnation(1)
+            .build(), LOCAL_ENDPOINT));
+
+        ArgumentCaptor<ORMapOperation> opCap = ArgumentCaptor.forClass(ORMapOperation.class);
+        verify(hostListCRDT, times(3)).execute(opCap.capture());
+
+        ArgumentCaptor<ClusterMessage> msgCap = ArgumentCaptor.forClass(ClusterMessage.class);
+        ArgumentCaptor<InetSocketAddress> addrCap = ArgumentCaptor.forClass(InetSocketAddress.class);
+        ArgumentCaptor<Boolean> reliableCap = ArgumentCaptor.forClass(Boolean.class);
+
+        verify(messenger, times(2)).send(msgCap.capture(), addrCap.capture(), reliableCap.capture());
+
+        assertEquals(msgCap.getValue().getJoin().getMember().getEndpoint(), LOCAL_ENDPOINT);
+        assertEquals(msgCap.getValue().getJoin().getMember().getIncarnation(), 1);
+        assertEquals(addrCap.getValue(), REMOTE_ADDR_1);
+        assertTrue(reliableCap.getValue());
+    }
+    @Test
     public void handleFailAndClearZombie() {
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);

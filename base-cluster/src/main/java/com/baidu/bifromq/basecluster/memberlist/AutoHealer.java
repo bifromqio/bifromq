@@ -146,9 +146,9 @@ public final class AutoHealer {
         HostEndpoint failedEndpoint = fail.getEndpoint();
         // no need to heal self, memberlist will refute it
         Integer inc = alivePeers.get(failedEndpoint);
-        if (!failedEndpoint.equals(memberList.local().getEndpoint()) &&
-            !memberList.isZombie(failedEndpoint) &&
-            inc != null && inc <= fail.getIncarnation()) {
+        if (!failedEndpoint.equals(memberList.local().getEndpoint())
+            && !memberList.isZombie(failedEndpoint)
+            && inc != null && inc <= fail.getIncarnation()) {
             log.debug("Member[{},{}] is failed, add it healing list: local={}",
                 failedEndpoint, fail.getIncarnation(), memberList.local().getEndpoint());
             alivePeers.remove(failedEndpoint, inc);
@@ -168,14 +168,17 @@ public final class AutoHealer {
 
     private void heal() {
         for (Map.Entry<HostEndpoint, Integer> entry : healingMembers.asMap().entrySet()) {
-            log.debug("Send join message to the host[{}] locating at address[{}] for healing the connection",
-                entry.getKey(), entry.getValue());
+            HostEndpoint healMember = entry.getKey();
+            int incarnation = entry.getValue();
+            log.debug(
+                "Send join message to the host[{}:{}] locating at address[{}:{}] for healing the connection: incarnation={}",
+                healMember.getId(), healMember.getPid(), healMember.getAddress(), healMember.getPort(), incarnation);
             messenger.send(ClusterMessage.newBuilder()
                 .setJoin(Join.newBuilder()
                     .setMember(memberList.local())
-                    .setExpectedHost(entry.getKey())
+                    .setExpectedHost(healMember)
                     .build())
-                .build(), addressResolver.resolve(entry.getKey()), true);
+                .build(), addressResolver.resolve(healMember), true);
         }
         // run a compaction so that expired entries could be cleanup as soon as possible
         healingMembers.cleanUp();
