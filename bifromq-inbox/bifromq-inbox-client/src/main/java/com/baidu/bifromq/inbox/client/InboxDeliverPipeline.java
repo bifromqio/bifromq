@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.inbox.client;
 
+import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.parseTenantId;
 import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_DELIVERERKEY;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
@@ -29,7 +30,8 @@ class InboxDeliverPipeline implements IDeliverer {
     private final IRPCClient.IRequestPipeline<SendRequest, SendReply> ppln;
 
     InboxDeliverPipeline(String delivererKey, IRPCClient rpcClient) {
-        ppln = rpcClient.createRequestPipeline("", null, delivererKey,
+        String tenantId = parseTenantId(delivererKey);
+        ppln = rpcClient.createRequestPipeline(tenantId, null, delivererKey,
             Map.of(PIPELINE_ATTR_KEY_DELIVERERKEY, delivererKey), InboxServiceGrpc.getReceiveMethod());
     }
 

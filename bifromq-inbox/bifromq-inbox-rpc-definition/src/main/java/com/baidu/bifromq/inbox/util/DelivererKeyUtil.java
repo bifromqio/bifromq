@@ -18,12 +18,8 @@ import com.baidu.bifromq.sysprops.props.InboxDelivererNum;
 public class DelivererKeyUtil {
     private static final int MAX_INBOX_DELIVERER = InboxDelivererNum.INSTANCE.get();
 
-    public static String getSubInboxId(String inboxId, long incarnation) {
-        return inboxId + "_" + incarnation;
-    }
-
-    public static long getIncarnation(String subInboxId) {
-        return Long.parseUnsignedLong(subInboxId.substring(subInboxId.lastIndexOf("_")));
+    public static String parseTenantId(String delivererKey) {
+        return delivererKey.substring(0, delivererKey.lastIndexOf("_"));
     }
 
     public static String getDelivererKey(String tenantId, String inboxId) {
@@ -31,6 +27,6 @@ public class DelivererKeyUtil {
         if (k < 0) {
             k = (k + MAX_INBOX_DELIVERER) % MAX_INBOX_DELIVERER;
         }
-        return tenantId + k;
+        return tenantId + "_" + k;
     }
 }
