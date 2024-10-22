@@ -14,15 +14,15 @@
 package com.baidu.bifromq.apiserver.http.handler;
 
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
-import com.baidu.bifromq.retain.client.IRetainClient;
+import com.baidu.bifromq.inbox.client.IInboxClient;
 import javax.ws.rs.Path;
 
-@Path("/td/retain")
-public class HTTPSetRetainTrafficDirective extends HTTPSetTrafficDirective {
+@Path("/td/inbox")
+public class HTTPUnsetInboxTrafficDirective extends HTTPUnsetTrafficDirective {
     private final IRPCServiceTrafficGovernor trafficGovernor;
 
-    public HTTPSetRetainTrafficDirective(IRetainClient retainClient) {
-        this.trafficGovernor = retainClient.trafficGovernor();
+    public HTTPUnsetInboxTrafficDirective(IInboxClient inboxClient) {
+        this.trafficGovernor = inboxClient.trafficGovernor();
     }
 
     @Override

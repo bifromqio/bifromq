@@ -35,9 +35,19 @@ public interface IRPCServiceTrafficGovernor extends IRPCServiceTrafficDirector {
     CompletableFuture<Void> setServerGroups(String serverId, Set<String> groupTags);
 
     /**
-     * Update the traffic directive in the form of mapping tenantIdPrefix to a set of weighted group tags.
+     * Set the traffic directive for a tenantIdPrefix.
      *
-     * @param trafficDirective the traffic directive
+     * @param tenantIdPrefix the tenantIdPrefix
+     * @param groupTags      the groupTags
+     * @return the future
      */
-    CompletableFuture<Void> updateTrafficDirective(Map<String, Map<String, Integer>> trafficDirective);
+    CompletableFuture<Void> setTrafficDirective(String tenantIdPrefix, Map<String, Integer> groupTags);
+
+    /**
+     * Unset the traffic directive for a tenantIdPrefix if exists.
+     *
+     * @param tenantIdPrefix the tenantIdPrefix
+     * @return the future
+     */
+    CompletableFuture<Void> unsetTrafficDirective(String tenantIdPrefix);
 }

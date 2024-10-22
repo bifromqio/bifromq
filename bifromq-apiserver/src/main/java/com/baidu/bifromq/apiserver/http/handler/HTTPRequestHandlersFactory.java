@@ -46,6 +46,11 @@ public class HTTPRequestHandlersFactory implements IHTTPRequestHandlersFactory {
         register(new HTTPSetInboxTrafficDirective(inboxClient));
         register(new HTTPSetRetainTrafficDirective(retainClient));
 
+        register(new HTTPUnsetDictTrafficDirective(sessionDictClient));
+        register(new HTTPUnsetDistTrafficDirective(distClient));
+        register(new HTTPUnsetInboxTrafficDirective(inboxClient));
+        register(new HTTPUnsetRetainTrafficDirective(retainClient));
+
         register(new HTTPGetBrokerServerLandscapeHandler(brokerClient));
         register(new HTTPGetDictServerLandscapeHandler(sessionDictClient));
         register(new HTTPGetDistServerLandscapeHandler(distClient));

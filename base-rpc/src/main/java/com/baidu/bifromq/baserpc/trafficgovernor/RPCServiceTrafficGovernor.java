@@ -47,7 +47,12 @@ final class RPCServiceTrafficGovernor extends RPCServiceTrafficDirector implemen
     }
 
     @Override
-    public CompletableFuture<Void> updateTrafficDirective(Map<String, Map<String, Integer>> trafficDirective) {
-        return announce(trafficDirective);
+    public CompletableFuture<Void> setTrafficDirective(String tenantIdPrefix, Map<String, Integer> groupTags) {
+        return set(tenantIdPrefix, groupTags);
+    }
+
+    @Override
+    public CompletableFuture<Void> unsetTrafficDirective(String tenantIdPrefix) {
+        return unset(tenantIdPrefix);
     }
 }

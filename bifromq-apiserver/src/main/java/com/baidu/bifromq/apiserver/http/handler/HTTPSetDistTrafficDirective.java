@@ -28,7 +28,7 @@ public class HTTPSetDistTrafficDirective extends HTTPSetTrafficDirective {
     }
 
     @Override
-    protected CompletableFuture<Void> trafficDirective(Map<String, Map<String, Integer>> td) {
-        return trafficGovernor.updateTrafficDirective(td);
+    protected IRPCServiceTrafficGovernor trafficGovernor() {
+        return trafficGovernor;
     }
 }

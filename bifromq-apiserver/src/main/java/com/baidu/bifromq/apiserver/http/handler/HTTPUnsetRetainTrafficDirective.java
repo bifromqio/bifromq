@@ -18,10 +18,10 @@ import com.baidu.bifromq.retain.client.IRetainClient;
 import javax.ws.rs.Path;
 
 @Path("/td/retain")
-public class HTTPSetRetainTrafficDirective extends HTTPSetTrafficDirective {
+public class HTTPUnsetRetainTrafficDirective extends HTTPUnsetTrafficDirective {
     private final IRPCServiceTrafficGovernor trafficGovernor;
 
-    public HTTPSetRetainTrafficDirective(IRetainClient retainClient) {
+    public HTTPUnsetRetainTrafficDirective(IRetainClient retainClient) {
         this.trafficGovernor = retainClient.trafficGovernor();
     }
 

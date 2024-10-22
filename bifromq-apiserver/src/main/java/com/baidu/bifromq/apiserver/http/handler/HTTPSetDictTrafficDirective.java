@@ -14,10 +14,7 @@
 package com.baidu.bifromq.apiserver.http.handler;
 
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
-import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import javax.ws.rs.Path;
 
 @Path("/td/dict")
@@ -29,7 +26,7 @@ public class HTTPSetDictTrafficDirective extends HTTPSetTrafficDirective {
     }
 
     @Override
-    protected CompletableFuture<Void> trafficDirective(Map<String, Map<String, Integer>> td) {
-        return trafficGovernor.updateTrafficDirective(td);
+    protected IRPCServiceTrafficGovernor trafficGovernor() {
+        return trafficGovernor;
     }
 }

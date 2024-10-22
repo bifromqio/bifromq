@@ -14,6 +14,7 @@
 package com.baidu.bifromq.baserpc.trafficgovernor;
 
 import static com.google.protobuf.ByteString.copyFromUtf8;
+import static java.util.Collections.emptyMap;
 import static java.util.concurrent.Executors.newSingleThreadExecutor;
 
 import com.baidu.bifromq.basecrdt.core.api.CRDTURI;
@@ -28,7 +29,6 @@ import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.proto.LoadAssignment;
 import com.baidu.bifromq.baserpc.proto.RPCServer;
-import com.baidu.bifromq.baserpc.proto.TrafficDirective;
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -57,7 +57,7 @@ abstract class RPCServiceAnnouncer {
     private final Replica crdtReplica;
     private final IORMap rpcServiceCRDT;
     private final BehaviorSubject<Map<String, RPCServer>> svrSubject;
-    private final BehaviorSubject<TrafficDirective> tdSubject;
+    private final BehaviorSubject<Map<String, Map<String, Integer>>> tdSubject;
     private final CompositeDisposable disposable = new CompositeDisposable();
 
     protected RPCServiceAnnouncer(String serviceUniqueName, ICRDTService crdtService) {
@@ -68,24 +68,19 @@ abstract class RPCServiceAnnouncer {
         this.crdtReplica = rpcServiceCRDT.id();
         Map<String, RPCServer> serverMap = buildAnnouncedServers(HLC.INST.get());
         svrSubject = serverMap.isEmpty() ? BehaviorSubject.create() : BehaviorSubject.createDefault(serverMap);
-        tdSubject = BehaviorSubject.createDefault(buildAnnouncedTrafficDirective(HLC.INST.get())
-            .orElse(TrafficDirective.getDefaultInstance()));
+        tdSubject = BehaviorSubject.createDefault(buildAnnouncedTrafficDirective(HLC.INST.get()).orElse(emptyMap()));
         disposable.add(rpcServiceCRDT.getORMap(SERVER_LIST_KEY)
             .inflation()
             .observeOn(RPC_SHARED_SCHEDULER)
             .map(this::buildAnnouncedServers)
             .subscribe(svrSubject::onNext));
-        disposable.add(rpcServiceCRDT.getMVReg(TRAFFIC_DIRECTIVE_KEY)
+        disposable.add(rpcServiceCRDT.getORMap(TRAFFIC_DIRECTIVE_KEY)
             .inflation()
             .observeOn(RPC_SHARED_SCHEDULER)
             .map(this::buildAnnouncedTrafficDirective)
             .filter(Optional::isPresent)
             .map(Optional::get)
-            .subscribe(td -> {
-                if (td.getAnnouncedTS() > tdSubject.getValue().getAnnouncedTS()) {
-                    tdSubject.onNext(td);
-                }
-            }));
+            .subscribe(tdSubject::onNext));
     }
 
     protected ByteString id() {
@@ -102,13 +97,20 @@ abstract class RPCServiceAnnouncer {
             .with(MVRegOperation.write(server.toByteString())));
     }
 
-    protected CompletableFuture<Void> announce(Map<String, Map<String, Integer>> trafficDirective) {
+    protected CompletableFuture<Void> set(String tenantIdPrefix, Map<String, Integer> weightedGroups) {
         return rpcServiceCRDT.execute(ORMapOperation.update(TRAFFIC_DIRECTIVE_KEY)
-            .with(MVRegOperation.write(TrafficDirective.newBuilder()
-                .putAllAssignment(Maps.transformValues(trafficDirective,
-                    v -> LoadAssignment.newBuilder().putAllWeightedGroup(v).build()))
-                .setAnnouncedTS(HLC.INST.get())
-                .build().toByteString())));
+            .with(ORMapOperation.update(ByteString.copyFromUtf8(tenantIdPrefix))
+                .with(MVRegOperation.write(LoadAssignment
+                    .newBuilder()
+                    .putAllWeightedGroup(weightedGroups)
+                    .build()
+                    .toByteString()))));
+    }
+
+    protected CompletableFuture<Void> unset(String tenantIdPrefix) {
+        return rpcServiceCRDT.execute(ORMapOperation.update(TRAFFIC_DIRECTIVE_KEY)
+            .with(ORMapOperation.remove(ByteString.copyFromUtf8(tenantIdPrefix))
+                .of(CausalCRDTType.mvreg)));
     }
 
     protected CompletableFuture<Void> revoke(String id) {
@@ -158,8 +160,7 @@ abstract class RPCServiceAnnouncer {
     }
 
     protected Observable<Map<String, Map<String, Integer>>> trafficDirective() {
-        return tdSubject.map(td -> Maps.transformValues(td.getAssignmentMap(), LoadAssignment::getWeightedGroupMap))
-            .observeOn(RPC_SHARED_SCHEDULER);
+        return tdSubject.observeOn(RPC_SHARED_SCHEDULER);
     }
 
     protected Observable<Set<ByteString>> aliveAnnouncers() {
@@ -167,21 +168,33 @@ abstract class RPCServiceAnnouncer {
             .map(r -> r.stream().map(Replica::getId).collect(Collectors.toSet()));
     }
 
-    private Optional<TrafficDirective> buildAnnouncedTrafficDirective(long t) {
-        TrafficDirective td = null;
-        Iterator<ByteString> itr = rpcServiceCRDT.getMVReg(TRAFFIC_DIRECTIVE_KEY).read();
+    private Optional<Map<String, Map<String, Integer>>> buildAnnouncedTrafficDirective(long t) {
+        Map<String, Map<String, Integer>> trafficDirective = Maps.newHashMap();
+        IORMap directives = rpcServiceCRDT.getORMap(TRAFFIC_DIRECTIVE_KEY);
+        directives.keys().forEachRemaining(key -> {
+            assert key.valueType() == CausalCRDTType.mvreg;
+            Optional<LoadAssignment> la = parseLoadAssignment(directives.getMVReg(key.key()));
+            la.ifPresent(
+                loadAssignment -> trafficDirective.put(key.key().toStringUtf8(), loadAssignment.getWeightedGroupMap()));
+        });
+        return Optional.of(trafficDirective);
+    }
+
+    private Optional<LoadAssignment> parseLoadAssignment(IMVReg mvReg) {
+        LoadAssignment loadAssignment = null;
+        Iterator<ByteString> itr = mvReg.read();
         while (itr.hasNext()) {
             try {
-                TrafficDirective next = TrafficDirective.parseFrom(itr.next());
-                if (td == null) {
-                    td = next;
+                LoadAssignment next = LoadAssignment.parseFrom(itr.next());
+                if (loadAssignment == null) {
+                    loadAssignment = next;
                 } else {
-                    td = td.getAnnouncedTS() < next.getAnnouncedTS() ? next : td;
+                    loadAssignment = loadAssignment.getAnnouncedTS() < next.getAnnouncedTS() ? next : loadAssignment;
                 }
             } catch (InvalidProtocolBufferException e) {
-                log.error("Unable to parse RPCServer from crdt", e);
+                log.error("Unable to parse LoadAssignment from crdt", e);
             }
         }
-        return Optional.ofNullable(td);
+        return Optional.ofNullable(loadAssignment);
     }
 }

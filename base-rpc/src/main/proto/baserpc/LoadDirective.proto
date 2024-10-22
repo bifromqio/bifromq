@@ -9,9 +9,5 @@ option optimize_for = SPEED;
 
 message LoadAssignment {
   map<string, uint32> weightedGroup = 1;
-}
-
-message TrafficDirective {
-  map<string, LoadAssignment> assignment = 1; // key: tenantIdPrefix, value: LoadAssignment
   uint64 announcedTS = 2;
 }
