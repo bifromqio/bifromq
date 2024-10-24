@@ -83,14 +83,14 @@ public class ManagedRequestPipeline<ReqT, RespT> extends ManagedBiDiStream<ReqT,
 
     @Override
     void onStreamCreated() {
+        synchronized (this) {
+            isRetargeting = false;
+        }
         meter.recordCount(RPCMetric.ReqPipelineCreateCount);
     }
 
     @Override
     void onStreamReady() {
-        synchronized (this) {
-            isRetargeting = false;
-        }
         sendUntilStreamNotReadyOrNoTask();
     }
 

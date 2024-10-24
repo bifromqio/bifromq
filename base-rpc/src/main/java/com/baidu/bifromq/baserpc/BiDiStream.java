@@ -39,8 +39,6 @@ class BiDiStream<InT, OutT> implements IBiDiStream<InT, OutT> {
     private final Subject<Long> onReadySubject = BehaviorSubject.create();
     private final AtomicBoolean isCancelled = new AtomicBoolean();
     private final AtomicBoolean isClosed = new AtomicBoolean();
-    private volatile InT lastRequest;
-    private volatile OutT lastResponse;
 
     @SneakyThrows
     BiDiStream(String tenantId,
@@ -66,7 +64,6 @@ class BiDiStream<InT, OutT> implements IBiDiStream<InT, OutT> {
 
                     @Override
                     public void onNext(OutT outT) {
-                        lastResponse = outT;
                         outSubject.onNext(outT);
                     }
 
@@ -115,8 +112,6 @@ class BiDiStream<InT, OutT> implements IBiDiStream<InT, OutT> {
             callStreamObserver.onNext(in);
         } catch (Throwable e) {
             log.error("Failed to send message", e);
-        } finally {
-            lastRequest = in;
         }
     }
 

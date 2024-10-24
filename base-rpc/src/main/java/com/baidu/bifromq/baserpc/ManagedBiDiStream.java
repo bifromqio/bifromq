@@ -63,6 +63,7 @@ abstract class ManagedBiDiStream<InT, OutT> {
     private final AtomicBoolean closed = new AtomicBoolean();
     private final AtomicReference<BidiStreamContext<InT, OutT>> bidiStream =
         new AtomicReference<>(BidiStreamContext.from(new DummyBiDiStream<>(this)));
+    private final AtomicBoolean retargetScheduled = new AtomicBoolean();
     private volatile IServerSelector serverSelector = DummyServerSelector.INSTANCE;
 
     ManagedBiDiStream(String tenantId,
@@ -121,102 +122,103 @@ abstract class ManagedBiDiStream<InT, OutT> {
     abstract void onReceive(OutT out);
 
     private void onServerSelectorChanged(IServerSelector newServerSelector) {
-        synchronized (this) {
-            if (closed.get()) {
-                return;
+        switch (balanceMode) {
+            case DDBalanced -> {
+                boolean available = newServerSelector.exists(targetServerId);
+                this.serverSelector = newServerSelector;
+                if (available) {
+                    switch (state.get()) {
+                        // target the server if it is available
+                        case Init, StreamDisconnect, NoServerAvailable -> scheduleRetargetNow();
+                        default -> {
+                            // Normal, PendingRetarget, Retargeting do nothing
+                        }
+                    }
+                }
+                // do not close the stream proactively in DD mode, and let the server close it
             }
-            switch (balanceMode) {
-                case DDBalanced -> {
-                    boolean available = newServerSelector.exists(targetServerId);
-                    this.serverSelector = newServerSelector;
-                    if (available) {
-                        switch (state.get()) {
-                            // target the server if it is available
-                            case Init, StreamDisconnect, NoServerAvailable -> retarget(newServerSelector);
-                            default -> {
-                                // Normal, PendingRetarget, Retargeting do nothing
-                            }
-                        }
-                    }
-                    // do not close the stream proactively in DD mode, and let the server close it
+            case WCHBalanced -> {
+                IServerGroupRouter router = newServerSelector.get(tenantId);
+                IServerGroupRouter prevRouter = this.serverSelector.get(tenantId);
+                // no change in server group, no need to retarget
+                this.serverSelector = newServerSelector;
+                if (router.isSameGroup(prevRouter)) {
+                    return;
                 }
-                case WCHBalanced -> {
-                    IServerGroupRouter router = newServerSelector.get(tenantId);
-                    IServerGroupRouter prevRouter = this.serverSelector.get(tenantId);
-                    // no change in server group, no need to retarget
-                    this.serverSelector = newServerSelector;
-                    if (router.isSameGroup(prevRouter)) {
-                        return;
-                    }
-                    Optional<String> currentServer = prevRouter.hashing(wchKey);
-                    Optional<String> newServer = router.hashing(wchKey);
-                    if (newServer.isEmpty()) {
-                        // cancel current bidi-stream
+                Optional<String> currentServer = prevRouter.hashing(wchKey);
+                Optional<String> newServer = router.hashing(wchKey);
+                if (newServer.isEmpty()) {
+                    // cancel current bidi-stream
+                    synchronized (this) {
                         bidiStream.get().bidiStream().cancel("no server available");
-                    } else if (!newServer.equals(currentServer)) {
-                        switch (state.get()) {
-                            // trigger graceful retarget process
-                            case Normal -> gracefulRetarget();
-                            // target the server if it is available
-                            case Init, StreamDisconnect, NoServerAvailable -> retarget(newServerSelector);
-                            default -> {
-                                // PendingRetarget, Retargeting do nothing
-                            }
+                    }
+                } else if (!newServer.equals(currentServer)) {
+                    switch (state.get()) {
+                        // trigger graceful retarget process
+                        case Normal -> gracefulRetarget();
+                        // target the server if it is available
+                        case Init, StreamDisconnect, NoServerAvailable -> scheduleRetargetNow();
+                        default -> {
+                            // PendingRetarget, Retargeting do nothing
                         }
                     }
                 }
-                case WRBalanced -> {
-                    IServerGroupRouter router = newServerSelector.get(tenantId);
-                    IServerGroupRouter prevRouter = this.serverSelector.get(tenantId);
-                    // no change in server group, no need to retarget
-                    this.serverSelector = newServerSelector;
-                    if (router.isSameGroup(prevRouter)) {
-                        return;
-                    }
-                    Optional<String> newServer = router.random();
-                    if (newServer.isEmpty()) {
-                        // cancel current bidi-stream
-                        bidiStream.get().bidiStream().cancel("no server available");
-                    } else {
-                        switch (state.get()) {
-                            case Normal -> {
-                                // compare current server and new server
-                                if (newServer.get().equals(bidiStream.get().bidiStream().serverId())) {
-                                    return;
-                                }
-                                // trigger graceful retarget process if needed
-                                gracefulRetarget();
-                            }
-                            // schedule a task to build bidi-stream to target server
-                            case Init, StreamDisconnect, NoServerAvailable -> retarget(newServerSelector);
-                            default -> {
-                                // PendingRetarget, Retargeting do nothing
-                            }
-                        }
-                    }
+            }
+            case WRBalanced -> {
+                IServerGroupRouter router = newServerSelector.get(tenantId);
+                IServerGroupRouter prevRouter = this.serverSelector.get(tenantId);
+                // no change in server group, no need to retarget
+                this.serverSelector = newServerSelector;
+                if (router.isSameGroup(prevRouter)) {
+                    return;
                 }
-                default -> {
-                    assert balanceMode == BluePrint.BalanceMode.WRRBalanced;
-                    IServerGroupRouter router = newServerSelector.get(tenantId);
-                    IServerGroupRouter prevRouter = this.serverSelector.get(tenantId);
-                    // no change in server group, no need to retarget
-                    this.serverSelector = newServerSelector;
-                    if (router.isSameGroup(prevRouter)) {
-                        return;
-                    }
-                    Optional<String> newServer = router.tryRoundRobin();
-                    if (newServer.isEmpty()) {
-                        // cancel current bidi-stream
+                Optional<String> newServer = router.random();
+                if (newServer.isEmpty()) {
+                    // cancel current bidi-stream
+                    synchronized (this) {
                         bidiStream.get().bidiStream().cancel("no server available");
-                    } else {
-                        switch (state.get()) {
+                    }
+                } else {
+                    switch (state.get()) {
+                        case Normal -> {
+                            // compare current server and new server
+                            if (newServer.get().equals(bidiStream.get().bidiStream().serverId())) {
+                                return;
+                            }
                             // trigger graceful retarget process if needed
-                            case Normal -> gracefulRetarget();
-                            // schedule a task to build bidi-stream to target server
-                            case Init, StreamDisconnect, NoServerAvailable -> retarget(newServerSelector);
-                            default -> {
-                                // PendingRetarget, Retargeting do nothing
-                            }
+                            gracefulRetarget();
+                        }
+                        // schedule a task to build bidi-stream to target server
+                        case Init, StreamDisconnect, NoServerAvailable -> scheduleRetargetNow();
+                        default -> {
+                            // PendingRetarget, Retargeting do nothing
+                        }
+                    }
+                }
+            }
+            default -> {
+                assert balanceMode == BluePrint.BalanceMode.WRRBalanced;
+                IServerGroupRouter router = newServerSelector.get(tenantId);
+                IServerGroupRouter prevRouter = this.serverSelector.get(tenantId);
+                // no change in server group, no need to retarget
+                this.serverSelector = newServerSelector;
+                if (router.isSameGroup(prevRouter)) {
+                    return;
+                }
+                Optional<String> newServer = router.tryRoundRobin();
+                if (newServer.isEmpty()) {
+                    // cancel current bidi-stream
+                    synchronized (this) {
+                        bidiStream.get().bidiStream().cancel("no server available");
+                    }
+                } else {
+                    switch (state.get()) {
+                        // trigger graceful retarget process if needed
+                        case Normal -> gracefulRetarget();
+                        // schedule a task to build bidi-stream to target server
+                        case Init, StreamDisconnect, NoServerAvailable -> scheduleRetargetNow();
+                        default -> {
+                            // PendingRetarget, Retargeting do nothing
                         }
                     }
                 }
@@ -225,12 +227,7 @@ abstract class ManagedBiDiStream<InT, OutT> {
     }
 
     void send(InT in) {
-        synchronized (this) {
-            if (closed.get()) {
-                return;
-            }
-            bidiStream.get().bidiStream().send(in);
-        }
+        bidiStream.get().bidiStream().send(in);
     }
 
     void close() {
@@ -268,11 +265,12 @@ abstract class ManagedBiDiStream<InT, OutT> {
     }
 
     private void scheduleRetarget(Duration delay) {
-        IServerSelector currentServerSelector = this.serverSelector;
-        log.debug("Stream@{} schedule retarget task in {}ms: method={}",
-            this.hashCode(), delay.toMillis(), methodDescriptor.getBareMethodName());
-        CompletableFuture.runAsync(() -> retarget(currentServerSelector),
-            CompletableFuture.delayedExecutor(delay.toMillis(), MILLISECONDS));
+        if (retargetScheduled.compareAndSet(false, true)) {
+            log.debug("Stream@{} schedule retarget task in {}ms: method={}",
+                this.hashCode(), delay.toMillis(), methodDescriptor.getBareMethodName());
+            CompletableFuture.runAsync(() -> retarget(this.serverSelector),
+                CompletableFuture.delayedExecutor(delay.toMillis(), MILLISECONDS));
+        }
     }
 
     private void retarget(IServerSelector serverSelector) {
@@ -280,52 +278,51 @@ abstract class ManagedBiDiStream<InT, OutT> {
             if (closed.get()) {
                 return;
             }
-            if (state.get() != State.Normal && this.serverSelector == serverSelector) {
-                switch (balanceMode) {
-                    case DDBalanced -> {
-                        boolean available = serverSelector.exists(targetServerId);
-                        if (available) {
-                            target(targetServerId);
-                        } else {
-                            // delay MTTR(network partition) to declare no server available?
-                            state.set(State.NoServerAvailable);
-                            reportNoServerAvailable();
-                        }
+            switch (balanceMode) {
+                case DDBalanced -> {
+                    boolean available = serverSelector.exists(targetServerId);
+                    if (available) {
+                        target(targetServerId);
+                    } else {
+                        // delay MTTR(network partition) to declare no server available?
+                        state.set(State.NoServerAvailable);
+                        reportNoServerAvailable();
                     }
-                    case WCHBalanced -> {
-                        IServerGroupRouter router = serverSelector.get(tenantId);
-                        Optional<String> selectedServer = router.hashing(wchKey);
-                        if (selectedServer.isEmpty()) {
-                            state.set(State.NoServerAvailable);
-                            reportNoServerAvailable();
-                        } else {
-                            target(selectedServer.get());
-                        }
+                }
+                case WCHBalanced -> {
+                    IServerGroupRouter router = serverSelector.get(tenantId);
+                    Optional<String> selectedServer = router.hashing(wchKey);
+                    if (selectedServer.isEmpty()) {
+                        state.set(State.NoServerAvailable);
+                        reportNoServerAvailable();
+                    } else {
+                        target(selectedServer.get());
                     }
-                    case WRBalanced -> {
-                        IServerGroupRouter router = serverSelector.get(tenantId);
-                        Optional<String> selectedServer = router.random();
-                        if (selectedServer.isEmpty()) {
-                            state.set(State.NoServerAvailable);
-                            reportNoServerAvailable();
-                        } else {
-                            target(selectedServer.get());
-                        }
+                }
+                case WRBalanced -> {
+                    IServerGroupRouter router = serverSelector.get(tenantId);
+                    Optional<String> selectedServer = router.random();
+                    if (selectedServer.isEmpty()) {
+                        state.set(State.NoServerAvailable);
+                        reportNoServerAvailable();
+                    } else {
+                        target(selectedServer.get());
                     }
-                    default -> {
-                        assert balanceMode == BluePrint.BalanceMode.WRRBalanced;
-                        IServerGroupRouter router = serverSelector.get(tenantId);
-                        Optional<String> selectedServer = router.roundRobin();
-                        if (selectedServer.isEmpty()) {
-                            state.set(State.NoServerAvailable);
-                            reportNoServerAvailable();
-                        } else {
-                            target(selectedServer.get());
-                        }
+                }
+                default -> {
+                    assert balanceMode == BluePrint.BalanceMode.WRRBalanced;
+                    IServerGroupRouter router = serverSelector.get(tenantId);
+                    Optional<String> selectedServer = router.roundRobin();
+                    if (selectedServer.isEmpty()) {
+                        state.set(State.NoServerAvailable);
+                        reportNoServerAvailable();
+                    } else {
+                        target(selectedServer.get());
                     }
                 }
             }
         }
+        retargetScheduled.set(false);
         if (serverSelector != this.serverSelector) {
             // server selector has been changed, schedule a retarget
             scheduleRetargetNow();
@@ -333,28 +330,23 @@ abstract class ManagedBiDiStream<InT, OutT> {
     }
 
     private void target(String serverId) {
-        synchronized (this) {
-            if (closed.get()) {
-                return;
-            }
-            if (state.compareAndSet(State.Init, State.Normal)
-                || state.compareAndSet(State.StreamDisconnect, State.Normal)
-                || state.compareAndSet(State.NoServerAvailable, State.Normal)
-                || state.compareAndSet(State.Retargeting, State.Normal)) {
-                log.debug("Stream@{} build bidi-stream to target server[{}]: method={}",
-                    this.hashCode(), serverId, methodDescriptor.getBareMethodName());
-                BidiStreamContext<InT, OutT> bidiStreamContext = BidiStreamContext.from(new BiDiStream<>(
-                    tenantId,
-                    serverId,
-                    channel,
-                    methodDescriptor,
-                    metadataSupplier.get(),
-                    callOptions));
-                bidiStream.set(bidiStreamContext);
-                onStreamCreated();
-                bidiStreamContext.subscribe(this::onNext, this::onError, this::onCompleted);
-                bidiStreamContext.onReady(ts -> onStreamReady());
-            }
+        if (state.compareAndSet(State.Init, State.Normal)
+            || state.compareAndSet(State.StreamDisconnect, State.Normal)
+            || state.compareAndSet(State.NoServerAvailable, State.Normal)
+            || state.compareAndSet(State.Retargeting, State.Normal)) {
+            log.debug("Stream@{} build bidi-stream to target server[{}]: method={}",
+                this.hashCode(), serverId, methodDescriptor.getBareMethodName());
+            BidiStreamContext<InT, OutT> bidiStreamContext = BidiStreamContext.from(new BiDiStream<>(
+                tenantId,
+                serverId,
+                channel,
+                methodDescriptor,
+                metadataSupplier.get(),
+                callOptions));
+            bidiStream.set(bidiStreamContext);
+            onStreamCreated();
+            bidiStreamContext.subscribe(this::onNext, this::onError, this::onCompleted);
+            bidiStreamContext.onReady(ts -> onStreamReady());
         }
         if (bidiStream.get().bidiStream().isReady()) {
             log.debug("Stream@{} ready after build to server[{}]: method={}",
@@ -380,27 +372,17 @@ abstract class ManagedBiDiStream<InT, OutT> {
 
     private void onError(Throwable t) {
         log.debug("BidiStream@{} error: method={}", this.hashCode(), methodDescriptor.getBareMethodName(), t);
-        synchronized (ManagedBiDiStream.this) {
-            boolean isRetargeting = state.get() == State.Retargeting;
-            state.set(State.StreamDisconnect);
-            onStreamError(t);
-            if (!isRetargeting) {
-                scheduleRetargetWithRandomDelay();
-            }
-        }
+        state.compareAndSet(State.Normal, State.StreamDisconnect);
+        onStreamError(t);
+        scheduleRetargetWithRandomDelay();
     }
 
     private void onCompleted() {
         log.debug("BidiStream@{} complete: method={}", this.hashCode(), methodDescriptor.getBareMethodName());
-        synchronized (ManagedBiDiStream.this) {
-            // server gracefully close the stream
-            boolean isRetargeting = state.get() == State.Retargeting;
-            state.set(State.StreamDisconnect);
-            onStreamError(new CancellationException("server close the bidi-stream"));
-            if (!isRetargeting) {
-                scheduleRetargetWithRandomDelay();
-            }
-        }
+        // server gracefully close the stream
+        state.compareAndSet(State.Normal, State.StreamDisconnect);
+        onStreamError(new CancellationException("server close the bidi-stream"));
+        scheduleRetargetWithRandomDelay();
     }
 
     private record DummyBiDiStream<InT, OutT>(ManagedBiDiStream<InT, OutT> managedBiDiStream)

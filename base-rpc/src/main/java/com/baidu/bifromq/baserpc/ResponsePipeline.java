@@ -20,7 +20,7 @@ import java.time.Duration;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -30,9 +30,9 @@ public abstract class ResponsePipeline<RequestT, ResponseT> extends AbstractResp
     private static final ScheduledExecutorService SCHEDULER = Executors.newSingleThreadScheduledExecutor(
         EnvProvider.INSTANCE.newThreadFactory("base-rpc-flow-controller", true));
     private final Supplier<Boolean> flowControlSignal;
+    private final AtomicBoolean flowControlEnabled = new AtomicBoolean(false);
     private final long timeoutNanos;
     private final AtomicLong throttledAt = new AtomicLong(Long.MAX_VALUE);
-    private final AtomicInteger requestCount = new AtomicInteger(0);
 
     public ResponsePipeline(StreamObserver<ResponseT> responseObserver) {
         this(responseObserver, null, null);
@@ -46,6 +46,7 @@ public abstract class ResponsePipeline<RequestT, ResponseT> extends AbstractResp
             this.flowControlSignal = slowDownSignal;
             this.responseObserver.disableAutoRequest();
             this.responseObserver.setOnReadyHandler(new Runnable() {
+                // ensure that the first request is sent immediately
                 private boolean wasReady = false;
 
                 @Override
@@ -66,32 +67,32 @@ public abstract class ResponsePipeline<RequestT, ResponseT> extends AbstractResp
 
     @Override
     public final void onNext(RequestT request) {
-        if (flowControlSignal.get()) {
-            startHandlingRequest(request).thenAccept((response) -> emitResponse(request, response));
-            throttledAt.updateAndGet(v -> Math.min(v, System.nanoTime()));
-            requestCount.incrementAndGet();
-            // schedule a task to check memory usage and request more data if necessary
-            scheduleRequest();
-        } else {
-            startHandlingRequest(request).thenAccept((response) -> emitResponse(request, response));
-            responseObserver.request(1);
+        startHandlingRequest(request).thenAccept((response) -> emitResponse(request, response));
+        if (!flowControlEnabled.get()) {
+            if (flowControlSignal.get() && flowControlEnabled.compareAndSet(false, true)) {
+                throttledAt.set(System.nanoTime());
+                log.debug("ResponsePipeline@{} flow control start", this.hashCode());
+                checkSignal();
+            } else {
+                // flow control is disabled and no signal, request more
+                responseObserver.request(1);
+            }
         }
     }
 
-    private void scheduleRequest() {
+    private void checkSignal() {
         SCHEDULER.schedule(() -> {
             if (!flowControlSignal.get()) {
-                responseObserver.request(requestCount.getAndSet(0));
                 throttledAt.set(Long.MAX_VALUE);
-                if (flowControlSignal.get()) {
-                    throttledAt.set(System.nanoTime());
-                    scheduleRequest();
-                }
+                flowControlEnabled.set(false);
+                log.debug("ResponsePipeline@{} flow control stop", this.hashCode());
+                responseObserver.request(1);
             } else {
                 if (System.nanoTime() - throttledAt.get() > timeoutNanos) {
-                    onError(Status.RESOURCE_EXHAUSTED.asRuntimeException());
+                    log.debug("ResponsePipeline@{} flow control timeout", this.hashCode());
+                    responseObserver.onError(Status.RESOURCE_EXHAUSTED.asRuntimeException());
                 } else {
-                    scheduleRequest();
+                    checkSignal();
                 }
             }
         }, 100, TimeUnit.MILLISECONDS);

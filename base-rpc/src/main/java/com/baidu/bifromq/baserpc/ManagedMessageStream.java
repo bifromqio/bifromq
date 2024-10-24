@@ -36,7 +36,6 @@ class ManagedMessageStream<MsgT, AckT> extends ManagedBiDiStream<AckT, MsgT>
     private final IRPCMeter.IRPCMethodMeter meter;
     private final AtomicBoolean sending = new AtomicBoolean(false);
     private final AtomicBoolean isClosed = new AtomicBoolean(false);
-    private boolean isRetargeting = false;
 
     ManagedMessageStream(String tenantId,
                          @Nullable String wchKey,
@@ -110,10 +109,7 @@ class ManagedMessageStream<MsgT, AckT> extends ManagedBiDiStream<AckT, MsgT>
 
     @Override
     boolean prepareRetarget() {
-        synchronized (this) {
-            isRetargeting = true;
-            return true;
-        }
+        return true;
     }
 
     @Override
@@ -129,9 +125,6 @@ class ManagedMessageStream<MsgT, AckT> extends ManagedBiDiStream<AckT, MsgT>
 
     @Override
     void onStreamReady() {
-        synchronized (this) {
-            isRetargeting = false;
-        }
         sendUntilStreamNotReadyOrNoTask();
     }
 
@@ -154,19 +147,15 @@ class ManagedMessageStream<MsgT, AckT> extends ManagedBiDiStream<AckT, MsgT>
 
     private void sendUntilStreamNotReadyOrNoTask() {
         if (sending.compareAndSet(false, true)) {
-            synchronized (this) {
-                while (!isRetargeting && isReady() && !ackSendingBuffers.isEmpty()) {
-                    AckT ack = ackSendingBuffers.poll();
-                    send(ack);
-                    meter.recordCount(RPCMetric.StreamAckSendCount);
-                }
+            while (isReady() && !ackSendingBuffers.isEmpty()) {
+                AckT ack = ackSendingBuffers.poll();
+                send(ack);
+                meter.recordCount(RPCMetric.StreamAckSendCount);
             }
             sending.set(false);
-            synchronized (this) {
-                if (!isRetargeting && isReady() && !ackSendingBuffers.isEmpty()) {
-                    // deal with the spurious notification
-                    sendUntilStreamNotReadyOrNoTask();
-                }
+            if (isReady() && !ackSendingBuffers.isEmpty()) {
+                // deal with the spurious notification
+                sendUntilStreamNotReadyOrNoTask();
             }
         }
     }
