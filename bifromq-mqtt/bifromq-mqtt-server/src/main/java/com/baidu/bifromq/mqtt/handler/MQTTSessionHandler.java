@@ -849,7 +849,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         if (!msg.permissionGranted()) {
             eventCollector.report(getLocal(QoS0Dropped.class)
                 .reason(DropReason.NoSubPermission)
-                .isRetain(false)
+                .isRetain(msg.isRetain())
                 .sender(publisher)
                 .topic(msg.topic)
                 .matchedFilter(topicFilter)
@@ -864,7 +864,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             if (settings.debugMode) {
                 eventCollector.report(getLocal(QoS0Dropped.class)
                     .reason(DropReason.NoLocal)
-                    .isRetain(false)
+                    .isRetain(msg.isRetain())
                     .sender(publisher)
                     .topic(msg.topic)
                     .matchedFilter(topicFilter)
@@ -878,7 +878,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             if (settings.debugMode) {
                 eventCollector.report(getLocal(QoS0Dropped.class)
                     .reason(DropReason.Expired)
-                    .isRetain(false)
+                    .isRetain(msg.isRetain())
                     .sender(publisher)
                     .topic(msg.topic)
                     .matchedFilter(topicFilter)
@@ -890,7 +890,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         if (oomCondition.meet()) {
             eventCollector.report(getLocal(QoS0Dropped.class)
                 .reason(DropReason.ResourceExhausted)
-                .isRetain(false)
+                .isRetain(msg.isRetain())
                 .sender(publisher)
                 .topic(msg.topic)
                 .matchedFilter(topicFilter)
@@ -901,7 +901,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         if (!ctx.channel().isActive()) {
             eventCollector.report(getLocal(QoS0Dropped.class)
                 .reason(DropReason.ChannelClosed)
-                .isRetain(false)
+                .isRetain(msg.isRetain())
                 .sender(publisher)
                 .topic(msg.topic)
                 .matchedFilter(topicFilter)
@@ -912,7 +912,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         if (!ctx.channel().isWritable()) {
             eventCollector.report(getLocal(QoS0Dropped.class)
                 .reason(DropReason.Overflow)
-                .isRetain(false)
+                .isRetain(msg.isRetain())
                 .sender(publisher)
                 .topic(msg.topic)
                 .matchedFilter(topicFilter)
@@ -926,7 +926,6 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             if (f.isSuccess()) {
                 if (settings.debugMode) {
                     eventCollector.report(getLocal(QoS0Pushed.class)
-                        .reqId(pubMsg.variableHeader().packetId())
                         .isRetain(msg.isRetain())
                         .sender(publisher)
                         .matchedFilter(topicFilter)
@@ -938,7 +937,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 // TODO: add cause to event
                 eventCollector.report(getLocal(QoS0Dropped.class)
                     .reason(DropReason.InternalError)
-                    .isRetain(false)
+                    .isRetain(msg.isRetain())
                     .sender(publisher)
                     .topic(msg.topic)
                     .matchedFilter(topicFilter)
@@ -985,14 +984,26 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         if (option.getNoLocal() && clientInfo.equals(publisher)) {
             // skip local sub
             if (settings.debugMode) {
-                eventCollector.report(getLocal(QoS0Dropped.class)
-                    .reason(DropReason.NoLocal)
-                    .isRetain(false)
-                    .sender(publisher)
-                    .topic(msg.topic)
-                    .matchedFilter(topicFilter)
-                    .size(msgSize)
-                    .clientInfo(clientInfo()));
+                switch (msg.qos()) {
+                    case AT_LEAST_ONCE -> eventCollector.report(getLocal(QoS1Dropped.class)
+                        .reason(DropReason.NoLocal)
+                        .reqId(pubMsg.variableHeader().packetId())
+                        .isRetain(pubMsg.fixedHeader().isRetain())
+                        .sender(publisher)
+                        .topic(pubMsg.variableHeader().topicName())
+                        .matchedFilter(topicFilter)
+                        .size(msgSize)
+                        .clientInfo(clientInfo));
+                    case EXACTLY_ONCE -> eventCollector.report(getLocal(QoS2Dropped.class)
+                        .reason(DropReason.NoLocal)
+                        .reqId(pubMsg.variableHeader().packetId())
+                        .isRetain(pubMsg.fixedHeader().isRetain())
+                        .sender(publisher)
+                        .topic(pubMsg.variableHeader().topicName())
+                        .matchedFilter(topicFilter)
+                        .size(msgSize)
+                        .clientInfo(clientInfo));
+                }
             }
             ctx.executor().execute(() -> confirm(packetId, false));
             return;
