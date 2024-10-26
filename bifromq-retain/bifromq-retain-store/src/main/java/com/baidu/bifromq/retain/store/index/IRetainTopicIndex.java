@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.retain.store.index;
 
-import java.util.List;
+import java.util.Set;
 
 /**
  * The index of retain topics.
@@ -23,7 +23,7 @@ public interface IRetainTopicIndex {
 
     void remove(String tenantId, String topic);
 
-    List<RetainedMsgInfo> match(String tenantId, String topicFilter);
+    Set<RetainedMsgInfo> match(String tenantId, String topicFilter);
 
-    List<RetainedMsgInfo> findAll();
+    Set<RetainedMsgInfo> findAll();
 }

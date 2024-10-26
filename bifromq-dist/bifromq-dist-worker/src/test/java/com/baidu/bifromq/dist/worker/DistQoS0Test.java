@@ -15,6 +15,7 @@ package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.type.QoS.AT_MOST_ONCE;
 import static com.google.protobuf.ByteString.copyFromUtf8;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.clearInvocations;
@@ -42,7 +43,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Ignore;
 import org.testng.annotations.Test;
 
 @Slf4j
@@ -368,7 +368,6 @@ public class DistQoS0Test extends DistWorkerTest {
         match(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
         dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         verify(writer1, timeout(1000).times(1)).deliver(any());
-        clearInvocations(writer1, writer2, writer3);
 
         // pub: qos0
         // topic: "/a/b/c"
@@ -376,9 +375,16 @@ public class DistQoS0Test extends DistWorkerTest {
         // sub: no sub
         // expected behavior: inbox1 gets no messages
         unmatch(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
-        dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-        verify(writer1, timeout(1000).times(0)).deliver(any());
-        clearInvocations(writer1, writer2, writer3);
+        await().until(() -> {
+            clearInvocations(writer1);
+            dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+            try {
+                verify(writer1, timeout(1000).times(0)).deliver(any());
+                return true;
+            } catch (Throwable e) {
+                return false;
+            }
+        });
 
         // pub: qos0
         // topic: "/a/b/c"
@@ -386,9 +392,16 @@ public class DistQoS0Test extends DistWorkerTest {
         // sub: inbox2 -> [($share/group/a/b/c, qos0)]
         // expected behavior: inbox2 gets 1 message
         match(tenantA, "$share/group//a/b/c", MqttBroker, "inbox2", "batch2");
-        dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-        verify(writer2, timeout(1000).times(1)).deliver(any());
-        clearInvocations(writer1, writer2, writer3);
+        await().until(() -> {
+            clearInvocations(writer2);
+            dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+            try {
+                verify(writer2, timeout(1000).times(1)).deliver(any());
+                return true;
+            } catch (Throwable e) {
+                return false;
+            }
+        });
 
         // pub: qos0
         // topic: "/a/b/c"
@@ -397,10 +410,17 @@ public class DistQoS0Test extends DistWorkerTest {
         // expected behavior: inbox2 gets no messages and inbox3 gets 1
         unmatch(tenantA, "$share/group//a/b/c", MqttBroker, "inbox2", "batch2");
         match(tenantA, "$share/group//a/b/c", MqttBroker, "inbox3", "batch3");
-        dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-        verify(writer2, timeout(1000).times(0)).deliver(any());
-        verify(writer3, timeout(1000).times(1)).deliver(any());
-        clearInvocations(writer1, writer2, writer3);
+        await().until(() -> {
+            clearInvocations(writer2, writer3);
+            dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+            try {
+                verify(writer2, timeout(1000).times(0)).deliver(any());
+                verify(writer3, timeout(1000).times(1)).deliver(any());
+                return true;
+            } catch (Throwable e) {
+                return false;
+            }
+        });
 
         // pub: qos0
         // topic: "/a/b/c"
@@ -409,10 +429,17 @@ public class DistQoS0Test extends DistWorkerTest {
         // expected behavior: inbox2 gets 1 message and inbox3 gets none
         match(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox2", "batch2");
         unmatch(tenantA, "$share/group//a/b/c", MqttBroker, "inbox3", "batch3");
-        dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-        verify(writer2, timeout(1000).times(1)).deliver(any());
-        verify(writer3, timeout(1000).times(0)).deliver(any());
-        clearInvocations(writer1, writer2, writer3);
+        await().until(() -> {
+            clearInvocations(writer2, writer3);
+            dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+            try {
+                verify(writer2, timeout(1000).times(1)).deliver(any());
+                verify(writer3, timeout(1000).times(0)).deliver(any());
+                return true;
+            } catch (Throwable e) {
+                return false;
+            }
+        });
 
         // pub: qos0
         // topic: "/a/b/c"
@@ -421,16 +448,24 @@ public class DistQoS0Test extends DistWorkerTest {
         // expected behavior: inbox2 gets no messages and inbox3 gets 1
         unmatch(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox2", "batch2");
         match(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox3", "batch3");
-        dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-        verify(writer2, timeout(1000).times(0)).deliver(any());
-        verify(writer3, timeout(1000).times(1)).deliver(any());
+        await().until(() -> {
+            clearInvocations(writer2, writer3);
+            dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+            try {
+                verify(writer2, timeout(1000).times(0)).deliver(any());
+                verify(writer3, timeout(1000).times(1)).deliver(any());
+                return true;
+            } catch (Throwable e) {
+                return false;
+            }
+        });
 
         // clear
         unmatch(tenantA, "$oshare/group//a/b/c", MqttBroker, "inbox3", "batch3");
     }
 
     @Test(groups = "integration")
-    public void testRouteRefreshWithWildcardTopic() throws InterruptedException {
+    public void testRouteRefreshWithWildcardTopic() {
         // pub: qos0
         // topic: "/a/b/c"
         // sub: inbox1 -> [(/a/b/c, qos0)]
@@ -439,9 +474,16 @@ public class DistQoS0Test extends DistWorkerTest {
         when(mqttBroker.open("batch2")).thenReturn(writer2);
         when(mqttBroker.open("batch3")).thenReturn(writer3);
         match(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
-        dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-        verify(writer1, timeout(1000).times(1)).deliver(any());
-        clearInvocations(writer1, writer2, writer3);
+        await().until(() -> {
+            clearInvocations(writer1);
+            dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+            try {
+                verify(writer1, timeout(1000).times(1)).deliver(any());
+                return true;
+            } catch (Throwable e) {
+                return false;
+            }
+        });
 
         // pub: qos0
         // topic: "/a/b/c", "/#"
@@ -449,11 +491,17 @@ public class DistQoS0Test extends DistWorkerTest {
         // sub: inbox1 -> [(/a/b/c, qos0)], inbox2 -> [(/#, qos0)]
         // expected behavior: inbox1 gets 1 message and inbox2 gets 1 either
         match(tenantA, "/#", MqttBroker, "inbox2", "batch2");
-        Thread.sleep(1100);
-        dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-        verify(writer1, timeout(1000).times(1)).deliver(any());
-        verify(writer2, timeout(1000).times(1)).deliver(any());
-        clearInvocations(writer1, writer2, writer3);
+        await().until(() -> {
+            clearInvocations(writer1, writer2);
+            dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+            try {
+                verify(writer1, timeout(1000).times(1)).deliver(any());
+                verify(writer2, timeout(1000).times(1)).deliver(any());
+                return true;
+            } catch (Throwable e) {
+                return false;
+            }
+        });
 
         // pub: qos0
         // topic: "/a/b/c", "/#"
@@ -465,11 +513,18 @@ public class DistQoS0Test extends DistWorkerTest {
         match(tenantA, "$share/group/#", MqttBroker, "inbox3", "batch3");
         match(tenantA, "$oshare/group/#", MqttBroker, "inbox3", "batch3");
         // wait for cache refresh after writing
-        Thread.sleep(1100);
-        dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-        verify(writer1, timeout(1000).times(1)).deliver(any());
-        verify(writer2, timeout(1000).times(1)).deliver(any());
-        verify(writer3, timeout(1000).atLeastOnce()).deliver(any());
+        await().until(() -> {
+            clearInvocations(writer1, writer2, writer3);
+            dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+            try {
+                verify(writer1, timeout(1000).times(1)).deliver(any());
+                verify(writer2, timeout(1000).times(1)).deliver(any());
+                verify(writer3, timeout(1000).times(2)).deliver(any());
+                return true;
+            } catch (Throwable e) {
+                return false;
+            }
+        });
 
         // clear
         unmatch(tenantA, "/#", MqttBroker, "inbox2", "batch2");

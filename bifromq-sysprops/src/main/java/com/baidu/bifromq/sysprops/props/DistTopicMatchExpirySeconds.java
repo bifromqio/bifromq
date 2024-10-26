@@ -23,6 +23,6 @@ public final class DistTopicMatchExpirySeconds extends BifroMQSysProp<Integer, I
     public static final DistTopicMatchExpirySeconds INSTANCE = new DistTopicMatchExpirySeconds();
 
     private DistTopicMatchExpirySeconds() {
-        super("dist_worker_topic_match_expiry_seconds", 5, IntegerParser.POSITIVE);
+        super("dist_worker_topic_match_expiry_seconds", 60, IntegerParser.POSITIVE);
     }
 }

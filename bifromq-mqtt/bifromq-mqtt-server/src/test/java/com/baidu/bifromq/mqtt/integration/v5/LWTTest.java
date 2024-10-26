@@ -69,21 +69,21 @@ public class LWTTest extends MQTTTest {
 
     @Test(groups = "integration")
     public void lastWillTest() {
-        lastWillTest(0, 0, 0);
-        lastWillTest(0, 0, 1);
-        lastWillTest(0, 0, 2);
-        lastWillTest(0, 2, 0);
-        lastWillTest(0, 2, 1);
-        lastWillTest(0, 2, 2);
-        lastWillTest(2, 0, 0);
-        lastWillTest(2, 0, 1);
-        lastWillTest(2, 0, 2);
-        lastWillTest(1, 3, 0);
-        lastWillTest(1, 3, 1);
-        lastWillTest(1, 3, 2);
-        lastWillTest(3, 1, 0);
-        lastWillTest(3, 1, 1);
-        lastWillTest(3, 1, 2);
+        lastWillTest("wt000", 0, 0, 0);
+        lastWillTest("wt001", 0, 0, 1);
+        lastWillTest("wt002", 0, 0, 2);
+        lastWillTest("wt020", 0, 2, 0);
+        lastWillTest("wt021", 0, 2, 1);
+        lastWillTest("wt022", 0, 2, 2);
+        lastWillTest("wt200", 2, 0, 0);
+        lastWillTest("wt201", 2, 0, 1);
+        lastWillTest("wt202", 2, 0, 2);
+        lastWillTest("wt130", 1, 3, 0);
+        lastWillTest("wt131", 1, 3, 1);
+        lastWillTest("wt132", 1, 3, 2);
+        lastWillTest("wt310", 3, 1, 0);
+        lastWillTest("wt311", 3, 1, 1);
+        lastWillTest("wt312", 3, 1, 2);
     }
 
     @Test(groups = "integration")
@@ -102,10 +102,11 @@ public class LWTTest extends MQTTTest {
         lastWillTest("112", 1, 1, 2, true);
     }
 
-    private void lastWillTest(int sessionExpiryInterval,
+    private void lastWillTest(String willTopic,
+                              int sessionExpiryInterval,
                               int willDelayInterval,
                               int willQoS) {
-        lastWillTest("willTopic", sessionExpiryInterval, willDelayInterval, willQoS, false);
+        lastWillTest(willTopic, sessionExpiryInterval, willDelayInterval, willQoS, false);
     }
 
     private void lastWillTest(String willTopic,

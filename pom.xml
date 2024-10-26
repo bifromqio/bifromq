@@ -96,6 +96,7 @@
         <logback.version>1.5.6</logback.version>
         <micrometer.version>1.11.12</micrometer.version>
         <netty.version>4.1.112.Final</netty.version>
+        <pcollections.version>4.0.2</pcollections.version>
         <pf4j.version>3.12.0</pf4j.version>
         <protobuf-java.version>3.25.5</protobuf-java.version>
         <reflections.verion>0.10.2</reflections.verion>
@@ -573,6 +574,11 @@
                 <groupId>io.reactivex.rxjava3</groupId>
                 <artifactId>rxjava</artifactId>
                 <version>${rxjava3.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.pcollections</groupId>
+                <artifactId>pcollections</artifactId>
+                <version>${pcollections.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.micrometer</groupId>

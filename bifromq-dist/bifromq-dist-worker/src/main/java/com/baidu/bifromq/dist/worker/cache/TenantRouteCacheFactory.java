@@ -17,14 +17,20 @@ import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
+import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
 class TenantRouteCacheFactory implements ITenantRouteCacheFactory {
+    private final Executor matchExecutor;
     private final ThreadLocalKVReader threadLocalReader;
     private final Timer internalMatchTimer;
     private final Duration expiry;
 
-    public TenantRouteCacheFactory(Supplier<IKVCloseableReader> readerSupplier, Duration expiry, String... tags) {
+    public TenantRouteCacheFactory(Supplier<IKVCloseableReader> readerSupplier,
+                                   Duration expiry,
+                                   Executor matchExecutor,
+                                   String... tags) {
+        this.matchExecutor = matchExecutor;
         this.threadLocalReader = new ThreadLocalKVReader(readerSupplier);
         this.expiry = expiry;
         internalMatchTimer = Timer.builder("dist.match.internal")
@@ -41,7 +47,7 @@ class TenantRouteCacheFactory implements ITenantRouteCacheFactory {
     @Override
     public ITenantRouteCache create(String tenantId) {
         return new TenantRouteCache(tenantId,
-            new TenantRouteMatcher(tenantId, threadLocalReader, internalMatchTimer), expiry);
+            new TenantRouteMatcher(tenantId, threadLocalReader, internalMatchTimer), expiry, matchExecutor);
     }
 
     @Override

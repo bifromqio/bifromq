@@ -118,7 +118,7 @@ public class RetainTopicIndexTest {
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
     }
 
-    private void assertMatch(String tenantId, List<RetainedMsgInfo> matches, String... expected) {
+    private void assertMatch(String tenantId, Set<RetainedMsgInfo> matches, String... expected) {
         assertEquals(new HashSet<>(matches),
             Set.of(expected).stream().map(topic -> new RetainedMsgInfo(tenantId, topic, 0, 0))
                 .collect(Collectors.toSet()));

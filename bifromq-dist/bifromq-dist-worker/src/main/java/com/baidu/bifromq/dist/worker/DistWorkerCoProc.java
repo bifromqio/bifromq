@@ -72,7 +72,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -132,8 +131,8 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     public Supplier<RWCoProcOutput> mutate(RWCoProcInput input, IKVReader reader, IKVWriter writer) {
         DistServiceRWCoProcInput coProcInput = input.getDistService();
         log.trace("Receive rw co-proc request\n{}", coProcInput);
-        // tenantId -> topic -> matchings
-        Map<String, Map<String, Set<Matching>>> updatedMatches = Maps.newHashMap();
+        // tenantId -> topicFilters
+        Map<String, Set<String>> updatedMatches = Maps.newHashMap();
         DistServiceRWCoProcOutput.Builder outputBuilder = DistServiceRWCoProcOutput.newBuilder();
         AtomicReference<Runnable> afterMutate = new AtomicReference<>();
         switch (coProcInput.getTypeCase()) {
@@ -152,11 +151,11 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         RWCoProcOutput output = RWCoProcOutput.newBuilder().setDistService(outputBuilder.build()).build();
         return () -> {
             switch (coProcInput.getTypeCase()) {
-                case BATCHMATCH -> routeCache.addAllMatch(updatedMatches);
-                case BATCHUNMATCH -> routeCache.removeAllMatch(updatedMatches);
+                case BATCHMATCH -> routeCache.refresh(updatedMatches);
+                case BATCHUNMATCH -> routeCache.refresh(updatedMatches);
             }
-            updatedMatches.forEach((tenantId, matches) ->
-                matches.forEach((topicFilter, match) -> deliverExecutorGroup.invalidate(tenantId, topicFilter)));
+            updatedMatches.forEach((tenantId, topicFilters) ->
+                topicFilters.forEach(topicFilter -> deliverExecutorGroup.invalidate(tenantId, topicFilter)));
             afterMutate.get().run();
             return output;
         };
@@ -177,7 +176,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     private Runnable batchMatch(BatchMatchRequest request,
                                 IKVReader reader,
                                 IKVWriter writer,
-                                Map<String, Map<String, Set<Matching>>> newMatches,
+                                Map<String, Set<String>> newMatches,
                                 BatchMatchReply.Builder replyBuilder) {
         replyBuilder.setReqId(request.getReqId());
         Map<String, AtomicInteger> normalRoutesAdded = new HashMap<>();
@@ -192,9 +191,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 if (!reader.exist(normalMatchRecordKey)) {
                     writer.put(normalMatchRecordKey, ByteString.EMPTY);
                     normalRoutesAdded.computeIfAbsent(tenantId, k -> new AtomicInteger()).incrementAndGet();
-                    newMatches.computeIfAbsent(tenantId, k -> new HashMap<>())
-                        .computeIfAbsent(topicFilter, k -> new HashSet<>())
-                        .add(parseMatchRecord(normalMatchRecordKey, ByteString.EMPTY));
+                    newMatches.computeIfAbsent(tenantId, k -> new HashSet<>()).add(topicFilter);
                 }
                 replyBuilder.putResults(scopedTopicFilter, BatchMatchReply.Result.OK);
             } else {
@@ -244,9 +241,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             if (updated) {
                 writer.put(groupMatchRecordKey, matchGroup.build().toByteString());
                 String groupTopicFilter = parseTopicFilter(groupMatchRecordKey.toStringUtf8());
-                newMatches.computeIfAbsent(tenantId, k -> new HashMap<>())
-                    .computeIfAbsent(groupTopicFilter, k -> new HashSet<>())
-                    .add(parseMatchRecord(groupMatchRecordKey, newMatch.build().toByteString()));
+                newMatches.computeIfAbsent(tenantId, k -> new HashSet<>()).add(groupTopicFilter);
             }
         });
         return () -> {
@@ -258,7 +253,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     private Runnable batchUnmatch(BatchUnmatchRequest request,
                                   IKVReader reader,
                                   IKVWriter writer,
-                                  Map<String, Map<String, Set<Matching>>> removedMatches,
+                                  Map<String, Set<String>> removedMatches,
                                   BatchUnmatchReply.Builder replyBuilder) {
         replyBuilder.setReqId(request.getReqId());
         Map<String, AtomicInteger> normalRoutesRemoved = new HashMap<>();
@@ -274,9 +269,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 if (value.isPresent()) {
                     writer.delete(normalMatchRecordKey);
                     normalRoutesRemoved.computeIfAbsent(tenantId, k -> new AtomicInteger()).incrementAndGet();
-                    removedMatches.computeIfAbsent(tenantId, k -> new HashMap<>())
-                        .computeIfAbsent(topicFilter, k -> new HashSet<>())
-                        .add(parseMatchRecord(normalMatchRecordKey, value.get()));
+                    removedMatches.computeIfAbsent(tenantId, k -> new HashSet<>()).add(topicFilter);
                     replyBuilder.putResults(scopedTopicFilter, BatchUnmatchReply.Result.OK);
                 } else {
                     replyBuilder.putResults(scopedTopicFilter, BatchUnmatchReply.Result.NOT_EXISTED);
@@ -320,9 +313,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                             .toByteString());
                     }
                     String groupTopicFilter = parseTopicFilter(groupMatchRecordKey.toStringUtf8());
-                    removedMatches.computeIfAbsent(tenantId, k -> new HashMap<>())
-                        .computeIfAbsent(groupTopicFilter, k -> new HashSet<>())
-                        .add(parseMatchRecord(groupMatchRecordKey, removedMatch.build().toByteString()));
+                    removedMatches.computeIfAbsent(tenantId, k -> new HashSet<>()).add(groupTopicFilter);
                 }
             } else {
                 delGroupMembers.forEach(delQInboxId ->

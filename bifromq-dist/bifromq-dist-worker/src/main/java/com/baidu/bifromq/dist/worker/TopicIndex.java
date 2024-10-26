@@ -24,12 +24,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Concurrent Index for searching Topics against TopicFilter.
  */
 public final class TopicIndex<V> extends TopicLevelTrie<V> {
-    private static final BranchSelector BranchSelector = new BranchSelector() {
+    private static final BranchSelector TopicMatcher = new BranchSelector() {
         @Override
         public <T> Map<Branch<T>, Action> selectBranch(Map<String, Branch<T>> branches,
                                                        List<String> topicLevels,
@@ -108,9 +109,19 @@ public final class TopicIndex<V> extends TopicLevelTrie<V> {
         }
     };
 
-    public TopicIndex() {
-        super(BranchSelector);
-    }
+    private static final BranchSelector TopicGetter = new BranchSelector() {
+        @Override
+        public <T> Map<Branch<T>, Action> selectBranch(Map<String, Branch<T>> branches,
+                                                       List<String> topicLevels,
+                                                       int currentLevel) {
+            String topicLevelToMatch = topicLevels.get(currentLevel);
+            if (branches.containsKey(topicLevelToMatch)) {
+                return Map.of(branches.get(topicLevelToMatch),
+                    currentLevel < topicLevels.size() - 1 ? Action.CONTINUE : Action.MATCH_AND_STOP);
+            }
+            return Collections.emptyMap();
+        }
+    };
 
     public void add(String topic, V value) {
         add(TopicUtil.parse(topic, false), value);
@@ -120,7 +131,11 @@ public final class TopicIndex<V> extends TopicLevelTrie<V> {
         remove(TopicUtil.parse(topic, false), value);
     }
 
-    public List<V> match(String topicFilter) {
-        return lookup(TopicUtil.parse(topicFilter, false));
+    public Set<V> get(String topic) {
+        return lookup(TopicUtil.parse(topic, false), TopicGetter);
+    }
+
+    public Set<V> match(String topicFilter) {
+        return lookup(TopicUtil.parse(topicFilter, false), TopicMatcher);
     }
 }

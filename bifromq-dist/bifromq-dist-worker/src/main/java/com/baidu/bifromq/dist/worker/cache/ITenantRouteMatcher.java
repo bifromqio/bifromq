@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.dist.worker.cache;
 
-import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.dist.entity.Matching;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -24,9 +24,8 @@ public interface ITenantRouteMatcher {
     /**
      * Match the topic within the given boundary.
      *
-     * @param topic               the topic to match
-     * @param matchRecordBoundary the boundary of the match record
-     * @return the set of matching
+     * @param topics the topics to match
+     * @return the result
      */
-    Set<Matching> match(String topic, Boundary matchRecordBoundary);
+    Map<String, Set<Matching>> matchAll(Set<String> topics);
 }

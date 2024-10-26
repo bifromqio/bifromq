@@ -22,9 +22,7 @@ import java.util.concurrent.CompletableFuture;
 public interface ISubscriptionCache {
     CompletableFuture<Set<Matching>> get(String tenantId, String topic);
 
-    void removeAllMatch(Map<String, Map<String, Set<Matching>>> matchesByTenant);
-
-    void addAllMatch(Map<String, Map<String, Set<Matching>>> matchesByTenant);
+    void refresh(Map<String, Set<String>> topicFiltersByTenant);
 
     void reset(Boundary boundary);
 

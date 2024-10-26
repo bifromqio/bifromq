@@ -17,18 +17,15 @@ import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.dist.entity.Matching;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Cache for matched routes for given tenant.
  */
 public interface ITenantRouteCache {
-    void addAllMatch(Map<String, Set<Matching>> newMatches);
+    void refresh(Set<String> topicFilters);
 
-    void removeAllMatch(Map<String, Set<Matching>> obsoleteMatches);
-
-    Set<Matching> getIfPresent(String topic, Boundary matchRecordRange);
-
-    Set<Matching> get(String topic, Boundary matchRecordRange);
+    CompletableFuture<Set<Matching>> getMatch(String topic, Boundary currentTenantRange);
 
     void destroy();
 }

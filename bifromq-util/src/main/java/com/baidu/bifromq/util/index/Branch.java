@@ -13,48 +13,47 @@
 
 package com.baidu.bifromq.util.index;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
+import org.pcollections.HashTreePSet;
+import org.pcollections.PSet;
 
 public class Branch<V> {
     final INode<V> iNode;
-    final Set<V> values;
+    PSet<V> values;
 
     Branch(INode<V> iNode) {
         this.iNode = iNode;
-        this.values = new HashSet<>();
+        this.values = HashTreePSet.empty();
     }
 
     Branch(V value) {
         this.iNode = null;
-        this.values = new HashSet<>(Collections.singleton(value));
+        this.values = HashTreePSet.empty();
+        this.values = this.values.plus(value);
+    }
+
+    private Branch(INode<V> iNode, PSet<V> values) {
+        this.iNode = iNode;
+        this.values = values;
     }
 
     Branch<V> updated(INode<V> iNode) {
-        return new Branch<V>(iNode, values);
+        return new Branch<>(iNode, values);
     }
 
     Branch<V> updated(V value) {
-        Set<V> newSubs = new HashSet<>(values);
-        newSubs.add(value);
+        PSet<V> newSubs = values;
+        newSubs = newSubs.plus(value);
         return new Branch<>(iNode, newSubs);
     }
 
     Branch<V> removed(V sub) {
-        Set<V> newSubs = new HashSet<>(values);
-        newSubs.remove(sub);
+        PSet<V> newSubs = values;
+        newSubs = newSubs.minus(sub);
         return new Branch<>(iNode, newSubs);
     }
 
-    List<V> values() {
-        return new ArrayList<>(values);
-    }
-
-    Branch(INode<V> iNode, Set<V> values) {
-        this.iNode = iNode;
-        this.values = values;
+    Set<V> values() {
+        return values;
     }
 }

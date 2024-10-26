@@ -23,7 +23,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertTrue;
 
@@ -67,66 +66,35 @@ public class SubscriptionCacheTest {
         when(tenantRouteCacheFactoryMock.create(anyString())).thenReturn(tenantRouteCacheMock);
         when(tenantRouteCacheFactoryMock.expiry()).thenReturn(Duration.ofMinutes(10));
 
-        cache = new SubscriptionCache(kvRangeIdMock, tenantRouteCacheFactoryMock, matchExecutor, tickerMock);
+        cache = new SubscriptionCache(kvRangeIdMock, tenantRouteCacheFactoryMock, tickerMock);
         cache.reset(FULL_BOUNDARY);
     }
 
     @Test
-    public void getCacheHit() {
+    public void get() {
         String tenantId = "tenant1";
         String topic = "home/sensor/temperature";
 
         Set<Matching> mockMatchings = new HashSet<>();
-        when(tenantRouteCacheMock.getIfPresent(eq(topic), any(Boundary.class))).thenReturn(mockMatchings);
+        when(tenantRouteCacheMock.getMatch(eq(topic), any(Boundary.class))).thenReturn(
+            CompletableFuture.completedFuture(mockMatchings));
 
-        CompletableFuture<Set<Matching>> result = cache.get(tenantId, topic);
-        assertNotNull(result);
-        assertTrue(result.isDone());
-        assertEquals(mockMatchings, result.join());
-    }
-
-    @Test
-    public void getCacheMiss() {
-        String tenantId = "tenant1";
-        String topic = "home/sensor/temperature";
-
-        Set<Matching> mockMatchings = new HashSet<>();
-        when(tenantRouteCacheMock.getIfPresent(eq(topic), any(Boundary.class))).thenReturn(null);
-        when(tenantRouteCacheMock.get(eq(topic), any(Boundary.class))).thenReturn(mockMatchings);
-
-        CompletableFuture<Set<Matching>> result = cache.get(tenantId, topic);
-        assertNotNull(result);
-        assertFalse(result.isDone());
-
-        Set<Matching> resultSet = result.join();
+        Set<Matching> resultSet = cache.get(tenantId, topic).join();
         assertEquals(mockMatchings, resultSet);
-        verify(tenantRouteCacheMock).get(eq(topic), any(Boundary.class));
+        verify(tenantRouteCacheMock).getMatch(eq(topic), any(Boundary.class));
     }
 
     @Test
-    public void addAllMatch() {
+    public void refresh() {
         String tenantId = "tenant1";
-        Map<String, Set<Matching>> matchings = new HashMap<>();
-        Map<String, Map<String, Set<Matching>>> matchesByTenant = new HashMap<>();
-        matchesByTenant.put(tenantId, matchings);
+        Set<String> topicFilters = new HashSet<>();
+        Map<String, Set<String>> matchesByTenant = new HashMap<>();
+        matchesByTenant.put(tenantId, topicFilters);
 
         when(tenantRouteCacheFactoryMock.create(tenantId)).thenReturn(tenantRouteCacheMock);
-        cache.addAllMatch(matchesByTenant);
+        cache.refresh(matchesByTenant);
 
-        verify(tenantRouteCacheMock, never()).addAllMatch(matchings);
-    }
-
-    @Test
-    public void removeAllMatch() {
-        String tenantId = "tenant1";
-        Map<String, Set<Matching>> matchings = new HashMap<>();
-        Map<String, Map<String, Set<Matching>>> matchesByTenant = new HashMap<>();
-        matchesByTenant.put(tenantId, matchings);
-
-        when(tenantRouteCacheFactoryMock.create(tenantId)).thenReturn(tenantRouteCacheMock);
-        cache.removeAllMatch(matchesByTenant);
-
-        verify(tenantRouteCacheMock, never()).removeAllMatch(matchings);
+        verify(tenantRouteCacheMock, never()).refresh(topicFilters);
     }
 
     @Test
@@ -135,7 +103,8 @@ public class SubscriptionCacheTest {
         String topic = "home/sensor/temperature";
 
         Set<Matching> mockMatchings = new HashSet<>();
-        when(tenantRouteCacheMock.getIfPresent(eq(topic), any(Boundary.class))).thenReturn(mockMatchings);
+        when(tenantRouteCacheMock.getMatch(eq(topic), any(Boundary.class))).thenReturn(
+            CompletableFuture.completedFuture(mockMatchings));
 
         cache.get(tenantId, topic);
 
@@ -145,7 +114,7 @@ public class SubscriptionCacheTest {
         CompletableFuture<Set<Matching>> result = cache.get(tenantId, topic);
         assertNotNull(result);
         assertTrue(result.isDone());
-        verify(tenantRouteCacheMock, times(2)).getIfPresent(eq(topic), any(Boundary.class));
+        verify(tenantRouteCacheMock, times(2)).getMatch(eq(topic), any(Boundary.class));
     }
 
     @Test
@@ -154,7 +123,8 @@ public class SubscriptionCacheTest {
         String topic = "home/sensor/temperature";
 
         Set<Matching> mockMatchings = new HashSet<>();
-        when(tenantRouteCacheMock.getIfPresent(eq(topic), any(Boundary.class))).thenReturn(mockMatchings);
+        when(tenantRouteCacheMock.getMatch(eq(topic), any(Boundary.class))).thenReturn(
+            CompletableFuture.completedFuture(mockMatchings));
         cache.get(tenantId, topic);
 
         Boundary boundary = Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("start"))
@@ -163,7 +133,7 @@ public class SubscriptionCacheTest {
 
         CompletableFuture<Set<Matching>> result = cache.get("tenant1", "home/sensor/temperature");
         assertNotNull(result);
-        verify(tenantRouteCacheMock, times(2)).getIfPresent(eq(topic), any(Boundary.class));
+        verify(tenantRouteCacheMock, times(2)).getMatch(eq(topic), any(Boundary.class));
     }
 
     @Test

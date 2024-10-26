@@ -110,7 +110,7 @@ public class DistWorkerCoProcTest {
         RWCoProcOutput result = resultSupplier.get();
 
         // Verify that matches are added to the cache
-        verify(routeCache, times(1)).addAllMatch(any());
+        verify(routeCache, times(1)).refresh(any());
 
         // Verify that tenant state is updated for both tenants
         verify(tenantsState, times(1)).incNormalRoutes(eq("tenant1"), eq(1));
@@ -144,8 +144,8 @@ public class DistWorkerCoProcTest {
         RWCoProcOutput result = resultSupplier.get();
 
         // Verify that matches are removed from the cache
-        verify(routeCache, times(1)).removeAllMatch(argThat(m -> m.containsKey("tenant1")
-            && m.get("tenant1").containsKey("topicFilter1")));
+        verify(routeCache, times(1)).refresh(argThat(m -> m.containsKey("tenant1")
+            && m.get("tenant1").contains("topicFilter1")));
 
         // Verify that tenant state is updated
         verify(tenantsState, times(1)).decNormalRoutes(eq("tenant1"), eq(1));

@@ -14,53 +14,65 @@
 package com.baidu.bifromq.dist.worker.cache;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
-import com.baidu.bifromq.dist.entity.GroupMatching;
 import com.baidu.bifromq.dist.entity.Matching;
 import com.baidu.bifromq.dist.worker.TopicIndex;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.metrics.TenantMetric;
 import com.baidu.bifromq.sysprops.props.DistMaxCachedRoutesPerTenant;
-import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
+import com.github.benmanes.caffeine.cache.CacheLoader;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.Expiry;
 import com.github.benmanes.caffeine.cache.Scheduler;
 import com.github.benmanes.caffeine.cache.Ticker;
 import com.github.benmanes.caffeine.cache.Weigher;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.locks.StampedLock;
-import lombok.AllArgsConstructor;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import lombok.EqualsAndHashCode;
 import org.checkerframework.checker.index.qual.NonNegative;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 class TenantRouteCache implements ITenantRouteCache {
+    private record RouteCacheKey(String topic, Boundary matchRecordBoundary) {
+    }
+
     @EqualsAndHashCode
-    @AllArgsConstructor
-    private static class RouteCacheKey {
-        final String topic;
-        final Boundary matchRecordBoundary;
+    private static class RouteCacheIndexKey {
+        final RouteCacheKey cacheKey;
         @EqualsAndHashCode.Exclude
-        final boolean refreshExpiry;
+        volatile boolean refresh;
+
+        private RouteCacheIndexKey(RouteCacheKey cacheKey) {
+            this.cacheKey = cacheKey;
+        }
     }
 
     private final String tenantId;
-    private final ITenantRouteMatcher matcher;
-    private final Cache<RouteCacheKey, Set<Matching>> routesCache;
-    private final TopicIndex<RouteCacheKey> index;
-    private final StampedLock stampedLock = new StampedLock();
+    private final AsyncLoadingCache<RouteCacheKey, Set<Matching>> routesCache;
+    private final TopicIndex<RouteCacheIndexKey> index;
 
-    TenantRouteCache(String tenantId, ITenantRouteMatcher matcher, Duration expiryAfterAccess) {
-        this(tenantId, matcher, expiryAfterAccess, Ticker.systemTicker());
+    TenantRouteCache(String tenantId,
+                     ITenantRouteMatcher matcher,
+                     Duration expiryAfterAccess,
+                     Executor matchExecutor) {
+        this(tenantId, matcher, expiryAfterAccess, Ticker.systemTicker(), matchExecutor);
     }
 
-    TenantRouteCache(String tenantId, ITenantRouteMatcher matcher, Duration expiryAfterAccess, Ticker ticker) {
+    TenantRouteCache(String tenantId,
+                     ITenantRouteMatcher matcher,
+                     Duration expiryAfterAccess,
+                     Ticker ticker,
+                     Executor matchExecutor) {
         this.tenantId = tenantId;
-        this.matcher = matcher;
         index = new TopicIndex<>();
         routesCache = Caffeine.newBuilder()
-            .ticker(ticker)
             .scheduler(Scheduler.systemScheduler())
+            .ticker(ticker)
+            .executor(matchExecutor)
             .maximumWeight(DistMaxCachedRoutesPerTenant.INSTANCE.get())
             .weigher(new Weigher<RouteCacheKey, Set<Matching>>() {
                 @Override
@@ -68,136 +80,68 @@ class TenantRouteCache implements ITenantRouteCache {
                     return value.size();
                 }
             })
-            .expireAfter(new Expiry<RouteCacheKey, Set<Matching>>() {
-                @Override
-                public long expireAfterCreate(RouteCacheKey key, Set<Matching> matchings, long currentTime) {
-                    return expiryAfterAccess.toNanos();
-                }
-
-                @Override
-                public long expireAfterUpdate(RouteCacheKey key, Set<Matching> matchings, long currentTime,
-                                              @NonNegative long currentDuration) {
-                    return expiryAfterAccess.toNanos();
-                }
-
-                @Override
-                public long expireAfterRead(RouteCacheKey key, Set<Matching> matchings, long currentTime,
-                                            @NonNegative long currentDuration) {
-                    if (key.refreshExpiry) {
-                        return expiryAfterAccess.toNanos();
-                    }
-                    return currentDuration;
-                }
-            })
+            .expireAfterAccess(expiryAfterAccess)
+            .refreshAfterWrite(Duration.ofSeconds(1))
             .evictionListener((key, value, cause) -> {
                 if (key != null) {
-                    index.remove(key.topic, key);
+                    index.remove(key.topic, new RouteCacheIndexKey(key));
                 }
             })
-            .build();
-        ITenantMeter.gauging(tenantId, TenantMetric.MqttRouteCacheSize, routesCache::estimatedSize);
-    }
-
-    @Override
-    public void addAllMatch(Map<String, Set<Matching>> newMatches) {
-        long stamp = stampedLock.writeLock();
-        try {
-            for (Map.Entry<String, Set<Matching>> entry : newMatches.entrySet()) {
-                String topicFilter = entry.getKey();
-                for (RouteCacheKey cacheKey : index.match(topicFilter)) {
-                    for (Matching matching : entry.getValue()) {
-                        // indexed key will not refresh expiry
-                        Set<Matching> cachedMatching = routesCache.getIfPresent(cacheKey);
-                        if (cachedMatching != null) {
-                            switch (matching.type()) {
-                                case Normal -> cachedMatching.add(matching);
-                                case Group -> {
-                                    GroupMatching newGroupMatching = (GroupMatching) matching;
-                                    boolean found = false;
-                                    for (Matching m : cachedMatching) {
-                                        if (m.type() == Matching.Type.Group) {
-                                            GroupMatching cachedGroupMatching = (GroupMatching) m;
-                                            if (cachedGroupMatching.originalTopicFilter()
-                                                .equals(newGroupMatching.originalTopicFilter())) {
-                                                cachedGroupMatching.addAll(newGroupMatching.receiverIds);
-                                                found = true;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                    if (!found) {
-                                        cachedMatching.add(matching);
-                                    }
-                                }
-                            }
-                        }
-                    }
+            .buildAsync(new CacheLoader<>() {
+                @Override
+                public @Nullable Set<Matching> load(RouteCacheKey key) {
+                    ITenantMeter.get(tenantId).recordCount(TenantMetric.MqttRouteCacheMissCount);
+                    Map<String, Set<Matching>> results = matcher.matchAll(Collections.singleton(key.topic));
+                    index.add(key.topic, new RouteCacheIndexKey(key));
+                    return results.get(key.topic);
                 }
-            }
-        } finally {
-            stampedLock.unlockWrite(stamp);
-        }
-    }
 
-    @Override
-    public void removeAllMatch(Map<String, Set<Matching>> obsoleteMatches) {
-        long stamp = stampedLock.writeLock();
-        try {
-            for (Map.Entry<String, Set<Matching>> entry : obsoleteMatches.entrySet()) {
-                String topicFilter = entry.getKey();
-                for (RouteCacheKey cacheKey : index.match(topicFilter)) {
-                    for (Matching matching : entry.getValue()) {
-                        // indexed key will not refresh expiry
-                        Set<Matching> cachedMatching = routesCache.getIfPresent(cacheKey);
-                        if (cachedMatching != null) {
-                            // remove matching from cache
-                            switch (matching.type()) {
-                                case Normal -> cachedMatching.remove(matching);
-                                case Group -> {
-                                    GroupMatching obsoleteGroupMatching = (GroupMatching) matching;
-                                    cachedMatching.removeIf(m -> {
-                                        if (m.type() == Matching.Type.Group) {
-                                            GroupMatching cachedGroupMatching = ((GroupMatching) m);
-                                            if (cachedGroupMatching.originalTopicFilter()
-                                                .equals(obsoleteGroupMatching.originalTopicFilter())) {
-                                                cachedGroupMatching.removeAll(obsoleteGroupMatching.receiverIds);
-                                                return cachedGroupMatching.receiverIds.isEmpty();
-                                            }
-                                        }
-                                        return false;
-                                    });
-                                }
-                            }
-                        }
+                @Override
+                public Map<RouteCacheKey, Set<Matching>> loadAll(Set<? extends RouteCacheKey> keys) {
+                    ITenantMeter.get(tenantId).recordCount(TenantMetric.MqttRouteCacheMissCount, keys.size());
+                    Map<String, RouteCacheKey> topicToKeyMap = new HashMap<>();
+                    keys.forEach(k -> topicToKeyMap.put(k.topic(), k));
+                    Map<String, Set<Matching>> resultMap = matcher.matchAll(topicToKeyMap.keySet());
+                    Map<RouteCacheKey, Set<Matching>> result = new HashMap<>();
+                    for (Map.Entry<String, Set<Matching>> entry : resultMap.entrySet()) {
+                        RouteCacheKey key = topicToKeyMap.get(entry.getKey());
+                        result.put(key, entry.getValue());
+                        index.add(key.topic, new RouteCacheIndexKey(key));
                     }
+                    return result;
                 }
+
+                @Override
+                public @Nullable Set<Matching> reload(RouteCacheKey key, Set<Matching> oldValue) {
+                    Set<RouteCacheIndexKey> indexKey = index.get(key.topic);
+                    if (indexKey.isEmpty() || index.get(key.topic).stream().anyMatch(k -> {
+                        if (k.cacheKey.equals(key) && k.refresh) {
+                            k.refresh = false;
+                            return true;
+                        }
+                        return false;
+                    })) {
+                        Map<String, Set<Matching>> results = matcher.matchAll(Collections.singleton(key.topic));
+                        return results.get(key.topic);
+                    }
+                    return oldValue;
+                }
+            });
+        ITenantMeter.gauging(tenantId, TenantMetric.MqttRouteCacheSize, routesCache.synchronous()::estimatedSize);
+    }
+
+    @Override
+    public void refresh(Set<String> topicFilters) {
+        topicFilters.forEach(topicFilter -> {
+            for (RouteCacheIndexKey cacheKey : index.match(topicFilter)) {
+                cacheKey.refresh = true;
             }
-        } finally {
-            stampedLock.unlockWrite(stamp);
-        }
+        });
     }
 
     @Override
-    public Set<Matching> getIfPresent(String topic, Boundary matchRecordRange) {
-        return routesCache.getIfPresent(new RouteCacheKey(topic, matchRecordRange, true));
-    }
-
-    @Override
-    public Set<Matching> get(String topic, Boundary matchRecordRange) {
-        Set<Matching> cachedMatchings = getIfPresent(topic, matchRecordRange);
-        if (cachedMatchings != null) {
-            return cachedMatchings;
-        }
-        long stamp = stampedLock.readLock();
-        try {
-            ITenantMeter.get(tenantId).recordCount(TenantMetric.MqttRouteCacheMissCount);
-            Set<Matching> matchings = matcher.match(topic, matchRecordRange);
-            routesCache.put(new RouteCacheKey(topic, matchRecordRange, true), matchings);
-            index.add(topic, new RouteCacheKey(topic, matchRecordRange, false));
-            return matchings;
-        } finally {
-            stampedLock.unlockRead(stamp);
-        }
+    public CompletableFuture<Set<Matching>> getMatch(String topic, Boundary currentTenantRange) {
+        return routesCache.get(new RouteCacheKey(topic, currentTenantRange));
     }
 
     @Override

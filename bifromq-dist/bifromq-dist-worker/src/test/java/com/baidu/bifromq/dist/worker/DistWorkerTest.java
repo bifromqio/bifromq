@@ -258,6 +258,9 @@ public abstract class DistWorkerTest {
     @BeforeMethod(alwaysRun = true)
     public void printCaseStart(Method method) {
         log.info("Test case[{}.{}] start", method.getDeclaringClass().getName(), method.getName());
+        tenantA = "tenantA" + System.nanoTime();
+        tenantB = "tenantB" + System.nanoTime();
+
     }
 
     @AfterMethod(alwaysRun = true)

@@ -166,7 +166,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
         if (limit == 0) {
             return emptyList();
         }
-        List<RetainedMsgInfo> matchedMsgInfos = index.match(tenantId, topicFilter);
+        Set<RetainedMsgInfo> matchedMsgInfos = index.match(tenantId, topicFilter);
         List<TopicMessage> messages = new LinkedList<>();
         for (RetainedMsgInfo msgInfo : matchedMsgInfos) {
             if (messages.size() >= limit) {
@@ -205,7 +205,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                         .setPublisher(retainMessage.getPublisher())
                         .build();
                     ByteString retainKey = retainKey(tenantId, topicMessage.getTopic());
-                    List<RetainedMsgInfo> retainedMsgInfos = index.match(tenantId, topic);
+                    Set<RetainedMsgInfo> retainedMsgInfos = index.match(tenantId, topic);
                     if (topicMessage.getMessage().getPayload().isEmpty()) {
                         // delete existing retained
                         if (!retainedMsgInfos.isEmpty()) {
@@ -257,7 +257,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
         replyBuilder.setReqId(request.getReqId());
         long now = request.getNow();
         Map<String, Set<String>> removedTopics = new HashMap<>();
-        List<RetainedMsgInfo> retainedMsgInfos = request.hasTenantId()
+        Set<RetainedMsgInfo> retainedMsgInfos = request.hasTenantId()
             ? index.match(request.getTenantId(), MULTI_WILDCARD) : index.findAll();
         for (RetainedMsgInfo msgInfo : retainedMsgInfos) {
             long expireTime = expireAt(msgInfo.timestamp,

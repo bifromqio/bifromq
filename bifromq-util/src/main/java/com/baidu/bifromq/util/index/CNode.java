@@ -13,70 +13,70 @@
 
 package com.baidu.bifromq.util.index;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import org.pcollections.HashTreePMap;
+import org.pcollections.PMap;
 
 public class CNode<V> {
-    final Map<String, Branch<V>> branches;
+    PMap<String, Branch<V>> branches;
 
     CNode() {
-        this.branches = new HashMap<>();
+        this.branches = HashTreePMap.empty();
     }
 
-    CNode(Map<String, Branch<V>> branches) {
+    CNode(PMap<String, Branch<V>> branches) {
         this.branches = branches;
     }
 
     CNode(List<String> topicLevels, V value) {
         this();
         if (topicLevels.size() == 1) {
-            branches.put(topicLevels.get(0), new Branch<>(value));
+            branches = branches.plus(topicLevels.get(0), new Branch<>(value));
         } else {
             INode<V> nin = new INode<>(
                 new MainNode<>(new CNode<>(topicLevels.subList(1, topicLevels.size()), value)));
-            branches.put(topicLevels.get(0), new Branch<>(nin));
+            branches = branches.plus(topicLevels.get(0), new Branch<>(nin));
         }
     }
 
     CNode<V> inserted(List<String> topicLevels, V value) {
-        Map<String, Branch<V>> newBranches = new HashMap<>(branches);
+        PMap<String, Branch<V>> newBranches = branches;
         if (topicLevels.size() == 1) {
-            newBranches.put(topicLevels.get(0), new Branch<>(value));
+            newBranches = newBranches.plus(topicLevels.get(0), new Branch<>(value));
         } else {
             INode<V> nin = new INode<>(new MainNode<>(new CNode<>(topicLevels.subList(1, topicLevels.size()), value)));
-            newBranches.put(topicLevels.get(0), new Branch<>(nin));
+            newBranches = newBranches.plus(topicLevels.get(0), new Branch<>(nin));
         }
         return new CNode<>(newBranches);
     }
 
     // updatedBranch returns a copy of this C-node with the specified branch updated.
     CNode<V> updatedBranch(String topicLevel, INode<V> iNode, Branch<V> br) {
-        Map<String, Branch<V>> newBranches = new HashMap<>(branches);
-        newBranches.put(topicLevel, br.updated(iNode));
+        PMap<String, Branch<V>> newBranches = branches;
+        newBranches = newBranches.plus(topicLevel, br.updated(iNode));
         return new CNode<>(newBranches);
     }
 
     CNode<V> updated(String topicLevel, V value) {
-        Map<String, Branch<V>> newBranches = new HashMap<>(branches);
+        PMap<String, Branch<V>> newBranches = branches;
         Branch<V> br = newBranches.get(topicLevel);
         if (br != null) {
-            newBranches.put(topicLevel, br.updated(value));
+            newBranches = newBranches.plus(topicLevel, br.updated(value));
         } else {
-            newBranches.put(topicLevel, new Branch<>(value));
+            newBranches = newBranches.plus(topicLevel, new Branch<>(value));
         }
         return new CNode<>(newBranches);
     }
 
     CNode<V> removed(String topicLevel, V value) {
-        Map<String, Branch<V>> newBranches = new HashMap<>(branches);
+        PMap<String, Branch<V>> newBranches = branches;
         Branch<V> br = newBranches.get(topicLevel);
         if (br != null) {
             Branch<V> updatedBranch = br.removed(value);
             if (updatedBranch.values.isEmpty() && updatedBranch.iNode == null) {
-                newBranches.remove(topicLevel);
+                newBranches = newBranches.minus(topicLevel);
             } else {
-                newBranches.put(topicLevel, updatedBranch);
+                newBranches = newBranches.plus(topicLevel, updatedBranch);
             }
         }
         return new CNode<>(newBranches);

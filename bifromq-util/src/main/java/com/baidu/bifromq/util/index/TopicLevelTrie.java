@@ -13,13 +13,15 @@
 
 package com.baidu.bifromq.util.index;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
+import static java.util.Collections.emptySet;
+
+import com.google.common.collect.Sets;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
+import org.pcollections.HashTreePMap;
+import org.pcollections.PMap;
 
 /**
  * The topic level trie supporting concurrent update and lookup.
@@ -64,15 +66,13 @@ public abstract class TopicLevelTrie<V> {
      * @param successOrRetry The successOrRetry flag.
      * @param <V>            The type of the value.
      */
-    private record LookupResult<V>(List<V> values, boolean successOrRetry) {
+    private record LookupResult<V>(Set<V> values, boolean successOrRetry) {
     }
 
-    private final BranchSelector branchSelector;
     private volatile INode<V> root = null;
 
-    public TopicLevelTrie(BranchSelector branchSelector) {
+    public TopicLevelTrie() {
         ROOT_UPDATER.compareAndSet(this, null, new INode<>(new MainNode<>(new CNode<>())));
-        this.branchSelector = branchSelector;
     }
 
     protected V add(List<String> topicLevels, V value) {
@@ -172,17 +172,21 @@ public abstract class TopicLevelTrie<V> {
      * @param topicLevels The topic levels.
      * @return The values.
      */
-    protected final List<V> lookup(List<String> topicLevels) {
+    protected final Set<V> lookup(List<String> topicLevels, BranchSelector branchSelector) {
         while (true) {
             INode<V> r = root();
-            LookupResult<V> result = lookup(r, null, topicLevels, 0);
+            LookupResult<V> result = lookup(r, null, topicLevels, 0, branchSelector);
             if (result.successOrRetry) {
                 return result.values;
             }
         }
     }
 
-    private LookupResult<V> lookup(INode<V> i, INode<V> parent, List<String> topicLevels, int currentLevel) {
+    private LookupResult<V> lookup(INode<V> i,
+                                   INode<V> parent,
+                                   List<String> topicLevels,
+                                   int currentLevel,
+                                   BranchSelector branchSelector) {
         // LPoint
         MainNode<V> main = i.main();
         if (main.cNode != null) {
@@ -190,20 +194,21 @@ public abstract class TopicLevelTrie<V> {
             Map<Branch<V>, BranchSelector.Action> branches =
                 branchSelector.selectBranch(cn.branches, topicLevels, currentLevel);
 
-            Set<V> values = new HashSet<>();
+            Set<V> values = emptySet();
             for (Map.Entry<Branch<V>, BranchSelector.Action> entry : branches.entrySet()) {
                 Branch<V> branch = entry.getKey();
                 BranchSelector.Action action = entry.getValue();
                 switch (action) {
                     case MATCH_AND_CONTINUE, CONTINUE -> {
                         if (action == BranchSelector.Action.MATCH_AND_CONTINUE) {
-                            values.addAll(branch.values());
+                            values = Sets.union(values, branch.values());
                         }
                         // Continue
                         if (branch.iNode != null) {
-                            LookupResult<V> result = lookup(branch.iNode, i, topicLevels, currentLevel + 1);
+                            LookupResult<V> result =
+                                lookup(branch.iNode, i, topicLevels, currentLevel + 1, branchSelector);
                             if (result.successOrRetry) {
-                                values.addAll(result.values);
+                                values = Sets.union(values, result.values);
                             } else {
                                 return result;
                             }
@@ -211,13 +216,13 @@ public abstract class TopicLevelTrie<V> {
                     }
                     case MATCH_AND_STOP, STOP -> {
                         if (action == BranchSelector.Action.MATCH_AND_STOP) {
-                            values.addAll(branch.values());
+                            values = Sets.union(values, branch.values());
                         }
                     }
                     default -> throw new IllegalStateException("Unknown action: " + action);
                 }
             }
-            return new LookupResult<>(new ArrayList<>(values), true);
+            return new LookupResult<>(values, true);
         } else if (main.tNode != null) {
             clean(parent);
             return new LookupResult<>(null, false);
@@ -275,10 +280,10 @@ public abstract class TopicLevelTrie<V> {
     }
 
     private MainNode<V> toCompressed(CNode<V> cn) {
-        Map<String, Branch<V>> branches = new HashMap<>();
+        PMap<String, Branch<V>> branches = HashTreePMap.empty();
         for (Map.Entry<String, Branch<V>> entry : cn.branches.entrySet()) {
             if (!couldTrim(entry.getValue())) {
-                branches.put(entry.getKey(), entry.getValue());
+                branches = branches.plus(entry.getKey(), entry.getValue());
             }
         }
         return new MainNode<>(new CNode<>(branches));

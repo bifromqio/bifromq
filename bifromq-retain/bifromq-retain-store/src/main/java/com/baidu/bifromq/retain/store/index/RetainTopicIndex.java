@@ -24,9 +24,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class RetainTopicIndex extends TopicLevelTrie<RetainedMsgInfo> implements IRetainTopicIndex {
-    private static final BranchSelector BranchSelector = new BranchSelector() {
+    private static final BranchSelector RetainMatcher = new BranchSelector() {
         @Override
         public <T> Map<Branch<T>, Action> selectBranch(Map<String, Branch<T>> branches,
                                                        List<String> topicLevels,
@@ -116,10 +117,6 @@ public class RetainTopicIndex extends TopicLevelTrie<RetainedMsgInfo> implements
         }
     };
 
-    public RetainTopicIndex() {
-        super(BranchSelector);
-    }
-
     public void add(String tenantId, String topic, long timestamp, int expirySeconds) {
         add(TopicUtil.parse(tenantId, topic, false),
             new RetainedMsgInfo(tenantId, topic, timestamp, expirySeconds));
@@ -130,12 +127,12 @@ public class RetainTopicIndex extends TopicLevelTrie<RetainedMsgInfo> implements
             new RetainedMsgInfo(tenantId, topic, 0, 0));
     }
 
-    public List<RetainedMsgInfo> match(String tenantId, String topicFilter) {
-        return lookup(TopicUtil.parse(tenantId, topicFilter, false));
+    public Set<RetainedMsgInfo> match(String tenantId, String topicFilter) {
+        return lookup(TopicUtil.parse(tenantId, topicFilter, false), RetainMatcher);
     }
 
     @Override
-    public List<RetainedMsgInfo> findAll() {
-        return lookup(Collections.emptyList());
+    public Set<RetainedMsgInfo> findAll() {
+        return lookup(Collections.emptyList(), RetainMatcher);
     }
 }

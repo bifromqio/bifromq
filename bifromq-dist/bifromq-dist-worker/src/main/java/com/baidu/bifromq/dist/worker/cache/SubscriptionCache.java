@@ -64,22 +64,20 @@ public class SubscriptionCache implements ISubscriptionCache {
         }
     }
 
-    private final Executor matchExecutor;
     private final ITenantRouteCacheFactory tenantRouteCacheFactory;
     private final LoadingCache<TenantKey, ITenantRouteCache> tenantCache;
     private volatile Boundary boundary;
 
     public SubscriptionCache(KVRangeId id, Supplier<IKVCloseableReader> rangeReaderProvider, Executor matchExecutor) {
         this(id, new TenantRouteCacheFactory(rangeReaderProvider,
-                Duration.ofSeconds(DistTopicMatchExpirySeconds.INSTANCE.get()), "id", KVRangeIdUtil.toString(id)),
-            matchExecutor, Ticker.systemTicker());
+                Duration.ofSeconds(DistTopicMatchExpirySeconds.INSTANCE.get()), matchExecutor,
+                "id", KVRangeIdUtil.toString(id)),
+            Ticker.systemTicker());
     }
 
     public SubscriptionCache(KVRangeId id,
                              ITenantRouteCacheFactory tenantRouteCacheFactory,
-                             Executor matchExecutor,
                              Ticker ticker) {
-        this.matchExecutor = matchExecutor;
         this.tenantRouteCacheFactory = tenantRouteCacheFactory;
         long expiryNanos = tenantRouteCacheFactory.expiry().multipliedBy(2).toNanos();
         tenantCache = Caffeine.newBuilder()
@@ -118,32 +116,15 @@ public class SubscriptionCache implements ISubscriptionCache {
             .setStartKey(matchRecordKeyPrefix(tenantId))
             .setEndKey(tenantUpperBound(tenantId))
             .build(), boundary);
-        Set<Matching> matches = routesCache.getIfPresent(topic, tenantBoundary);
-        if (matches != null) {
-            // cache hit: fast path
-            return CompletableFuture.completedFuture(matches);
-        }
-        // cache miss: slow path
-        return CompletableFuture.supplyAsync(() -> routesCache.get(topic, tenantBoundary), matchExecutor);
+        return routesCache.getMatch(topic, tenantBoundary);
     }
 
     @Override
-    public void removeAllMatch(Map<String, Map<String, Set<Matching>>> matchesByTenant) {
-        matchesByTenant.forEach(
-            (tenantId, matches) -> {
-                ITenantRouteCache cache = tenantCache.getIfPresent(noRefreshExpiry(tenantId));
-                if (cache != null) {
-                    cache.removeAllMatch(matches);
-                }
-            });
-    }
-
-    @Override
-    public void addAllMatch(Map<String, Map<String, Set<Matching>>> matchesByTenant) {
-        matchesByTenant.forEach((tenantId, matches) -> {
+    public void refresh(Map<String, Set<String>> topicFiltersByTenant) {
+        topicFiltersByTenant.forEach((tenantId, topicFilters) -> {
             ITenantRouteCache cache = tenantCache.getIfPresent(noRefreshExpiry(tenantId));
             if (cache != null) {
-                cache.addAllMatch(matches);
+                cache.refresh(topicFilters);
             }
         });
     }

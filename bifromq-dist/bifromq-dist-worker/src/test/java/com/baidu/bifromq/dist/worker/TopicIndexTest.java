@@ -16,7 +16,7 @@ package com.baidu.bifromq.dist.worker;
 import static org.testng.Assert.assertEquals;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -67,6 +67,21 @@ public class TopicIndexTest {
     }
 
     @Test
+    public void testGet() {
+        add("/", "/a", "/b", "a", "a/", "a/b", "a/b/c", "$a", "$a/", "$a/b").join();
+        assertEquals(topicIndex.get("/"), Set.of("/"));
+        assertEquals(topicIndex.get("/a"), Set.of("/a"));
+        assertEquals(topicIndex.get("/b"), Set.of("/b"));
+        assertEquals(topicIndex.get("a"), Set.of("a"));
+        assertEquals(topicIndex.get("a/"), Set.of("a/"));
+        assertEquals(topicIndex.get("a/b"), Set.of("a/b"));
+        assertEquals(topicIndex.get("a/b/c"), Set.of("a/b/c"));
+        assertEquals(topicIndex.get("$a"), Set.of("$a"));
+        assertEquals(topicIndex.get("$a/"), Set.of("$a/"));
+        assertEquals(topicIndex.get("$a/b"), Set.of("$a/b"));
+    }
+
+    @Test
     public void testRemove() {
         add("/", "/a", "/b", "a", "a/", "a/b", "a/b/c", "$a", "$a/", "$a/b").join();
         topicIndex.remove("/", "/");
@@ -93,6 +108,23 @@ public class TopicIndexTest {
         assertMatch(topicIndex.match("#"));
     }
 
+    @Test
+    public void testMultiValue() {
+        topicIndex.add("a", "a1");
+        topicIndex.add("a", "a1");
+        topicIndex.add("a", "a2");
+        assertEquals(topicIndex.get("a"), Set.of("a1", "a2"));
+
+        topicIndex.remove("a", "a3");
+        assertEquals(topicIndex.get("a"), Set.of("a1", "a2"));
+
+
+        topicIndex.remove("a", "a2");
+        assertEquals(topicIndex.get("a"), Set.of("a1"));
+
+        topicIndex.remove("a", "a1");
+        assertEquals(topicIndex.get("a"), Collections.emptySet());
+    }
 
     @Test
     public void testEdgeCases() {
@@ -108,7 +140,7 @@ public class TopicIndexTest {
         return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new));
     }
 
-    private void assertMatch(List<String> matches, String... expected) {
-        assertEquals(new HashSet<>(matches), Set.of(expected));
+    private void assertMatch(Set<String> matches, String... expected) {
+        assertEquals(matches, Set.of(expected));
     }
 }
