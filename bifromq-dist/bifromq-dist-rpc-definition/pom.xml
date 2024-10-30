@@ -17,7 +17,7 @@
     <parent>
         <groupId>com.baidu.bifromq</groupId>
         <artifactId>bifromq-dist</artifactId>
-        <version>3.3.2</version>
+        <version>3.3.3</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
