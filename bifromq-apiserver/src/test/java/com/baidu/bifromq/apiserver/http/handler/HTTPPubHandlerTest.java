@@ -49,21 +49,21 @@ import java.util.concurrent.CompletableFuture;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
 
-public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHandler> {
+public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<PubHandler> {
     @Mock
     private IDistClient distClient;
     private ISettingProvider settingProvider = Setting::current;
 
     @Override
-    protected Class<HTTPPubHandler> handlerClass() {
-        return HTTPPubHandler.class;
+    protected Class<PubHandler> handlerClass() {
+        return PubHandler.class;
     }
 
     @Test
     public void missingHeaders() {
         DefaultFullHttpRequest req = buildRequest();
 
-        HTTPPubHandler handler = new HTTPPubHandler(settingProvider, distClient);
+        PubHandler handler = new PubHandler(settingProvider, distClient);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
@@ -78,7 +78,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPPubHandler handler = new HTTPPubHandler(settingProvider, distClient);
+        PubHandler handler = new PubHandler(settingProvider, distClient);
         handler.handle(reqId, tenantId, req);
         verify(distClient).pub(eq(reqId),
             eq(req.headers().get(HEADER_TOPIC.header)),
@@ -109,7 +109,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPPubHandler handler = new HTTPPubHandler(settingProvider, distClient);
+        PubHandler handler = new PubHandler(settingProvider, distClient);
 
         when(distClient.pub(anyLong(), anyString(), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(PubResult.OK));
@@ -130,7 +130,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPPubHandler handler = new HTTPPubHandler(settingProvider, distClient);
+        PubHandler handler = new PubHandler(settingProvider, distClient);
 
         when(distClient.pub(anyLong(), anyString(), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(PubResult.OK));
@@ -150,7 +150,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPPubHandler handler = new HTTPPubHandler(settingProvider, distClient);
+        PubHandler handler = new PubHandler(settingProvider, distClient);
 
         when(distClient.pub(anyLong(), anyString(), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(result));
@@ -164,7 +164,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/fake");
         long reqId = System.nanoTime();
         req.headers().set(Headers.HEADER_REQ_ID.header, reqId);
-        HTTPPubHandler handler = new HTTPPubHandler(settingProvider, distClient);
+        PubHandler handler = new PubHandler(settingProvider, distClient);
         FullHttpResponse response = handler.handle(reqId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());
         assertEquals(response.status(), BAD_REQUEST);
@@ -178,7 +178,7 @@ public class HTTPPubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPPubHa
         req.headers().set(Headers.HEADER_REQ_ID.header, reqId);
         req.headers().set(Headers.HEADER_TENANT_ID.header, "tenantId");
         req.headers().set(CONTENT_LENGTH, 1024 * 2048);
-        HTTPPubHandler handler = new HTTPPubHandler(settingProvider, distClient);
+        PubHandler handler = new PubHandler(settingProvider, distClient);
         FullHttpResponse response = handler.handle(reqId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());
         assertEquals(response.status(), HttpResponseStatus.REQUEST_ENTITY_TOO_LARGE);

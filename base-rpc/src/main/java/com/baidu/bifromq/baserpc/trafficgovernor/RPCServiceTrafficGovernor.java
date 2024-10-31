@@ -47,7 +47,7 @@ final class RPCServiceTrafficGovernor extends RPCServiceTrafficDirector implemen
     }
 
     @Override
-    public CompletableFuture<Void> setTrafficDirective(String tenantIdPrefix, Map<String, Integer> groupTags) {
+    public CompletableFuture<Void> setTrafficRules(String tenantIdPrefix, Map<String, Integer> groupTags) {
         return set(tenantIdPrefix, groupTags);
     }
 

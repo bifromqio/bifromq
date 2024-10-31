@@ -34,19 +34,19 @@ import java.util.concurrent.CompletableFuture;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
 
-public class HTTPExpireRetainHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPExpireRetainHandler> {
+public class HTTPExpireRetainHandlerTest extends AbstractHTTPRequestHandlerTest<ExpireRetainHandler> {
     @Mock
     private IRetainClient retainClient;
 
     @Override
-    protected Class<HTTPExpireRetainHandler> handlerClass() {
-        return HTTPExpireRetainHandler.class;
+    protected Class<ExpireRetainHandler> handlerClass() {
+        return ExpireRetainHandler.class;
     }
 
     @Test
     public void missingHeaders() {
         DefaultFullHttpRequest req = buildRequest();
-        HTTPExpireRetainHandler handler = new HTTPExpireRetainHandler(settingProvider, retainClient);
+        ExpireRetainHandler handler = new ExpireRetainHandler(settingProvider, retainClient);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
@@ -57,7 +57,7 @@ public class HTTPExpireRetainHandlerTest extends AbstractHTTPRequestHandlerTest<
         req.headers().set(HEADER_EXPIRY_SECONDS.header, "10");
         long reqId = 123;
         String tenantId = "bifromq_dev";
-        HTTPExpireRetainHandler handler = new HTTPExpireRetainHandler(settingProvider, retainClient);
+        ExpireRetainHandler handler = new ExpireRetainHandler(settingProvider, retainClient);
         when(retainClient.expireAll(any())).thenReturn(CompletableFuture.completedFuture(
             ExpireAllReply.newBuilder()
                 .setResult(ExpireAllReply.Result.OK)
@@ -77,7 +77,7 @@ public class HTTPExpireRetainHandlerTest extends AbstractHTTPRequestHandlerTest<
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPExpireRetainHandler handler = new HTTPExpireRetainHandler(settingProvider, retainClient);
+        ExpireRetainHandler handler = new ExpireRetainHandler(settingProvider, retainClient);
         when(retainClient.expireAll(any())).thenReturn(CompletableFuture.completedFuture(
             ExpireAllReply.newBuilder()
                 .setResult(ERROR)

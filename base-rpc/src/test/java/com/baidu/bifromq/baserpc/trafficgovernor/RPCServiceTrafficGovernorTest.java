@@ -30,7 +30,7 @@ public class RPCServiceTrafficGovernorTest extends RPCServiceAnnouncerTest {
         String service = "service";
         ICRDTService crdtService = newCRDTService();
         IRPCServiceTrafficGovernor trafficGovernor = IRPCServiceTrafficGovernor.newInstance(service, crdtService);
-        assertTrue(trafficGovernor.trafficDirective().blockingFirst().isEmpty());
+        assertTrue(trafficGovernor.trafficRules().blockingFirst().isEmpty());
 
         trafficGovernor.destroy();
         crdtService.stop();
@@ -46,22 +46,22 @@ public class RPCServiceTrafficGovernorTest extends RPCServiceAnnouncerTest {
         ICRDTService tdCrdtService = newCRDTService();
         IRPCServiceTrafficDirector trafficDirector = IRPCServiceTrafficDirector.newInstance(service, tdCrdtService);
 
-        trafficGovernor.setTrafficDirective("tenantA", singletonMap("group1", 1));
+        trafficGovernor.setTrafficRules("tenantA", singletonMap("group1", 1));
 
-        await().until(() -> trafficGovernor.trafficDirective().blockingFirst().equals(td)
-            && trafficDirector.trafficDirective().blockingFirst().equals(td));
+        await().until(() -> trafficGovernor.trafficRules().blockingFirst().equals(td)
+            && trafficDirector.trafficRules().blockingFirst().equals(td));
 
         Map<String, Map<String, Integer>> td1 =
             Map.of("tenantA", singletonMap("group1", 1), "tenantB", singletonMap("group2", 1));
-        trafficGovernor.setTrafficDirective("tenantB", singletonMap("group2", 1));
+        trafficGovernor.setTrafficRules("tenantB", singletonMap("group2", 1));
 
-        await().until(() -> trafficGovernor.trafficDirective().blockingFirst().equals(td1)
-            && trafficDirector.trafficDirective().blockingFirst().equals(td1));
+        await().until(() -> trafficGovernor.trafficRules().blockingFirst().equals(td1)
+            && trafficDirector.trafficRules().blockingFirst().equals(td1));
 
         trafficGovernor.unsetTrafficDirective("tenantB");
 
-        await().until(() -> trafficGovernor.trafficDirective().blockingFirst().equals(td)
-            && trafficDirector.trafficDirective().blockingFirst().equals(td));
+        await().until(() -> trafficGovernor.trafficRules().blockingFirst().equals(td)
+            && trafficDirector.trafficRules().blockingFirst().equals(td));
 
         trafficGovernor.destroy();
         tgCrdtService.stop();

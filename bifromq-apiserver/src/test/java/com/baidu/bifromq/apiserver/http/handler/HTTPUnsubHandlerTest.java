@@ -34,19 +34,19 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.testng.annotations.Test;
 
-public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUnsubHandler> {
+public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<UnsubHandler> {
     @Mock
     private ISessionDictClient sessionDictClient;
 
     @Override
-    protected Class<HTTPUnsubHandler> handlerClass() {
-        return HTTPUnsubHandler.class;
+    protected Class<UnsubHandler> handlerClass() {
+        return UnsubHandler.class;
     }
 
     @Test
     public void missingHeaders() {
         DefaultFullHttpRequest req = buildRequest();
-        HTTPUnsubHandler handler = new HTTPUnsubHandler(settingProvider, sessionDictClient);
+        UnsubHandler handler = new UnsubHandler(settingProvider, sessionDictClient);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
@@ -68,7 +68,7 @@ public class HTTPUnsubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPUns
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPUnsubHandler handler = new HTTPUnsubHandler(settingProvider, sessionDictClient);
+        UnsubHandler handler = new UnsubHandler(settingProvider, sessionDictClient);
         when(sessionDictClient.unsub(any()))
             .thenReturn(CompletableFuture.completedFuture(UnsubReply.newBuilder()
                 .setResult(result)

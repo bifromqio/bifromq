@@ -18,7 +18,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.apiserver.MockableTest;
-import com.baidu.bifromq.apiserver.http.handler.HTTPPubHandler;
+import com.baidu.bifromq.apiserver.http.handler.PubHandler;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
@@ -59,13 +59,13 @@ public class HTTPRouteMapTest extends MockableTest {
 
     @Test
     public void getHandler() {
-        HTTPPubHandler pubHandler = new HTTPPubHandler(settingProvider, distClient);
+        PubHandler pubHandler = new PubHandler(settingProvider, distClient);
         Collection<IHTTPRequestHandler> ret = Collections.singleton(pubHandler);
         when(handlersFactory.build()).thenReturn(ret);
         HTTPRouteMap routeMap = new HTTPRouteMap(handlersFactory);
-        Path route = HTTPPubHandler.class.getAnnotation(Path.class);
+        Path route = PubHandler.class.getAnnotation(Path.class);
         FullHttpRequest httpRequest =
-            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, getHTTPMethod(HTTPPubHandler.class), route.value());
+            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, getHTTPMethod(PubHandler.class), route.value());
         IHTTPRequestHandler handler = routeMap.getHandler(httpRequest);
         assertEquals(handler, pubHandler);
     }

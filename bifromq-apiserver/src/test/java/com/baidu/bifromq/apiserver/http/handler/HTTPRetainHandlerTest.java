@@ -38,21 +38,21 @@ import java.util.concurrent.CompletableFuture;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
 
-public class HTTPRetainHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPRetainHandler> {
+public class HTTPRetainHandlerTest extends AbstractHTTPRequestHandlerTest<RetainHandler> {
     @Mock
     private IRetainClient retainClient;
     private ISettingProvider settingProvider = Setting::current;
 
     @Override
-    protected Class<HTTPRetainHandler> handlerClass() {
-        return HTTPRetainHandler.class;
+    protected Class<RetainHandler> handlerClass() {
+        return RetainHandler.class;
     }
 
     @Test
     public void missingHeaders() {
         DefaultFullHttpRequest req = buildRequest();
 
-        HTTPRetainHandler handler = new HTTPRetainHandler(settingProvider, retainClient);
+        RetainHandler handler = new RetainHandler(settingProvider, retainClient);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
@@ -73,7 +73,7 @@ public class HTTPRetainHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPRe
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPRetainHandler handler = new HTTPRetainHandler(settingProvider, retainClient);
+        RetainHandler handler = new RetainHandler(settingProvider, retainClient);
 
         when(retainClient.retain(anyLong(), anyString(), any(), any(), anyInt(), any()))
             .thenReturn(CompletableFuture.completedFuture(RetainReply.newBuilder()

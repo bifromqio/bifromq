@@ -23,7 +23,7 @@ import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERR
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_0;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
-import com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils;
+import com.baidu.bifromq.apiserver.http.handler.HeaderUtils;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -68,7 +68,7 @@ public class HTTPRequestRouter extends SimpleChannelInboundHandler<FullHttpReque
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest req) {
-        long reqId = HTTPHeaderUtils.getOptionalReqId(req);
+        long reqId = HeaderUtils.getOptionalReqId(req);
         req.retain();
         routeMap.getHandler(req)
             .handle(reqId, req)

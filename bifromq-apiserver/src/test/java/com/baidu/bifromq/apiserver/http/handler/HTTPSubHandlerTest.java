@@ -17,7 +17,7 @@ import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_ID;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_SUB_QOS;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_TOPIC_FILTER;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_USER_ID;
-import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getRequiredSubQoS;
+import static com.baidu.bifromq.apiserver.http.handler.HeaderUtils.getRequiredSubQoS;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
@@ -36,19 +36,19 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.testng.annotations.Test;
 
-public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHandler> {
+public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<SubHandler> {
     @Mock
     private ISessionDictClient sessionDictClient;
 
     @Override
-    protected Class<HTTPSubHandler> handlerClass() {
-        return HTTPSubHandler.class;
+    protected Class<SubHandler> handlerClass() {
+        return SubHandler.class;
     }
 
     @Test
     public void missingHeaders() {
         DefaultFullHttpRequest req = buildRequest();
-        HTTPSubHandler handler = new HTTPSubHandler(settingProvider, sessionDictClient);
+        SubHandler handler = new SubHandler(settingProvider, sessionDictClient);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
@@ -72,7 +72,7 @@ public class HTTPSubHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPSubHa
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPSubHandler handler = new HTTPSubHandler(settingProvider, sessionDictClient);
+        SubHandler handler = new SubHandler(settingProvider, sessionDictClient);
         when(sessionDictClient.sub(any()))
             .thenReturn(CompletableFuture.completedFuture(SubReply.newBuilder()
                 .setResult(subResult)

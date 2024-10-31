@@ -36,15 +36,15 @@ import org.mockito.Mock;
 import org.testng.annotations.Test;
 
 public class HTTPDictServerLandscapeHandlerTest
-    extends AbstractHTTPRequestHandlerTest<HTTPGetDictServerLandscapeHandler> {
+    extends AbstractHTTPRequestHandlerTest<GetDictServerLandscapeHandler> {
     @Mock
     private IRPCServiceTrafficGovernor trafficGovernor;
     @Mock
     private ISessionDictClient dictClient;
 
     @Override
-    protected Class<HTTPGetDictServerLandscapeHandler> handlerClass() {
-        return HTTPGetDictServerLandscapeHandler.class;
+    protected Class<GetDictServerLandscapeHandler> handlerClass() {
+        return GetDictServerLandscapeHandler.class;
     }
 
     @SneakyThrows
@@ -63,7 +63,7 @@ public class HTTPDictServerLandscapeHandlerTest
         when(trafficGovernor.serverList()).thenReturn(
             Observable.just(Set.of(new IRPCServiceTrafficDirector.Server(rpcServer))));
 
-        HTTPGetDictServerLandscapeHandler handler = new HTTPGetDictServerLandscapeHandler(dictClient);
+        GetDictServerLandscapeHandler handler = new GetDictServerLandscapeHandler(dictClient);
         DefaultFullHttpRequest req = buildRequest(HttpMethod.GET);
         FullHttpResponse resp = handler.handle(111, req).join();
         assertEquals(resp.protocolVersion(), req.protocolVersion());

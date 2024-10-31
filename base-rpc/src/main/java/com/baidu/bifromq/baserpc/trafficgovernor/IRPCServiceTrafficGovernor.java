@@ -41,7 +41,7 @@ public interface IRPCServiceTrafficGovernor extends IRPCServiceTrafficDirector {
      * @param groupTags      the groupTags
      * @return the future
      */
-    CompletableFuture<Void> setTrafficDirective(String tenantIdPrefix, Map<String, Integer> groupTags);
+    CompletableFuture<Void> setTrafficRules(String tenantIdPrefix, Map<String, Integer> groupTags);
 
     /**
      * Unset the traffic directive for a tenantIdPrefix if exists.

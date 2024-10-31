@@ -36,15 +36,15 @@ import org.mockito.Mock;
 import org.testng.annotations.Test;
 
 public class HTTPBrokerServerLandscapeHandlerTest
-    extends AbstractHTTPRequestHandlerTest<HTTPGetBrokerServerLandscapeHandler> {
+    extends AbstractHTTPRequestHandlerTest<GetBrokerServerLandscapeHandler> {
     @Mock
     private IRPCServiceTrafficGovernor trafficGovernor;
     @Mock
     private IMqttBrokerClient brokerClient;
 
     @Override
-    protected Class<HTTPGetBrokerServerLandscapeHandler> handlerClass() {
-        return HTTPGetBrokerServerLandscapeHandler.class;
+    protected Class<GetBrokerServerLandscapeHandler> handlerClass() {
+        return GetBrokerServerLandscapeHandler.class;
     }
 
     @SneakyThrows
@@ -63,7 +63,7 @@ public class HTTPBrokerServerLandscapeHandlerTest
         when(trafficGovernor.serverList()).thenReturn(
             Observable.just(Set.of(new IRPCServiceTrafficDirector.Server(rpcServer))));
 
-        HTTPGetBrokerServerLandscapeHandler handler = new HTTPGetBrokerServerLandscapeHandler(brokerClient);
+        GetBrokerServerLandscapeHandler handler = new GetBrokerServerLandscapeHandler(brokerClient);
         DefaultFullHttpRequest req = buildRequest(HttpMethod.GET);
         FullHttpResponse resp = handler.handle(111, req).join();
         assertEquals(resp.protocolVersion(), req.protocolVersion());

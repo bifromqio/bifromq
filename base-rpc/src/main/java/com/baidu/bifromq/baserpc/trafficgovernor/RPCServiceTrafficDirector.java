@@ -47,7 +47,7 @@ class RPCServiceTrafficDirector extends RPCServiceAnnouncer implements IRPCServi
 
 
     @Override
-    public Observable<Map<String, Map<String, Integer>>> trafficDirective() {
+    public Observable<Map<String, Map<String, Integer>>> trafficRules() {
         return super.trafficDirective();
     }
 

@@ -15,7 +15,7 @@ package com.baidu.bifromq.apiserver;
 
 import com.baidu.bifromq.apiserver.http.HTTPRouteMap;
 import com.baidu.bifromq.apiserver.http.IHTTPRouteMap;
-import com.baidu.bifromq.apiserver.http.handler.HTTPRequestHandlersFactory;
+import com.baidu.bifromq.apiserver.http.handler.RequestHandlersFactory;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
@@ -76,7 +76,7 @@ public class APIServer implements IAPIServer {
         this.bossGroup = bossGroup;
         this.workerGroup = workerGroup;
         IHTTPRouteMap routeMap =
-            new HTTPRouteMap(new HTTPRequestHandlersFactory(agentHost, brokerClient, sessionDictClient,
+            new HTTPRouteMap(new RequestHandlersFactory(agentHost, brokerClient, sessionDictClient,
                 distClient, inboxClient, retainClient, settingProvider));
         this.serverChannel =
             buildServerChannel(port, new NonTLSServerInitializer(routeMap, settingProvider, maxContentLength));

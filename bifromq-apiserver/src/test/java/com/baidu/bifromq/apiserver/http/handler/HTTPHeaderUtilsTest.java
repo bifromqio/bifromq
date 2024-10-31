@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
-import static com.baidu.bifromq.apiserver.http.handler.HTTPHeaderUtils.getHeader;
+import static com.baidu.bifromq.apiserver.http.handler.HeaderUtils.getHeader;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertThrows;
@@ -31,37 +31,37 @@ public class HTTPHeaderUtilsTest {
     @Test
     public void getOptionalReqId() {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/fake");
-        assertTrue(HTTPHeaderUtils.getOptionalReqId(req) != 0);
+        assertTrue(HeaderUtils.getOptionalReqId(req) != 0);
 
         req.headers().set(Headers.HEADER_REQ_ID.header, "123");
-        assertEquals(HTTPHeaderUtils.getOptionalReqId(req), 123L);
+        assertEquals(HeaderUtils.getOptionalReqId(req), 123L);
 
         req.headers().set(Headers.HEADER_REQ_ID.header, "int_unparsable");
-        assertTrue(HTTPHeaderUtils.getOptionalReqId(req) != 0);
+        assertTrue(HeaderUtils.getOptionalReqId(req) != 0);
     }
 
     @Test
     public void getRequiredSubQoS() {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/fake");
-        assertThrows(() -> HTTPHeaderUtils.getRequiredSubQoS(req));
+        assertThrows(() -> HeaderUtils.getRequiredSubQoS(req));
 
         req.headers().set(Headers.HEADER_SUB_QOS.header, "0");
-        assertEquals(HTTPHeaderUtils.getRequiredSubQoS(req), QoS.AT_MOST_ONCE);
+        assertEquals(HeaderUtils.getRequiredSubQoS(req), QoS.AT_MOST_ONCE);
 
         req.headers().set(Headers.HEADER_SUB_QOS.header, "3");
-        assertThrows(() -> HTTPHeaderUtils.getRequiredSubQoS(req));
+        assertThrows(() -> HeaderUtils.getRequiredSubQoS(req));
     }
 
     @Test
     public void getClientMeta() {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/fake");
-        assertTrue(HTTPHeaderUtils.getClientMeta(req).isEmpty());
+        assertTrue(HeaderUtils.getClientMeta(req).isEmpty());
 
         String name_field = "name";
         String age_field = "age";
         req.headers().set(Headers.HEADER_CLIENT_META_PREFIX + name_field, "BifroMQ");
         req.headers().set(Headers.HEADER_CLIENT_META_PREFIX + age_field, "4");
-        Map<String, String> clientMeta = HTTPHeaderUtils.getClientMeta(req);
+        Map<String, String> clientMeta = HeaderUtils.getClientMeta(req);
         assertEquals(clientMeta.get(name_field), req.headers().get(Headers.HEADER_CLIENT_META_PREFIX + name_field));
         assertEquals(clientMeta.get(age_field), req.headers().get(Headers.HEADER_CLIENT_META_PREFIX + age_field));
     }

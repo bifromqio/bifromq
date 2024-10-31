@@ -36,13 +36,13 @@ import lombok.SneakyThrows;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
 
-public class HTTPGetSessionInfoHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPGetSessionInfoHandler> {
+public class HTTPGetSessionInfoHandlerTest extends AbstractHTTPRequestHandlerTest<GetSessionInfoHandler> {
     @Mock
     private ISessionDictClient sessionDictClient;
 
     @Override
-    protected Class<HTTPGetSessionInfoHandler> handlerClass() {
-        return HTTPGetSessionInfoHandler.class;
+    protected Class<GetSessionInfoHandler> handlerClass() {
+        return GetSessionInfoHandler.class;
     }
 
     @Test
@@ -52,7 +52,7 @@ public class HTTPGetSessionInfoHandlerTest extends AbstractHTTPRequestHandlerTes
         req.headers().set(HEADER_CLIENT_ID.header, "client_id");
         long reqId = 123;
         String tenantId = "bifromq_dev";
-        HTTPGetSessionInfoHandler handler = new HTTPGetSessionInfoHandler(settingProvider, sessionDictClient);
+        GetSessionInfoHandler handler = new GetSessionInfoHandler(settingProvider, sessionDictClient);
         when(sessionDictClient.get(any()))
             .thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder()
                 .setReqId(reqId)
@@ -80,7 +80,7 @@ public class HTTPGetSessionInfoHandlerTest extends AbstractHTTPRequestHandlerTes
             .setType(MQTTClientInfoConstants.MQTT_TYPE_VALUE)
             .putMetadata(MQTTClientInfoConstants.MQTT_USER_ID_KEY, "user")
             .build();
-        HTTPGetSessionInfoHandler handler = new HTTPGetSessionInfoHandler(settingProvider, sessionDictClient);
+        GetSessionInfoHandler handler = new GetSessionInfoHandler(settingProvider, sessionDictClient);
         when(sessionDictClient.get(any()))
             .thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder()
                 .setReqId(reqId)

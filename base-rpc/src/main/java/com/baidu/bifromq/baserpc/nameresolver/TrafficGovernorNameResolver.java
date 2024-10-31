@@ -49,7 +49,7 @@ class TrafficGovernorNameResolver extends NameResolver {
     @Override
     public void start(Listener listener) {
         log.debug("Starting TrafficGovernorNameResolver for service[{}]", serviceUniqueName);
-        disposable.add(Observable.combineLatest(trafficDirector.trafficDirective(),
+        disposable.add(Observable.combineLatest(trafficDirector.trafficRules(),
                 trafficDirector.serverList(), (td, sl) -> {
                     log.debug("Service[{}] landscape update:td={}, sl={}", serviceUniqueName, td, sl);
                     return (Runnable) () -> listener.onAddresses(toAddressGroup(sl), toAttributes(td));

@@ -44,19 +44,19 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
 
-public class HTTPKillHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPKillHandler> {
+public class HTTPKillHandlerTest extends AbstractHTTPRequestHandlerTest<KillHandler> {
     @Mock
     private ISessionDictClient sessionDictClient;
 
     @Override
-    protected Class<HTTPKillHandler> handlerClass() {
-        return HTTPKillHandler.class;
+    protected Class<KillHandler> handlerClass() {
+        return KillHandler.class;
     }
 
     @Test
     public void missingHeaders() {
         DefaultFullHttpRequest req = buildRequest();
-        HTTPKillHandler handler = new HTTPKillHandler(settingProvider, sessionDictClient);
+        KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
         assertThrows(() -> handler.handle(123, "fakeTenant", req).join());
     }
 
@@ -70,7 +70,7 @@ public class HTTPKillHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPKill
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPKillHandler handler = new HTTPKillHandler(settingProvider, sessionDictClient);
+        KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
         handler.handle(reqId, tenantId, req);
         ArgumentCaptor<ClientInfo> killerCap = ArgumentCaptor.forClass(ClientInfo.class);
         verify(sessionDictClient).kill(
@@ -99,7 +99,7 @@ public class HTTPKillHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPKill
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPKillHandler handler = new HTTPKillHandler(settingProvider, sessionDictClient);
+        KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
         handler.handle(reqId, tenantId, req);
         ArgumentCaptor<ClientInfo> killerCap = ArgumentCaptor.forClass(ClientInfo.class);
         verify(sessionDictClient).kill(
@@ -129,7 +129,7 @@ public class HTTPKillHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPKill
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPKillHandler handler = new HTTPKillHandler(settingProvider, sessionDictClient);
+        KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
         handler.handle(reqId, tenantId, req);
         ArgumentCaptor<ClientInfo> killerCap = ArgumentCaptor.forClass(ClientInfo.class);
         verify(sessionDictClient).kill(
@@ -156,7 +156,7 @@ public class HTTPKillHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPKill
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPKillHandler handler = new HTTPKillHandler(settingProvider, sessionDictClient);
+        KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
         handler.handle(reqId, tenantId, req);
         ArgumentCaptor<ClientInfo> killerCap = ArgumentCaptor.forClass(ClientInfo.class);
         verify(sessionDictClient).killAll(eq(reqId), eq(tenantId),
@@ -177,7 +177,7 @@ public class HTTPKillHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPKill
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPKillHandler handler = new HTTPKillHandler(settingProvider, sessionDictClient);
+        KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
         handler.handle(reqId, tenantId, req);
         ArgumentCaptor<ClientInfo> killerCap = ArgumentCaptor.forClass(ClientInfo.class);
         verify(sessionDictClient).killAll(eq(reqId), eq(tenantId), isNull(), killerCap.capture(),
@@ -199,7 +199,7 @@ public class HTTPKillHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPKill
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPKillHandler handler = new HTTPKillHandler(settingProvider, sessionDictClient);
+        KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
 
         when(sessionDictClient.kill(anyLong(), anyString(), anyString(), anyString(), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(KillReply.newBuilder()
@@ -220,7 +220,7 @@ public class HTTPKillHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPKill
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPKillHandler handler = new HTTPKillHandler(settingProvider, sessionDictClient);
+        KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
 
         when(sessionDictClient.kill(anyLong(), anyString(), anyString(), anyString(), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(KillReply.newBuilder()
@@ -242,7 +242,7 @@ public class HTTPKillHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPKill
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPKillHandler handler = new HTTPKillHandler(settingProvider, sessionDictClient);
+        KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
         handler.handle(reqId, tenantId, req);
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());
@@ -263,7 +263,7 @@ public class HTTPKillHandlerTest extends AbstractHTTPRequestHandlerTest<HTTPKill
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        HTTPKillHandler handler = new HTTPKillHandler(settingProvider, sessionDictClient);
+        KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
         handler.handle(reqId, tenantId, req);
         FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
         assertEquals(response.protocolVersion(), req.protocolVersion());

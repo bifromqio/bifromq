@@ -57,14 +57,14 @@ public interface IRPCServiceTrafficDirector {
     }
 
     /**
-     * Current traffic directive of the service
+     * Current traffic directive of the service.
      *
      * @return an observable of traffic directive
      */
-    Observable<Map<String, Map<String, Integer>>> trafficDirective();
+    Observable<Map<String, Map<String, Integer>>> trafficRules();
 
     /**
-     * Watch the ever-updating server list of the service
+     * Watch the ever-updating server list of the service.
      *
      * @return an observable of servers
      */
