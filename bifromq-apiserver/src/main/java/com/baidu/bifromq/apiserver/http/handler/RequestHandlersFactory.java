@@ -16,6 +16,7 @@ package com.baidu.bifromq.apiserver.http.handler;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandlersFactory;
 import com.baidu.bifromq.basecluster.IAgentHost;
+import com.baidu.bifromq.basekv.IBaseKVMetaService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
@@ -30,12 +31,16 @@ public class RequestHandlersFactory implements IHTTPRequestHandlersFactory {
     private final Map<Class<? extends IHTTPRequestHandler>, IHTTPRequestHandler> handlers = new HashMap<>();
 
     public RequestHandlersFactory(IAgentHost agentHost,
+                                  IBaseKVMetaService metaService,
                                   IMqttBrokerClient brokerClient,
                                   ISessionDictClient sessionDictClient,
                                   IDistClient distClient,
                                   IInboxClient inboxClient,
                                   IRetainClient retainClient,
                                   ISettingProvider settingProvider) {
+        register(new GetLoadRulesHandler(metaService));
+        register(new SetLoadRulesHandler(metaService));
+
         register(new GetDictTrafficRulesHandler(sessionDictClient));
         register(new GetDistTrafficRulesHandler(distClient));
         register(new GetInboxTrafficRulesHandler(inboxClient));

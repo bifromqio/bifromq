@@ -17,6 +17,7 @@ import com.baidu.bifromq.apiserver.http.HTTPRouteMap;
 import com.baidu.bifromq.apiserver.http.IHTTPRouteMap;
 import com.baidu.bifromq.apiserver.http.handler.RequestHandlersFactory;
 import com.baidu.bifromq.basecluster.IAgentHost;
+import com.baidu.bifromq.basekv.IBaseKVMetaService;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
@@ -63,6 +64,7 @@ public class APIServer implements IAPIServer {
                       EventLoopGroup bossGroup,
                       EventLoopGroup workerGroup,
                       SslContext sslContext,
+                      IBaseKVMetaService metaService,
                       IAgentHost agentHost,
                       IMqttBrokerClient brokerClient,
                       IDistClient distClient,
@@ -76,7 +78,7 @@ public class APIServer implements IAPIServer {
         this.bossGroup = bossGroup;
         this.workerGroup = workerGroup;
         IHTTPRouteMap routeMap =
-            new HTTPRouteMap(new RequestHandlersFactory(agentHost, brokerClient, sessionDictClient,
+            new HTTPRouteMap(new RequestHandlersFactory(agentHost, metaService, brokerClient, sessionDictClient,
                 distClient, inboxClient, retainClient, settingProvider));
         this.serverChannel =
             buildServerChannel(port, new NonTLSServerInitializer(routeMap, settingProvider, maxContentLength));

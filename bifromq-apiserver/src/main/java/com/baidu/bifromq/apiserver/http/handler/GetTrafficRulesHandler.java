@@ -38,10 +38,10 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class GetTrafficRulesHandler implements IHTTPRequestHandler {
-    protected abstract Single<Map<String, Map<String, Integer>>> trafficDirective();
+    protected abstract Single<Map<String, Map<String, Integer>>> trafficRules();
 
     @GET
-    @Operation(summary = "Get the traffic directive")
+    @Operation(summary = "Get the traffic rules")
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER,
             description = "optional caller provided request id", schema = @Schema(implementation = Long.class))
@@ -52,8 +52,8 @@ public abstract class GetTrafficRulesHandler implements IHTTPRequestHandler {
     })
     @Override
     public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
-        log.trace("Handling http get server landscape request: {}", req);
-        return trafficDirective()
+        log.trace("Handling http get traffic rules request: {}", req);
+        return trafficRules()
             .toCompletionStage()
             .toCompletableFuture()
             .thenApply(trafficDirective -> {

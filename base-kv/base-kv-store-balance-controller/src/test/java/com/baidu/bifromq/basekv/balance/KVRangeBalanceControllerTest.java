@@ -55,6 +55,7 @@ public class KVRangeBalanceControllerTest {
     @Mock
     private IBaseKVStoreClient storeClient;
 
+    private final PublishSubject<String> loadRuleSubject = PublishSubject.create();
     private final PublishSubject<Set<KVRangeStoreDescriptor>> storeDescSubject = PublishSubject.create();
 
     private KVRangeBalanceController KVRangeBalanceController;
@@ -68,13 +69,13 @@ public class KVRangeBalanceControllerTest {
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         File optFile =
             new File(KVRangeBalanceControllerTest.class.getClassLoader().getResource("controller.yml").getPath());
-        KVRangeBalanceControllerOptions
-            KVRangeBalanceControllerOptions = mapper.readValue(optFile, KVRangeBalanceControllerOptions.class);
+        KVRangeBalanceControllerOptions options = mapper.readValue(optFile, KVRangeBalanceControllerOptions.class);
         KVRangeBalanceController = new KVRangeBalanceController(
             storeClient,
-            KVRangeBalanceControllerOptions,
+            options,
             Executors.newScheduledThreadPool(1)
         );
+        when(storeClient.loadRules()).thenReturn(loadRuleSubject);
         when(storeClient.describe()).thenReturn(storeDescSubject);
     }
 
@@ -109,6 +110,7 @@ public class KVRangeBalanceControllerTest {
                 .addRanges(rangeDescriptors.get(i))
                 .build());
         }
+        loadRuleSubject.onNext("{}");
         storeDescSubject.onNext(storeDescriptors);
         Thread.sleep(1200);
         verify(storeClient, times(0)).changeReplicaConfig(anyString(), any());
@@ -146,6 +148,7 @@ public class KVRangeBalanceControllerTest {
                 .addRanges(rangeDescriptors.get(i))
                 .build());
         }
+        loadRuleSubject.onNext("{}");
         storeDescSubject.onNext(storeDescriptors);
 
         when(storeClient.changeReplicaConfig(anyString(), any())).thenReturn(

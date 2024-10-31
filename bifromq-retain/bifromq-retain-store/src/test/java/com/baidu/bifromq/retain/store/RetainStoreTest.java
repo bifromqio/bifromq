@@ -31,6 +31,7 @@ import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
+import com.baidu.bifromq.basekv.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
@@ -95,8 +96,8 @@ public class RetainStoreTest {
 
     private static final String DB_WAL_NAME = "testWAL";
     private IAgentHost agentHost;
-    private ICRDTService clientCrdtService;
-    private ICRDTService serverCrdtService;
+    private ICRDTService crdtService;
+    private IBaseKVMetaService metaService;
     protected SimpleMeterRegistry meterRegistry;
     protected IRetainStore testStore;
     protected IBaseKVStoreClient storeClient;
@@ -122,11 +123,11 @@ public class RetainStoreTest {
             .build();
         agentHost = IAgentHost.newInstance(agentHostOpts);
         agentHost.start();
-        clientCrdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        clientCrdtService.start(agentHost);
 
-        serverCrdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        serverCrdtService.start(agentHost);
+        crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
+        crdtService.start(agentHost);
+
+        metaService = IBaseKVMetaService.newInstance(crdtService);
 
         String uuid = UUID.randomUUID().toString();
         options = new KVRangeStoreOptions();
@@ -145,7 +146,8 @@ public class RetainStoreTest {
         storeClient = IBaseKVStoreClient
             .newBuilder()
             .clusterId(IRetainStore.CLUSTER_NAME)
-            .crdtService(clientCrdtService)
+            .crdtService(crdtService)
+            .metaService(metaService)
             .build();
         buildStoreServer();
         testStore.start();
@@ -159,7 +161,8 @@ public class RetainStoreTest {
             .bootstrap(true)
             .host("127.0.0.1")
             .agentHost(agentHost)
-            .crdtService(serverCrdtService)
+            .crdtService(crdtService)
+            .metaService(metaService)
             .storeClient(storeClient)
             .storeOptions(options)
             .balanceControllerOptions(new KVRangeBalanceControllerOptions())
@@ -183,8 +186,8 @@ public class RetainStoreTest {
         log.info("Finish testing, and tearing down");
         testStore.stop();
         storeClient.stop();
-        clientCrdtService.stop();
-        serverCrdtService.stop();
+        metaService.stop();
+        crdtService.stop();
         agentHost.shutdown();
         try {
             Files.walk(dbRootDir)

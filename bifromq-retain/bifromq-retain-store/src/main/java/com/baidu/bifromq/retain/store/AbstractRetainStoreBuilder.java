@@ -15,6 +15,7 @@ package com.baidu.bifromq.retain.store;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.basekv.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
@@ -26,7 +27,7 @@ abstract class AbstractRetainStoreBuilder<T extends AbstractRetainStoreBuilder<T
     String clusterId = IRetainStore.CLUSTER_NAME;
     boolean bootstrap;
     IAgentHost agentHost;
-    ICRDTService crdtService;
+    IBaseKVMetaService metaService;
     IBaseKVStoreClient storeClient;
     KVRangeStoreOptions storeOptions;
     KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
@@ -57,8 +58,8 @@ abstract class AbstractRetainStoreBuilder<T extends AbstractRetainStoreBuilder<T
         return thisT();
     }
 
-    public T crdtService(ICRDTService crdtService) {
-        this.crdtService = crdtService;
+    public T metaService(IBaseKVMetaService metaService) {
+        this.metaService = metaService;
         return thisT();
     }
 

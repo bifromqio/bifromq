@@ -24,6 +24,7 @@ final class StandaloneInboxStore extends AbstractInboxStore<StandaloneInboxStore
         super(builder);
         storeServer = IBaseKVStoreServer.standaloneServer()
             .crdtService(builder.crdtService)
+            .metaService(builder.metaService)
             // build basekv store service
             .addService(builder.clusterId, builder.bootstrap)
             .coProcFactory(coProcFactory)

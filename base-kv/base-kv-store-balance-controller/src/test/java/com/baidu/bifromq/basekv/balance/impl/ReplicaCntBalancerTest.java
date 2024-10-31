@@ -18,13 +18,11 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
-import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
-import com.google.protobuf.ByteString;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -42,7 +40,7 @@ public class ReplicaCntBalancerTest {
     @Test
     public void balanceWithNoLeaderRange() {
         Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
-        balancer.update(storeDescriptors);
+        balancer.update("{}", storeDescriptors);
 
         Optional<ChangeConfigCommand> command = balancer.balance();
         assertFalse(command.isPresent());
@@ -76,7 +74,7 @@ public class ReplicaCntBalancerTest {
         storeDescriptors.add(storeDescriptor);
         storeDescriptors.add(remoteStoreDescriptor);
 
-        balancer.update(storeDescriptors);
+        balancer.update("{}", storeDescriptors);
 
         Optional<ChangeConfigCommand> command = balancer.balance();
         assertTrue(command.isPresent());
@@ -124,7 +122,7 @@ public class ReplicaCntBalancerTest {
         storeDescriptors.add(voterStore3Descriptor);
         storeDescriptors.add(learnerStoreDescriptor);
 
-        balancer.update(storeDescriptors);
+        balancer.update("{}", storeDescriptors);
 
         Optional<ChangeConfigCommand> command = balancer.balance();
         assertTrue(command.isPresent());
@@ -154,7 +152,7 @@ public class ReplicaCntBalancerTest {
         Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
         storeDescriptors.add(storeDescriptor);
 
-        balancer.update(storeDescriptors);
+        balancer.update("{}", storeDescriptors);
 
         Optional<ChangeConfigCommand> command = balancer.balance();
         assertTrue(command.isPresent());
@@ -186,7 +184,7 @@ public class ReplicaCntBalancerTest {
         Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
         storeDescriptors.add(storeDescriptor);
 
-        balancer.update(storeDescriptors);
+        balancer.update("{}", storeDescriptors);
 
         Optional<ChangeConfigCommand> command = balancer.balance();
         assertTrue(command.isPresent());
@@ -223,7 +221,7 @@ public class ReplicaCntBalancerTest {
         storeDescriptors.add(storeDescriptor);
         storeDescriptors.add(learnerStoreDescriptor);
 
-        balancer.update(storeDescriptors);
+        balancer.update("{}", storeDescriptors);
 
         Optional<ChangeConfigCommand> command = balancer.balance();
         assertFalse(command.isPresent());
@@ -274,7 +272,7 @@ public class ReplicaCntBalancerTest {
         storeDescriptors.add(learnerStoreDescriptor);
         storeDescriptors.add(learnerStore1Descriptor);
 
-        balancer.update(storeDescriptors);
+        balancer.update("{}", storeDescriptors);
 
         Optional<ChangeConfigCommand> command = balancer.balance();
         assertTrue(command.isPresent(), "A balance command should be generated.");

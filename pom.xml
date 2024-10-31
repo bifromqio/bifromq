@@ -217,6 +217,11 @@
             </dependency>
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
+                <artifactId>base-kv-meta-service</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
                 <artifactId>base-kv-store-rpc-definition</artifactId>
                 <version>${project.version}</version>
             </dependency>

@@ -14,6 +14,7 @@
 package com.baidu.bifromq.inbox.server;
 
 import static com.baidu.bifromq.inbox.records.ScopedInbox.distInboxId;
+import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
@@ -46,10 +47,10 @@ public class InboxInsertTest extends InboxServiceTest {
     @Test(groups = "integration")
     public void insert() throws InterruptedException {
         long now = HLC.INST.getPhysical();
-        String tenantId = "tenant-" + now;
-        String inboxId = "insert_inbox-" + now;
+        String tenantId = "tenant" + now;
+        String inboxId = "insertInbox" + now;
         long incarnation = HLC.INST.getPhysical();
-        String delivererKey = "deliverer1";
+        String delivererKey = getDelivererKey(tenantId, inboxId);
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         long reqId = System.nanoTime();
         CreateReply createReply = inboxClient.create(CreateRequest.newBuilder()
@@ -128,10 +129,10 @@ public class InboxInsertTest extends InboxServiceTest {
     @Test(groups = "integration")
     public void insertMultiMsgPackWithSameInbox() throws InterruptedException {
         long now = HLC.INST.getPhysical();
-        String tenantId = "tenant-" + now;
-        String inboxId = "insert_inbox-" + now;
+        String tenantId = "tenant" + now;
+        String inboxId = "insertInbox" + now;
         long incarnation = HLC.INST.getPhysical();
-        String delivererKey = "deliverer1";
+        String delivererKey = getDelivererKey(tenantId, inboxId);
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         long reqId = System.nanoTime();
         CreateReply createReply = inboxClient.create(CreateRequest.newBuilder()

@@ -15,6 +15,7 @@ package com.baidu.bifromq.dist.worker;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.basekv.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
@@ -31,7 +32,7 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
     String clusterId = IDistWorker.CLUSTER_NAME;
     boolean bootstrap;
     IAgentHost agentHost;
-    ICRDTService crdtService;
+    IBaseKVMetaService metaService;
     Executor queryExecutor;
     int tickerThreads;
     ScheduledExecutorService bgTaskExecutor;
@@ -67,8 +68,8 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
         return thisT();
     }
 
-    public T crdtService(ICRDTService crdtService) {
-        this.crdtService = crdtService;
+    public T metaService(IBaseKVMetaService metaService) {
+        this.metaService = metaService;
         return thisT();
     }
 

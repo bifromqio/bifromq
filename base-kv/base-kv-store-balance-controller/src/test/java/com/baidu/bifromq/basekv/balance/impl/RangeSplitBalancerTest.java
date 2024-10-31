@@ -47,7 +47,7 @@ public class RangeSplitBalancerTest {
     @Test
     public void cpuUsageExceedLimit() {
         RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "local", HintType);
-        balancer.update(Collections.singleton(KVRangeStoreDescriptor
+        balancer.update("{}", Collections.singleton(KVRangeStoreDescriptor
             .newBuilder()
             .setId("local")
             .putStatistics("cpu.usage", 0.75)
@@ -78,7 +78,7 @@ public class RangeSplitBalancerTest {
             .build()
         );
         RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "local", HintType, 10, 0.8, 5, 20);
-        balancer.update(descriptors);
+        balancer.update("{}", descriptors);
         Optional<SplitCommand> command = balancer.balance();
         assertTrue(command.isPresent());
         assertEquals(command.get().getKvRangeId(), rangeId);
@@ -108,7 +108,7 @@ public class RangeSplitBalancerTest {
             .build()
         );
         RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "local", HintType);
-        balancer.update(descriptors);
+        balancer.update("{}", descriptors);
         Optional<SplitCommand> command = balancer.balance();
         assertFalse(command.isPresent());
     }
@@ -135,7 +135,7 @@ public class RangeSplitBalancerTest {
             .build()
         );
         RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "local", HintType, 1, 0.8, 5, 20);
-        balancer.update(descriptors);
+        balancer.update("{}", descriptors);
         Optional<SplitCommand> command = balancer.balance();
         assertFalse(command.isPresent());
     }

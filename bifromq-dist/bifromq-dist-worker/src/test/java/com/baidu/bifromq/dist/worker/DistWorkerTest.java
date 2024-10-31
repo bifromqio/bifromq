@@ -34,6 +34,7 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.basekv.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
@@ -120,8 +121,8 @@ public abstract class DistWorkerTest {
     protected static final int InboxService = 1;
 
     private IAgentHost agentHost;
-    private ICRDTService clientCrdtService;
-    private ICRDTService serverCrdtService;
+    private ICRDTService crdtService;
+    private IBaseKVMetaService metaService;
     @Mock
     protected IEventCollector eventCollector;
     @Mock
@@ -184,11 +185,11 @@ public abstract class DistWorkerTest {
             .build();
         agentHost = IAgentHost.newInstance(agentHostOpts);
         agentHost.start();
-        clientCrdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        clientCrdtService.start(agentHost);
 
-        serverCrdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        serverCrdtService.start(agentHost);
+        crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
+        crdtService.start(agentHost);
+
+        metaService = IBaseKVMetaService.newInstance(crdtService);
 
         String uuid = UUID.randomUUID().toString();
         KVRangeStoreOptions options = new KVRangeStoreOptions();
@@ -205,7 +206,8 @@ public abstract class DistWorkerTest {
             .newBuilder()
             .eventLoopGroup(NettyUtil.createEventLoopGroup())
             .clusterId(IDistWorker.CLUSTER_NAME)
-            .crdtService(clientCrdtService)
+            .crdtService(crdtService)
+            .metaService(metaService)
             .executor(MoreExecutors.directExecutor())
             .build();
         testWorker = IDistWorker.standaloneBuilder()
@@ -215,7 +217,8 @@ public abstract class DistWorkerTest {
             .ioExecutor(MoreExecutors.directExecutor())
             .bootstrap(true)
             .agentHost(agentHost)
-            .crdtService(serverCrdtService)
+            .crdtService(crdtService)
+            .metaService(metaService)
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)
             .distClient(distClient)
@@ -238,8 +241,8 @@ public abstract class DistWorkerTest {
         new Thread(() -> {
             storeClient.stop();
             testWorker.stop();
-            clientCrdtService.stop();
-            serverCrdtService.stop();
+            metaService.stop();
+            crdtService.stop();
             agentHost.shutdown();
             try {
                 Files.walk(dbRootDir)

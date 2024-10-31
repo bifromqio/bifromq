@@ -40,7 +40,7 @@ public abstract class StoreBalancer {
         this.localStoreId = localStoreId;
     }
 
-    public abstract void update(Set<KVRangeStoreDescriptor> storeDescriptors);
+    public abstract void update(String loadRules, Set<KVRangeStoreDescriptor> storeDescriptors);
 
     public abstract Optional<? extends BalanceCommand> balance();
 

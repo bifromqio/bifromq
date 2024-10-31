@@ -19,6 +19,7 @@ import static org.testng.Assert.assertEquals;
 import com.baidu.bifromq.apiserver.MockableTest;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.basecluster.IAgentHost;
+import com.baidu.bifromq.basekv.IBaseKVMetaService;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
@@ -34,6 +35,8 @@ import org.testng.annotations.Test;
 public class HTTPRequestHandlersFactoryTest extends MockableTest {
     @Mock
     private IAgentHost agentHost;
+    @Mock
+    private IBaseKVMetaService metaService;
     @Mock
     private IRPCServiceTrafficGovernor trafficGovernor;
     @Mock
@@ -51,6 +54,7 @@ public class HTTPRequestHandlersFactoryTest extends MockableTest {
 
     @Test
     public void build() {
+        when(metaService.clusterIds()).thenReturn(Observable.empty());
         when(trafficGovernor.serverList()).thenReturn(Observable.empty());
         when(trafficGovernor.trafficRules()).thenReturn(Observable.empty());
         when(brokerClient.trafficGovernor()).thenReturn(trafficGovernor);
@@ -59,9 +63,9 @@ public class HTTPRequestHandlersFactoryTest extends MockableTest {
         when(sessionDictClient.trafficGovernor()).thenReturn(trafficGovernor);
         when(retainClient.trafficGovernor()).thenReturn(trafficGovernor);
         RequestHandlersFactory handlersFactory =
-            new RequestHandlersFactory(agentHost, brokerClient, sessionDictClient,
+            new RequestHandlersFactory(agentHost, metaService, brokerClient, sessionDictClient,
                 distClient, inboxClient, retainClient, settingProvider);
         Collection<IHTTPRequestHandler> handlers = handlersFactory.build();
-        assertEquals(handlers.size(), 30);
+        assertEquals(handlers.size(), 32);
     }
 }

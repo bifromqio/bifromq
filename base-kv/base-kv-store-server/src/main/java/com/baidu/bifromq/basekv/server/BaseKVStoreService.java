@@ -17,10 +17,9 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
+import com.baidu.bifromq.basekv.IBaseKVClusterMetadataManager;
 import com.baidu.bifromq.basekv.store.IKVRangeStore;
-import com.baidu.bifromq.basekv.store.IKVRangeStoreDescriptorReporter;
 import com.baidu.bifromq.basekv.store.KVRangeStore;
-import com.baidu.bifromq.basekv.store.KVRangeStoreDescriptorReporter;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException.BadRequest;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException.BadVersion;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException.TryLater;
@@ -48,16 +47,14 @@ import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.collect.Sets;
 import io.grpc.stub.StreamObserver;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
-import java.time.Duration;
 import org.slf4j.Logger;
 
 class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBase {
-    private static final int DEAD_STORE_CLEANUP_TIME_FACTOR = 10;
     private final Logger log;
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final IKVRangeStore kvRangeStore;
-    private final IKVRangeStoreDescriptorReporter storeDescriptorReporter;
     private final IAgentHost agentHost;
+    private final IBaseKVClusterMetadataManager metadataManager;
     private final String clusterId;
     private final boolean bootstrap;
 
@@ -73,10 +70,7 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
         this.clusterId = builder.clusterId;
         this.agentHost = builder.agentHost;
         log = SiftLogger.getLogger(BaseKVStoreService.class, "clusterId", clusterId, "storeId", kvRangeStore.id());
-        storeDescriptorReporter = new KVRangeStoreDescriptorReporter(clusterId, kvRangeStore.id(),
-            builder.serverBuilder.crdtService,
-            Duration.ofSeconds(builder.storeOptions.getStatsCollectIntervalSec()).toMillis()
-                * DEAD_STORE_CLEANUP_TIME_FACTOR);
+        metadataManager = builder.serverBuilder.metaService.metadataManager(clusterId);
     }
 
     public String clusterId() {
@@ -94,16 +88,15 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
             kvRangeStore.bootstrap(KVRangeIdUtil.generate(), FULL_BOUNDARY);
         }
         // sync store descriptor via crdt
-        disposables.add(kvRangeStore.describe().subscribe(storeDescriptorReporter::report));
-        storeDescriptorReporter.start();
+        disposables.add(kvRangeStore.describe().subscribe(metadataManager::report));
         log.debug("BaseKVStore service started");
     }
 
     public void stop() {
         log.debug("Stopping BaseKVStore service");
+        metadataManager.stopReport(kvRangeStore.id()).join();
         disposables.dispose();
         kvRangeStore.stop();
-        storeDescriptorReporter.stop();
         log.debug("BaseKVStore service stopped");
     }
 

@@ -48,7 +48,7 @@ public class DistWorkerSplitBalancerTest {
     @Test
     public void cpuUsageExceedLimit() {
         DistWorkerSplitBalancer balancer = new DistWorkerSplitBalancer("cluster", "local");
-        balancer.update(Collections.singleton(KVRangeStoreDescriptor
+        balancer.update("{}", Collections.singleton(KVRangeStoreDescriptor
             .newBuilder()
             .setId("local")
             .putStatistics("cpu.usage", 0.75)
@@ -84,7 +84,7 @@ public class DistWorkerSplitBalancerTest {
             .build()
         );
         DistWorkerSplitBalancer balancer = new DistWorkerSplitBalancer("cluster", "local", 0.8, 5, 20);
-        balancer.update(descriptors);
+        balancer.update("{}", descriptors);
         Optional<SplitCommand> command = balancer.balance();
         assertTrue(command.isPresent());
         assertEquals(command.get().getKvRangeId(), rangeId);
@@ -114,7 +114,7 @@ public class DistWorkerSplitBalancerTest {
                 .build())
             .build()
         );
-        balancer.update(descriptors);
+        balancer.update("{}", descriptors);
         command = balancer.balance();
         assertTrue(command.isPresent());
         assertEquals(command.get().getKvRangeId(), rangeId);
@@ -144,7 +144,7 @@ public class DistWorkerSplitBalancerTest {
             .build()
         );
         DistWorkerSplitBalancer balancer = new DistWorkerSplitBalancer("cluster", "local");
-        balancer.update(descriptors);
+        balancer.update("{}", descriptors);
         Optional<SplitCommand> command = balancer.balance();
         assertFalse(command.isPresent());
     }

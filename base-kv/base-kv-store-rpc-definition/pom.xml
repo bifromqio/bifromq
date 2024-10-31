@@ -39,10 +39,6 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>base-crdt-service</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.baidu.bifromq</groupId>
             <artifactId>base-kv-raft-type</artifactId>
         </dependency>
         <!--CoProc definition -->

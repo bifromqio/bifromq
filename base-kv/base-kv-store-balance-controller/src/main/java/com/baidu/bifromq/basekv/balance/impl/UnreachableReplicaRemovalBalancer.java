@@ -88,7 +88,7 @@ public final class UnreachableReplicaRemovalBalancer extends StoreBalancer {
     }
 
     @Override
-    public void update(Set<KVRangeStoreDescriptor> storeDescriptors) {
+    public void update(String loadRules, Set<KVRangeStoreDescriptor> storeDescriptors) {
         Map<String, Map<KVRangeId, KVRangeDescriptor>> descriptorMap = build(storeDescriptors);
         latestDescriptorMap = descriptorMap;
 

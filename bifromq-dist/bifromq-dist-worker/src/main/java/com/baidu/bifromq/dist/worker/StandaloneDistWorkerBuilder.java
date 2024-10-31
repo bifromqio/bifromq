@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.dist.worker;
 
+import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
@@ -31,6 +32,7 @@ public final class StandaloneDistWorkerBuilder extends AbstractDistWorkerBuilder
     EventLoopGroup workerEventLoopGroup;
     SslContext sslContext;
     Executor ioExecutor;
+    ICRDTService crdtService;
 
     public IDistWorker build() {
         return new StandaloneDistWorker(this);

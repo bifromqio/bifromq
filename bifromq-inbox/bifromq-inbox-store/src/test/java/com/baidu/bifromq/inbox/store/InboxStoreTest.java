@@ -33,6 +33,7 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.basekv.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
@@ -130,8 +131,8 @@ abstract class InboxStoreTest {
     protected IEventCollector eventCollector;
     protected SimpleMeterRegistry meterRegistry;
     private IAgentHost agentHost;
-    private ICRDTService clientCrdtService;
-    private ICRDTService serverCrdtService;
+    private ICRDTService crdtService;
+    private IBaseKVMetaService metaService;
     private ExecutorService queryExecutor;
     private int tickerThreads = 2;
     private ScheduledExecutorService bgTaskExecutor;
@@ -160,11 +161,10 @@ abstract class InboxStoreTest {
         agentHost = IAgentHost.newInstance(agentHostOpts);
         agentHost.start();
 
-        clientCrdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        clientCrdtService.start(agentHost);
+        crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
+        crdtService.start(agentHost);
 
-        serverCrdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        serverCrdtService.start(agentHost);
+        metaService = IBaseKVMetaService.newInstance(crdtService);
 
         String uuid = UUID.randomUUID().toString();
         options = new KVRangeStoreOptions();
@@ -183,7 +183,8 @@ abstract class InboxStoreTest {
         storeClient = IBaseKVStoreClient
             .newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
-            .crdtService(clientCrdtService)
+            .crdtService(crdtService)
+            .metaService(metaService)
             .build();
         buildStoreServer();
         testStore.start();
@@ -199,7 +200,8 @@ abstract class InboxStoreTest {
             .bootstrap(true)
             .host("127.0.0.1")
             .agentHost(agentHost)
-            .crdtService(serverCrdtService)
+            .crdtService(crdtService)
+            .metaService(metaService)
             .inboxClient(inboxClient)
             .storeClient(storeClient)
             .settingProvider(settingProvider)
@@ -222,24 +224,22 @@ abstract class InboxStoreTest {
     @AfterClass(groups = "integration")
     public void tearDown() throws Exception {
         log.info("Finish testing, and tearing down");
-        new Thread(() -> {
-            testStore.stop();
-            storeClient.stop();
-            inboxClient.close();
-            clientCrdtService.stop();
-            serverCrdtService.stop();
-            agentHost.shutdown();
-            try {
-                Files.walk(dbRootDir)
-                    .sorted(Comparator.reverseOrder())
-                    .map(Path::toFile)
-                    .forEach(File::delete);
-            } catch (IOException e) {
-                log.error("Failed to delete db root dir", e);
-            }
-            queryExecutor.shutdown();
-            bgTaskExecutor.shutdown();
-        }).start();
+        testStore.stop();
+        storeClient.stop();
+        inboxClient.close();
+        metaService.stop();
+        crdtService.stop();
+        agentHost.shutdown();
+        try {
+            Files.walk(dbRootDir)
+                .sorted(Comparator.reverseOrder())
+                .map(Path::toFile)
+                .forEach(File::delete);
+        } catch (IOException e) {
+            log.error("Failed to delete db root dir", e);
+        }
+        queryExecutor.shutdown();
+        bgTaskExecutor.shutdown();
         closeable.close();
     }
 

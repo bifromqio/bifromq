@@ -21,6 +21,7 @@ import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.basekv.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
@@ -49,8 +50,8 @@ import org.testng.annotations.BeforeClass;
 @Slf4j
 public abstract class DistServiceTest {
     private IAgentHost agentHost;
-    private ICRDTService clientCrdtService;
-    private ICRDTService serverCrdtService;
+    private ICRDTService crdtService;
+    private IBaseKVMetaService metaService;
     private IDistWorker distWorker;
     private IDistServer distServer;
     private IDistClient distClient;
@@ -90,13 +91,13 @@ public abstract class DistServiceTest {
             .build();
         agentHost = IAgentHost.newInstance(agentHostOpts);
         agentHost.start();
-        clientCrdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        clientCrdtService.start(agentHost);
 
-        serverCrdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        serverCrdtService.start(agentHost);
+        crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
+        crdtService.start(agentHost);
 
-        distClient = IDistClient.newBuilder().crdtService(clientCrdtService).build();
+        metaService = IBaseKVMetaService.newInstance(crdtService);
+
+        distClient = IDistClient.newBuilder().crdtService(crdtService).build();
 
         KVRangeStoreOptions kvRangeStoreOptions = new KVRangeStoreOptions();
         kvRangeStoreOptions.setDataEngineConfigurator(new InMemKVEngineConfigurator());
@@ -106,7 +107,8 @@ public abstract class DistServiceTest {
         workerClient = IBaseKVStoreClient
             .newBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
-            .crdtService(clientCrdtService)
+            .crdtService(crdtService)
+            .metaService(metaService)
             .build();
         int tickerThreads = 2;
         distWorker = IDistWorker
@@ -114,7 +116,8 @@ public abstract class DistServiceTest {
             .bootstrap(true)
             .host("127.0.0.1")
             .agentHost(agentHost)
-            .crdtService(serverCrdtService)
+            .crdtService(crdtService)
+            .metaService(metaService)
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)
             .distClient(distClient)
@@ -131,7 +134,7 @@ public abstract class DistServiceTest {
             .distWorkerClient(workerClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
-            .crdtService(clientCrdtService)
+            .crdtService(crdtService)
             .build();
 
         distWorker.start();
@@ -149,8 +152,8 @@ public abstract class DistServiceTest {
             distWorker.stop();
             distClient.stop();
             distServer.shutdown();
-            clientCrdtService.stop();
-            serverCrdtService.stop();
+            metaService.stop();
+            crdtService.stop();
             agentHost.shutdown();
             queryExecutor.shutdown();
             bgTaskExecutor.shutdown();

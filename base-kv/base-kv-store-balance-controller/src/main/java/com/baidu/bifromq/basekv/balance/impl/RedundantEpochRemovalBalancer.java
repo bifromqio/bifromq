@@ -51,7 +51,7 @@ public class RedundantEpochRemovalBalancer extends StoreBalancer {
     }
 
     @Override
-    public void update(Set<KVRangeStoreDescriptor> storeDescriptors) {
+    public void update(String loadRules, Set<KVRangeStoreDescriptor> storeDescriptors) {
         latest = organizeByEpoch(storeDescriptors);
     }
 

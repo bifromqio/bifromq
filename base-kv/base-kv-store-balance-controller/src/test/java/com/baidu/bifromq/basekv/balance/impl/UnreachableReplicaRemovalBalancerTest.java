@@ -63,7 +63,7 @@ public class UnreachableReplicaRemovalBalancerTest {
                 Set.of(localStoreId), Set.of())
         );
 
-        balancer.update(Set.of(storeDescriptor));
+        balancer.update("{}", Set.of(storeDescriptor));
 
         Optional<ChangeConfigCommand> commandOpt = balancer.balance();
         assertTrue(commandOpt.isEmpty());
@@ -82,7 +82,7 @@ public class UnreachableReplicaRemovalBalancerTest {
         // Simulate initial time setting
         when(mockTimeSource.get()).thenReturn(System.currentTimeMillis());
 
-        balancer.update(Set.of(localStoreDescriptor, peerStoreDescriptor));
+        balancer.update("{}", Set.of(localStoreDescriptor, peerStoreDescriptor));
 
         // Simulate time passing to make the replica unhealthy
         when(mockTimeSource.get()).thenReturn(System.currentTimeMillis() + 16000);
@@ -112,7 +112,7 @@ public class UnreachableReplicaRemovalBalancerTest {
         // Simulate initial time setting
         when(mockTimeSource.get()).thenReturn(System.currentTimeMillis());
 
-        balancer.update(Set.of(localStoreDescriptor, peerStoreDescriptor));
+        balancer.update("{}", Set.of(localStoreDescriptor, peerStoreDescriptor));
 
         // Simulate time passing to make the replica unhealthy
         when(mockTimeSource.get()).thenReturn(System.currentTimeMillis() + 16000);
@@ -144,7 +144,7 @@ public class UnreachableReplicaRemovalBalancerTest {
                 Set.of(localStoreId), Set.of(peerStoreId))
         );
 
-        balancer.update(Set.of(localStoreDescriptor, peerStoreDescriptor));
+        balancer.update("{}", Set.of(localStoreDescriptor, peerStoreDescriptor));
 
         // Simulate the replica recovering before timeout
         KVRangeStoreDescriptor updatedDescriptor = createStoreDescriptor(
@@ -154,7 +154,7 @@ public class UnreachableReplicaRemovalBalancerTest {
                 Set.of(localStoreId, peerStoreId), Set.of())
         );
 
-        balancer.update(Set.of(updatedDescriptor, peerStoreDescriptor));
+        balancer.update("{}", Set.of(updatedDescriptor, peerStoreDescriptor));
 
         Optional<ChangeConfigCommand> commandOpt = balancer.balance();
         assertTrue(commandOpt.isEmpty());
@@ -175,7 +175,7 @@ public class UnreachableReplicaRemovalBalancerTest {
         );
 
 
-        balancer.update(Set.of(storeDescriptor, peerStoreDescriptor));
+        balancer.update("{}", Set.of(storeDescriptor, peerStoreDescriptor));
 
         // Simulate a leader change
         KVRangeStoreDescriptor updatedDescriptor = createStoreDescriptor(
@@ -184,7 +184,7 @@ public class UnreachableReplicaRemovalBalancerTest {
                 Set.of(localStoreId, peerStoreId), Set.of())
         );
 
-        balancer.update(Set.of(updatedDescriptor, peerStoreDescriptor));
+        balancer.update("{}", Set.of(updatedDescriptor, peerStoreDescriptor));
         when(mockTimeSource.get()).thenReturn(System.currentTimeMillis() + 16000);
 
         Optional<ChangeConfigCommand> commandOpt = balancer.balance();
@@ -202,7 +202,7 @@ public class UnreachableReplicaRemovalBalancerTest {
 
         KVRangeStoreDescriptor peerStoreDescriptor = createStoreDescriptor(peerStoreId);
 
-        balancer.update(Set.of(storeDescriptor, peerStoreDescriptor));
+        balancer.update("{}", Set.of(storeDescriptor, peerStoreDescriptor));
         when(mockTimeSource.get()).thenReturn(System.currentTimeMillis() + 16000);
         assertTrue(balancer.balance().isPresent());
 
@@ -214,7 +214,7 @@ public class UnreachableReplicaRemovalBalancerTest {
                 Set.of(localStoreId, peerStoreId), Set.of())
         );
 
-        balancer.update(Set.of(updatedStoreDescriptor));
+        balancer.update("{}", Set.of(updatedStoreDescriptor));
 
         when(mockTimeSource.get()).thenReturn(System.currentTimeMillis() + 32000);
 

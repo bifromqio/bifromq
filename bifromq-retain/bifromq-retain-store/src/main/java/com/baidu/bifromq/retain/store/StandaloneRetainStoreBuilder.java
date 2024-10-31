@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.retain.store;
 
+import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
@@ -33,6 +34,7 @@ public final class StandaloneRetainStoreBuilder extends AbstractRetainStoreBuild
     EventLoopGroup workerEventLoopGroup;
     Executor ioExecutor;
     SslContext sslContext;
+    ICRDTService crdtService;
 
     public IRetainStore build() {
         return new StandaloneRetainStore(this);

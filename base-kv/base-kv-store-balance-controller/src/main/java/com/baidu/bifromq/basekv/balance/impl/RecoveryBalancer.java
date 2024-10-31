@@ -51,7 +51,7 @@ public class RecoveryBalancer extends StoreBalancer {
     }
 
     @Override
-    public void update(Set<KVRangeStoreDescriptor> storeDescriptors) {
+    public void update(String loadRules, Set<KVRangeStoreDescriptor> storeDescriptors) {
         Map<String, KVRangeStoreDescriptor> prevAliveStores = this.latestStoreDescriptors.stream()
             .collect(Collectors.toMap(
                 KVRangeStoreDescriptor::getId,

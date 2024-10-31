@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.server;
 
+import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
@@ -32,6 +33,7 @@ public class StandaloneBaseKVStoreServerBuilder
     EventLoopGroup workerEventLoopGroup;
     Executor ioExecutor;
     SslContext sslContext;
+    ICRDTService crdtService;
 
     public IBaseKVStoreServer build() {
         return new StandaloneBaseKVStoreServer(this);

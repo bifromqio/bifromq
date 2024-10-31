@@ -31,7 +31,7 @@ public class GetRetainTrafficRulesHandler extends GetTrafficRulesHandler {
     }
 
     @Override
-    protected Single<Map<String, Map<String, Integer>>> trafficDirective() {
+    protected Single<Map<String, Map<String, Integer>>> trafficRules() {
         return trafficRulesSingle;
     }
 }

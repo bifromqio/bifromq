@@ -24,6 +24,7 @@ final class StandaloneRetainStore extends AbstractRetainStore<StandaloneRetainSt
         super(builder);
         storeServer = IBaseKVStoreServer.standaloneServer()
             .crdtService(builder.crdtService)
+            .metaService(builder.metaService)
             // build basekv store service
             .addService(builder.clusterId, builder.bootstrap)
             .coProcFactory(coProcFactory)

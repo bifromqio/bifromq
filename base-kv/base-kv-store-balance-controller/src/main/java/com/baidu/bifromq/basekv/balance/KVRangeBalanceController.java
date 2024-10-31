@@ -49,6 +49,7 @@ import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.Timer.Sample;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
+import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -69,6 +70,9 @@ import lombok.Builder;
 import org.slf4j.Logger;
 
 public class KVRangeBalanceController {
+    private record LoadRulesAndLandscape(String loadRules, Set<KVRangeStoreDescriptor> landscape) {
+    }
+
     private enum State {
         Init,
         Started,
@@ -129,9 +133,10 @@ public class KVRangeBalanceController {
             }
             this.metricsManager = new MetricManager(localStoreId, storeClient.clusterId());
             log.info("BalancerController start");
-            descriptorSub = this.storeClient.describe()
-                .distinctUntilChanged()
-                .subscribe(sds -> executor.execute(() -> updateStoreDescriptors(sds)));
+            descriptorSub =
+                Observable.combineLatest(storeClient.loadRules(), storeClient.describe(), LoadRulesAndLandscape::new)
+                    .distinctUntilChanged()
+                    .subscribe(v -> executor.execute(() -> updateStoreDescriptors(v.loadRules, v.landscape)));
             scheduleLater(randomDelay(), TimeUnit.MILLISECONDS);
         }
     }
@@ -148,9 +153,9 @@ public class KVRangeBalanceController {
         }
     }
 
-    private void updateStoreDescriptors(Set<KVRangeStoreDescriptor> descriptors) {
+    private void updateStoreDescriptors(String loadRules, Set<KVRangeStoreDescriptor> descriptors) {
         for (StoreBalancer balancer : balancers) {
-            balancer.update(descriptors);
+            balancer.update(loadRules, descriptors);
         }
         scheduleLater(randomDelay(), TimeUnit.MILLISECONDS);
     }

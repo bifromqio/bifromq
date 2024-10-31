@@ -23,7 +23,7 @@ final class NonStandaloneDistWorker extends AbstractDistWorker<NonStandaloneDist
     public NonStandaloneDistWorker(NonStandaloneDistWorkerBuilder builder) {
         super(builder);
         storeServer = IBaseKVStoreServer.nonStandaloneServer()
-            .crdtService(builder.crdtService)
+            .metaService(builder.metaService)
             // build basekv store service
             .addService(builder.clusterId, builder.bootstrap)
             .coProcFactory(coProcFactory)

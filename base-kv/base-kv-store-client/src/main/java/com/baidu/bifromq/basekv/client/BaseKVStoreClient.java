@@ -15,8 +15,6 @@ package com.baidu.bifromq.basekv.client;
 
 import static com.baidu.bifromq.basekv.RPCBluePrint.toScopedFullMethodName;
 import static com.baidu.bifromq.basekv.RPCServerMetadataUtil.RPC_METADATA_STORE_ID;
-import static com.baidu.bifromq.basekv.store.CRDTUtil.getDescriptorFromCRDT;
-import static com.baidu.bifromq.basekv.store.CRDTUtil.storeDescriptorMapCRDTURI;
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getBootstrapMethod;
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getChangeReplicaConfigMethod;
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getExecuteMethod;
@@ -31,8 +29,9 @@ import static com.baidu.bifromq.basekv.utils.DescriptorUtil.toLeaderRanges;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptyNavigableMap;
 
-import com.baidu.bifromq.basecrdt.core.api.IORMap;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.basekv.IBaseKVClusterMetadataManager;
+import com.baidu.bifromq.basekv.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.RPCBluePrint;
 import com.baidu.bifromq.basekv.exception.BaseKVException;
 import com.baidu.bifromq.basekv.proto.Boundary;
@@ -64,10 +63,8 @@ import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.baserpc.exception.ServerNotFoundException;
 import com.baidu.bifromq.baserpc.utils.BehaviorSubject;
 import com.baidu.bifromq.logger.SiftLogger;
-import com.google.common.collect.Iterators;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.protobuf.ByteString;
 import io.grpc.MethodDescriptor;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
@@ -75,7 +72,6 @@ import io.reactivex.rxjava3.subjects.Subject;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -95,10 +91,11 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     private final String clusterId;
     private final IRPCClient rpcClient;
     private final ICRDTService crdtService;
+    private final IBaseKVMetaService metaService;
     private final AtomicBoolean closed = new AtomicBoolean();
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final int queryPipelinesPerStore;
-    private final IORMap storeDescriptorCRDT;
+    private final IBaseKVClusterMetadataManager metadataManager;
     private final MethodDescriptor<BootstrapRequest, BootstrapReply> bootstrapMethod;
     private final MethodDescriptor<RecoverRequest, RecoverReply> recoverMethod;
     private final MethodDescriptor<TransferLeadershipRequest, TransferLeadershipReply> transferLeadershipMethod;
@@ -147,6 +144,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         this.queryMethod =
             bluePrint.methodDesc(toScopedFullMethodName(clusterId, getQueryMethod().getFullMethodName()));
         this.crdtService = builder.crdtService;
+        this.metaService = builder.metaService;
         this.queryPipelinesPerStore = builder.queryPipelinesPerStore <= 0 ? 5 : builder.queryPipelinesPerStore;
         this.rpcClient = IRPCClient.newBuilder()
             .bluePrint(bluePrint)
@@ -157,9 +155,9 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
             .keepAliveInSec(builder.keepAliveInSec)
             .crdtService(crdtService)
             .build();
-        storeDescriptorCRDT = crdtService.host(storeDescriptorMapCRDTURI(clusterId));
+        metadataManager = metaService.metadataManager(clusterId);
         clusterInfoObservable = Observable.combineLatest(
-                storeDescriptorCRDT.inflation().map(this::currentStoreDescriptors),
+                metadataManager.landscape(),
                 rpcClient.serverList()
                     .map(servers -> Maps.transformValues(servers, metadata -> metadata.get(RPC_METADATA_STORE_ID))),
                 ClusterInfo::new)
@@ -190,6 +188,11 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     @Override
     public String clusterId() {
         return clusterId;
+    }
+
+    @Override
+    public Observable<String> loadRules() {
+        return metadataManager.loadRules();
     }
 
     @Override
@@ -448,18 +451,6 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
             rpcClient.stop();
             log.info("BaseKVStore client stopped: cluster[{}]", clusterId);
         }
-    }
-
-    private Map<String, KVRangeStoreDescriptor> currentStoreDescriptors(long ts) {
-        log.trace("StoreDescriptor CRDT updated at {}: clusterId={}\n{}", ts, clusterId, storeDescriptorCRDT);
-        Iterator<ByteString> keyItr = Iterators.transform(storeDescriptorCRDT.keys(), IORMap.ORMapKey::key);
-
-        Map<String, KVRangeStoreDescriptor> storeDescriptors = new HashMap<>();
-        while (keyItr.hasNext()) {
-            Optional<KVRangeStoreDescriptor> storeDescOpt = getDescriptorFromCRDT(storeDescriptorCRDT, keyItr.next());
-            storeDescOpt.ifPresent(storeDesc -> storeDescriptors.put(storeDesc.getId(), storeDesc));
-        }
-        return storeDescriptors;
     }
 
     private void refresh(ClusterInfo clusterInfo) {

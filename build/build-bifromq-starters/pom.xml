@@ -29,6 +29,10 @@
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>base-env-provider</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>base-kv-meta-service</artifactId>
+        </dependency>
         <!-- third party dependencies -->
         <dependency>
             <groupId>org.bouncycastle</groupId>

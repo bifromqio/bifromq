@@ -44,6 +44,8 @@ public interface IBaseKVStoreClient extends IConnectable {
 
     String clusterId();
 
+    Observable<String> loadRules();
+
     Observable<Set<KVRangeStoreDescriptor>> describe();
 
     Observable<NavigableMap<Boundary, KVRangeSetting>> effectiveRouter();
@@ -134,7 +136,7 @@ public interface IBaseKVStoreClient extends IConnectable {
     IQueryPipeline createQueryPipeline(String storeId);
 
     /**
-     * Create a caller-managed pipeline for execute ro command orderly with linearizability guaranteed
+     * Create a caller-managed pipeline for execute ro command orderly with linearizability guaranteed.
      *
      * @param storeId
      * @return

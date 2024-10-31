@@ -14,7 +14,7 @@
 package com.baidu.bifromq.inbox.store;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.basekv.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
@@ -29,7 +29,7 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
     String clusterId = IInboxStore.CLUSTER_NAME;
     boolean bootstrap;
     IAgentHost agentHost;
-    ICRDTService crdtService;
+    IBaseKVMetaService metaService;
     IInboxClient inboxClient;
     IBaseKVStoreClient storeClient;
     ISettingProvider settingProvider;
@@ -62,8 +62,8 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
         return thisT();
     }
 
-    public T crdtService(ICRDTService crdtService) {
-        this.crdtService = crdtService;
+    public T metaService(IBaseKVMetaService metaService) {
+        this.metaService = metaService;
         return thisT();
     }
 

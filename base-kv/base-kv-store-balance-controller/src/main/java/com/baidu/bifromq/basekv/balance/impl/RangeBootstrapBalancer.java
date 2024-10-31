@@ -86,7 +86,7 @@ public class RangeBootstrapBalancer extends StoreBalancer {
 
 
     @Override
-    public void update(Set<KVRangeStoreDescriptor> storeDescriptors) {
+    public void update(String loadRules, Set<KVRangeStoreDescriptor> storeDescriptors) {
         Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(storeDescriptors);
         if (effectiveEpoch.isEmpty()) {
             if (bootstrapTrigger.get() == null) {

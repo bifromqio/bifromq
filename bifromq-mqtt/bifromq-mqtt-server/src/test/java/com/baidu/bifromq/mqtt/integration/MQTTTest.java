@@ -21,6 +21,7 @@ import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.basekv.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
@@ -89,6 +90,7 @@ public abstract class MQTTTest {
     protected IClientBalancer clientBalancer;
     private IAgentHost agentHost;
     private ICRDTService crdtService;
+    private IBaseKVMetaService metaService;
     private IRPCServer sharedRpcServer;
     private IMqttBrokerClient onlineInboxBrokerClient;
     private ISessionDictClient sessionDictClient;
@@ -140,6 +142,8 @@ public abstract class MQTTTest {
         crdtService.start(agentHost);
         log.info("CRDT service started");
 
+        metaService = IBaseKVMetaService.newInstance(crdtService);
+
         RPCServerBuilder rpcServerBuilder = IRPCServer.newBuilder()
             .host("127.0.0.1")
             .crdtService(crdtService)
@@ -164,13 +168,14 @@ public abstract class MQTTTest {
         inboxStoreKVStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
             .crdtService(crdtService)
+            .metaService(metaService)
             .executor(MoreExecutors.directExecutor())
             .build();
         inboxStore = IInboxStore.nonStandaloneBuilder()
             .rpcServerBuilder(rpcServerBuilder)
             .bootstrap(true)
             .agentHost(agentHost)
-            .crdtService(crdtService)
+            .metaService(metaService)
             .storeClient(inboxStoreKVStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
@@ -205,13 +210,14 @@ public abstract class MQTTTest {
             .newBuilder()
             .clusterId(IRetainStore.CLUSTER_NAME)
             .crdtService(crdtService)
+            .metaService(metaService)
             .executor(MoreExecutors.directExecutor())
             .build();
         retainStore = IRetainStore.nonStandaloneBuilder()
             .rpcServerBuilder(rpcServerBuilder)
             .bootstrap(true)
             .agentHost(agentHost)
-            .crdtService(crdtService)
+            .metaService(metaService)
             .storeClient(retainStoreKVStoreClient)
             .queryExecutor(queryExecutor)
             .tickerThreads(tickerThreads)
@@ -225,6 +231,7 @@ public abstract class MQTTTest {
         distWorkerStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
             .crdtService(crdtService)
+            .metaService(metaService)
             .executor(MoreExecutors.directExecutor())
             .build();
 
@@ -240,7 +247,7 @@ public abstract class MQTTTest {
             .rpcServerBuilder(rpcServerBuilder)
             .bootstrap(true)
             .agentHost(agentHost)
-            .crdtService(crdtService)
+            .metaService(metaService)
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)
             .distClient(distClient)
@@ -372,6 +379,8 @@ public abstract class MQTTTest {
         log.info("Session dict client stopped");
         sessionDictServer.shutdown();
         log.info("Session dict server shut down");
+
+        metaService.stop();
 
         crdtService.stop();
         log.info("CRDT service stopped");

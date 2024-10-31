@@ -62,7 +62,7 @@ public class RangeLeaderBalancerTest {
             .addRanges(kvRangeDescriptor)
             .build();
 
-        balancer.update(Set.of(storeDescriptor));
+        balancer.update("{}", Set.of(storeDescriptor));
 
         Optional<BalanceCommand> command = balancer.balance();
         assertFalse(command.isPresent());
@@ -81,7 +81,7 @@ public class RangeLeaderBalancerTest {
             .setId(localStoreId)
             .addRanges(kvRangeDescriptor)
             .build();
-        balancer.update(Set.of(storeDescriptor));
+        balancer.update("{}", Set.of(storeDescriptor));
         Optional<BalanceCommand> command = balancer.balance();
         assertFalse(command.isPresent());
     }
@@ -118,7 +118,7 @@ public class RangeLeaderBalancerTest {
                 .setConfig(ClusterConfig.newBuilder().addVoters(localStoreId).build())
                 .build())
             .build();
-        balancer.update(Set.of(storeDescriptor1, storeDescriptor2, storeDescriptor3));
+        balancer.update("{}", Set.of(storeDescriptor1, storeDescriptor2, storeDescriptor3));
         Optional<BalanceCommand> command = balancer.balance();
         assertFalse(command.isPresent());
     }
@@ -156,7 +156,7 @@ public class RangeLeaderBalancerTest {
             .setId("otherStore")
             .addRanges(kvRangeDescriptor3)
             .build();
-        balancer.update(Set.of(storeDescriptor1, storeDescriptor2));
+        balancer.update("{}", Set.of(storeDescriptor1, storeDescriptor2));
 
         Optional<BalanceCommand> command = balancer.balance();
         assertTrue(command.isPresent());
@@ -199,7 +199,7 @@ public class RangeLeaderBalancerTest {
             .setId("otherStore")
             .addRanges(kvRangeDescriptor3)
             .build();
-        balancer.update(Set.of(storeDescriptor1, storeDescriptor2));
+        balancer.update("{}", Set.of(storeDescriptor1, storeDescriptor2));
 
         Optional<BalanceCommand> command = balancer.balance();
         assertTrue(command.isPresent());
@@ -242,7 +242,7 @@ public class RangeLeaderBalancerTest {
             .setId("otherStore")
             .addRanges(kvRangeDescriptor3)
             .build();
-        balancer.update(Set.of(storeDescriptor1, storeDescriptor2));
+        balancer.update("{}", Set.of(storeDescriptor1, storeDescriptor2));
 
         Optional<BalanceCommand> command = balancer.balance();
         assertTrue(command.isPresent());
@@ -288,7 +288,7 @@ public class RangeLeaderBalancerTest {
             .setId("otherStore")
             .addRanges(kvRangeDescriptor3)
             .build();
-        balancer.update(Set.of(storeDescriptor1, storeDescriptor2));
+        balancer.update("{}", Set.of(storeDescriptor1, storeDescriptor2));
 
         Optional<BalanceCommand> command = balancer.balance();
         assertTrue(command.isPresent());
@@ -351,7 +351,7 @@ public class RangeLeaderBalancerTest {
         storeDescriptors.add(otherStoreDescriptor);
 
         // Update balancer with current store descriptors
-        balancer.update(storeDescriptors);
+        balancer.update("{}", storeDescriptors);
 
         // Simulate the scenario where localStore has exactly 'atMost' leaders
         Optional<BalanceCommand> balanceCommand = balancer.balance();

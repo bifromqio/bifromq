@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.inbox.store;
 
+import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
@@ -32,6 +33,7 @@ public final class StandaloneInboxStoreBuilder extends AbstractInboxStoreBuilder
     EventLoopGroup workerEventLoopGroup;
     SslContext sslContext;
     Executor ioExecutor;
+    ICRDTService crdtService;
 
     public IInboxStore build() {
         return new StandaloneInboxStore(this);

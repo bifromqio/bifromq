@@ -67,7 +67,7 @@ public class RedundantEpochRemovalBalancerTest {
         Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
         storeDescriptors.add(storeDescriptor);
 
-        balancer.update(storeDescriptors);
+        balancer.update("{}", storeDescriptors);
 
         Optional<ChangeConfigCommand> command = balancer.balance();
         assertFalse(command.isPresent());
@@ -116,7 +116,7 @@ public class RedundantEpochRemovalBalancerTest {
 
         Set<KVRangeStoreDescriptor> storeDescriptors = Set.of(storeDescriptor1, storeDescriptor2);
 
-        balancer.update(storeDescriptors);
+        balancer.update("{}", storeDescriptors);
 
         Optional<ChangeConfigCommand> command = balancer.balance();
         assertTrue(command.isPresent(), "A balance command should be generated for redundant replicas.");
@@ -170,7 +170,7 @@ public class RedundantEpochRemovalBalancerTest {
 
         Set<KVRangeStoreDescriptor> storeDescriptors = Set.of(storeDescriptor1, storeDescriptor2);
 
-        balancer.update(storeDescriptors);
+        balancer.update("{}", storeDescriptors);
 
         Optional<ChangeConfigCommand> command = balancer.balance();
         assertFalse(command.isPresent());

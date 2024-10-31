@@ -59,7 +59,7 @@ public class RecoveryBalancerTest {
             .setId("store2")
             .addRanges(rangeDescriptors.get(0).toBuilder().setRole(RaftNodeStatus.Candidate).setVer(3).build())
             .build();
-        balancer.update(Sets.newHashSet(storeDescriptor1, storeDescriptor2));
+        balancer.update("{}", Sets.newHashSet(storeDescriptor1, storeDescriptor2));
         Optional<RecoveryCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isPresent());
         RecoveryCommand recoveryCommand = commandOptional.get();
@@ -80,9 +80,9 @@ public class RecoveryBalancerTest {
             .setId("aaaaa")
             .addRanges(rangeDescriptors.get(0).toBuilder().setRole(RaftNodeStatus.Candidate).setVer(3).build())
             .build();
-        balancer.update(Sets.newHashSet(storeDescriptor1, storeDescriptor2));
+        balancer.update("{}", Sets.newHashSet(storeDescriptor1, storeDescriptor2));
         // store2 dead temporarily
-        balancer.update(Sets.newHashSet(storeDescriptor1));
+        balancer.update("{}", Sets.newHashSet(storeDescriptor1));
 
         Optional<RecoveryCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isPresent());
@@ -109,7 +109,7 @@ public class RecoveryBalancerTest {
             .addRanges(rangeDescriptors.get(0).toBuilder().setRole(RaftNodeStatus.Candidate).setVer(3).build())
             .build();
 
-        balancer.update(Sets.newHashSet(storeDescriptor1, storeDescriptor2, storeDescriptor3));
+        balancer.update("{}", Sets.newHashSet(storeDescriptor1, storeDescriptor2, storeDescriptor3));
         Optional<RecoveryCommand> commandOptional = balancer.balance();
         Assert.assertTrue(commandOptional.isEmpty());
     }

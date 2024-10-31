@@ -23,6 +23,7 @@ import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.basekv.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
@@ -57,8 +58,8 @@ import org.testng.annotations.BeforeMethod;
 public abstract class InboxServiceTest {
     protected IInboxClient inboxClient;
     private IAgentHost agentHost;
-    private ICRDTService clientCrdtService;
-    private ICRDTService serverCrdtService;
+    private ICRDTService crdtService;
+    private IBaseKVMetaService metaService;
     @Mock
     protected IEventCollector eventCollector;
     @Mock
@@ -95,12 +96,12 @@ public abstract class InboxServiceTest {
             .build();
         agentHost = IAgentHost.newInstance(agentHostOpts);
         agentHost.start();
-        clientCrdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        clientCrdtService.start(agentHost);
 
-        serverCrdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        serverCrdtService.start(agentHost);
-        inboxClient = IInboxClient.newBuilder().crdtService(clientCrdtService).build();
+        crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
+        crdtService.start(agentHost);
+
+        metaService = IBaseKVMetaService.newInstance(crdtService);
+        inboxClient = IInboxClient.newBuilder().crdtService(crdtService).build();
 
         KVRangeBalanceControllerOptions controllerOptions = new KVRangeBalanceControllerOptions();
         KVRangeStoreOptions kvRangeStoreOptions = new KVRangeStoreOptions();
@@ -110,13 +111,15 @@ public abstract class InboxServiceTest {
         bgTaskExecutor = Executors.newSingleThreadScheduledExecutor();
         inboxStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
-            .crdtService(clientCrdtService)
+            .crdtService(crdtService)
+            .metaService(metaService)
             .build();
         inboxStore = IInboxStore.standaloneBuilder()
             .bootstrap(true)
             .host("127.0.0.1")
             .agentHost(agentHost)
-            .crdtService(serverCrdtService)
+            .crdtService(crdtService)
+            .metaService(metaService)
             .storeClient(inboxStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
@@ -128,7 +131,7 @@ public abstract class InboxServiceTest {
             .build();
         inboxServer = IInboxServer.standaloneBuilder()
             .host("127.0.0.1")
-            .crdtService(serverCrdtService)
+            .crdtService(crdtService)
             .inboxClient(inboxClient)
             .distClient(distClient)
             .retainClient(retainClient)
@@ -152,13 +155,11 @@ public abstract class InboxServiceTest {
         inboxStore.stop();
         inboxClient.close();
         inboxStoreClient.stop();
-        new Thread(() -> {
-            clientCrdtService.stop();
-            serverCrdtService.stop();
-            agentHost.shutdown();
-            queryExecutor.shutdown();
-            bgTaskExecutor.shutdown();
-        }).start();
+        metaService.stop();
+        crdtService.stop();
+        agentHost.shutdown();
+        queryExecutor.shutdown();
+        bgTaskExecutor.shutdown();
         closeable.close();
     }
 

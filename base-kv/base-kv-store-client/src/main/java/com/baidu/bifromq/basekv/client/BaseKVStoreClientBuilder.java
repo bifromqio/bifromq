@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basekv.client;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.basekv.IBaseKVMetaService;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.UUID;
@@ -32,6 +33,7 @@ public final class BaseKVStoreClientBuilder {
     long idleTimeoutInSec;
 
     ICRDTService crdtService;
+    IBaseKVMetaService metaService;
 
     Executor executor;
     int queryPipelinesPerStore;

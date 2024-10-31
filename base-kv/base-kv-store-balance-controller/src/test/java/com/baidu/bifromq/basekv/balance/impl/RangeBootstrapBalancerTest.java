@@ -45,7 +45,7 @@ public class RangeBootstrapBalancerTest {
     @Test
     public void updateWithoutStoreDescriptors() {
         // Test when there are no store descriptors
-        balancer.update(Collections.emptySet());
+        balancer.update("{}", Collections.emptySet());
         mockTime.addAndGet(2000L); // Advance time by 2 seconds
 
         Optional<BootstrapCommand> command = balancer.balance();
@@ -61,7 +61,7 @@ public class RangeBootstrapBalancerTest {
             .setId(localStoreId)
             .build();
 
-        balancer.update(Set.of(storeDescriptor));
+        balancer.update("{}", Set.of(storeDescriptor));
         mockTime.addAndGet(2000L); // Advance time by 2 seconds
 
         Optional<BootstrapCommand> command = balancer.balance();

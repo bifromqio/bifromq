@@ -13,13 +13,13 @@
 
 package com.baidu.bifromq.basekv.server;
 
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.basekv.IBaseKVMetaService;
 import java.util.HashMap;
 import java.util.Map;
 
 public abstract class AbstractBaseKVStoreServerBuilder<P extends AbstractBaseKVStoreServerBuilder<P>> {
     final Map<String, BaseKVStoreServiceBuilder<P>> serviceBuilders = new HashMap<>();
-    ICRDTService crdtService;
+    IBaseKVMetaService metaService;
 
     public abstract IBaseKVStoreServer build();
 
@@ -32,8 +32,8 @@ public abstract class AbstractBaseKVStoreServerBuilder<P extends AbstractBaseKVS
     }
 
     @SuppressWarnings("unchecked")
-    public P crdtService(ICRDTService crdtService) {
-        this.crdtService = crdtService;
+    public P metaService(IBaseKVMetaService metaService) {
+        this.metaService = metaService;
         return (P) this;
     }
 }
