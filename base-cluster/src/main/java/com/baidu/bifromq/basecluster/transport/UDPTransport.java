@@ -41,6 +41,7 @@ import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.subjects.CompletableSubject;
 import java.net.InetSocketAddress;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import lombok.Builder;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -148,7 +149,7 @@ public final class UDPTransport extends AbstractTransport {
         CompletableSubject doneSignal = CompletableSubject.create();
         Completable.concatArrayDelayError(
                 Completable.fromFuture(channel.close()),
-                Completable.fromFuture(elg.shutdownGracefully()),
+                Completable.fromFuture(elg.shutdownGracefully(0, 5, TimeUnit.SECONDS)),
                 Completable.fromRunnable(() -> {
                     Metrics.globalRegistry.remove(sendBytes);
                     Metrics.globalRegistry.remove(recvBytes);

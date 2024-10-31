@@ -49,6 +49,7 @@ import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -264,13 +265,15 @@ public final class TCPTransport extends AbstractTransport {
     protected Completable doShutdown() {
         log.debug("Closing tcp transport");
         return Completable.concatArrayDelayError(
-            Completable.fromRunnable(() -> channelMaps.forEach((r, cm) -> cm.invalidateAll())),
-            Completable.fromFuture(tcpListeningChannel.channel().close()),
-            Completable.fromFuture(elg.shutdownGracefully()), Completable.fromRunnable(() -> {
-                Metrics.globalRegistry.remove(sendBytes);
-                Metrics.globalRegistry.remove(recvBytes);
-                Metrics.globalRegistry.remove(transportLatency);
-            })).onErrorComplete();
+                Completable.fromRunnable(() -> channelMaps.forEach((r, cm) -> cm.invalidateAll())),
+                Completable.fromFuture(tcpListeningChannel.channel().close()),
+                Completable.fromFuture(elg.shutdownGracefully(0, 5, TimeUnit.SECONDS)),
+                Completable.fromRunnable(() -> {
+                    Metrics.globalRegistry.remove(sendBytes);
+                    Metrics.globalRegistry.remove(recvBytes);
+                    Metrics.globalRegistry.remove(transportLatency);
+                }))
+            .onErrorComplete();
     }
 
     @VisibleForTesting
