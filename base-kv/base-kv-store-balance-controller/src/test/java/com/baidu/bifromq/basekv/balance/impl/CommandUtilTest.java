@@ -13,16 +13,30 @@
 
 package com.baidu.bifromq.basekv.balance.impl;
 
+import static com.baidu.bifromq.basekv.balance.impl.CommandUtil.diffBy;
+import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertNull;
 
+import com.baidu.bifromq.basekv.balance.BalanceNow;
+import com.baidu.bifromq.basekv.balance.BalanceResult;
+import com.baidu.bifromq.basekv.balance.BalanceResultType;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
+import com.baidu.bifromq.basekv.balance.command.MergeCommand;
+import com.baidu.bifromq.basekv.balance.command.SplitCommand;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
+import com.baidu.bifromq.basekv.utils.BoundaryUtil;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.basekv.utils.KeySpaceDAG;
+import com.google.protobuf.ByteString;
 import java.util.Collections;
-import java.util.Optional;
+import java.util.NavigableMap;
 import java.util.Set;
+import java.util.TreeMap;
 import org.testng.annotations.Test;
 
 public class CommandUtilTest {
@@ -39,10 +53,10 @@ public class CommandUtilTest {
                 .build())
             .build();
 
-        Optional<ChangeConfigCommand> commandOptional = CommandUtil.quit(localStoreId, kvRangeDescriptor);
+        BalanceResult result = CommandUtil.quit(localStoreId, kvRangeDescriptor);
 
-        assertTrue(commandOptional.isPresent());
-        ChangeConfigCommand command = commandOptional.get();
+        assertEquals(result.type(), BalanceResultType.BalanceNow);
+        ChangeConfigCommand command = (ChangeConfigCommand) ((BalanceNow<?>) result).command;
 
         assertEquals(command.getToStore(), localStoreId);
         assertEquals(command.getKvRangeId(), kvRangeId);
@@ -63,10 +77,10 @@ public class CommandUtilTest {
                 .build())
             .build();
 
-        Optional<ChangeConfigCommand> commandOptional = CommandUtil.quit(localStoreId, kvRangeDescriptor);
+        BalanceResult result = CommandUtil.quit(localStoreId, kvRangeDescriptor);
 
-        assertTrue(commandOptional.isPresent());
-        ChangeConfigCommand command = commandOptional.get();
+        assertEquals(result.type(), BalanceResultType.BalanceNow);
+        ChangeConfigCommand command = (ChangeConfigCommand) ((BalanceNow<?>) result).command;
 
         assertEquals(command.getToStore(), localStoreId);
         assertEquals(command.getKvRangeId(), kvRangeId);
@@ -86,14 +100,219 @@ public class CommandUtilTest {
                 .build())
             .build();
 
-        Optional<ChangeConfigCommand> commandOptional = CommandUtil.quit(localStoreId, kvRangeDescriptor);
+        BalanceResult result = CommandUtil.quit(localStoreId, kvRangeDescriptor);
 
-        assertTrue(commandOptional.isPresent());
-        ChangeConfigCommand command = commandOptional.get();
+        assertEquals(result.type(), BalanceResultType.BalanceNow);
+        ChangeConfigCommand command = (ChangeConfigCommand) ((BalanceNow<?>) result).command;
 
         assertEquals(command.getToStore(), localStoreId);
         assertEquals(command.getKvRangeId(), kvRangeId);
         assertEquals(command.getVoters(), Collections.emptySet());
         assertEquals(command.getLearners(), Collections.emptySet());
+    }
+
+
+    @Test
+    public void diffByNull() {
+        NavigableMap<Boundary, ClusterConfig> expected = new TreeMap<>(BoundaryUtil::compare);
+        expected.put(boundary(null, "a"),
+            ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build());
+        expected.put(boundary("a", null), ClusterConfig.newBuilder().addVoters("voter1").build());
+
+        NavigableMap<Boundary, KeySpaceDAG.LeaderRange> current = new TreeMap<>(BoundaryUtil::compare);
+        KVRangeId id = KVRangeIdUtil.generate();
+        KVRangeId id1 = KVRangeIdUtil.generate();
+        current.put(boundary(null, "a"), new KeySpaceDAG.LeaderRange("voter1", KVRangeDescriptor
+            .newBuilder()
+            .setId(id)
+            .setVer(1L)
+            .setConfig(ClusterConfig.newBuilder().addVoters("voter2").addNextVoters("voter3").build())
+            .build()));
+        current.put(boundary("a", null), new KeySpaceDAG.LeaderRange("voter1", KVRangeDescriptor
+            .newBuilder()
+            .setId(id1)
+            .setConfig(ClusterConfig.newBuilder().addVoters("voter2").build())
+            .build()));
+        assertNull(diffBy(expected, current));
+    }
+
+    @Test
+    public void diffByConfigChange() {
+        NavigableMap<Boundary, ClusterConfig> expected = new TreeMap<>(BoundaryUtil::compare);
+        expected.put(boundary(null, "a"),
+            ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build());
+        expected.put(boundary("a", null), ClusterConfig.newBuilder().addVoters("voter1").build());
+
+        NavigableMap<Boundary, KeySpaceDAG.LeaderRange> current = new TreeMap<>(BoundaryUtil::compare);
+        KVRangeId id = KVRangeIdUtil.generate();
+        KVRangeId id1 = KVRangeIdUtil.generate();
+        current.put(boundary(null, "a"), new KeySpaceDAG.LeaderRange("voter1", KVRangeDescriptor
+            .newBuilder()
+            .setId(id)
+            .setVer(1L)
+            .setConfig(ClusterConfig.newBuilder().addVoters("voter2").build())
+            .build()));
+        current.put(boundary("a", null), new KeySpaceDAG.LeaderRange("voter1", KVRangeDescriptor
+            .newBuilder()
+            .setId(id1)
+            .setConfig(ClusterConfig.newBuilder().addVoters("voter2").build())
+            .build()));
+        ChangeConfigCommand command = (ChangeConfigCommand) diffBy(expected, current);
+        assertNotNull(command);
+        assertEquals(command.getToStore(), "voter1");
+        assertEquals(command.getKvRangeId(), id);
+        assertEquals(command.getExpectedVer(), 1L);
+        assertEquals(command.getVoters(), Set.of("voter1"));
+        assertEquals(command.getLearners(), Set.of("learner1"));
+    }
+
+    @Test
+    public void diffBySplit() {
+        NavigableMap<Boundary, ClusterConfig> expected = new TreeMap<>(BoundaryUtil::compare);
+        expected.put(boundary(null, "a"),
+            ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build());
+        expected.put(boundary("a", "b"),
+            ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build());
+        expected.put(boundary("b", null),
+            ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build());
+
+        NavigableMap<Boundary, KeySpaceDAG.LeaderRange> current = new TreeMap<>(BoundaryUtil::compare);
+        KVRangeId id = KVRangeIdUtil.generate();
+        KVRangeId id1 = KVRangeIdUtil.generate();
+        current.put(boundary(null, "b"), new KeySpaceDAG.LeaderRange("voter1", KVRangeDescriptor
+            .newBuilder()
+            .setId(id)
+            .setVer(1L)
+            .setConfig(ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build())
+            .build()));
+        current.put(boundary("b", null), new KeySpaceDAG.LeaderRange("voter1", KVRangeDescriptor
+            .newBuilder()
+            .setId(id1)
+            .setConfig(ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build())
+            .build()));
+        SplitCommand command = (SplitCommand) diffBy(expected, current);
+        assertNotNull(command);
+        assertEquals(command.getToStore(), "voter1");
+        assertEquals(command.getKvRangeId(), id);
+        assertEquals(command.getExpectedVer(), 1L);
+        assertEquals(command.getSplitKey(), ByteString.copyFromUtf8("a"));
+    }
+
+    @Test
+    public void diffByConfigChangeDuringMerging() {
+        NavigableMap<Boundary, ClusterConfig> expected = new TreeMap<>(BoundaryUtil::compare);
+        expected.put(boundary(null, "b"),
+            ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build());
+        expected.put(boundary("b", null),
+            ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build());
+
+        NavigableMap<Boundary, KeySpaceDAG.LeaderRange> current = new TreeMap<>(BoundaryUtil::compare);
+        KVRangeId id = KVRangeIdUtil.generate();
+        KVRangeId id1 = KVRangeIdUtil.generate();
+        KVRangeId id2 = KVRangeIdUtil.generate();
+        current.put(boundary(null, "a"), new KeySpaceDAG.LeaderRange("voter1", KVRangeDescriptor
+            .newBuilder()
+            .setId(id)
+            .setVer(1L)
+            .setConfig(ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build())
+            .build()));
+        current.put(boundary("a", "b"), new KeySpaceDAG.LeaderRange("voter1", KVRangeDescriptor
+            .newBuilder()
+            .setId(id1)
+            .setVer(2L)
+            .setConfig(ClusterConfig.newBuilder().addVoters("voter1").build())
+            .build()));
+        current.put(boundary("b", null), new KeySpaceDAG.LeaderRange("voter1", KVRangeDescriptor
+            .newBuilder()
+            .setId(id2)
+            .setConfig(ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build())
+            .build()));
+        ChangeConfigCommand command = (ChangeConfigCommand) diffBy(expected, current);
+        assertNotNull(command);
+        assertEquals(command.getToStore(), "voter1");
+        assertEquals(command.getKvRangeId(), id1);
+        assertEquals(command.getExpectedVer(), 2L);
+        assertEquals(command.getVoters(), Set.of("voter1"));
+        assertEquals(command.getLearners(), Set.of("learner1"));
+    }
+
+    @Test
+    public void diffByMergeDuringMerging() {
+        NavigableMap<Boundary, ClusterConfig> expected = new TreeMap<>(BoundaryUtil::compare);
+        expected.put(boundary(null, "b"),
+            ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build());
+        expected.put(boundary("b", null),
+            ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build());
+
+        NavigableMap<Boundary, KeySpaceDAG.LeaderRange> current = new TreeMap<>(BoundaryUtil::compare);
+        KVRangeId id = KVRangeIdUtil.generate();
+        KVRangeId id1 = KVRangeIdUtil.generate();
+        KVRangeId id2 = KVRangeIdUtil.generate();
+        current.put(boundary(null, "a"), new KeySpaceDAG.LeaderRange("voter1", KVRangeDescriptor
+            .newBuilder()
+            .setId(id)
+            .setVer(1L)
+            .setConfig(ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build())
+            .build()));
+        current.put(boundary("a", "b"), new KeySpaceDAG.LeaderRange("voter1", KVRangeDescriptor
+            .newBuilder()
+            .setId(id1)
+            .setVer(2L)
+            .setConfig(ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build())
+            .build()));
+        current.put(boundary("b", null), new KeySpaceDAG.LeaderRange("voter1", KVRangeDescriptor
+            .newBuilder()
+            .setId(id2)
+            .setConfig(ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build())
+            .build()));
+        MergeCommand command = (MergeCommand) diffBy(expected, current);
+        assertNotNull(command);
+        assertEquals(command.getToStore(), "voter1");
+        assertEquals(command.getKvRangeId(), id);
+        assertEquals(command.getExpectedVer(), 1L);
+        assertEquals(command.getMergeeId(), id1);
+    }
+
+    @Test
+    public void diffByNullDuringMerging() {
+        NavigableMap<Boundary, ClusterConfig> expected = new TreeMap<>(BoundaryUtil::compare);
+        expected.put(boundary(null, "b"),
+            ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build());
+        expected.put(boundary("b", null),
+            ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build());
+
+        NavigableMap<Boundary, KeySpaceDAG.LeaderRange> current = new TreeMap<>(BoundaryUtil::compare);
+        KVRangeId id = KVRangeIdUtil.generate();
+        KVRangeId id1 = KVRangeIdUtil.generate();
+        KVRangeId id2 = KVRangeIdUtil.generate();
+        current.put(boundary(null, "a"), new KeySpaceDAG.LeaderRange("voter1", KVRangeDescriptor
+            .newBuilder()
+            .setId(id)
+            .setVer(1L)
+            .setConfig(ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build())
+            .build()));
+        current.put(boundary("a", "b"), new KeySpaceDAG.LeaderRange("voter1", KVRangeDescriptor
+            .newBuilder()
+            .setId(id1)
+            .setVer(2L)
+            .setConfig(ClusterConfig.newBuilder().addVoters("voter1").addNextVoters("voter2").build())
+            .build()));
+        current.put(boundary("b", null), new KeySpaceDAG.LeaderRange("voter1", KVRangeDescriptor
+            .newBuilder()
+            .setId(id2)
+            .setConfig(ClusterConfig.newBuilder().addVoters("voter1").addLearners("learner1").build())
+            .build()));
+        assertNull(diffBy(expected, current));
+    }
+
+    private Boundary boundary(String startKey, String endKey) {
+        Boundary.Builder builder = Boundary.newBuilder();
+        if (startKey != null) {
+            builder.setStartKey(copyFromUtf8(startKey));
+        }
+        if (endKey != null) {
+            builder.setEndKey(copyFromUtf8(endKey));
+        }
+        return builder.build();
     }
 }

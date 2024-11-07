@@ -13,132 +13,136 @@
 
 package com.baidu.bifromq.basekv.balance.impl;
 
-import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
-
-import com.baidu.bifromq.basekv.balance.StoreBalancer;
-import com.baidu.bifromq.basekv.balance.command.SplitCommand;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.proto.SplitHint;
-import com.baidu.bifromq.basekv.proto.State;
-import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
-import com.baidu.bifromq.basekv.utils.DescriptorUtil;
-import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import java.util.Collections;
-import java.util.List;
+import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
+import com.baidu.bifromq.basekv.utils.KeySpaceDAG;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Optional;
-import java.util.Set;
 
-public class RangeSplitBalancer extends StoreBalancer {
-    public static final String LOAD_TYPE_IO_DENSITY = "ioDensity";
-    public static final String LOAD_TYPE_IO_LATENCY_NANOS = "ioLatencyNanos";
-    public static final String LOAD_TYPE_AVG_LATENCY_NANOS = "avgLatencyNanos";
+public class RangeSplitBalancer extends RuleBasedPlacementBalancer {
+    public static final String LOAD_RULE_CPU_USAGE_LIMIT = "maxCpuUsagePerRange";
+    public static final String LOAD_RULE_MAX_IO_DENSITY_PER_RANGE = "maxIODensityPerRange";
+    public static final String LOAD_RULE_IO_NANOS_LIMIT_PER_RANGE = "ioNanosLimitPerRange";
+    public static final String LOAD_RULE_MAX_RANGES_PER_STORE = "maxRangesPerStore";
 
+    private static final String LOAD_TYPE_IO_DENSITY = "ioDensity";
+    private static final String LOAD_TYPE_IO_LATENCY_NANOS = "ioLatencyNanos";
+    private static final String LOAD_TYPE_CPU_USAGE = "cpu.usage";
 
-    private static final int DEFAULT_MAX_RANGES_PER_STORE = 30;
-    private static final double DEFAULT_CPU_USAGE_LIMIT = 0.8;
-    private static final int DEFAULT_MAX_IO_DENSITY_PER_RANGE = 30;
-    private static final long DEFAULT_IO_NANOS_LIMIT_PER_RANGE = 30_000;
-    private final int maxRanges;
-    private final double cpuUsageLimit;
-    private final int maxIODensityPerRange;
-    private final long ioNanosLimitPerRange;
     private final String hintType;
-    private volatile Set<KVRangeStoreDescriptor> latestStoreDescriptors = Collections.emptySet();
 
-    public RangeSplitBalancer(String clusterId, String localStoreId, String hintType) {
-        this(clusterId,
-            localStoreId,
-            hintType,
-            DEFAULT_MAX_RANGES_PER_STORE,
-            DEFAULT_CPU_USAGE_LIMIT,
-            DEFAULT_MAX_IO_DENSITY_PER_RANGE,
-            DEFAULT_IO_NANOS_LIMIT_PER_RANGE);
-    }
+    private final Struct defaultLoadRules;
 
+    /**
+     * Constructor of StoreBalancer.
+     *
+     * @param clusterId    the id of the BaseKV cluster which the store belongs to
+     * @param localStoreId the id of the store which the balancer is responsible for
+     */
     public RangeSplitBalancer(String clusterId,
                               String localStoreId,
                               String hintType,
-                              int maxRanges,
+                              int maxRangesPerRange,
                               double cpuUsageLimit,
                               int maxIoDensityPerRange,
                               long ioNanoLimitPerRange) {
         super(clusterId, localStoreId);
         this.hintType = hintType;
-        this.maxRanges = maxRanges;
-        this.cpuUsageLimit = cpuUsageLimit;
-        this.maxIODensityPerRange = maxIoDensityPerRange;
-        this.ioNanosLimitPerRange = ioNanoLimitPerRange;
+        this.defaultLoadRules = Struct.newBuilder()
+            .putFields(LOAD_RULE_CPU_USAGE_LIMIT, Value.newBuilder().setNumberValue(cpuUsageLimit).build())
+            .putFields(LOAD_RULE_MAX_IO_DENSITY_PER_RANGE,
+                Value.newBuilder().setNumberValue(maxIoDensityPerRange).build())
+            .putFields(LOAD_RULE_IO_NANOS_LIMIT_PER_RANGE,
+                Value.newBuilder().setNumberValue(ioNanoLimitPerRange).build())
+            .putFields(LOAD_RULE_MAX_RANGES_PER_STORE, Value.newBuilder().setNumberValue(maxRangesPerRange).build())
+            .build();
     }
 
     @Override
-    public void update(String loadRules, Set<KVRangeStoreDescriptor> storeDescriptors) {
-        Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(storeDescriptors);
-        if (effectiveEpoch.isEmpty()) {
-            return;
-        }
-        latestStoreDescriptors = effectiveEpoch.get().storeDescriptors();
+    protected Struct defaultLoadRules() {
+        return defaultLoadRules;
     }
 
     @Override
-    public Optional<SplitCommand> balance() {
-        KVRangeStoreDescriptor localStoreDesc = null;
-        for (KVRangeStoreDescriptor d : latestStoreDescriptors) {
-            if (d.getId().equals(localStoreId)) {
-                localStoreDesc = d;
-                break;
-            }
+    public boolean validate(Struct loadRules) {
+        Value cpuUsageLimit = loadRules.getFieldsMap().get(LOAD_RULE_CPU_USAGE_LIMIT);
+        if (cpuUsageLimit == null
+            || !cpuUsageLimit.hasNumberValue()
+            || cpuUsageLimit.getNumberValue() < 0 || cpuUsageLimit.getNumberValue() > 1) {
+            return false;
         }
-        if (localStoreDesc == null) {
-            log.debug("There is no storeDescriptor for local store[{}]", localStoreId);
-            return Optional.empty();
+        Value maxIODensityPerRange = loadRules.getFieldsMap().get(LOAD_RULE_MAX_IO_DENSITY_PER_RANGE);
+        if (maxIODensityPerRange == null
+            || !maxIODensityPerRange.hasNumberValue()
+            || maxIODensityPerRange.getNumberValue() < 0) {
+            return false;
         }
-        double cpuUsage = localStoreDesc.getStatisticsMap().get("cpu.usage");
-        if (cpuUsage > cpuUsageLimit) {
-            log.debug("High CPU usage[{}], temporarily disable RangeSplitBalancer for local store[{}]",
-                cpuUsage, localStoreId);
-            return Optional.empty();
+        Value maxIONanosPerRange = loadRules.getFieldsMap().get(LOAD_RULE_IO_NANOS_LIMIT_PER_RANGE);
+        if (maxIONanosPerRange == null
+            || !maxIONanosPerRange.hasNumberValue()
+            || maxIONanosPerRange.getNumberValue() < 0) {
+            return false;
         }
-        if (localStoreDesc.getRangesList().size() >= maxRanges) {
-            log.debug("Max {} ranges allowed for local store[{}]", maxRanges, localStoreId);
-            return Optional.empty();
-        }
-        List<KVRangeDescriptor> localLeaderRangeDescriptors = localStoreDesc.getRangesList()
-            .stream()
-            .filter(d -> d.getRole() == RaftNodeStatus.Leader)
-            .filter(d -> d.getState() == State.StateType.Normal)
-            .filter(d -> d.getHintsList().stream()
-                .anyMatch(hint -> hint.getType().equals(hintType)))
-            // split range with highest io density
-            .sorted((o1, o2) -> Double.compare(o2.getHints(0).getLoadOrDefault(LOAD_TYPE_IO_DENSITY, 0),
-                o1.getHints(0).getLoadOrDefault(LOAD_TYPE_IO_DENSITY, 0)))
-            .toList();
-        // No leader range in localStore
-        if (localLeaderRangeDescriptors.isEmpty()) {
-            return Optional.empty();
-        }
-        for (KVRangeDescriptor leaderRangeDescriptor : localLeaderRangeDescriptors) {
-            Optional<SplitHint> splitHintOpt = leaderRangeDescriptor
+        Value maxRangesPerStore = loadRules.getFieldsMap().get(LOAD_RULE_MAX_RANGES_PER_STORE);
+        return maxRangesPerStore != null
+            && maxRangesPerStore.hasNumberValue()
+            && maxRangesPerStore.getNumberValue() > 0;
+    }
+
+    @Override
+    protected Map<Boundary, ClusterConfig> doGenerate(Struct loadRules,
+                                                      Map<String, KVRangeStoreDescriptor> landscape,
+                                                      NavigableMap<Boundary, KeySpaceDAG.LeaderRange> effectiveRoute) {
+        double cpuUsageLimit = loadRules.getFieldsMap().get(LOAD_RULE_CPU_USAGE_LIMIT).getNumberValue();
+        double maxRangesPerStore = loadRules.getFieldsMap().get(LOAD_RULE_MAX_RANGES_PER_STORE).getNumberValue();
+        double maxIODensityPerRange = loadRules.getFieldsMap().get(LOAD_RULE_MAX_IO_DENSITY_PER_RANGE).getNumberValue();
+        double ioLatencyLimitPerRange =
+            loadRules.getFieldsMap().get(LOAD_RULE_IO_NANOS_LIMIT_PER_RANGE).getNumberValue();
+        Map<Boundary, ClusterConfig> expectedRangeLayout = new HashMap<>();
+        for (Map.Entry<Boundary, KeySpaceDAG.LeaderRange> entry : effectiveRoute.entrySet()) {
+            Boundary boundary = entry.getKey();
+            KeySpaceDAG.LeaderRange leaderRange = entry.getValue();
+            KVRangeDescriptor rangeDescriptor = leaderRange.descriptor();
+            KVRangeStoreDescriptor storeDescriptor = landscape.get(leaderRange.storeId());
+            ClusterConfig clusterConfig = rangeDescriptor.getConfig();
+            Optional<SplitHint> splitHintOpt = rangeDescriptor
                 .getHintsList()
                 .stream()
                 .filter(h -> h.getType().equals(hintType))
                 .findFirst();
-            assert splitHintOpt.isPresent();
-            SplitHint splitHint = splitHintOpt.get();
-            if (splitHint.getLoadOrDefault(LOAD_TYPE_IO_LATENCY_NANOS, 0) < ioNanosLimitPerRange
-                &&
-                splitHint.getLoadOrDefault(LOAD_TYPE_IO_DENSITY, 0) > maxIODensityPerRange && splitHint.hasSplitKey()) {
-                log.debug("Split range[{}] in store[{}]: key={}",
-                    KVRangeIdUtil.toString(leaderRangeDescriptor.getId()),
-                    localStoreId, splitHint.getSplitKey());
-                return Optional.of(SplitCommand.builder()
-                    .toStore(localStoreId)
-                    .expectedVer(leaderRangeDescriptor.getVer())
-                    .kvRangeId(leaderRangeDescriptor.getId())
-                    .splitKey(splitHint.getSplitKey())
-                    .build());
+            if (splitHintOpt.isPresent()) {
+                SplitHint splitHint = splitHintOpt.get();
+                double cpuUsage = storeDescriptor.getStatisticsMap().get(LOAD_TYPE_CPU_USAGE);
+                double ioDensity = splitHint.getLoadOrDefault(LOAD_TYPE_IO_DENSITY, 0);
+                double ioLatencyNanos = splitHint.getLoadOrDefault(LOAD_TYPE_IO_LATENCY_NANOS, 0);
+                if (clusterConfig.getNextVotersList().isEmpty() && clusterConfig.getNextLearnersList().isEmpty()
+                    && cpuUsage < cpuUsageLimit
+                    && ioLatencyNanos < ioLatencyLimitPerRange
+                    && ioDensity > maxIODensityPerRange
+                    && storeDescriptor.getRangesList().size() < maxRangesPerStore
+                    && splitHint.hasSplitKey()) {
+                    expectedRangeLayout.put(boundary
+                        .toBuilder()
+                        .setEndKey(splitHint.getSplitKey())
+                        .build(), clusterConfig);
+                    expectedRangeLayout.put(boundary
+                        .toBuilder()
+                        .setStartKey(splitHint.getSplitKey())
+                        .build(), clusterConfig);
+                } else {
+                    expectedRangeLayout.put(boundary, rangeDescriptor.getConfig());
+                }
+            } else {
+                expectedRangeLayout.put(boundary, rangeDescriptor.getConfig());
             }
         }
-        return Optional.empty();
+        return expectedRangeLayout;
     }
 }

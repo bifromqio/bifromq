@@ -29,7 +29,8 @@ public enum Headers {
     HEADER_QOS("qos"),
     HEADER_EXPIRY_SECONDS("expiry_seconds"),
     HEADER_SERVER_ID("server_id"),
-    HEADER_CLUSTER_ID("cluster_id");
+    HEADER_CLUSTER_ID("cluster_id"),
+    HEADER_BALANCER_CLASS("balancer_class");
 
     public final String header;
 

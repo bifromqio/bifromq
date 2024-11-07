@@ -48,4 +48,7 @@ public class RetainStoreCoProcFactory implements IKVRangeCoProcFactory {
                                        Supplier<IKVCloseableReader> rangeReaderProvider) {
         return new RetainStoreCoProc(clusterId, storeId, id, rangeReaderProvider);
     }
+
+    public void close() {
+    }
 }

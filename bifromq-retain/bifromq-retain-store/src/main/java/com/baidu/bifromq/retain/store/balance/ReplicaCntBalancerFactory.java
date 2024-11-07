@@ -13,12 +13,12 @@
 
 package com.baidu.bifromq.retain.store.balance;
 
-import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.ReplicaCntBalancer;
+import com.baidu.bifromq.retain.store.spi.IRetainStoreBalancerFactory;
 import com.baidu.bifromq.sysprops.props.RetainStoreRangeVoterNum;
 
-public class ReplicaCntBalancerFactory implements IStoreBalancerFactory {
+public class ReplicaCntBalancerFactory implements IRetainStoreBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {

@@ -13,6 +13,9 @@
 
 package com.baidu.bifromq.basekv;
 
+import static com.baidu.bifromq.basekv.proto.ProposalResult.ACCEPTED;
+import static com.baidu.bifromq.basekv.proto.ProposalResult.REJECTED;
+
 import com.baidu.bifromq.basecrdt.core.api.CausalCRDTType;
 import com.baidu.bifromq.basecrdt.core.api.IMVReg;
 import com.baidu.bifromq.basecrdt.core.api.IORMap;
@@ -23,15 +26,17 @@ import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.proto.DescriptorKey;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.proto.LoadRules;
+import com.baidu.bifromq.basekv.proto.LoadRulesProposition;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.protobuf.Struct;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import io.reactivex.rxjava3.subjects.Subject;
-import java.util.Collections;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,36 +44,69 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class BaseKVClusterMetadataManager implements IBaseKVClusterMetadataManager {
-    private static final LoadRules DEFAULT_LOAD_RULES = LoadRules.newBuilder().setLoadRules("{}").build();
 
     private record StoreDescriptorAndReplicas(Map<DescriptorKey, KVRangeStoreDescriptor> descriptorMap,
                                               Set<ByteString> replicaIds) {
     }
 
+    private static final ByteString ORMapKey_LoadRules_Proposal = ByteString.copyFromUtf8("LoadRulesProposal");
     private static final ByteString ORMapKey_LoadRules = ByteString.copyFromUtf8("LoadRules");
     private static final ByteString ORMapKey_Landscape = ByteString.copyFromUtf8("Landscape");
-    private final IMVReg loadRulesMVReg;
+    private final IORMap loadRulesORMap;
+    private final IORMap loadRulesProposalORMap;
     private final IORMap landscapeORMap;
-    private final Subject<LoadRules> loadRulesSubject = BehaviorSubject.createDefault(DEFAULT_LOAD_RULES);
+    private final Duration proposalTimeout;
+    private final Subject<Map<String, Struct>> loadRulesSubject = BehaviorSubject.create();
     private final BehaviorSubject<Map<DescriptorKey, KVRangeStoreDescriptor>> landscapeSubject =
-        BehaviorSubject.createDefault(Collections.emptyMap());
+        BehaviorSubject.create();
     private final CompositeDisposable disposable = new CompositeDisposable();
+    private volatile LoadRulesProposalHandler handler = null;
 
     public BaseKVClusterMetadataManager(IORMap basekvClusterDescriptor,
-                                        Observable<Set<Replica>> aliveReplicas) {
-        this.loadRulesMVReg = basekvClusterDescriptor.getMVReg(ORMapKey_LoadRules);
+                                        Observable<Set<Replica>> aliveReplicas,
+                                        Duration proposalTimeout) {
+        this.loadRulesORMap = basekvClusterDescriptor.getORMap(ORMapKey_LoadRules);
+        this.loadRulesProposalORMap = basekvClusterDescriptor.getORMap(ORMapKey_LoadRules_Proposal);
         this.landscapeORMap = basekvClusterDescriptor.getORMap(ORMapKey_Landscape);
+        this.proposalTimeout = proposalTimeout;
         disposable.add(landscapeORMap.inflation()
             .map(this::buildLandscape)
             .subscribe(landscapeSubject::onNext));
-        disposable.add(loadRulesMVReg.inflation()
-            .mapOptional(this::buildLoadRules)
+        disposable.add(loadRulesORMap.inflation()
+            .map(this::buildBalancerLoadRules)
             .subscribe(loadRulesSubject::onNext));
+        disposable.add(loadRulesProposalORMap.inflation()
+            .map(this::buildLoadRulesProposition)
+            .map(m -> {
+                Map<String, LoadRulesProposition> result = new HashMap<>();
+                m.forEach((k, v) -> {
+                    if (v.hasProposal()) {
+                        result.put(k, v);
+                    }
+                });
+                return result;
+            })
+            .scan((prev, curr) -> {
+                if (prev == null) {
+                    return curr;
+                } else {
+                    Map<String, LoadRulesProposition> result = new HashMap<>();
+                    curr.forEach((k, v) -> {
+                        if (!prev.containsKey(k) || !prev.get(k).equals(v)) {
+                            result.put(k, v);
+                        }
+                    });
+                    return result;
+                }
+            })
+            .filter(m -> !m.isEmpty())
+            .subscribe(this::handleProposals));
         disposable.add(Observable.combineLatest(landscapeSubject, aliveReplicas
                     .map(replicas -> replicas.stream().map(Replica::getId).collect(Collectors.toSet())),
                 (StoreDescriptorAndReplicas::new))
@@ -76,20 +114,51 @@ class BaseKVClusterMetadataManager implements IBaseKVClusterMetadataManager {
     }
 
     @Override
-    public Observable<String> loadRules() {
-        return loadRulesSubject.map(LoadRules::getLoadRules);
+    public Observable<Map<String, Struct>> loadRules() {
+        return loadRulesSubject.distinctUntilChanged();
     }
 
     @Override
-    public CompletableFuture<Void> setLoadRules(String loadRules) {
-        Optional<LoadRules> rulesOnCRDT = buildLoadRules(System.currentTimeMillis());
-        if (rulesOnCRDT.isEmpty() || !rulesOnCRDT.get().getLoadRules().equals(loadRules)) {
-            return loadRulesMVReg.execute(MVRegOperation.write(LoadRules.newBuilder()
-                .setLoadRules(loadRules)
-                .setHlc(HLC.INST.get())
-                .build().toByteString()));
-        }
-        return CompletableFuture.completedFuture(null);
+    public void setLoadRulesProposalHandler(LoadRulesProposalHandler handler) {
+        this.handler = handler;
+    }
+
+    @Override
+    public CompletableFuture<ProposalResult> proposeLoadRules(String balancerClassFQN, Struct loadRules) {
+        IMVReg balancerProposalMVReg = loadRulesProposalORMap.getMVReg(ByteString.copyFromUtf8(balancerClassFQN));
+        CompletableFuture<ProposalResult> resultFuture = new CompletableFuture<>();
+        long now = HLC.INST.get();
+        balancerProposalMVReg.inflation()
+            .timeout(proposalTimeout.toMillis(), TimeUnit.MILLISECONDS)
+            .mapOptional(ts -> {
+                Optional<LoadRulesProposition> propositionOpt = buildLoadRulesProposition(balancerProposalMVReg);
+                if (propositionOpt.isEmpty()) {
+                    return Optional.of(ProposalResult.NO_BALANCER);
+                }
+                LoadRulesProposition loadRulesProposition = propositionOpt.get();
+                if (loadRulesProposition.getHlc() == now) {
+                    if (loadRulesProposition.hasProposalResult()) {
+                        switch (loadRulesProposition.getProposalResult()) {
+                            case ACCEPTED:
+                                return Optional.of(ProposalResult.ACCEPTED);
+                            default:
+                                return Optional.of(ProposalResult.REJECTED);
+                        }
+                    }
+                    return Optional.empty();
+                } else if (loadRulesProposition.getHlc() > now) {
+                    return Optional.of(ProposalResult.OVERRIDDEN);
+                } else {
+                    return Optional.empty();
+                }
+            })
+            .take(1)
+            .subscribe(resultFuture::complete, resultFuture::completeExceptionally);
+        balancerProposalMVReg.execute(MVRegOperation.write(LoadRulesProposition.newBuilder()
+            .setProposal(loadRules)
+            .setHlc(now)
+            .build().toByteString()));
+        return resultFuture;
     }
 
     @Override
@@ -136,12 +205,78 @@ class BaseKVClusterMetadataManager implements IBaseKVClusterMetadataManager {
         landscapeSubject.onComplete();
     }
 
-    private Optional<LoadRules> buildLoadRules(long ts) {
-        List<LoadRules> l = Lists.newArrayList(Iterators.filter(Iterators.transform(loadRulesMVReg.read(), b -> {
+    private void handleProposals(Map<String, LoadRulesProposition> proposals) {
+        LoadRulesProposalHandler handler = this.handler;
+        if (handler != null) {
+            for (String balancerClassFQN : proposals.keySet()) {
+                LoadRulesProposition proposition = proposals.get(balancerClassFQN);
+                Struct loadRules = proposition.getProposal();
+                switch (handler.handle(balancerClassFQN, loadRules)) {
+                    case ACCEPTED -> {
+                        loadRulesORMap.execute(ORMapOperation
+                            .update(ByteString.copyFromUtf8(balancerClassFQN))
+                            .with(MVRegOperation.write(LoadRules.newBuilder()
+                                .setLoadRules(loadRules)
+                                .setHlc(proposition.getHlc()) // keep same HLC
+                                .build().toByteString())));
+                        loadRulesProposalORMap.execute(ORMapOperation
+                            .update(ByteString.copyFromUtf8(balancerClassFQN))
+                            .with(MVRegOperation.write(LoadRulesProposition.newBuilder()
+                                .setProposalResult(ACCEPTED)
+                                .setHlc(proposition.getHlc()) // keep same HLC
+                                .build().toByteString())));
+                    }
+                    case REJECTED -> loadRulesProposalORMap.execute(ORMapOperation
+                        .update(ByteString.copyFromUtf8(balancerClassFQN))
+                        .with(MVRegOperation.write(LoadRulesProposition.newBuilder()
+                            .setProposalResult(REJECTED)
+                            .setHlc(proposition.getHlc()) // keep same HLC
+                            .build().toByteString())));
+                    case NO_BALANCER -> loadRulesProposalORMap.execute(ORMapOperation
+                        .remove(ByteString.copyFromUtf8(balancerClassFQN))
+                        .of(CausalCRDTType.mvreg));
+                }
+            }
+        }
+    }
+
+    private Map<String, Struct> buildBalancerLoadRules(long ts) {
+        Map<String, Struct> loadRulesMap = new HashMap<>();
+        loadRulesORMap.keys().forEachRemaining(ormapKey -> {
+            String balancerClassFQN = ormapKey.key().toStringUtf8();
+            Optional<LoadRules> loadRules = buildLoadRules(loadRulesORMap.getMVReg(ormapKey.key()));
+            loadRules.ifPresent(rules -> loadRulesMap.put(balancerClassFQN, rules.getLoadRules()));
+        });
+        return loadRulesMap;
+    }
+
+    private Optional<LoadRules> buildLoadRules(IMVReg mvReg) {
+        List<LoadRules> l = Lists.newArrayList(Iterators.filter(Iterators.transform(mvReg.read(), b -> {
             try {
                 return LoadRules.parseFrom(b);
             } catch (InvalidProtocolBufferException e) {
                 log.error("Unable to parse LoadRules", e);
+                return null;
+            }
+        }), Objects::nonNull));
+        l.sort((a, b) -> Long.compareUnsigned(b.getHlc(), a.getHlc()));
+        return Optional.ofNullable(l.isEmpty() ? null : l.get(0));
+    }
+
+    private Map<String, LoadRulesProposition> buildLoadRulesProposition(long ts) {
+        Map<String, LoadRulesProposition> loadRulesPropositionMap = new HashMap<>();
+        loadRulesProposalORMap.keys().forEachRemaining(ormapKey ->
+            buildLoadRulesProposition(loadRulesProposalORMap.getMVReg(ormapKey.key()))
+                .ifPresent(proposition -> loadRulesPropositionMap.put(ormapKey.key().toStringUtf8(), proposition)));
+        return loadRulesPropositionMap;
+    }
+
+    private Optional<LoadRulesProposition> buildLoadRulesProposition(IMVReg mvReg) {
+        List<LoadRulesProposition> l = Lists.newArrayList(Iterators.filter(Iterators.transform(mvReg.read(), b -> {
+            try {
+                return LoadRulesProposition.parseFrom(b);
+            } catch (InvalidProtocolBufferException e) {
+                log.error("Unable to parse LoadRulesProposal", e);
                 return null;
             }
         }), Objects::nonNull));

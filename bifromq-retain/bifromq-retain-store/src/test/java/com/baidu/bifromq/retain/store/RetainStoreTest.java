@@ -32,7 +32,6 @@ import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.IBaseKVMetaService;
-import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngineConfigurator;
@@ -58,11 +57,13 @@ import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcInput;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcOutput;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcInput;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcOutput;
+import com.baidu.bifromq.retain.store.balance.RangeBootstrapBalancerFactory;
 import com.baidu.bifromq.retain.utils.KeyUtil;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Struct;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Metrics;
@@ -74,6 +75,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.Comparator;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -165,11 +167,13 @@ public class RetainStoreTest {
             .metaService(metaService)
             .storeClient(storeClient)
             .storeOptions(options)
-            .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .queryExecutor(queryExecutor)
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .gcInterval(Duration.ofSeconds(60))
+            .balancerFactoryConfig(
+                Map.of(RangeBootstrapBalancerFactory.class.getName(),
+                    Struct.getDefaultInstance()))
             .build();
     }
 

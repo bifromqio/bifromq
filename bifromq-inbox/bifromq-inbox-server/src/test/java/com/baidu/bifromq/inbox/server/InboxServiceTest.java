@@ -24,7 +24,6 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.IBaseKVMetaService;
-import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
@@ -34,13 +33,16 @@ import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.store.IInboxStore;
+import com.baidu.bifromq.inbox.store.balance.RangeBootstrapBalancerFactory;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import com.google.protobuf.Struct;
 import java.lang.reflect.Method;
 import java.time.Duration;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -103,7 +105,6 @@ public abstract class InboxServiceTest {
         metaService = IBaseKVMetaService.newInstance(crdtService);
         inboxClient = IInboxClient.newBuilder().crdtService(crdtService).build();
 
-        KVRangeBalanceControllerOptions controllerOptions = new KVRangeBalanceControllerOptions();
         KVRangeStoreOptions kvRangeStoreOptions = new KVRangeStoreOptions();
         kvRangeStoreOptions.setDataEngineConfigurator(new InMemKVEngineConfigurator());
         kvRangeStoreOptions.setWalEngineConfigurator(new InMemKVEngineConfigurator());
@@ -124,10 +125,11 @@ public abstract class InboxServiceTest {
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .storeOptions(kvRangeStoreOptions)
-            .balanceControllerOptions(controllerOptions)
             .queryExecutor(queryExecutor)
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
+            .balancerFactoryConfig(
+                Map.of(RangeBootstrapBalancerFactory.class.getName(), Struct.getDefaultInstance()))
             .build();
         inboxServer = IInboxServer.standaloneBuilder()
             .host("127.0.0.1")

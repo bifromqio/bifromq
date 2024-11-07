@@ -13,11 +13,11 @@
 
 package com.baidu.bifromq.dist.worker.balance;
 
-import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.RedundantEpochRemovalBalancer;
+import com.baidu.bifromq.dist.worker.spi.IDistWorkerBalancerFactory;
 
-public class RedundantEpochRemovalBalancerFactory implements IStoreBalancerFactory {
+public class RedundantEpochRemovalBalancerFactory implements IDistWorkerBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {

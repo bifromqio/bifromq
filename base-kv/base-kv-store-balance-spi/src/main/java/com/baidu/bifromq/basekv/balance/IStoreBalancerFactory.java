@@ -19,5 +19,4 @@ package com.baidu.bifromq.basekv.balance;
 public interface IStoreBalancerFactory {
 
     StoreBalancer newBalancer(String clusterId, String localStoreId);
-
 }

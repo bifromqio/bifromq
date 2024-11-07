@@ -22,13 +22,13 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.IBaseKVMetaService;
-import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.IRPCClient;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.worker.IDistWorker;
+import com.baidu.bifromq.dist.worker.balance.RangeBootstrapBalancerFactory;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
@@ -37,7 +37,9 @@ import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import com.google.protobuf.Struct;
 import java.time.Duration;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -103,7 +105,6 @@ public abstract class DistServiceTest {
         kvRangeStoreOptions.setDataEngineConfigurator(new InMemKVEngineConfigurator());
         kvRangeStoreOptions.setWalEngineConfigurator(new InMemKVEngineConfigurator());
 
-        KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
         workerClient = IBaseKVStoreClient
             .newBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
@@ -126,8 +127,10 @@ public abstract class DistServiceTest {
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(kvRangeStoreOptions)
-            .balanceControllerOptions(balanceControllerOptions)
             .subBrokerManager(subBrokerMgr)
+            .balancerFactoryConfig(
+                Map.of(RangeBootstrapBalancerFactory.class.getName(),
+                    Struct.getDefaultInstance()))
             .build();
         distServer = IDistServer.standaloneBuilder()
             .host("127.0.0.1")

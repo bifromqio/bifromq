@@ -13,13 +13,13 @@
 
 package com.baidu.bifromq.inbox.store.balance;
 
-import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.RangeBootstrapBalancer;
+import com.baidu.bifromq.inbox.store.spi.IInboxStoreBalancerFactory;
 import com.baidu.bifromq.sysprops.props.InboxStoreRecoveryWaitTimeMillis;
 import java.time.Duration;
 
-public class RangeBootstrapBalancerFactory implements IStoreBalancerFactory {
+public class RangeBootstrapBalancerFactory implements IInboxStoreBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {

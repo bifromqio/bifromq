@@ -14,12 +14,13 @@
 package com.baidu.bifromq.retain.store;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.IBaseKVMetaService;
-import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
+import com.google.protobuf.Struct;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -30,10 +31,11 @@ abstract class AbstractRetainStoreBuilder<T extends AbstractRetainStoreBuilder<T
     IBaseKVMetaService metaService;
     IBaseKVStoreClient storeClient;
     KVRangeStoreOptions storeOptions;
-    KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
     Executor queryExecutor;
     int tickerThreads;
     ScheduledExecutorService bgTaskExecutor;
+    Duration balancerRetryDelay = Duration.ofSeconds(5);
+    Map<String, Struct> balancerFactoryConfig = new HashMap<>();
     Duration loadEstimateWindow = Duration.ofSeconds(5);
     Duration gcInterval = Duration.ofMinutes(60);
 
@@ -73,11 +75,6 @@ abstract class AbstractRetainStoreBuilder<T extends AbstractRetainStoreBuilder<T
         return thisT();
     }
 
-    public T balanceControllerOptions(KVRangeBalanceControllerOptions controllerOptions) {
-        this.balanceControllerOptions = controllerOptions;
-        return thisT();
-    }
-
     public T queryExecutor(Executor queryExecutor) {
         this.queryExecutor = queryExecutor;
         return thisT();
@@ -90,6 +87,16 @@ abstract class AbstractRetainStoreBuilder<T extends AbstractRetainStoreBuilder<T
 
     public T bgTaskExecutor(ScheduledExecutorService bgTaskExecutor) {
         this.bgTaskExecutor = bgTaskExecutor;
+        return thisT();
+    }
+
+    public T balanceRetryDelay(Duration delay) {
+        this.balancerRetryDelay = delay;
+        return thisT();
+    }
+
+    public T balancerFactoryConfig(Map<String, Struct> config) {
+        this.balancerFactoryConfig.putAll(config);
         return thisT();
     }
 

@@ -15,13 +15,15 @@ package com.baidu.bifromq.basekv.balance.impl;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.assertSame;
 
+import com.baidu.bifromq.basekv.balance.BalanceNow;
+import com.baidu.bifromq.basekv.balance.BalanceResult;
+import com.baidu.bifromq.basekv.balance.BalanceResultType;
 import com.baidu.bifromq.basekv.balance.command.BootstrapCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import java.time.Duration;
 import java.util.Collections;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
@@ -45,12 +47,12 @@ public class RangeBootstrapBalancerTest {
     @Test
     public void updateWithoutStoreDescriptors() {
         // Test when there are no store descriptors
-        balancer.update("{}", Collections.emptySet());
+        balancer.update(Collections.emptySet());
         mockTime.addAndGet(2000L); // Advance time by 2 seconds
 
-        Optional<BootstrapCommand> command = balancer.balance();
-        assertTrue(command.isPresent());
-        assertEquals(FULL_BOUNDARY, command.get().getBoundary());
+        BalanceResult result = balancer.balance();
+        assertSame(result.type(), BalanceResultType.BalanceNow);
+        assertEquals(FULL_BOUNDARY, ((BootstrapCommand) ((BalanceNow<?>) result).command).getBoundary());
     }
 
 
@@ -61,11 +63,11 @@ public class RangeBootstrapBalancerTest {
             .setId(localStoreId)
             .build();
 
-        balancer.update("{}", Set.of(storeDescriptor));
+        balancer.update(Set.of(storeDescriptor));
         mockTime.addAndGet(2000L); // Advance time by 2 seconds
 
-        Optional<BootstrapCommand> command = balancer.balance();
-        assertTrue(command.isPresent());
-        assertEquals(FULL_BOUNDARY, command.get().getBoundary());
+        BalanceResult result = balancer.balance();
+        assertSame(result.type(), BalanceResultType.BalanceNow);
+        assertEquals(FULL_BOUNDARY, ((BootstrapCommand) ((BalanceNow<?>) result).command).getBoundary());
     }
 }

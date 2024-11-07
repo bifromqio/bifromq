@@ -17,6 +17,9 @@ import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter
 import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter.LOAD_TYPE_IO_LATENCY_NANOS;
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
 
+import com.baidu.bifromq.basekv.balance.BalanceNow;
+import com.baidu.bifromq.basekv.balance.BalanceResult;
+import com.baidu.bifromq.basekv.balance.NoNeedBalance;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.command.SplitCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
@@ -61,8 +64,8 @@ class DistWorkerSplitBalancer extends StoreBalancer {
     }
 
     @Override
-    public void update(String loadRules, Set<KVRangeStoreDescriptor> storeDescriptors) {
-        Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(storeDescriptors);
+    public void update(Set<KVRangeStoreDescriptor> landscape) {
+        Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(landscape);
         if (effectiveEpoch.isEmpty()) {
             return;
         }
@@ -70,7 +73,7 @@ class DistWorkerSplitBalancer extends StoreBalancer {
     }
 
     @Override
-    public Optional<SplitCommand> balance() {
+    public BalanceResult balance() {
         KVRangeStoreDescriptor localStoreDesc = null;
         for (KVRangeStoreDescriptor d : latestStoreDescriptors) {
             if (d.getId().equals(localStoreId)) {
@@ -80,17 +83,17 @@ class DistWorkerSplitBalancer extends StoreBalancer {
         }
         if (localStoreDesc == null) {
             log.warn("There is no storeDescriptor for local store[{}]", localStoreId);
-            return Optional.empty();
+            return NoNeedBalance.INSTANCE;
         }
         double cpuUsage = localStoreDesc.getStatisticsMap().get("cpu.usage");
         if (cpuUsage > cpuUsageLimit) {
             log.warn("High CPU usage[{}], temporarily disable FanoutSplitBalancer for local store[{}]",
                 cpuUsage, localStoreId);
-            return Optional.empty();
+            return NoNeedBalance.INSTANCE;
         }
         Optional<SplitCommand> fanoutBalanceCmd = balanceFanout(localStoreDesc);
         if (fanoutBalanceCmd.isPresent()) {
-            return fanoutBalanceCmd;
+            return BalanceNow.of(fanoutBalanceCmd.get());
         }
         return balanceMutationLoad(localStoreDesc);
     }
@@ -135,7 +138,7 @@ class DistWorkerSplitBalancer extends StoreBalancer {
         return Optional.empty();
     }
 
-    private Optional<SplitCommand> balanceMutationLoad(KVRangeStoreDescriptor localStoreDesc) {
+    private BalanceResult balanceMutationLoad(KVRangeStoreDescriptor localStoreDesc) {
         List<KVRangeDescriptor> localLeaderRangeDescriptors = localStoreDesc.getRangesList()
             .stream()
             .filter(d -> d.getRole() == RaftNodeStatus.Leader)
@@ -148,7 +151,7 @@ class DistWorkerSplitBalancer extends StoreBalancer {
             .toList();
         // No leader range in localStore
         if (localLeaderRangeDescriptors.isEmpty()) {
-            return Optional.empty();
+            return NoNeedBalance.INSTANCE;
         }
         for (KVRangeDescriptor leaderRangeDescriptor : localLeaderRangeDescriptors) {
             Optional<SplitHint> splitHintOpt = leaderRangeDescriptor
@@ -164,7 +167,7 @@ class DistWorkerSplitBalancer extends StoreBalancer {
                 log.debug("Split range[{}] in store[{}]: key={}",
                     KVRangeIdUtil.toString(leaderRangeDescriptor.getId()),
                     localStoreId, splitHint.getSplitKey());
-                return Optional.of(SplitCommand.builder()
+                return BalanceNow.of(SplitCommand.builder()
                     .toStore(localStoreId)
                     .expectedVer(leaderRangeDescriptor.getVer())
                     .kvRangeId(leaderRangeDescriptor.getId())
@@ -172,6 +175,6 @@ class DistWorkerSplitBalancer extends StoreBalancer {
                     .build());
             }
         }
-        return Optional.empty();
+        return NoNeedBalance.INSTANCE;
     }
 }

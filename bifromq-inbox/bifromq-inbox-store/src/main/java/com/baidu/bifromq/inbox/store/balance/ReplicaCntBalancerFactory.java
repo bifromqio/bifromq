@@ -13,12 +13,12 @@
 
 package com.baidu.bifromq.inbox.store.balance;
 
-import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.ReplicaCntBalancer;
+import com.baidu.bifromq.inbox.store.spi.IInboxStoreBalancerFactory;
 import com.baidu.bifromq.sysprops.props.InboxStoreRangeVoterNum;
 
-public class ReplicaCntBalancerFactory implements IStoreBalancerFactory {
+public class ReplicaCntBalancerFactory implements IInboxStoreBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {

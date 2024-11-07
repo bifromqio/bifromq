@@ -13,6 +13,12 @@
 
 package com.baidu.bifromq.basekv.balance.impl;
 
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertSame;
+
+import com.baidu.bifromq.basekv.balance.BalanceNow;
+import com.baidu.bifromq.basekv.balance.BalanceResult;
+import com.baidu.bifromq.basekv.balance.BalanceResultType;
 import com.baidu.bifromq.basekv.balance.command.RecoveryCommand;
 import com.baidu.bifromq.basekv.balance.utils.DescriptorUtils;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
@@ -23,8 +29,6 @@ import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import java.util.List;
-import java.util.Optional;
-import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -41,8 +45,7 @@ public class RecoveryBalancerTest {
 
     @Test
     public void balanceWithoutUpdate() {
-        Optional<RecoveryCommand> balance = balancer.balance();
-        Assert.assertTrue(balance.isEmpty());
+        assertEquals(balancer.balance().type(), BalanceResultType.NoNeedBalance);
     }
 
     @Test
@@ -59,11 +62,11 @@ public class RecoveryBalancerTest {
             .setId("store2")
             .addRanges(rangeDescriptors.get(0).toBuilder().setRole(RaftNodeStatus.Candidate).setVer(3).build())
             .build();
-        balancer.update("{}", Sets.newHashSet(storeDescriptor1, storeDescriptor2));
-        Optional<RecoveryCommand> commandOptional = balancer.balance();
-        Assert.assertTrue(commandOptional.isPresent());
-        RecoveryCommand recoveryCommand = commandOptional.get();
-        Assert.assertEquals("store2", recoveryCommand.getToStore());
+        balancer.update(Sets.newHashSet(storeDescriptor1, storeDescriptor2));
+        BalanceResult result = balancer.balance();
+        assertSame(result.type(), BalanceResultType.BalanceNow);
+        RecoveryCommand recoveryCommand = (RecoveryCommand) ((BalanceNow<?>) result).command;
+        assertEquals("store2", recoveryCommand.getToStore());
     }
 
     @Test
@@ -80,14 +83,14 @@ public class RecoveryBalancerTest {
             .setId("aaaaa")
             .addRanges(rangeDescriptors.get(0).toBuilder().setRole(RaftNodeStatus.Candidate).setVer(3).build())
             .build();
-        balancer.update("{}", Sets.newHashSet(storeDescriptor1, storeDescriptor2));
+        balancer.update(Sets.newHashSet(storeDescriptor1, storeDescriptor2));
         // store2 dead temporarily
-        balancer.update("{}", Sets.newHashSet(storeDescriptor1));
+        balancer.update(Sets.newHashSet(storeDescriptor1));
 
-        Optional<RecoveryCommand> commandOptional = balancer.balance();
-        Assert.assertTrue(commandOptional.isPresent());
-        RecoveryCommand recoveryCommand = commandOptional.get();
-        Assert.assertEquals(LOCAL_STORE_ID, recoveryCommand.getToStore());
+        BalanceResult result = balancer.balance();
+        assertSame(result.type(), BalanceResultType.BalanceNow);
+        RecoveryCommand recoveryCommand = (RecoveryCommand) ((BalanceNow<?>) result).command;
+        assertEquals(LOCAL_STORE_ID, recoveryCommand.getToStore());
     }
 
     @Test
@@ -109,10 +112,8 @@ public class RecoveryBalancerTest {
             .addRanges(rangeDescriptors.get(0).toBuilder().setRole(RaftNodeStatus.Candidate).setVer(3).build())
             .build();
 
-        balancer.update("{}", Sets.newHashSet(storeDescriptor1, storeDescriptor2, storeDescriptor3));
-        Optional<RecoveryCommand> commandOptional = balancer.balance();
-        Assert.assertTrue(commandOptional.isEmpty());
+        balancer.update(Sets.newHashSet(storeDescriptor1, storeDescriptor2, storeDescriptor3));
+        BalanceResult result = balancer.balance();
+        assertSame(result.type(), BalanceResultType.NoNeedBalance);
     }
-
-
 }

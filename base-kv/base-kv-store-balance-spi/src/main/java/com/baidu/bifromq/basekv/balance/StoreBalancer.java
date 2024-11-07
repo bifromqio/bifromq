@@ -13,10 +13,9 @@
 
 package com.baidu.bifromq.basekv.balance;
 
-import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.logger.SiftLogger;
-import java.util.Optional;
+import com.google.protobuf.Struct;
 import java.util.Set;
 import org.slf4j.Logger;
 
@@ -40,8 +39,32 @@ public abstract class StoreBalancer {
         this.localStoreId = localStoreId;
     }
 
-    public abstract void update(String loadRules, Set<KVRangeStoreDescriptor> storeDescriptors);
+    public boolean validate(Struct loadRules) {
+        return false;
+    }
 
-    public abstract Optional<? extends BalanceCommand> balance();
+    /**
+     * Update the store balancer with latest load rules.
+     * <br>
+     * It's up to the balancer implementation to decide how to interpret the rules to generate concrete balancing action
+     * commands.
+     *
+     * @param loadRules the latest load rules
+     */
+    public void update(Struct loadRules) {
+        // do nothing by default
+    }
 
+    /**
+     * Update the store balancer with landscape.
+     *
+     * @param landscape the latest store descriptors
+     */
+    public abstract void update(Set<KVRangeStoreDescriptor> landscape);
+
+    public abstract BalanceResult balance();
+
+    public void close() {
+        // do nothing by default
+    }
 }

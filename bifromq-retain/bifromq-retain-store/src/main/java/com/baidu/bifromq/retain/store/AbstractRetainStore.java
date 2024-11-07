@@ -15,17 +15,22 @@ package com.baidu.bifromq.retain.store;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.basekv.balance.KVRangeBalanceController;
+import com.baidu.bifromq.basehookloader.BaseHookLoader;
+import com.baidu.bifromq.basekv.balance.KVStoreBalanceController;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.baserpc.IConnectable;
 import com.baidu.bifromq.retain.store.gc.IRetainStoreGCProcessor;
 import com.baidu.bifromq.retain.store.gc.RetainStoreGCProcessor;
+import com.baidu.bifromq.retain.store.spi.IRetainStoreBalancerFactory;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Duration;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -42,11 +47,12 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
     private final String clusterId;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final IBaseKVStoreClient storeClient;
-    private final KVRangeBalanceController rangeBalanceController;
+    private final KVStoreBalanceController balanceController;
     private final AsyncRunner jobRunner;
     private final ScheduledExecutorService jobScheduler;
     private final boolean jobExecutorOwner;
     private final Duration gcInterval;
+    private final List<IRetainStoreBalancerFactory> effectiveBalancerFactories = new LinkedList<>();
     private volatile CompletableFuture<Void> gcJob;
     protected final RetainStoreCoProcFactory coProcFactory;
     private IRetainStoreGCProcessor gcProcessor;
@@ -56,8 +62,26 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
         this.storeClient = builder.storeClient;
         this.gcInterval = builder.gcInterval;
         coProcFactory = new RetainStoreCoProcFactory(builder.loadEstimateWindow);
-        rangeBalanceController =
-            new KVRangeBalanceController(storeClient, builder.balanceControllerOptions, builder.bgTaskExecutor);
+        Map<String, IRetainStoreBalancerFactory> loadedFactories =
+            BaseHookLoader.load(IRetainStoreBalancerFactory.class);
+        for (String factoryName : builder.balancerFactoryConfig.keySet()) {
+            if (!loadedFactories.containsKey(factoryName)) {
+                log.warn("RetainStoreBalancerFactory[{}] not found", factoryName);
+                continue;
+            }
+            IRetainStoreBalancerFactory balancer = loadedFactories.get(factoryName);
+            balancer.init(builder.balancerFactoryConfig.get(factoryName));
+            log.info("RetainStoreBalancerFactory[{}] enabled", factoryName);
+            effectiveBalancerFactories.add(balancer);
+        }
+
+
+        balanceController = new KVStoreBalanceController(
+            builder.metaService.metadataManager(clusterId),
+            storeClient,
+            effectiveBalancerFactories,
+            builder.balancerRetryDelay,
+            builder.bgTaskExecutor);
         jobExecutorOwner = builder.bgTaskExecutor == null;
         if (jobExecutorOwner) {
             String threadName = String.format("retain-store[%s]-job-executor", builder.clusterId);
@@ -80,7 +104,7 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
         if (status.compareAndSet(Status.INIT, Status.STARTING)) {
             log.info("Starting retain store");
             storeServer().start();
-            rangeBalanceController.start(id());
+            balanceController.start(id());
             gcProcessor = new RetainStoreGCProcessor(storeClient, id());
             status.compareAndSet(Status.STARTING, Status.STARTED);
             storeClient
@@ -101,8 +125,10 @@ abstract class AbstractRetainStore<T extends AbstractRetainStoreBuilder<T>> impl
             if (gcJob != null && !gcJob.isDone()) {
                 gcJob.join();
             }
-            rangeBalanceController.stop();
+            balanceController.stop();
             storeServer().stop();
+            coProcFactory.close();
+            effectiveBalancerFactories.forEach(IRetainStoreBalancerFactory::close);
             if (jobExecutorOwner) {
                 log.debug("Shutting down job executor");
                 MoreExecutors.shutdownAndAwaitTermination(jobScheduler, 5, TimeUnit.SECONDS);

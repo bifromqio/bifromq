@@ -50,7 +50,8 @@ public abstract class SetServerGroupsHandler implements IHTTPRequestHandler {
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER,
             description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
-        @Parameter(name = "server_id", in = ParameterIn.HEADER, required = true, description = "the id of server"),
+        @Parameter(name = "server_id", in = ParameterIn.HEADER, required = true,
+            description = "the id of server", schema = @Schema(implementation = String.class)),
     })
     @RequestBody(required = true)
     @ApiResponses(value = {

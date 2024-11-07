@@ -16,6 +16,9 @@ package com.baidu.bifromq.basekv.balance.impl;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Normal;
 
 import com.baidu.bifromq.basehlc.HLC;
+import com.baidu.bifromq.basekv.balance.BalanceNow;
+import com.baidu.bifromq.basekv.balance.BalanceResult;
+import com.baidu.bifromq.basekv.balance.NoNeedBalance;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
@@ -30,7 +33,6 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
@@ -88,8 +90,8 @@ public final class UnreachableReplicaRemovalBalancer extends StoreBalancer {
     }
 
     @Override
-    public void update(String loadRules, Set<KVRangeStoreDescriptor> storeDescriptors) {
-        Map<String, Map<KVRangeId, KVRangeDescriptor>> descriptorMap = build(storeDescriptors);
+    public void update(Set<KVRangeStoreDescriptor> landscape) {
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> descriptorMap = build(landscape);
         latestDescriptorMap = descriptorMap;
 
         // Track the current leaders
@@ -127,7 +129,7 @@ public final class UnreachableReplicaRemovalBalancer extends StoreBalancer {
     }
 
     @Override
-    public Optional<ChangeConfigCommand> balance() {
+    public BalanceResult balance() {
         long currentTime = millisSource.get();
         Map<String, Map<KVRangeId, KVRangeDescriptor>> storeDescriptors = latestDescriptorMap;
         for (KVRangeId rangeId : replicaSuspicionTimeMap.keySet()) {
@@ -149,7 +151,7 @@ public final class UnreachableReplicaRemovalBalancer extends StoreBalancer {
                     ClusterConfig clusterConfig = rangeDescriptor.getConfig();
                     log.debug("Remove unhealthy replicas: rangeId={}, replicas={}",
                         KVRangeIdUtil.toString(rangeId), unhealthyReplicas);
-                    return Optional.of(ChangeConfigCommand.builder()
+                    return BalanceNow.of(ChangeConfigCommand.builder()
                         .toStore(localStoreId)
                         .kvRangeId(rangeId)
                         .expectedVer(rangeDescriptor.getVer())
@@ -159,7 +161,7 @@ public final class UnreachableReplicaRemovalBalancer extends StoreBalancer {
                 }
             }
         }
-        return Optional.empty();
+        return NoNeedBalance.INSTANCE;
     }
 
     private Map<String, Map<KVRangeId, KVRangeDescriptor>> build(Set<KVRangeStoreDescriptor> descriptors) {

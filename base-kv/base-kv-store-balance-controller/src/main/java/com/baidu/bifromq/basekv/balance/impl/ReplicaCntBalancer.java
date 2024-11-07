@@ -17,6 +17,9 @@ import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.toLeaderRanges;
 import static java.util.Collections.emptySet;
 
+import com.baidu.bifromq.basekv.balance.BalanceNow;
+import com.baidu.bifromq.basekv.balance.BalanceResult;
+import com.baidu.bifromq.basekv.balance.NoNeedBalance;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.proto.Boundary;
@@ -61,8 +64,8 @@ public class ReplicaCntBalancer extends StoreBalancer {
     }
 
     @Override
-    public void update(String loadRules, Set<KVRangeStoreDescriptor> storeDescriptors) {
-        Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(storeDescriptors);
+    public void update(Set<KVRangeStoreDescriptor> landscape) {
+        Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(landscape);
         if (effectiveEpoch.isEmpty()) {
             return;
         }
@@ -70,14 +73,14 @@ public class ReplicaCntBalancer extends StoreBalancer {
     }
 
     @Override
-    public Optional<ChangeConfigCommand> balance() {
+    public BalanceResult balance() {
         Set<KVRangeStoreDescriptor> current = effectiveEpoch;
         Map<String, Map<KVRangeId, KVRangeDescriptor>> allLeaderRangesByStoreId = toLeaderRanges(current);
         KeySpaceDAG keySpaceDAG = new KeySpaceDAG(allLeaderRangesByStoreId);
         NavigableMap<Boundary, KeySpaceDAG.LeaderRange> effectiveRoute = keySpaceDAG.getEffectiveFullCoveredRoute();
         if (effectiveRoute.isEmpty()) {
             // only operate on the leader range in effectiveRoute
-            return Optional.empty();
+            return NoNeedBalance.INSTANCE;
         }
         Map<String, Set<KVRangeId>> effectiveLeaderRangesByStoreId = new HashMap<>();
         for (KeySpaceDAG.LeaderRange leaderRange : effectiveRoute.values()) {
@@ -89,7 +92,7 @@ public class ReplicaCntBalancer extends StoreBalancer {
 
         // No leader range in localStore
         if (localEffectiveLeaderRangeIds.isEmpty()) {
-            return Optional.empty();
+            return NoNeedBalance.INSTANCE;
         }
         // Sort store list by storeLoad for adding or removing replica
         List<String> sortedAliveStore = current.stream()
@@ -111,10 +114,10 @@ public class ReplicaCntBalancer extends StoreBalancer {
                     .voters(newVoters)
                     .learners(newLearners)
                     .build();
-                return Optional.of(changeConfigCommand);
+                return BalanceNow.of(changeConfigCommand);
             }
         }
-        return Optional.empty();
+        return NoNeedBalance.INSTANCE;
     }
 
     private Set<String> getNewVoters(List<String> sortedCandidateStores, Set<String> oldVoters) {

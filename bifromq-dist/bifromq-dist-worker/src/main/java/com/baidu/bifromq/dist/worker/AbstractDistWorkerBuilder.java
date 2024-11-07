@@ -14,16 +14,17 @@
 package com.baidu.bifromq.dist.worker;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.IBaseKVMetaService;
-import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import com.google.protobuf.Struct;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -42,7 +43,8 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
     IBaseKVStoreClient storeClient;
     ISubBrokerManager subBrokerManager;
     KVRangeStoreOptions storeOptions;
-    KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
+    Duration balancerRetryDelay = Duration.ofSeconds(5);
+    Map<String, Struct> balancerFactoryConfig = new HashMap<>();
     Duration loadEstimateWindow = Duration.ofSeconds(5);
 
     AbstractDistWorkerBuilder() {
@@ -118,8 +120,13 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
         return thisT();
     }
 
-    public T balanceControllerOptions(KVRangeBalanceControllerOptions balanceControllerOptions) {
-        this.balanceControllerOptions = balanceControllerOptions;
+    public T balanceRetryDelay(Duration delay) {
+        this.balancerRetryDelay = delay;
+        return thisT();
+    }
+
+    public T balancerFactoryConfig(Map<String, Struct> config) {
+        this.balancerFactoryConfig.putAll(config);
         return thisT();
     }
 

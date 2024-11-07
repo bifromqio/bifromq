@@ -14,16 +14,16 @@
 package com.baidu.bifromq.inbox.store.balance;
 
 
-import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.RecoveryBalancer;
+import com.baidu.bifromq.inbox.store.spi.IInboxStoreBalancerFactory;
 import com.baidu.bifromq.sysprops.props.InboxStoreRecoveryWaitTimeMillis;
 
 /**
  * RecoveryBalancerFactory is deprecated.
  */
 @Deprecated(since = "3.3.0", forRemoval = true)
-public class RecoveryBalancerFactory implements IStoreBalancerFactory {
+public class RecoveryBalancerFactory implements IInboxStoreBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {

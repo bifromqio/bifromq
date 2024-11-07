@@ -16,8 +16,21 @@ package com.baidu.bifromq.starter.config.standalone.model;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
-import java.util.ArrayList;
-import java.util.List;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.google.protobuf.Struct;
+import com.google.protobuf.util.JsonFormat;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -37,9 +50,11 @@ public class StateStoreConfig {
     @Getter
     @Setter
     public static class BalancerOptions {
-        private long scheduleIntervalInMs = 5000;
+        private long retryDelayInMS = 5000;
         @JsonSetter(nulls = Nulls.SKIP)
-        private List<String> balancers = new ArrayList<>();
+        @JsonSerialize(using = BalancerFactorySerializer.class)
+        @JsonDeserialize(using = BalancerFactoryDeserializer.class)
+        private Map<String, Struct> balancers = new HashMap<>();
     }
 
     @Getter
@@ -60,12 +75,17 @@ public class StateStoreConfig {
         public DistWorkerConfig() {
             // DO not enable DistWorker split by default
 //            balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.DistWorkerSplitBalancerFactory");
-            balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.RangeLeaderBalancerFactory");
-            balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.ReplicaCntBalancerFactory");
-            balanceConfig.balancers.add(
-                "com.baidu.bifromq.dist.worker.balance.UnreachableReplicaRemovalBalancerFactory");
-            balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.RangeBootstrapBalancerFactory");
-            balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.RedundantEpochRemovalBalancerFactory");
+            balanceConfig.balancers.put("com.baidu.bifromq.dist.worker.balance.RangeLeaderBalancerFactory",
+                Struct.getDefaultInstance());
+            balanceConfig.balancers.put("com.baidu.bifromq.dist.worker.balance.ReplicaCntBalancerFactory",
+                Struct.getDefaultInstance());
+            balanceConfig.balancers.put(
+                "com.baidu.bifromq.dist.worker.balance.UnreachableReplicaRemovalBalancerFactory",
+                Struct.getDefaultInstance());
+            balanceConfig.balancers.put("com.baidu.bifromq.dist.worker.balance.RangeBootstrapBalancerFactory",
+                Struct.getDefaultInstance());
+            balanceConfig.balancers.put("com.baidu.bifromq.dist.worker.balance.RedundantEpochRemovalBalancerFactory",
+                Struct.getDefaultInstance());
         }
     }
 
@@ -86,13 +106,19 @@ public class StateStoreConfig {
         private BalancerOptions balanceConfig = new BalancerOptions();
 
         public InboxStoreConfig() {
-            balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.ReplicaCntBalancerFactory");
-            balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.RangeSplitBalancerFactory");
-            balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.RangeLeaderBalancerFactory");
-            balanceConfig.balancers.add(
-                "com.baidu.bifromq.inbox.store.balance.UnreachableReplicaRemovalBalancerFactory");
-            balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.RangeBootstrapBalancerFactory");
-            balanceConfig.balancers.add("com.baidu.bifromq.inbox.store.balance.RedundantEpochRemovalBalancerFactory");
+            balanceConfig.balancers.put("com.baidu.bifromq.inbox.store.balance.ReplicaCntBalancerFactory",
+                Struct.getDefaultInstance());
+            balanceConfig.balancers.put("com.baidu.bifromq.inbox.store.balance.RangeSplitBalancerFactory",
+                Struct.getDefaultInstance());
+            balanceConfig.balancers.put("com.baidu.bifromq.inbox.store.balance.RangeLeaderBalancerFactory",
+                Struct.getDefaultInstance());
+            balanceConfig.balancers.put(
+                "com.baidu.bifromq.inbox.store.balance.UnreachableReplicaRemovalBalancerFactory",
+                Struct.getDefaultInstance());
+            balanceConfig.balancers.put("com.baidu.bifromq.inbox.store.balance.RangeBootstrapBalancerFactory",
+                Struct.getDefaultInstance());
+            balanceConfig.balancers.put("com.baidu.bifromq.inbox.store.balance.RedundantEpochRemovalBalancerFactory",
+                Struct.getDefaultInstance());
         }
     }
 
@@ -113,11 +139,60 @@ public class StateStoreConfig {
         private BalancerOptions balanceConfig = new BalancerOptions();
 
         public RetainStoreConfig() {
-            balanceConfig.balancers.add("com.baidu.bifromq.retain.store.balance.ReplicaCntBalancerFactory");
-            balanceConfig.balancers.add(
-                "com.baidu.bifromq.retain.store.balance.UnreachableReplicaRemovalBalancerFactory");
-            balanceConfig.balancers.add("com.baidu.bifromq.retain.store.balance.RangeBootstrapBalancerFactory");
-            balanceConfig.balancers.add("com.baidu.bifromq.retain.store.balance.RedundantEpochRemovalBalancerFactory");
+            balanceConfig.balancers.put("com.baidu.bifromq.retain.store.balance.ReplicaCntBalancerFactory",
+                Struct.getDefaultInstance());
+            balanceConfig.balancers.put(
+                "com.baidu.bifromq.retain.store.balance.UnreachableReplicaRemovalBalancerFactory",
+                Struct.getDefaultInstance());
+            balanceConfig.balancers.put("com.baidu.bifromq.retain.store.balance.RangeBootstrapBalancerFactory",
+                Struct.getDefaultInstance());
+            balanceConfig.balancers.put("com.baidu.bifromq.retain.store.balance.RedundantEpochRemovalBalancerFactory",
+                Struct.getDefaultInstance());
+        }
+    }
+
+    private static class BalancerFactorySerializer extends JsonSerializer<Map<String, Struct>> {
+        @Override
+        public void serialize(Map<String, Struct> value, JsonGenerator gen, SerializerProvider serializers)
+            throws IOException {
+            gen.writeStartObject();
+            for (Map.Entry<String, Struct> entry : value.entrySet()) {
+                String balancerName = entry.getKey();
+                Struct balancerConfig = entry.getValue();
+                gen.writeFieldName(balancerName);
+                String jsonString = JsonFormat.printer().print(balancerConfig);
+                JsonNode jsonNode = gen.getCodec().readTree(gen.getCodec().getFactory().createParser(jsonString));
+                gen.writeTree(jsonNode);
+            }
+            gen.writeEndObject();
+        }
+    }
+
+    private static class BalancerFactoryDeserializer extends JsonDeserializer<Map<String, Struct>> {
+        @Override
+        public Map<String, Struct> deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
+            JsonNode node = p.getCodec().readTree(p);
+            Map<String, Struct> balancerConfigMap = new HashMap<>();
+
+            if (node.isArray()) {
+                for (JsonNode balancerNode : node) {
+                    String balancerName = balancerNode.asText();
+                    balancerConfigMap.put(balancerName, Struct.getDefaultInstance());
+                }
+            } else if (node.isObject()) {
+                Iterator<Map.Entry<String, JsonNode>> fields = node.fields();
+                while (fields.hasNext()) {
+                    Map.Entry<String, JsonNode> field = fields.next();
+                    String balancerName = field.getKey();
+                    JsonNode balancerConfigNode = field.getValue();
+                    String jsonString = balancerConfigNode.toString();
+                    Struct.Builder structBuilder = Struct.newBuilder();
+                    JsonFormat.parser().merge(jsonString, structBuilder);
+                    Struct balancerConfig = structBuilder.build();
+                    balancerConfigMap.put(balancerName, balancerConfig);
+                }
+            }
+            return balancerConfigMap;
         }
     }
 }

@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basekv;
 
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
+import com.google.protobuf.Struct;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.Map;
 import java.util.Optional;
@@ -24,19 +25,34 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface IBaseKVClusterMetadataManager {
     /**
-     * Get the observable of LoadRules.
+     * Get the observable of accepted LoadRules.
      *
      * @return the observable of LoadRules in JSON string
      */
-    Observable<String> loadRules();
+    Observable<Map<String, Struct>> loadRules();
 
     /**
-     * Set the LoadRules in JSON string.
+     * Set the handler of LoadRules proposal.
      *
-     * @param loadRules the LoadRules in JSON string
+     * @param handler the handler of LoadRules proposal
+     */
+    void setLoadRulesProposalHandler(LoadRulesProposalHandler handler);
+
+    /**
+     * The result of proposing LoadRules.
+     */
+    enum ProposalResult {
+        ACCEPTED, REJECTED, NO_BALANCER, OVERRIDDEN
+    }
+
+    /**
+     * Propose the LoadRules update for given balancer.
+     *
+     * @param balancerClassFQN the balancer class full qualified name
+     * @param loadRules        the LoadRules in JSON object
      * @return the future of setting LoadRules
      */
-    CompletableFuture<Void> setLoadRules(String loadRules);
+    CompletableFuture<ProposalResult> proposeLoadRules(String balancerClassFQN, Struct loadRules);
 
     /**
      * Get the observable of landscape.

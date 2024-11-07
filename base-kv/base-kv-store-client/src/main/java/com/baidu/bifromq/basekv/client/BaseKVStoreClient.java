@@ -65,6 +65,7 @@ import com.baidu.bifromq.baserpc.utils.BehaviorSubject;
 import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.protobuf.Struct;
 import io.grpc.MethodDescriptor;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
@@ -188,11 +189,6 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     @Override
     public String clusterId() {
         return clusterId;
-    }
-
-    @Override
-    public Observable<String> loadRules() {
-        return metadataManager.loadRules();
     }
 
     @Override

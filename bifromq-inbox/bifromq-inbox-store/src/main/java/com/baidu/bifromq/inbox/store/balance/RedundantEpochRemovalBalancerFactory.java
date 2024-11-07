@@ -13,11 +13,11 @@
 
 package com.baidu.bifromq.inbox.store.balance;
 
-import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.RedundantEpochRemovalBalancer;
+import com.baidu.bifromq.inbox.store.spi.IInboxStoreBalancerFactory;
 
-public class RedundantEpochRemovalBalancerFactory implements IStoreBalancerFactory {
+public class RedundantEpochRemovalBalancerFactory implements IInboxStoreBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {

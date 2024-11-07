@@ -13,20 +13,24 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
+import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
+import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
+import static io.netty.handler.codec.http.HttpResponseStatus.CONFLICT;
+import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR;
 import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+import static io.netty.handler.codec.http.HttpResponseStatus.REQUEST_TIMEOUT;
 
 import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.basekv.IBaseKVClusterMetadataManager;
 import com.baidu.bifromq.basekv.IBaseKVMetaService;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.protobuf.Struct;
+import com.google.protobuf.util.JsonFormat;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpResponseStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
@@ -35,9 +39,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeoutException;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import lombok.extern.slf4j.Slf4j;
@@ -62,8 +68,10 @@ public class SetLoadRulesHandler implements IHTTPRequestHandler {
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER,
             description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
-        @Parameter(name = "cluster_id", in = ParameterIn.HEADER,
-            description = "optional caller provided request id", schema = @Schema(implementation = Long.class))
+        @Parameter(name = "cluster_id", in = ParameterIn.HEADER, required = true,
+            description = "the cluster id", schema = @Schema(implementation = String.class)),
+        @Parameter(name = "balancer_class", in = ParameterIn.HEADER, required = true,
+            description = "the balancer class FQN", schema = @Schema(implementation = String.class))
     })
     @RequestBody(required = false)
     @ApiResponses(value = {
@@ -73,24 +81,51 @@ public class SetLoadRulesHandler implements IHTTPRequestHandler {
     public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
         log.trace("Handling http set load rules request: {}", req);
         String clusterId = HeaderUtils.getHeader(Headers.HEADER_CLUSTER_ID, req, true);
+        String balancerClass = HeaderUtils.getHeader(Headers.HEADER_BALANCER_CLASS, req, true);
         IBaseKVClusterMetadataManager metadataManager = metadataManagers.get(clusterId);
         if (metadataManager == null) {
-            return CompletableFuture.completedFuture(
-                new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND, Unpooled.EMPTY_BUFFER));
+            return CompletableFuture.completedFuture(new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
+                Unpooled.copiedBuffer((clusterId + " not found").getBytes())));
         }
         try {
-            ObjectMapper objectMapper = new ObjectMapper();
-            String loadRules = req.content().toString(io.netty.util.CharsetUtil.UTF_8);
-            JsonNode jsonNode = objectMapper.readTree(loadRules);
-            if (!jsonNode.isObject()) {
-                throw new IllegalArgumentException("Load rules must be an json object");
-            }
-            return metadataManager.setLoadRules(loadRules)
-                .thenApply(v -> new DefaultFullHttpResponse(req.protocolVersion(), OK, Unpooled.EMPTY_BUFFER));
-        } catch (Exception e) {
+            Struct loadRules = fromJson(req.content().toString(io.netty.util.CharsetUtil.UTF_8));
+            return metadataManager.proposeLoadRules(balancerClass, loadRules)
+                .handle((v, e) -> {
+                    if (e != null) {
+                        if (e.getCause() instanceof TimeoutException) {
+                            return new DefaultFullHttpResponse(req.protocolVersion(),
+                                REQUEST_TIMEOUT, EMPTY_BUFFER);
+                        } else {
+                            return new DefaultFullHttpResponse(req.protocolVersion(),
+                                INTERNAL_SERVER_ERROR, Unpooled.copiedBuffer(e.getMessage().getBytes()));
+                        }
+                    }
+                    switch (v) {
+                        case ACCEPTED -> {
+                            return new DefaultFullHttpResponse(req.protocolVersion(), OK, EMPTY_BUFFER);
+                        }
+                        case REJECTED -> {
+                            return new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, EMPTY_BUFFER);
+                        }
+                        case NO_BALANCER -> {
+                            return new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
+                                Unpooled.copiedBuffer(v.name().getBytes()));
+                        }
+                        default -> {
+                            return new DefaultFullHttpResponse(req.protocolVersion(), CONFLICT, EMPTY_BUFFER);
+                        }
+                    }
+                });
+        } catch (Throwable e) {
             return CompletableFuture.completedFuture(
-                new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.BAD_REQUEST,
+                new DefaultFullHttpResponse(req.protocolVersion(), INTERNAL_SERVER_ERROR,
                     Unpooled.copiedBuffer(e.getMessage().getBytes())));
         }
+    }
+
+    private Struct fromJson(String json) throws IOException {
+        Struct.Builder structBuilder = Struct.newBuilder();
+        JsonFormat.parser().ignoringUnknownFields().merge(json, structBuilder);
+        return structBuilder.build();
     }
 }

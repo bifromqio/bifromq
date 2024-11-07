@@ -53,9 +53,13 @@ public final class ExpireSessionHandler extends TenantAwareHandler {
     @DELETE
     @Operation(summary = "Expire inactive persistent session using given expiry time")
     @Parameters({
-        @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
-        @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id"),
-        @Parameter(name = "expiry_seconds", in = ParameterIn.HEADER, required = true, description = "the overridden session expiry time in seconds"),
+        @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id",
+            schema = @Schema(implementation = Long.class)),
+        @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id",
+            schema = @Schema(implementation = String.class)),
+        @Parameter(name = "expiry_seconds", in = ParameterIn.HEADER, required = true,
+            description = "the overridden session expiry time in seconds",
+            schema = @Schema(implementation = Integer.class)),
     })
     @RequestBody(required = false)
     @ApiResponses(value = {

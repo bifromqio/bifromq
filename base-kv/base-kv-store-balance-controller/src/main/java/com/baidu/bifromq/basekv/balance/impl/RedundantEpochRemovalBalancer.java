@@ -16,14 +16,14 @@ package com.baidu.bifromq.basekv.balance.impl;
 import static com.baidu.bifromq.basekv.balance.impl.CommandUtil.quit;
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.organizeByEpoch;
 
+import com.baidu.bifromq.basekv.balance.BalanceResult;
+import com.baidu.bifromq.basekv.balance.NoNeedBalance;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
-import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import java.util.Collections;
 import java.util.NavigableMap;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -51,14 +51,14 @@ public class RedundantEpochRemovalBalancer extends StoreBalancer {
     }
 
     @Override
-    public void update(String loadRules, Set<KVRangeStoreDescriptor> storeDescriptors) {
-        latest = organizeByEpoch(storeDescriptors);
+    public void update(Set<KVRangeStoreDescriptor> landscape) {
+        latest = organizeByEpoch(landscape);
     }
 
     @Override
-    public Optional<ChangeConfigCommand> balance() {
+    public BalanceResult balance() {
         if (latest.isEmpty()) {
-            return Optional.empty();
+            return NoNeedBalance.INSTANCE;
         }
         if (latest.size() > 1) {
             // deal with higher epoch redundant replicas generated during bootstrap at startup time
@@ -75,6 +75,6 @@ public class RedundantEpochRemovalBalancer extends StoreBalancer {
                 }
             }
         }
-        return Optional.empty();
+        return NoNeedBalance.INSTANCE;
     }
 }

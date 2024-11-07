@@ -35,7 +35,6 @@ import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.IBaseKVMetaService;
-import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngineConfigurator;
@@ -62,6 +61,7 @@ import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.TenantOption;
+import com.baidu.bifromq.dist.worker.balance.RangeBootstrapBalancerFactory;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
@@ -79,6 +79,7 @@ import com.baidu.bifromq.type.TopicMessagePack;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Struct;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.File;
@@ -200,7 +201,6 @@ public abstract class DistWorkerTest {
         ((RocksDBWALableKVEngineConfigurator) options.getWalEngineConfigurator())
             .dbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
 
-        KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
 
         storeClient = IBaseKVStoreClient
             .newBuilder()
@@ -226,9 +226,9 @@ public abstract class DistWorkerTest {
             .queryExecutor(queryExecutor)
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
-            .balanceControllerOptions(balanceControllerOptions)
             .storeOptions(options)
             .subBrokerManager(receiverManager)
+            .balancerFactoryConfig(Map.of(RangeBootstrapBalancerFactory.class.getName(), Struct.getDefaultInstance()))
             .build();
         testWorker.start();
         storeClient.join();

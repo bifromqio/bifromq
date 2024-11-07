@@ -13,6 +13,9 @@
 
 package com.baidu.bifromq.basekv.balance.impl;
 
+import com.baidu.bifromq.basekv.balance.BalanceNow;
+import com.baidu.bifromq.basekv.balance.BalanceResult;
+import com.baidu.bifromq.basekv.balance.NoNeedBalance;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.command.RecoveryCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
@@ -27,7 +30,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
@@ -51,14 +53,14 @@ public class RecoveryBalancer extends StoreBalancer {
     }
 
     @Override
-    public void update(String loadRules, Set<KVRangeStoreDescriptor> storeDescriptors) {
+    public void update(Set<KVRangeStoreDescriptor> landscape) {
         Map<String, KVRangeStoreDescriptor> prevAliveStores = this.latestStoreDescriptors.stream()
             .collect(Collectors.toMap(
                 KVRangeStoreDescriptor::getId,
                 sd -> sd
             ));
         Set<String> currAliveStores =
-            storeDescriptors.stream().map(KVRangeStoreDescriptor::getId).collect(Collectors.toSet());
+            landscape.stream().map(KVRangeStoreDescriptor::getId).collect(Collectors.toSet());
         // Put disappeared store into cache to avoid frequently scheduling
         for (String deadStore : Sets.difference(prevAliveStores.keySet(), currAliveStores)) {
             deadStoreCache.put(deadStore, prevAliveStores.get(deadStore));
@@ -66,15 +68,15 @@ public class RecoveryBalancer extends StoreBalancer {
         for (String aliveStore : currAliveStores) {
             deadStoreCache.invalidate(aliveStore);
         }
-        this.latestStoreDescriptors = storeDescriptors;
+        this.latestStoreDescriptors = landscape;
     }
 
     @Override
-    public Optional<RecoveryCommand> balance() {
+    public BalanceResult balance() {
         return recoverNoLeaderRange();
     }
 
-    private Optional<RecoveryCommand> recoverNoLeaderRange() {
+    private BalanceResult recoverNoLeaderRange() {
         Set<KVRangeStoreDescriptor> allSds = Sets.newHashSet(latestStoreDescriptors);
         Map<String, KVRangeStoreDescriptor> deadSds = deadStoreCache.asMap();
         allSds.addAll(deadSds.values());
@@ -121,7 +123,7 @@ public class RecoveryBalancer extends StoreBalancer {
                 sortedRange.put(storeId, entry.getValue().get(storeId));
             }
             if (!sortedRange.isEmpty()) {
-                return Optional.of(
+                return BalanceNow.of(
                     RecoveryCommand.builder()
                         .toStore(sortedRange.firstKey())
                         .kvRangeId(entry.getKey())
@@ -129,7 +131,7 @@ public class RecoveryBalancer extends StoreBalancer {
                 );
             }
         }
-        return Optional.empty();
+        return NoNeedBalance.INSTANCE;
     }
 
 }

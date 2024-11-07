@@ -32,7 +32,9 @@ import com.baidu.bifromq.basekv.store.proto.RecoverRequest;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipReply;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipRequest;
 import com.baidu.bifromq.baserpc.IConnectable;
+import com.google.protobuf.Struct;
 import io.reactivex.rxjava3.core.Observable;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -43,8 +45,6 @@ public interface IBaseKVStoreClient extends IConnectable {
     }
 
     String clusterId();
-
-    Observable<String> loadRules();
 
     Observable<Set<KVRangeStoreDescriptor>> describe();
 

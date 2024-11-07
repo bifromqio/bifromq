@@ -13,13 +13,19 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
+import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR;
 import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+import static java.util.Collections.emptyMap;
 
 import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.basekv.IBaseKVClusterMetadataManager;
 import com.baidu.bifromq.basekv.IBaseKVMetaService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.protobuf.Struct;
+import com.google.protobuf.util.JsonFormat;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -35,8 +41,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -59,8 +68,8 @@ public class GetLoadRulesHandler implements IHTTPRequestHandler {
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER,
             description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
-        @Parameter(name = "cluster_id", in = ParameterIn.HEADER,
-            description = "optional caller provided request id", schema = @Schema(implementation = Long.class))
+        @Parameter(name = "cluster_id", in = ParameterIn.HEADER, required = true,
+            description = "the cluster id", schema = @Schema(implementation = String.class))
     })
     @RequestBody(required = false)
     @ApiResponses(value = {
@@ -72,19 +81,45 @@ public class GetLoadRulesHandler implements IHTTPRequestHandler {
         String clusterId = HeaderUtils.getHeader(Headers.HEADER_CLUSTER_ID, req, true);
         IBaseKVClusterMetadataManager metadataManager = metadataManagers.get(clusterId);
         if (metadataManager == null) {
-            return CompletableFuture.completedFuture(
-                new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND, Unpooled.EMPTY_BUFFER));
+            return CompletableFuture.completedFuture(new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
+                Unpooled.copiedBuffer((clusterId + " not found").getBytes())));
         }
         return metadataManager.loadRules()
-            .first("")
+            .timeout(1, TimeUnit.SECONDS)
+            .firstElement()
             .toCompletionStage()
             .toCompletableFuture()
-            .thenApply(loadRules -> {
-                DefaultFullHttpResponse
-                    resp = new DefaultFullHttpResponse(req.protocolVersion(), OK,
-                    Unpooled.wrappedBuffer(loadRules.getBytes()));
-                resp.headers().set("Content-Type", "application/json");
-                return resp;
+            .handle((loadRules, e) -> {
+                if (e != null) {
+                    if (e instanceof TimeoutException) {
+                        DefaultFullHttpResponse resp =
+                            new DefaultFullHttpResponse(req.protocolVersion(), OK,
+                                Unpooled.wrappedBuffer(toJson(emptyMap()).getBytes()));
+                        resp.headers().set("Content-Type", "application/json");
+                        return resp;
+                    } else {
+                        return new DefaultFullHttpResponse(req.protocolVersion(), INTERNAL_SERVER_ERROR,
+                            Unpooled.copiedBuffer(e.getMessage().getBytes()));
+                    }
+                } else {
+                    DefaultFullHttpResponse resp = new DefaultFullHttpResponse(req.protocolVersion(), OK,
+                        Unpooled.wrappedBuffer(toJson(loadRules).getBytes()));
+                    resp.headers().set("Content-Type", "application/json");
+                    return resp;
+                }
             });
+    }
+
+    @SneakyThrows
+    private String toJson(Map<String, Struct> balancerLoadRules) {
+        ObjectMapper objectMapper = new ObjectMapper();
+        ObjectNode rootNode = objectMapper.createObjectNode();
+        for (Map.Entry<String, Struct> entry : balancerLoadRules.entrySet()) {
+            String key = entry.getKey();
+            Struct value = entry.getValue();
+            String jsonValue = JsonFormat.printer().print(value);
+            rootNode.set(key, objectMapper.readTree(jsonValue));
+        }
+        return objectMapper.writeValueAsString(rootNode);
     }
 }

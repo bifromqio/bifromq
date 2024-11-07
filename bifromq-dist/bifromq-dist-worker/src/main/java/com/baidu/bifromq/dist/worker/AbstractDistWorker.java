@@ -14,12 +14,17 @@
 package com.baidu.bifromq.dist.worker;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
-import com.baidu.bifromq.basekv.balance.KVRangeBalanceController;
+import com.baidu.bifromq.basehookloader.BaseHookLoader;
+import com.baidu.bifromq.basekv.balance.KVStoreBalanceController;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
+import com.baidu.bifromq.dist.worker.spi.IDistWorkerBalancerFactory;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -34,10 +39,11 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
 
     private final String clusterId;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
-    private final KVRangeBalanceController rangeBalanceController;
+    private final KVStoreBalanceController storeBalanceController;
     private final ScheduledExecutorService jobScheduler;
     private final AsyncRunner jobRunner;
     private final boolean jobExecutorOwner;
+    private final List<IDistWorkerBalancerFactory> effectiveBalancerFactories = new LinkedList<>();
     protected final DistWorkerCoProcFactory coProcFactory;
 
     public AbstractDistWorker(T builder) {
@@ -48,8 +54,24 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
             builder.resourceThrottler,
             builder.subBrokerManager,
             builder.loadEstimateWindow);
-        rangeBalanceController =
-            new KVRangeBalanceController(builder.storeClient, builder.balanceControllerOptions, builder.bgTaskExecutor);
+        Map<String, IDistWorkerBalancerFactory> loadedFactories = BaseHookLoader.load(IDistWorkerBalancerFactory.class);
+        for (String factoryName : builder.balancerFactoryConfig.keySet()) {
+            if (!loadedFactories.containsKey(factoryName)) {
+                log.warn("DistWorkerBalancerFactory[{}] not found", factoryName);
+                continue;
+            }
+            IDistWorkerBalancerFactory balancer = loadedFactories.get(factoryName);
+            balancer.init(builder.balancerFactoryConfig.get(factoryName));
+            log.info("DistWorkerBalancerFactory[{}] enabled", factoryName);
+            effectiveBalancerFactories.add(balancer);
+        }
+
+        storeBalanceController = new KVStoreBalanceController(
+            builder.metaService.metadataManager(clusterId),
+            builder.storeClient,
+            effectiveBalancerFactories,
+            builder.balancerRetryDelay,
+            builder.bgTaskExecutor);
         jobExecutorOwner = builder.bgTaskExecutor == null;
         if (jobExecutorOwner) {
             String threadName = String.format("dist-worker[%s]-job-executor", builder.clusterId);
@@ -72,7 +94,7 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
         if (status.compareAndSet(Status.INIT, Status.STARTING)) {
             log.info("Starting dist worker");
             storeServer().start();
-            rangeBalanceController.start(storeServer().storeId(clusterId));
+            storeBalanceController.start(storeServer().storeId(clusterId));
             status.compareAndSet(Status.STARTING, Status.STARTED);
             log.info("Dist worker started");
         }
@@ -82,10 +104,11 @@ abstract class AbstractDistWorker<T extends AbstractDistWorkerBuilder<T>> implem
         if (status.compareAndSet(Status.STARTED, Status.STOPPING)) {
             log.info("Stopping DistWorker");
             jobRunner.awaitDone();
-            rangeBalanceController.stop();
+            storeBalanceController.stop();
             storeServer().stop();
             log.debug("Stopping CoProcFactory");
             coProcFactory.close();
+            effectiveBalancerFactories.forEach(IDistWorkerBalancerFactory::close);
             if (jobExecutorOwner) {
                 log.debug("Stopping Job Executor");
                 MoreExecutors.shutdownAndAwaitTermination(jobScheduler, 5, TimeUnit.SECONDS);

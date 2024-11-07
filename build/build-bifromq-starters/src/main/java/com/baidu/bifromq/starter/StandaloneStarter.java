@@ -23,7 +23,6 @@ import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.IBaseKVMetaService;
-import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeOptions;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
@@ -56,7 +55,6 @@ import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.sessiondict.server.ISessionDictServer;
 import com.baidu.bifromq.starter.config.standalone.StandaloneConfig;
 import com.baidu.bifromq.starter.config.standalone.StandaloneConfigConsolidator;
-import com.baidu.bifromq.starter.config.standalone.model.StateStoreConfig;
 import com.baidu.bifromq.starter.config.standalone.model.apiserver.APIServerConfig;
 import com.baidu.bifromq.starter.config.standalone.model.mqttserver.MQTTServerConfig;
 import com.baidu.bifromq.starter.utils.ConfigUtil;
@@ -280,11 +278,12 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .queryExecutor(MoreExecutors.directExecutor())
             .tickerThreads(config.getStateStoreConfig().getTickerThreads())
             .bgTaskExecutor(bgTaskExecutor)
+            .balanceRetryDelay(Duration.ofMillis(
+                config.getStateStoreConfig().getRetainStoreConfig().getBalanceConfig().getRetryDelayInMS()))
+            .balancerFactoryConfig(
+                config.getStateStoreConfig().getRetainStoreConfig().getBalanceConfig().getBalancers())
             .loadEstimateWindow(Duration.ofSeconds(RetainStoreLoadEstimationWindowSeconds.INSTANCE.get()))
             .gcInterval(Duration.ofSeconds(config.getStateStoreConfig().getRetainStoreConfig().getGcIntervalSeconds()))
-            .balanceControllerOptions(
-                toControllerOptions(config.getStateStoreConfig().getRetainStoreConfig().getBalanceConfig())
-            )
             .storeOptions(new KVRangeStoreOptions()
                 .setKvRangeOptions(new KVRangeOptions()
                     .setCompactWALThreshold(config.getStateStoreConfig()
@@ -329,9 +328,9 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .bgTaskExecutor(bgTaskExecutor)
             .loadEstimateWindow(Duration.ofSeconds(InboxStoreLoadEstimationWindowSeconds.INSTANCE.get()))
             .gcInterval(Duration.ofSeconds(config.getStateStoreConfig().getInboxStoreConfig().getGcIntervalSeconds()))
-            .balanceControllerOptions(
-                toControllerOptions(config.getStateStoreConfig().getInboxStoreConfig().getBalanceConfig())
-            )
+            .balanceRetryDelay(Duration.ofMillis(
+                config.getStateStoreConfig().getInboxStoreConfig().getBalanceConfig().getRetryDelayInMS()))
+            .balancerFactoryConfig(config.getStateStoreConfig().getInboxStoreConfig().getBalanceConfig().getBalancers())
             .storeOptions(new KVRangeStoreOptions()
                 .setKvRangeOptions(new KVRangeOptions()
                     .setCompactWALThreshold(config.getStateStoreConfig()
@@ -421,8 +420,9 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                         .getStateStoreConfig()
                         .getDistWorkerConfig()
                         .getWalEngineConfig(), "dist_wal")))
-            .balanceControllerOptions(
-                toControllerOptions(config.getStateStoreConfig().getDistWorkerConfig().getBalanceConfig()))
+            .balanceRetryDelay(Duration.ofMillis(
+                config.getStateStoreConfig().getDistWorkerConfig().getBalanceConfig().getRetryDelayInMS()))
+            .balancerFactoryConfig(config.getStateStoreConfig().getDistWorkerConfig().getBalanceConfig().getBalancers())
             .subBrokerManager(subBrokerManager)
             .loadEstimateWindow(Duration.ofSeconds(DistWorkerLoadEstimationWindowSeconds.INSTANCE.get()))
             .build();
@@ -493,12 +493,6 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         sharedBaseKVRpcServer = sharedBaseKVServerBuilder.build();
         mqttBroker = brokerBuilder.build();
         sharedIORpcServer = sharedRPCServerBuilder.build();
-    }
-
-    private KVRangeBalanceControllerOptions toControllerOptions(StateStoreConfig.BalancerOptions options) {
-        return new KVRangeBalanceControllerOptions()
-            .setScheduleIntervalInMs(options.getScheduleIntervalInMs())
-            .setBalancers(options.getBalancers());
     }
 
     @Override

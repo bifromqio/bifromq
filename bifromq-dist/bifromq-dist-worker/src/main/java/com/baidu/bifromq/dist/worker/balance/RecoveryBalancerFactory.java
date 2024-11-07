@@ -13,16 +13,16 @@
 
 package com.baidu.bifromq.dist.worker.balance;
 
-import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.RecoveryBalancer;
+import com.baidu.bifromq.dist.worker.spi.IDistWorkerBalancerFactory;
 import com.baidu.bifromq.sysprops.props.DistWorkerRecoveryWaitTimeMillis;
 
 /**
  * RecoveryBalancerFactory is deprecated.
  */
 @Deprecated(since = "3.3.0", forRemoval = true)
-public class RecoveryBalancerFactory implements IStoreBalancerFactory {
+public class RecoveryBalancerFactory implements IDistWorkerBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {

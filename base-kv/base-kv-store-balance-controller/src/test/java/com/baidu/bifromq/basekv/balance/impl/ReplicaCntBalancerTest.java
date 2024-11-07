@@ -15,8 +15,12 @@ package com.baidu.bifromq.basekv.balance.impl;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basekv.balance.BalanceNow;
+import com.baidu.bifromq.basekv.balance.BalanceResult;
+import com.baidu.bifromq.basekv.balance.BalanceResultType;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -24,7 +28,6 @@ import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import java.util.HashSet;
-import java.util.Optional;
 import java.util.Set;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -40,10 +43,9 @@ public class ReplicaCntBalancerTest {
     @Test
     public void balanceWithNoLeaderRange() {
         Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
-        balancer.update("{}", storeDescriptors);
+        balancer.update(storeDescriptors);
 
-        Optional<ChangeConfigCommand> command = balancer.balance();
-        assertFalse(command.isPresent());
+        assertSame(balancer.balance().type(), BalanceResultType.NoNeedBalance);
     }
 
     @Test
@@ -74,13 +76,13 @@ public class ReplicaCntBalancerTest {
         storeDescriptors.add(storeDescriptor);
         storeDescriptors.add(remoteStoreDescriptor);
 
-        balancer.update("{}", storeDescriptors);
+        balancer.update(storeDescriptors);
 
-        Optional<ChangeConfigCommand> command = balancer.balance();
-        assertTrue(command.isPresent());
-        assertTrue(command.get().getVoters().contains("localStore"));
-        assertTrue(command.get().getVoters().contains("remoteStore"));
-        assertTrue(command.get().getLearners().isEmpty());
+        BalanceResult result = balancer.balance();
+        ChangeConfigCommand command = (ChangeConfigCommand) ((BalanceNow<?>) result).command;
+        assertTrue(command.getVoters().contains("localStore"));
+        assertTrue(command.getVoters().contains("remoteStore"));
+        assertTrue(command.getLearners().isEmpty());
     }
 
     @Test
@@ -122,11 +124,11 @@ public class ReplicaCntBalancerTest {
         storeDescriptors.add(voterStore3Descriptor);
         storeDescriptors.add(learnerStoreDescriptor);
 
-        balancer.update("{}", storeDescriptors);
+        balancer.update(storeDescriptors);
 
-        Optional<ChangeConfigCommand> command = balancer.balance();
-        assertTrue(command.isPresent());
-        assertTrue(command.get().getLearners().contains("learnerStore"));
+        BalanceResult result = balancer.balance();
+        ChangeConfigCommand command = (ChangeConfigCommand) ((BalanceNow<?>) result).command;
+        assertTrue(command.getLearners().contains("learnerStore"));
     }
 
     @Test
@@ -152,13 +154,13 @@ public class ReplicaCntBalancerTest {
         Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
         storeDescriptors.add(storeDescriptor);
 
-        balancer.update("{}", storeDescriptors);
+        balancer.update(storeDescriptors);
 
-        Optional<ChangeConfigCommand> command = balancer.balance();
-        assertTrue(command.isPresent());
-        assertTrue(command.get().getVoters().contains("localStore"));
-        assertFalse(command.get().getVoters().contains("remoteStore"));
-        assertTrue(command.get().getLearners().isEmpty());
+        BalanceResult result = balancer.balance();
+        ChangeConfigCommand command = (ChangeConfigCommand) ((BalanceNow<?>) result).command;
+        assertTrue(command.getVoters().contains("localStore"));
+        assertFalse(command.getVoters().contains("remoteStore"));
+        assertTrue(command.getLearners().isEmpty());
     }
 
     @Test
@@ -184,12 +186,12 @@ public class ReplicaCntBalancerTest {
         Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
         storeDescriptors.add(storeDescriptor);
 
-        balancer.update("{}", storeDescriptors);
+        balancer.update(storeDescriptors);
 
-        Optional<ChangeConfigCommand> command = balancer.balance();
-        assertTrue(command.isPresent());
-        assertTrue(command.get().getVoters().contains("localStore"));
-        assertTrue(command.get().getLearners().isEmpty());
+        BalanceResult result = balancer.balance();
+        ChangeConfigCommand command = (ChangeConfigCommand) ((BalanceNow<?>) result).command;
+        assertTrue(command.getVoters().contains("localStore"));
+        assertTrue(command.getLearners().isEmpty());
     }
 
     @Test
@@ -221,10 +223,9 @@ public class ReplicaCntBalancerTest {
         storeDescriptors.add(storeDescriptor);
         storeDescriptors.add(learnerStoreDescriptor);
 
-        balancer.update("{}", storeDescriptors);
+        balancer.update(storeDescriptors);
 
-        Optional<ChangeConfigCommand> command = balancer.balance();
-        assertFalse(command.isPresent());
+        assertSame(balancer.balance().type(), BalanceResultType.NoNeedBalance);
     }
 
     @Test
@@ -272,11 +273,11 @@ public class ReplicaCntBalancerTest {
         storeDescriptors.add(learnerStoreDescriptor);
         storeDescriptors.add(learnerStore1Descriptor);
 
-        balancer.update("{}", storeDescriptors);
+        balancer.update(storeDescriptors);
 
-        Optional<ChangeConfigCommand> command = balancer.balance();
-        assertTrue(command.isPresent(), "A balance command should be generated.");
-        assertTrue(command.get().getLearners().contains("learnerStore"));
-        assertTrue(command.get().getLearners().contains("learnerStore1"));
+        BalanceResult result = balancer.balance();
+        ChangeConfigCommand command = (ChangeConfigCommand) ((BalanceNow<?>) result).command;
+        assertTrue(command.getLearners().contains("learnerStore"));
+        assertTrue(command.getLearners().contains("learnerStore1"));
     }
 }

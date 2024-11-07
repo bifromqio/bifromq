@@ -19,9 +19,9 @@ import static com.baidu.bifromq.basekv.store.range.hinter.KVLoadBasedSplitHinter
 import static com.baidu.bifromq.dist.worker.hinter.FanoutSplitHinter.LOAD_TYPE_FANOUT_SCALE;
 import static com.baidu.bifromq.dist.worker.hinter.FanoutSplitHinter.LOAD_TYPE_FANOUT_TOPIC_FILTERS;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basekv.balance.BalanceNow;
+import com.baidu.bifromq.basekv.balance.BalanceResultType;
 import com.baidu.bifromq.basekv.balance.command.SplitCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -34,7 +34,6 @@ import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.dist.worker.hinter.FanoutSplitHinter;
 import com.google.protobuf.ByteString;
 import java.util.Collections;
-import java.util.Optional;
 import java.util.Set;
 import org.testng.annotations.Test;
 
@@ -42,19 +41,19 @@ public class DistWorkerSplitBalancerTest {
     @Test
     public void noLocalDesc() {
         DistWorkerSplitBalancer balancer = new DistWorkerSplitBalancer("cluster", "local");
-        assertFalse(balancer.balance().isPresent());
+        assertEquals(balancer.balance().type(), BalanceResultType.NoNeedBalance);
     }
 
     @Test
     public void cpuUsageExceedLimit() {
         DistWorkerSplitBalancer balancer = new DistWorkerSplitBalancer("cluster", "local");
-        balancer.update("{}", Collections.singleton(KVRangeStoreDescriptor
+        balancer.update(Collections.singleton(KVRangeStoreDescriptor
             .newBuilder()
             .setId("local")
             .putStatistics("cpu.usage", 0.75)
             .build()
         ));
-        assertFalse(balancer.balance().isPresent());
+        assertEquals(balancer.balance().type(), BalanceResultType.NoNeedBalance);
     }
 
     @Test
@@ -84,13 +83,12 @@ public class DistWorkerSplitBalancerTest {
             .build()
         );
         DistWorkerSplitBalancer balancer = new DistWorkerSplitBalancer("cluster", "local", 0.8, 5, 20);
-        balancer.update("{}", descriptors);
-        Optional<SplitCommand> command = balancer.balance();
-        assertTrue(command.isPresent());
-        assertEquals(command.get().getKvRangeId(), rangeId);
-        assertEquals(command.get().getToStore(), "local");
-        assertEquals(command.get().getExpectedVer(), 0);
-        assertEquals(((SplitCommand) command.get()).getSplitKey(), ByteString.copyFromUtf8("fanoutSplitKey"));
+        balancer.update(descriptors);
+        SplitCommand command = (SplitCommand) ((BalanceNow<?>) balancer.balance()).command;
+        assertEquals(command.getKvRangeId(), rangeId);
+        assertEquals(command.getToStore(), "local");
+        assertEquals(command.getExpectedVer(), 0);
+        assertEquals(command.getSplitKey(), ByteString.copyFromUtf8("fanoutSplitKey"));
 
         descriptors = Collections.singleton(KVRangeStoreDescriptor
             .newBuilder()
@@ -114,13 +112,13 @@ public class DistWorkerSplitBalancerTest {
                 .build())
             .build()
         );
-        balancer.update("{}", descriptors);
-        command = balancer.balance();
-        assertTrue(command.isPresent());
-        assertEquals(command.get().getKvRangeId(), rangeId);
-        assertEquals(command.get().getToStore(), "local");
-        assertEquals(command.get().getExpectedVer(), 0);
-        assertEquals(((SplitCommand) command.get()).getSplitKey(), ByteString.copyFromUtf8("splitMutationLoadKey"));
+        balancer.update(descriptors);
+        command = (SplitCommand) ((BalanceNow<?>) balancer.balance()).command;
+
+        assertEquals(command.getKvRangeId(), rangeId);
+        assertEquals(command.getToStore(), "local");
+        assertEquals(command.getExpectedVer(), 0);
+        assertEquals(command.getSplitKey(), ByteString.copyFromUtf8("splitMutationLoadKey"));
     }
 
     @Test
@@ -144,8 +142,7 @@ public class DistWorkerSplitBalancerTest {
             .build()
         );
         DistWorkerSplitBalancer balancer = new DistWorkerSplitBalancer("cluster", "local");
-        balancer.update("{}", descriptors);
-        Optional<SplitCommand> command = balancer.balance();
-        assertFalse(command.isPresent());
+        balancer.update(descriptors);
+        assertEquals(balancer.balance().type(), BalanceResultType.NoNeedBalance);
     }
 }

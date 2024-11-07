@@ -18,8 +18,10 @@ import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.toLeaderRanges;
 import static java.util.Collections.emptySet;
 
+import com.baidu.bifromq.basekv.balance.BalanceNow;
+import com.baidu.bifromq.basekv.balance.BalanceResult;
+import com.baidu.bifromq.basekv.balance.NoNeedBalance;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
-import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.balance.command.TransferLeadershipCommand;
 import com.baidu.bifromq.basekv.proto.Boundary;
@@ -53,8 +55,8 @@ public class RangeLeaderBalancer extends StoreBalancer {
     }
 
     @Override
-    public void update(String loadRules, Set<KVRangeStoreDescriptor> storeDescriptors) {
-        Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(storeDescriptors);
+    public void update(Set<KVRangeStoreDescriptor> landscape) {
+        Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(landscape);
         if (effectiveEpoch.isEmpty()) {
             return;
         }
@@ -62,7 +64,7 @@ public class RangeLeaderBalancer extends StoreBalancer {
     }
 
     @Override
-    public Optional<BalanceCommand> balance() {
+    public BalanceResult balance() {
         Set<KVRangeStoreDescriptor> current = effectiveEpoch;
         // leader ranges including non-effective ranges
         Map<String, Map<KVRangeId, KVRangeDescriptor>> allLeaderRangesByStoreId = toLeaderRanges(current);
@@ -70,7 +72,7 @@ public class RangeLeaderBalancer extends StoreBalancer {
         NavigableMap<Boundary, KeySpaceDAG.LeaderRange> effectiveRoute = keySpaceDAG.getEffectiveFullCoveredRoute();
         if (effectiveRoute.isEmpty()) {
             // only operate on the leader range in effectiveRoute
-            return Optional.empty();
+            return NoNeedBalance.INSTANCE;
         }
         Map<String, Set<KVRangeId>> effectiveLeaderRangesByStoreId = new HashMap<>();
         for (KeySpaceDAG.LeaderRange leaderRange : effectiveRoute.values()) {
@@ -80,13 +82,13 @@ public class RangeLeaderBalancer extends StoreBalancer {
         return balanceStoreLeaders(allLeaderRangesByStoreId, effectiveLeaderRangesByStoreId, effectiveRoute.size());
     }
 
-    private Optional<BalanceCommand> balanceStoreLeaders(
+    private BalanceResult balanceStoreLeaders(
         Map<String, Map<KVRangeId, KVRangeDescriptor>> allLeaderRangesByStoreId,
         Map<String, Set<KVRangeId>> effectiveLeaderRangesByStoreId,
         int effectiveLeaderRangeCount) {
         double storeCount = allLeaderRangesByStoreId.size();
         if (storeCount == 1) {
-            return Optional.empty();
+            return NoNeedBalance.INSTANCE;
         }
         int atMost = (int) Math.ceil(effectiveLeaderRangeCount / storeCount);
         int atLeast = (int) Math.floor(effectiveLeaderRangeCount / storeCount);
@@ -105,10 +107,10 @@ public class RangeLeaderBalancer extends StoreBalancer {
                 localEffectiveLeaderRangeIds);
         }
 
-        return Optional.empty();
+        return NoNeedBalance.INSTANCE;
     }
 
-    private Optional<BalanceCommand> handleOverloadedStore(
+    private BalanceResult handleOverloadedStore(
         Map<String, Map<KVRangeId, KVRangeDescriptor>> allLeaderRangesByStoreId,
         Map<String, Set<KVRangeId>> effectiveLeaderRangesByStoreId,
         int atLeast,
@@ -127,7 +129,7 @@ public class RangeLeaderBalancer extends StoreBalancer {
         return generateBalanceCommand(rangeToBalance, targetStoreId);
     }
 
-    private Optional<BalanceCommand> handleExactBalance(
+    private BalanceResult handleExactBalance(
         Map<String, Map<KVRangeId, KVRangeDescriptor>> allLeaderRangesByStoreId,
         Map<String, Set<KVRangeId>> effectiveLeaderRangesByStoreId,
         int atLeast,
@@ -140,7 +142,7 @@ public class RangeLeaderBalancer extends StoreBalancer {
             (storeId, leaderRangeIds) -> storeOrderByLeaders.add(new StoreLeaderCount(storeId, leaderRangeIds.size())));
 
         if (!storeOrderByLeaders.last().storeId.equals(localStoreId)) {
-            return Optional.empty();
+            return NoNeedBalance.INSTANCE;
         }
         for (StoreLeaderCount storeLeaderCount : storeOrderByLeaders) {
             if (storeLeaderCount.leaderCount() < atLeast) {
@@ -154,12 +156,12 @@ public class RangeLeaderBalancer extends StoreBalancer {
                 break;
             }
         }
-        return Optional.empty();
+        return NoNeedBalance.INSTANCE;
     }
 
-    private Optional<BalanceCommand> generateBalanceCommand(KVRangeDescriptor rangeToBalance, String targetStoreId) {
+    private BalanceResult generateBalanceCommand(KVRangeDescriptor rangeToBalance, String targetStoreId) {
         if (rangeToBalance.getConfig().getVotersList().contains(targetStoreId)) {
-            return Optional.of(TransferLeadershipCommand.builder()
+            return BalanceNow.of(TransferLeadershipCommand.builder()
                 .toStore(localStoreId)
                 .kvRangeId(rangeToBalance.getId())
                 .expectedVer(rangeToBalance.getVer())
@@ -172,7 +174,7 @@ public class RangeLeaderBalancer extends StoreBalancer {
             voters.add(targetStoreId);
             learners.add(localStoreId);
             learners.remove(targetStoreId);
-            return Optional.of(ChangeConfigCommand.builder()
+            return BalanceNow.of(ChangeConfigCommand.builder()
                 .toStore(localStoreId)
                 .kvRangeId(rangeToBalance.getId())
                 .expectedVer(rangeToBalance.getVer())
@@ -184,7 +186,7 @@ public class RangeLeaderBalancer extends StoreBalancer {
             Set<String> learners = Sets.newHashSet(rangeToBalance.getConfig().getLearnersList());
             voters.remove(localStoreId);
             voters.add(targetStoreId);
-            return Optional.of(ChangeConfigCommand.builder()
+            return BalanceNow.of(ChangeConfigCommand.builder()
                 .toStore(localStoreId)
                 .kvRangeId(rangeToBalance.getId())
                 .expectedVer(rangeToBalance.getVer())

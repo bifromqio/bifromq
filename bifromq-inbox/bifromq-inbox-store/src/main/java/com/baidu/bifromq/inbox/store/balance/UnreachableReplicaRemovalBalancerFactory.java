@@ -13,13 +13,13 @@
 
 package com.baidu.bifromq.inbox.store.balance;
 
-import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.UnreachableReplicaRemovalBalancer;
+import com.baidu.bifromq.inbox.store.spi.IInboxStoreBalancerFactory;
 import com.baidu.bifromq.sysprops.props.InboxStoreRecoveryWaitTimeMillis;
 import java.time.Duration;
 
-public class UnreachableReplicaRemovalBalancerFactory implements IStoreBalancerFactory {
+public class UnreachableReplicaRemovalBalancerFactory implements IInboxStoreBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {

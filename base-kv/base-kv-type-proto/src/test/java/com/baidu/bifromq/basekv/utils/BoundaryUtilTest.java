@@ -29,6 +29,7 @@ import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
+import java.util.Set;
 import org.testng.annotations.Test;
 
 public class BoundaryUtilTest {
@@ -162,6 +163,7 @@ public class BoundaryUtilTest {
         assertTrue(BoundaryUtil.isOverlap(a_b, a_e));
         assertTrue(BoundaryUtil.isOverlap(b_f, a_e));
         assertTrue(BoundaryUtil.isOverlap(a_e, b_f));
+        assertTrue(BoundaryUtil.isOverlap(Set.of(a_b, a_e, b_f, f_)));
         assertFalse(BoundaryUtil.isOverlap(EMPTY_BOUNDARY, EMPTY_BOUNDARY));
         assertFalse(BoundaryUtil.isOverlap(EMPTY_BOUNDARY, FULL_BOUNDARY));
         assertFalse(BoundaryUtil.isOverlap(FULL_BOUNDARY, EMPTY_BOUNDARY));
@@ -171,6 +173,50 @@ public class BoundaryUtilTest {
         assertFalse(BoundaryUtil.isOverlap(EMPTY_BOUNDARY, _a));
         assertFalse(BoundaryUtil.isOverlap(f_, EMPTY_BOUNDARY));
         assertFalse(BoundaryUtil.isOverlap(EMPTY_BOUNDARY, f_));
+        assertFalse(BoundaryUtil.isOverlap(Set.of(_a, a_b, b_f, f_)));
+    }
+
+    @Test
+    public void isValidSplitSet() {
+        Boundary _a = boundary(null, "a");
+        Boundary a_b = boundary("a", "b");
+        Boundary b_c = boundary("b", "c");
+        Boundary c_d = boundary("c", "d");
+        Boundary d_e = boundary("d", "e");
+        Boundary e_ = boundary("e", null);
+        Boundary fullBoundary = FULL_BOUNDARY;
+        Boundary emptyBoundary = EMPTY_BOUNDARY;
+
+        // Valid split set with contiguous boundaries
+        Set<Boundary> validSplitSet = Set.of(_a, a_b, b_c, c_d, d_e, e_);
+        assertTrue(BoundaryUtil.isValidSplitSet(validSplitSet));
+
+        // Single boundary that is FULL_BOUNDARY
+        Set<Boundary> singleFullBoundary = Set.of(fullBoundary);
+        assertTrue(BoundaryUtil.isValidSplitSet(singleFullBoundary));
+
+        // Empty boundary set
+        Set<Boundary> emptySet = Set.of();
+        assertFalse(BoundaryUtil.isValidSplitSet(emptySet));
+
+        // Empty and Full boundary set
+        Set<Boundary> emptyAndFull = Set.of(EMPTY_BOUNDARY, FULL_BOUNDARY);
+        assertTrue(BoundaryUtil.isValidSplitSet(emptyAndFull));
+
+        // Single boundary that is not FULL_BOUNDARY
+        Set<Boundary> singleNonFullBoundary = Set.of(a_b);
+        assertFalse(BoundaryUtil.isValidSplitSet(singleNonFullBoundary));
+
+        Set<Boundary> fullBoundaryWithHole = Set.of(_a, a_b, c_d, e_);
+        assertFalse(BoundaryUtil.isValidSplitSet(fullBoundaryWithHole));
+
+        // Set with non-contiguous boundaries
+        Set<Boundary> nonContiguousSet = Set.of(a_b, c_d);
+        assertFalse(BoundaryUtil.isValidSplitSet(nonContiguousSet));
+
+        // Set with overlap (invalid split set)
+        Set<Boundary> overlappingSet = Set.of(a_b, b_c, boundary("a", "c"));
+        assertFalse(BoundaryUtil.isValidSplitSet(overlappingSet));
     }
 
     @Test

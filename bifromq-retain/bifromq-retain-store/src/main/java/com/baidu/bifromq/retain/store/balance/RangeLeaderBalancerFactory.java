@@ -13,11 +13,11 @@
 
 package com.baidu.bifromq.retain.store.balance;
 
-import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.RangeLeaderBalancer;
+import com.baidu.bifromq.retain.store.spi.IRetainStoreBalancerFactory;
 
-public class RangeLeaderBalancerFactory implements IStoreBalancerFactory {
+public class RangeLeaderBalancerFactory implements IRetainStoreBalancerFactory {
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {
         return new RangeLeaderBalancer(clusterId, localStoreId);

@@ -14,9 +14,11 @@
 package com.baidu.bifromq.basekv.balance.impl;
 
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.assertSame;
 
+import com.baidu.bifromq.basekv.balance.BalanceNow;
+import com.baidu.bifromq.basekv.balance.BalanceResult;
+import com.baidu.bifromq.basekv.balance.BalanceResultType;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
@@ -27,7 +29,6 @@ import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.google.protobuf.ByteString;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Optional;
 import java.util.Set;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -67,10 +68,9 @@ public class RedundantEpochRemovalBalancerTest {
         Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
         storeDescriptors.add(storeDescriptor);
 
-        balancer.update("{}", storeDescriptors);
+        balancer.update(storeDescriptors);
 
-        Optional<ChangeConfigCommand> command = balancer.balance();
-        assertFalse(command.isPresent());
+        assertSame(balancer.balance().type(), BalanceResultType.NoNeedBalance);
     }
 
     @Test
@@ -116,11 +116,11 @@ public class RedundantEpochRemovalBalancerTest {
 
         Set<KVRangeStoreDescriptor> storeDescriptors = Set.of(storeDescriptor1, storeDescriptor2);
 
-        balancer.update("{}", storeDescriptors);
+        balancer.update(storeDescriptors);
 
-        Optional<ChangeConfigCommand> command = balancer.balance();
-        assertTrue(command.isPresent(), "A balance command should be generated for redundant replicas.");
-        ChangeConfigCommand changeConfigCommand = command.get();
+        BalanceResult command = balancer.balance();
+        assertEquals(command.type(), BalanceResultType.BalanceNow);
+        ChangeConfigCommand changeConfigCommand = (ChangeConfigCommand) ((BalanceNow<?>) command).command;
 
         assertEquals(changeConfigCommand.getToStore(), localStoreId);
         assertEquals(changeConfigCommand.getKvRangeId(), kvRangeId2);
@@ -170,9 +170,8 @@ public class RedundantEpochRemovalBalancerTest {
 
         Set<KVRangeStoreDescriptor> storeDescriptors = Set.of(storeDescriptor1, storeDescriptor2);
 
-        balancer.update("{}", storeDescriptors);
+        balancer.update(storeDescriptors);
 
-        Optional<ChangeConfigCommand> command = balancer.balance();
-        assertFalse(command.isPresent());
+        assertSame(balancer.balance().type(), BalanceResultType.NoNeedBalance);
     }
 }

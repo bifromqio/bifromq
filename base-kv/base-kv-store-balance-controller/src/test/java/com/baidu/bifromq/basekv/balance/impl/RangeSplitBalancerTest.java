@@ -13,130 +13,148 @@
 
 package com.baidu.bifromq.basekv.balance.impl;
 
-import static com.baidu.bifromq.basekv.balance.impl.RangeSplitBalancer.LOAD_TYPE_AVG_LATENCY_NANOS;
-import static com.baidu.bifromq.basekv.balance.impl.RangeSplitBalancer.LOAD_TYPE_IO_DENSITY;
-import static com.baidu.bifromq.basekv.balance.impl.RangeSplitBalancer.LOAD_TYPE_IO_LATENCY_NANOS;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basekv.balance.BalanceNow;
+import com.baidu.bifromq.basekv.balance.BalanceResultType;
 import com.baidu.bifromq.basekv.balance.command.SplitCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.proto.State;
+import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
-import java.util.Collections;
-import java.util.Optional;
 import java.util.Set;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class RangeSplitBalancerTest {
     private static final String HintType = "kv_io_mutation";
     private final String clusterId = "clusterId";
+    private KVRangeDescriptor.Builder rangeDescriptorBuilder;
+    private KVRangeStoreDescriptor.Builder storeDescriptorBuilder;
 
-    @Test
-    public void noLocalDesc() {
-        RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "local", HintType);
-        assertFalse(balancer.balance().isPresent());
+    @BeforeMethod
+    public void setup() {
+        rangeDescriptorBuilder = KVRangeDescriptor.newBuilder()
+            .setId(KVRangeIdUtil.generate())
+            .setVer(0L)
+            .setBoundary(FULL_BOUNDARY)
+            .setState(State.StateType.Normal)
+            .setRole(RaftNodeStatus.Leader)
+            .setConfig(ClusterConfig.newBuilder()
+                .addVoters("store1")
+                .build());
+        storeDescriptorBuilder = KVRangeStoreDescriptor
+            .newBuilder()
+            .setId("store1");
     }
 
     @Test
-    public void cpuUsageExceedLimit() {
-        RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "local", HintType);
-        balancer.update("{}", Collections.singleton(KVRangeStoreDescriptor
-            .newBuilder()
-            .setId("local")
-            .putStatistics("cpu.usage", 0.75)
-            .build()
-        ));
-        assertFalse(balancer.balance().isPresent());
+    public void defaultLoadRules() {
+        RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "store1", HintType, 30, 0.8, 30, 30_000);
+        assertTrue(balancer.validate(balancer.defaultLoadRules()));
     }
 
     @Test
-    public void splitHintPreference() {
-        KVRangeId rangeId = KVRangeIdUtil.generate();
-        Set<KVRangeStoreDescriptor> descriptors = Collections.singleton(KVRangeStoreDescriptor
-            .newBuilder()
-            .setId("local")
-            .putStatistics("cpu.usage", 0.65)
-            .addRanges(KVRangeDescriptor.newBuilder()
-                .setId(rangeId)
-                .setRole(RaftNodeStatus.Leader)
-                .setState(State.StateType.Normal)
+    public void noSplitHint() {
+        RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "store1", HintType, 30, 0.8, 30, 30_000);
+        balancer.update(Set.of(storeDescriptorBuilder
+            .addRanges(rangeDescriptorBuilder.build())
+            .build()));
+        assertEquals(balancer.balance().type(), BalanceResultType.NoNeedBalance);
+    }
+
+    @Test
+    public void genSplitCommand() {
+        RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "store1", HintType, 30, 0.8, 30, 30_000);
+        balancer.update(Set.of(storeDescriptorBuilder
+            .addRanges(rangeDescriptorBuilder
                 .addHints(SplitHint.newBuilder()
                     .setType(HintType)
-                    .putLoad(LOAD_TYPE_IO_DENSITY, 10)
-                    .putLoad(LOAD_TYPE_IO_LATENCY_NANOS, 15)
-                    .putLoad(LOAD_TYPE_AVG_LATENCY_NANOS, 100)
-                    .setSplitKey(ByteString.copyFromUtf8("splitMutationLoadKey"))
+                    .putLoad("ioDensity", 40.0)
+                    .putLoad("ioLatencyNanos", 100)
+                    .setSplitKey(ByteString.copyFromUtf8("a"))
                     .build())
                 .build())
-            .build()
-        );
-        RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "local", HintType, 10, 0.8, 5, 20);
-        balancer.update("{}", descriptors);
-        Optional<SplitCommand> command = balancer.balance();
-        assertTrue(command.isPresent());
-        assertEquals(command.get().getKvRangeId(), rangeId);
-        assertEquals(command.get().getToStore(), "local");
-        assertEquals(command.get().getExpectedVer(), 0);
-        assertEquals(((SplitCommand) command.get()).getSplitKey(), ByteString.copyFromUtf8("splitMutationLoadKey"));
+            .putStatistics("cpu.usage", 0.7)
+            .build()));
+        SplitCommand splitCommand = ((BalanceNow<SplitCommand>) balancer.balance()).command;
+        assertEquals(splitCommand.getToStore(), "store1");
+        assertEquals(splitCommand.getKvRangeId(), rangeDescriptorBuilder.getId());
+        assertEquals(splitCommand.getExpectedVer(), rangeDescriptorBuilder.getVer());
+        assertEquals(splitCommand.getSplitKey(), ByteString.copyFromUtf8("a"));
     }
 
     @Test
-    public void hintNoSplitKey() {
-        KVRangeId rangeId = KVRangeIdUtil.generate();
-        Set<KVRangeStoreDescriptor> descriptors = Collections.singleton(KVRangeStoreDescriptor
-            .newBuilder()
-            .setId("local")
-            .putStatistics("cpu.usage", 0.65)
-            .addRanges(KVRangeDescriptor.newBuilder()
-                .setId(rangeId)
-                .setRole(RaftNodeStatus.Leader)
-                .setState(State.StateType.Normal)
+    public void stopSplitWhenCPUOverUse() {
+        RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "store1", HintType, 30, 0.8, 30, 30_000);
+        balancer.update(Set.of(storeDescriptorBuilder
+            .addRanges(rangeDescriptorBuilder
                 .addHints(SplitHint.newBuilder()
                     .setType(HintType)
-                    .putLoad(LOAD_TYPE_IO_DENSITY, 1)
-                    .putLoad(LOAD_TYPE_IO_LATENCY_NANOS, 1)
-                    .putLoad(LOAD_TYPE_AVG_LATENCY_NANOS, 1)
+                    .putLoad("ioDensity", 1.0)
+                    .putLoad("ioLatencyNanos", 100)
+                    .setSplitKey(ByteString.copyFromUtf8("a"))
                     .build())
                 .build())
-            .build()
-        );
-        RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "local", HintType);
-        balancer.update("{}", descriptors);
-        Optional<SplitCommand> command = balancer.balance();
-        assertFalse(command.isPresent());
+            .putStatistics("cpu.usage", 0.9)
+            .build()));
+        assertEquals(balancer.balance().type(), BalanceResultType.NoNeedBalance);
     }
 
     @Test
-    public void noRoomPauseSplit() {
-        KVRangeId rangeId = KVRangeIdUtil.generate();
-        Set<KVRangeStoreDescriptor> descriptors = Collections.singleton(KVRangeStoreDescriptor
-            .newBuilder()
-            .setId("local")
-            .putStatistics("cpu.usage", 0.65)
-            .addRanges(KVRangeDescriptor.newBuilder()
-                .setId(rangeId)
-                .setRole(RaftNodeStatus.Leader)
-                .setState(State.StateType.Normal)
+    public void stopSplitWhenIODensityUnderLimit() {
+        RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "store1", HintType, 30, 0.8, 30, 30_000);
+        balancer.update(Set.of(storeDescriptorBuilder
+            .addRanges(rangeDescriptorBuilder
                 .addHints(SplitHint.newBuilder()
                     .setType(HintType)
-                    .putLoad(LOAD_TYPE_IO_DENSITY, 10)
-                    .putLoad(LOAD_TYPE_IO_LATENCY_NANOS, 15)
-                    .putLoad(LOAD_TYPE_AVG_LATENCY_NANOS, 100)
-                    .setSplitKey(ByteString.copyFromUtf8("splitMutationLoadKey"))
+                    .putLoad("ioDensity", 20)
+                    .putLoad("ioLatencyNanos", 100)
+                    .setSplitKey(ByteString.copyFromUtf8("a"))
                     .build())
                 .build())
-            .build()
-        );
-        RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "local", HintType, 1, 0.8, 5, 20);
-        balancer.update("{}", descriptors);
-        Optional<SplitCommand> command = balancer.balance();
-        assertFalse(command.isPresent());
+            .putStatistics("cpu.usage", 0.7)
+            .build()));
+        assertEquals(balancer.balance().type(), BalanceResultType.NoNeedBalance);
+    }
+
+    @Test
+    public void stopSplitWhenIOLatencyExceedLimit() {
+        RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "store1", HintType, 30, 0.8, 30, 30_000);
+        balancer.update(Set.of(storeDescriptorBuilder
+            .addRanges(rangeDescriptorBuilder
+                .addHints(SplitHint.newBuilder()
+                    .setType(HintType)
+                    .putLoad("ioDensity", 40)
+                    .putLoad("ioLatencyNanos", 40_000)
+                    .setSplitKey(ByteString.copyFromUtf8("a"))
+                    .build())
+                .build())
+            .putStatistics("cpu.usage", 0.7)
+            .build()));
+        assertEquals(balancer.balance().type(), BalanceResultType.NoNeedBalance);
+    }
+
+    @Test
+    public void stopSplitWhenExceedMaxRanges() {
+        RangeSplitBalancer balancer = new RangeSplitBalancer(clusterId, "store1", HintType, 1, 0.8, 30, 30_000);
+        balancer.update(Set.of(storeDescriptorBuilder
+            .addRanges(rangeDescriptorBuilder
+                .addHints(SplitHint.newBuilder()
+                    .setType(HintType)
+                    .putLoad("ioDensity", 40)
+                    .putLoad("ioLatencyNanos", 20_000)
+                    .setSplitKey(ByteString.copyFromUtf8("a"))
+                    .build())
+                .build())
+            .putStatistics("cpu.usage", 0.7)
+            .build()));
+        assertEquals(balancer.balance().type(), BalanceResultType.NoNeedBalance);
     }
 }

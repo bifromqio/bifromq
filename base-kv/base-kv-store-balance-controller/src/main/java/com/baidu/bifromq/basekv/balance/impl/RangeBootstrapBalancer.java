@@ -17,6 +17,9 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
 
 import com.baidu.bifromq.basehlc.HLC;
+import com.baidu.bifromq.basekv.balance.BalanceNow;
+import com.baidu.bifromq.basekv.balance.BalanceResult;
+import com.baidu.bifromq.basekv.balance.NoNeedBalance;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.command.BootstrapCommand;
 import com.baidu.bifromq.basekv.proto.Boundary;
@@ -86,8 +89,8 @@ public class RangeBootstrapBalancer extends StoreBalancer {
 
 
     @Override
-    public void update(String loadRules, Set<KVRangeStoreDescriptor> storeDescriptors) {
-        Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(storeDescriptors);
+    public void update(Set<KVRangeStoreDescriptor> landscape) {
+        Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(landscape);
         if (effectiveEpoch.isEmpty()) {
             if (bootstrapTrigger.get() == null) {
                 KVRangeId rangeId = KVRangeIdUtil.generate();
@@ -99,17 +102,17 @@ public class RangeBootstrapBalancer extends StoreBalancer {
     }
 
     @Override
-    public Optional<BootstrapCommand> balance() {
+    public BalanceResult balance() {
         BootstrapTrigger current = bootstrapTrigger.get();
         if (current != null && millisSource.get() > current.triggerTime) {
             bootstrapTrigger.set(null);
-            return Optional.of(BootstrapCommand.builder()
+            return BalanceNow.of(BootstrapCommand.builder()
                 .toStore(localStoreId)
                 .kvRangeId(current.id)
                 .boundary(current.boundary)
                 .build());
         }
-        return Optional.empty();
+        return NoNeedBalance.INSTANCE;
     }
 
     private long randomSuspicionTimeout() {

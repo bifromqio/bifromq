@@ -376,6 +376,11 @@
             </dependency>
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
+                <artifactId>bifromq-retain-store-spi</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
                 <artifactId>bifromq-retain-store</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -402,6 +407,11 @@
             </dependency>
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
+                <artifactId>bifromq-inbox-store-spi</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
                 <artifactId>bifromq-inbox-store</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -419,6 +429,11 @@
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
                 <artifactId>bifromq-dist-client</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
+                <artifactId>bifromq-dist-worker-spi</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

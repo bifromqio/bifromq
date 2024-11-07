@@ -14,15 +14,15 @@
 package com.baidu.bifromq.inbox.store.balance;
 
 
-import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.RangeSplitBalancer;
+import com.baidu.bifromq.inbox.store.spi.IInboxStoreBalancerFactory;
 import com.baidu.bifromq.sysprops.props.InboxStoreSplitMaxRangeNum;
 import com.baidu.bifromq.sysprops.props.InboxStoreSplitUnderCPUUsage;
 import com.baidu.bifromq.sysprops.props.InboxStoreSplitUnderIODensity;
 import com.baidu.bifromq.sysprops.props.InboxStoreSplitUnderIONanos;
 
-public class RangeSplitBalancerFactory implements IStoreBalancerFactory {
+public class RangeSplitBalancerFactory implements IInboxStoreBalancerFactory {
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {
         return new RangeSplitBalancer(clusterId, localStoreId,

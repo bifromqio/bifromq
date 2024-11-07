@@ -30,6 +30,10 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
+            <artifactId>base-hookloader</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
             <artifactId>base-hlc</artifactId>
         </dependency>
         <dependency>
@@ -67,6 +71,10 @@
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-retain-rpc-definition</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-retain-store-spi</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>

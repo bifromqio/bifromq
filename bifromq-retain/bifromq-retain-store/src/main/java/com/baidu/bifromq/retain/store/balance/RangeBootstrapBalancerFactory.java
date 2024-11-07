@@ -13,13 +13,13 @@
 
 package com.baidu.bifromq.retain.store.balance;
 
-import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.RangeBootstrapBalancer;
+import com.baidu.bifromq.retain.store.spi.IRetainStoreBalancerFactory;
 import com.baidu.bifromq.sysprops.props.RetainStoreRecoveryWaitTimeMillis;
 import java.time.Duration;
 
-public class RangeBootstrapBalancerFactory implements IStoreBalancerFactory {
+public class RangeBootstrapBalancerFactory implements IRetainStoreBalancerFactory {
 
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {

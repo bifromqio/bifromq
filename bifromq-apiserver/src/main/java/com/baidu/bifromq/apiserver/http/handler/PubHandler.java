@@ -72,13 +72,22 @@ public final class PubHandler extends TenantAwareHandler {
     @POST
     @Operation(summary = "Publish a message to given topic")
     @Parameters({
-        @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
-        @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id"),
-        @Parameter(name = "topic", in = ParameterIn.HEADER, required = true, description = "the message topic"),
-        @Parameter(name = "qos", in = ParameterIn.HEADER, required = true, description = "QoS of the message to be published"),
-        @Parameter(name = "expiry_seconds", in = ParameterIn.HEADER, description = "the message expiry seconds, must be positive"),
-        @Parameter(name = "client_type", in = ParameterIn.HEADER, required = true, description = "the caller client type"),
-        @Parameter(name = "client_meta_*", in = ParameterIn.HEADER, description = "the metadata header about caller client, must be started with client_meta_"),
+        @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id",
+            schema = @Schema(implementation = Long.class)),
+        @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id",
+            schema = @Schema(implementation = String.class)),
+        @Parameter(name = "topic", in = ParameterIn.HEADER, required = true, description = "the message topic",
+            schema = @Schema(implementation = String.class)),
+        @Parameter(name = "qos", in = ParameterIn.HEADER, required = true,
+            description = "QoS of the message to be published",
+            schema = @Schema(implementation = Integer.class, allowableValues = {"0", "1", "2"})),
+        @Parameter(name = "expiry_seconds", in = ParameterIn.HEADER,
+            description = "the message expiry seconds, must be positive",
+            schema = @Schema(implementation = Integer.class)),
+        @Parameter(name = "client_type", in = ParameterIn.HEADER, required = true,
+            description = "the caller client type", schema = @Schema(implementation = String.class)),
+        @Parameter(name = "client_meta_*", in = ParameterIn.HEADER,
+            description = "the metadata header about caller client, must be started with client_meta_"),
     })
     @RequestBody(required = true, description = "Message payload will be treated as binary", content = @Content(mediaType = "application/octet-stream"))
     @ApiResponses(value = {

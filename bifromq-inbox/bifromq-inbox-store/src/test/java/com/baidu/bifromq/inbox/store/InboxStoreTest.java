@@ -34,7 +34,6 @@ import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.IBaseKVMetaService;
-import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngineConfigurator;
@@ -77,6 +76,7 @@ import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
+import com.baidu.bifromq.inbox.store.balance.RangeBootstrapBalancerFactory;
 import com.baidu.bifromq.inbox.util.MessageUtil;
 import com.baidu.bifromq.metrics.TenantMetric;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
@@ -87,6 +87,7 @@ import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Struct;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Metrics;
@@ -100,6 +101,7 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -195,7 +197,6 @@ abstract class InboxStoreTest {
     }
 
     private void buildStoreServer() {
-        KVRangeBalanceControllerOptions controllerOptions = new KVRangeBalanceControllerOptions();
         testStore = (StandaloneInboxStore) IInboxStore.standaloneBuilder()
             .bootstrap(true)
             .host("127.0.0.1")
@@ -207,9 +208,9 @@ abstract class InboxStoreTest {
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .storeOptions(options)
-            .balanceControllerOptions(controllerOptions)
             .queryExecutor(queryExecutor)
             .tickerThreads(tickerThreads)
+            .balancerFactoryConfig(Map.of(RangeBootstrapBalancerFactory.class.getName(), Struct.getDefaultInstance()))
             .bgTaskExecutor(bgTaskExecutor)
             .gcInterval(Duration.ofSeconds(1))
             .build();

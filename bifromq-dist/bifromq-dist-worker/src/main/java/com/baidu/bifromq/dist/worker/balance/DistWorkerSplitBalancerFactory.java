@@ -13,13 +13,13 @@
 
 package com.baidu.bifromq.dist.worker.balance;
 
-import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
+import com.baidu.bifromq.dist.worker.spi.IDistWorkerBalancerFactory;
 import com.baidu.bifromq.sysprops.props.DistWorkerSplitUnderCPUUsage;
 import com.baidu.bifromq.sysprops.props.DistWorkerSplitUnderIODensity;
 import com.baidu.bifromq.sysprops.props.DistWorkerSplitUnderIONanos;
 
-public class DistWorkerSplitBalancerFactory implements IStoreBalancerFactory {
+public class DistWorkerSplitBalancerFactory implements IDistWorkerBalancerFactory {
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {
         return new DistWorkerSplitBalancer(clusterId, localStoreId,

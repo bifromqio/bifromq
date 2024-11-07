@@ -58,13 +58,18 @@ public final class SubHandler extends TenantAwareHandler {
     @PUT
     @Operation(summary = "Add a topic subscription to a mqtt session")
     @Parameters({
-        @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
-        @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the id of tenant"),
-        @Parameter(name = "user_id", in = ParameterIn.HEADER, required = true, description = "the id of user who established the session"),
-        @Parameter(name = "client_id", in = ParameterIn.HEADER, required = true, description = "the client id of the mqtt session"),
-        @Parameter(name = "topic_filter", in = ParameterIn.HEADER, required = true, description = "the topic filter to add"),
-        @Parameter(name = "sub_qos", in = ParameterIn.HEADER, schema = @Schema(allowableValues = {"0", "1",
-            "2"}), required = true, description = "the qos of the subscription")
+        @Parameter(name = "req_id", in = ParameterIn.HEADER,
+            description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
+        @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true,
+            description = "the id of tenant", schema = @Schema(implementation = String.class)),
+        @Parameter(name = "user_id", in = ParameterIn.HEADER, required = true,
+            description = "the id of user who established the session", schema = @Schema(implementation = String.class)),
+        @Parameter(name = "client_id", in = ParameterIn.HEADER, required = true,
+            description = "the client id of the mqtt session", schema = @Schema(implementation = String.class)),
+        @Parameter(name = "topic_filter", in = ParameterIn.HEADER, required = true,
+            description = "the topic filter to add", schema = @Schema(implementation = String.class)),
+        @Parameter(name = "sub_qos", in = ParameterIn.HEADER, description = "the qos of the subscription",
+            schema = @Schema(implementation = Integer.class, allowableValues = {"0", "1", "2"}), required = true)
     })
     @RequestBody(required = false)
     @ApiResponses(value = {

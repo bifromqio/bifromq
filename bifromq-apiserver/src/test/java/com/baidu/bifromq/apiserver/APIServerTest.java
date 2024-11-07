@@ -21,6 +21,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
+import com.baidu.bifromq.basekv.IBaseKVMetaService;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.PubResult;
@@ -51,6 +52,8 @@ public class APIServerTest extends MockableTest {
     @Mock
     private IAgentHost agentHost;
     @Mock
+    private IBaseKVMetaService metaService;
+    @Mock
     private IRPCServiceTrafficGovernor trafficGovernor;
     @Mock
     private IMqttBrokerClient brokerClient;
@@ -67,6 +70,7 @@ public class APIServerTest extends MockableTest {
     @BeforeMethod(alwaysRun = true)
     public void setup() {
         super.setup();
+        when(metaService.clusterIds()).thenReturn(Observable.empty());
         when(trafficGovernor.serverList()).thenReturn(Observable.empty());
         when(trafficGovernor.trafficRules()).thenReturn(Observable.empty());
         when(brokerClient.trafficGovernor()).thenReturn(trafficGovernor);
@@ -84,6 +88,7 @@ public class APIServerTest extends MockableTest {
             .bossGroup(bossGroup)
             .workerGroup(workerGroup)
             .agentHost(agentHost)
+            .metaService(metaService)
             .brokerClient(brokerClient)
             .distClient(distClient)
             .inboxClient(inboxClient)

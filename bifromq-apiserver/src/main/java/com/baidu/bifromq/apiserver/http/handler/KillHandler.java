@@ -74,17 +74,27 @@ public final class KillHandler extends TenantAwareHandler {
     @DELETE
     @Operation(summary = "Disconnect a MQTT client connection")
     @Parameters({
-        @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
-        @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id"),
-        @Parameter(name = "user_id", in = ParameterIn.HEADER, required = false, description = "the user id of the MQTT client connection to be disconnected"),
-        @Parameter(name = "client_id", in = ParameterIn.HEADER, required = false, description = "the client id of the mqtt session"),
-        @Parameter(name = "server_redirect", in = ParameterIn.HEADER, required = false,
-            description = "indicate if the client should redirect to another server", schema = @Schema(implementation = String.class,
-            allowableValues = {SERVER_REDIRECT_VALUE_NO, SERVER_REDIRECT_VALUE_MOVE, SERVER_REDIRECT_VALUE_TEMP_USE})),
-        @Parameter(name = "server_reference", in = ParameterIn.HEADER, required = false, description = "indicate the server reference to redirect to",
+        @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id",
+            schema = @Schema(implementation = Long.class)),
+        @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the tenant id",
+            schema = @Schema(implementation = String.class)),
+        @Parameter(name = "user_id", in = ParameterIn.HEADER,
+            description = "the user id of the MQTT client connection to be disconnected",
+            schema = @Schema(implementation = String.class)),
+        @Parameter(name = "client_id", in = ParameterIn.HEADER,
+            description = "the client id of the mqtt session"),
+        @Parameter(name = "server_redirect", in = ParameterIn.HEADER,
+            description = "indicate if the client should redirect to another server",
+            schema = @Schema(implementation = String.class,
+                allowableValues = {SERVER_REDIRECT_VALUE_NO, SERVER_REDIRECT_VALUE_MOVE,
+                    SERVER_REDIRECT_VALUE_TEMP_USE})),
+        @Parameter(name = "server_reference", in = ParameterIn.HEADER,
+            description = "indicate the server reference to redirect to",
             schema = @Schema(implementation = String.class, maxLength = MAX_SERVER_REFERENCE_LENGTH)),
-        @Parameter(name = "client_type", in = ParameterIn.HEADER, required = true, description = "the caller client type"),
-        @Parameter(name = "client_meta_*", in = ParameterIn.HEADER, description = "the metadata header about the caller client, must be started with client_meta_"),
+        @Parameter(name = "client_type", in = ParameterIn.HEADER, required = true,
+            description = "the caller client type", schema = @Schema(implementation = String.class)),
+        @Parameter(name = "client_meta_*", in = ParameterIn.HEADER,
+            description = "the metadata header about the caller client, must be started with client_meta_"),
     })
     @RequestBody(required = false)
     @ApiResponses(value = {

@@ -57,10 +57,15 @@ public final class GetSessionInfoHandler extends TenantAwareHandler {
     @Operation(summary = "Get the session information of the given user and client id")
 
     @Parameters({
-        @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
-        @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true, description = "the id of tenant"),
-        @Parameter(name = "user_id", in = ParameterIn.HEADER, required = true, description = "the id of user who established the session"),
-        @Parameter(name = "client_id", in = ParameterIn.HEADER, required = true, description = "the client id of the mqtt session"),
+        @Parameter(name = "req_id", in = ParameterIn.HEADER,
+            description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
+        @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true,
+            description = "the id of tenant", schema = @Schema(implementation = String.class)),
+        @Parameter(name = "user_id", in = ParameterIn.HEADER, required = true,
+            description = "the id of user who established the session",
+            schema = @Schema(implementation = String.class)),
+        @Parameter(name = "client_id", in = ParameterIn.HEADER, required = true,
+            description = "the client id of the mqtt session", schema = @Schema(implementation = String.class)),
     })
     @RequestBody(required = false)
     @ApiResponses(value = {

@@ -15,7 +15,8 @@ package com.baidu.bifromq.inbox.store;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.basekv.balance.KVRangeBalanceController;
+import com.baidu.bifromq.basehookloader.BaseHookLoader;
+import com.baidu.bifromq.basekv.balance.KVStoreBalanceController;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
@@ -23,10 +24,14 @@ import com.baidu.bifromq.baserpc.IConnectable;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.store.gc.IInboxStoreGCProcessor;
 import com.baidu.bifromq.inbox.store.gc.InboxStoreGCProcessor;
+import com.baidu.bifromq.inbox.store.spi.IInboxStoreBalancerFactory;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Duration;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -44,11 +49,12 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final IBaseKVStoreClient storeClient;
     private final IInboxClient inboxClient;
-    private final KVRangeBalanceController balanceController;
+    private final KVStoreBalanceController balanceController;
     private final AsyncRunner jobRunner;
     private final ScheduledExecutorService jobScheduler;
     private final boolean jobExecutorOwner;
     private final Duration gcInterval;
+    private final List<IInboxStoreBalancerFactory> effectiveBalancerFactories = new LinkedList<>();
     protected final InboxStoreCoProcFactory coProcFactory;
     private IInboxStoreGCProcessor inboxStoreGCProc;
     private volatile CompletableFuture<Void> gcJob;
@@ -60,8 +66,24 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
         this.gcInterval = builder.gcInterval;
         coProcFactory =
             new InboxStoreCoProcFactory(builder.settingProvider, builder.eventCollector, builder.loadEstimateWindow);
-        balanceController =
-            new KVRangeBalanceController(storeClient, builder.balanceControllerOptions, builder.bgTaskExecutor);
+        Map<String, IInboxStoreBalancerFactory> loadedFactories = BaseHookLoader.load(IInboxStoreBalancerFactory.class);
+        for (String factoryName : builder.balancerFactoryConfig.keySet()) {
+            if (!loadedFactories.containsKey(factoryName)) {
+                log.warn("InboxStoreBalancerFactory[{}] not found", factoryName);
+                continue;
+            }
+            IInboxStoreBalancerFactory balancer = loadedFactories.get(factoryName);
+            balancer.init(builder.balancerFactoryConfig.get(factoryName));
+            log.info("InboxStoreBalancerFactory[{}] enabled", factoryName);
+            effectiveBalancerFactories.add(balancer);
+        }
+
+        balanceController = new KVStoreBalanceController(
+            builder.metaService.metadataManager(clusterId),
+            storeClient,
+            effectiveBalancerFactories,
+            builder.balancerRetryDelay,
+            builder.bgTaskExecutor);
         jobExecutorOwner = builder.bgTaskExecutor == null;
         if (jobExecutorOwner) {
             String threadName = String.format("inbox-store[%s]-job-executor", builder.clusterId);
@@ -108,6 +130,7 @@ abstract class AbstractInboxStore<T extends AbstractInboxStoreBuilder<T>> implem
             storeServer().stop();
             log.debug("Stopping CoProcFactory");
             coProcFactory.close();
+            effectiveBalancerFactories.forEach(IInboxStoreBalancerFactory::close);
             if (jobExecutorOwner) {
                 log.debug("Shutting down job executor");
                 MoreExecutors.shutdownAndAwaitTermination(jobScheduler, 5, TimeUnit.SECONDS);

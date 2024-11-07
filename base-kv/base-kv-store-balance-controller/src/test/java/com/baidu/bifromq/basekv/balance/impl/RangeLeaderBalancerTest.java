@@ -16,8 +16,12 @@ package com.baidu.bifromq.basekv.balance.impl;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basekv.balance.BalanceNow;
+import com.baidu.bifromq.basekv.balance.BalanceResult;
+import com.baidu.bifromq.basekv.balance.BalanceResultType;
 import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.balance.command.TransferLeadershipCommand;
@@ -29,7 +33,6 @@ import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.google.protobuf.ByteString;
 import java.util.HashSet;
-import java.util.Optional;
 import java.util.Set;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -62,10 +65,10 @@ public class RangeLeaderBalancerTest {
             .addRanges(kvRangeDescriptor)
             .build();
 
-        balancer.update("{}", Set.of(storeDescriptor));
+        balancer.update(Set.of(storeDescriptor));
 
-        Optional<BalanceCommand> command = balancer.balance();
-        assertFalse(command.isPresent());
+        BalanceResult result = balancer.balance();
+        assertSame(result.type(), BalanceResultType.NoNeedBalance);
     }
 
     @Test
@@ -81,9 +84,10 @@ public class RangeLeaderBalancerTest {
             .setId(localStoreId)
             .addRanges(kvRangeDescriptor)
             .build();
-        balancer.update("{}", Set.of(storeDescriptor));
-        Optional<BalanceCommand> command = balancer.balance();
-        assertFalse(command.isPresent());
+        balancer.update(Set.of(storeDescriptor));
+
+        BalanceResult result = balancer.balance();
+        assertSame(result.type(), BalanceResultType.NoNeedBalance);
     }
 
     @Test
@@ -118,9 +122,10 @@ public class RangeLeaderBalancerTest {
                 .setConfig(ClusterConfig.newBuilder().addVoters(localStoreId).build())
                 .build())
             .build();
-        balancer.update("{}", Set.of(storeDescriptor1, storeDescriptor2, storeDescriptor3));
-        Optional<BalanceCommand> command = balancer.balance();
-        assertFalse(command.isPresent());
+        balancer.update(Set.of(storeDescriptor1, storeDescriptor2, storeDescriptor3));
+
+        BalanceResult result = balancer.balance();
+        assertSame(result.type(), BalanceResultType.NoNeedBalance);
     }
 
     @Test
@@ -156,14 +161,15 @@ public class RangeLeaderBalancerTest {
             .setId("otherStore")
             .addRanges(kvRangeDescriptor3)
             .build();
-        balancer.update("{}", Set.of(storeDescriptor1, storeDescriptor2));
+        balancer.update(Set.of(storeDescriptor1, storeDescriptor2));
 
-        Optional<BalanceCommand> command = balancer.balance();
-        assertTrue(command.isPresent());
-        assertTrue(command.get() instanceof TransferLeadershipCommand);
-        assertEquals(command.get().getKvRangeId(), kvRangeId2);
-        assertEquals(((TransferLeadershipCommand) command.get()).getNewLeaderStore(), "otherStore");
-        assertEquals(((TransferLeadershipCommand) command.get()).getExpectedVer(), 1);
+        BalanceResult result = balancer.balance();
+        assertSame(result.type(), BalanceResultType.BalanceNow);
+        BalanceCommand command = ((BalanceNow<?>) result).command;
+        assertTrue(command instanceof TransferLeadershipCommand);
+        assertEquals(command.getKvRangeId(), kvRangeId2);
+        assertEquals(((TransferLeadershipCommand) command).getNewLeaderStore(), "otherStore");
+        assertEquals(((TransferLeadershipCommand) command).getExpectedVer(), 1);
     }
 
     @Test
@@ -199,14 +205,15 @@ public class RangeLeaderBalancerTest {
             .setId("otherStore")
             .addRanges(kvRangeDescriptor3)
             .build();
-        balancer.update("{}", Set.of(storeDescriptor1, storeDescriptor2));
+        balancer.update(Set.of(storeDescriptor1, storeDescriptor2));
 
-        Optional<BalanceCommand> command = balancer.balance();
-        assertTrue(command.isPresent());
-        assertTrue(command.get() instanceof TransferLeadershipCommand);
-        assertEquals(command.get().getKvRangeId(), kvRangeId2);
-        assertEquals(((TransferLeadershipCommand) command.get()).getNewLeaderStore(), "otherStore");
-        assertEquals(((TransferLeadershipCommand) command.get()).getExpectedVer(), 1);
+        BalanceResult result = balancer.balance();
+        assertSame(result.type(), BalanceResultType.BalanceNow);
+        BalanceCommand command = ((BalanceNow<?>) result).command;
+        assertTrue(command instanceof TransferLeadershipCommand);
+        assertEquals(command.getKvRangeId(), kvRangeId2);
+        assertEquals(((TransferLeadershipCommand) command).getNewLeaderStore(), "otherStore");
+        assertEquals(((TransferLeadershipCommand) command).getExpectedVer(), 1);
     }
 
     @Test
@@ -242,16 +249,17 @@ public class RangeLeaderBalancerTest {
             .setId("otherStore")
             .addRanges(kvRangeDescriptor3)
             .build();
-        balancer.update("{}", Set.of(storeDescriptor1, storeDescriptor2));
+        balancer.update(Set.of(storeDescriptor1, storeDescriptor2));
 
-        Optional<BalanceCommand> command = balancer.balance();
-        assertTrue(command.isPresent());
-        assertTrue(command.get() instanceof ChangeConfigCommand);
-        assertEquals(command.get().getKvRangeId(), kvRangeId1);
-        assertEquals(((ChangeConfigCommand) command.get()).getExpectedVer(), 1);
-        assertTrue(((ChangeConfigCommand) command.get()).getVoters().contains("otherStore"));
-        assertTrue(((ChangeConfigCommand) command.get()).getLearners().contains("localStore"));
-        assertFalse(((ChangeConfigCommand) command.get()).getLearners().contains("otherStore"));
+        BalanceResult result = balancer.balance();
+        assertSame(result.type(), BalanceResultType.BalanceNow);
+        BalanceCommand command = ((BalanceNow<?>) result).command;
+        assertTrue(command instanceof ChangeConfigCommand);
+        assertEquals(command.getKvRangeId(), kvRangeId1);
+        assertEquals(((ChangeConfigCommand) command).getExpectedVer(), 1);
+        assertTrue(((ChangeConfigCommand) command).getVoters().contains("otherStore"));
+        assertTrue(((ChangeConfigCommand) command).getLearners().contains("localStore"));
+        assertFalse(((ChangeConfigCommand) command).getLearners().contains("otherStore"));
     }
 
     @Test
@@ -288,16 +296,17 @@ public class RangeLeaderBalancerTest {
             .setId("otherStore")
             .addRanges(kvRangeDescriptor3)
             .build();
-        balancer.update("{}", Set.of(storeDescriptor1, storeDescriptor2));
+        balancer.update(Set.of(storeDescriptor1, storeDescriptor2));
 
-        Optional<BalanceCommand> command = balancer.balance();
-        assertTrue(command.isPresent());
-        assertTrue(command.get() instanceof ChangeConfigCommand);
-        assertTrue(command.get().getKvRangeId().equals(kvRangeId1) || command.get().getKvRangeId().equals(kvRangeId2));
-        assertEquals(((ChangeConfigCommand) command.get()).getExpectedVer(), 1);
-        assertTrue(((ChangeConfigCommand) command.get()).getVoters().contains("otherStore"));
-        assertFalse(((ChangeConfigCommand) command.get()).getLearners().contains("localStore"));
-        assertFalse(((ChangeConfigCommand) command.get()).getLearners().contains("otherStore"));
+        BalanceResult result = balancer.balance();
+        assertSame(result.type(), BalanceResultType.BalanceNow);
+        BalanceCommand command = ((BalanceNow<?>) result).command;
+        assertTrue(command instanceof ChangeConfigCommand);
+        assertTrue(command.getKvRangeId().equals(kvRangeId1) || command.getKvRangeId().equals(kvRangeId2));
+        assertEquals(((ChangeConfigCommand) command).getExpectedVer(), 1);
+        assertTrue(((ChangeConfigCommand) command).getVoters().contains("otherStore"));
+        assertFalse(((ChangeConfigCommand) command).getLearners().contains("localStore"));
+        assertFalse(((ChangeConfigCommand) command).getLearners().contains("otherStore"));
     }
 
     @Test
@@ -351,16 +360,13 @@ public class RangeLeaderBalancerTest {
         storeDescriptors.add(otherStoreDescriptor);
 
         // Update balancer with current store descriptors
-        balancer.update("{}", storeDescriptors);
+        balancer.update(storeDescriptors);
 
         // Simulate the scenario where localStore has exactly 'atMost' leaders
-        Optional<BalanceCommand> balanceCommand = balancer.balance();
-
-        // Assert that the balancer does not produce any balance commands since the store has exactly atMost leaders
-        assertTrue(balanceCommand.isPresent());
-
+        BalanceResult result = balancer.balance();
+        assertSame(result.type(), BalanceResultType.BalanceNow);
+        BalanceCommand command = ((BalanceNow<?>) result).command;
         // Check if the balance command involves transferring a leader or changing the configuration
-        BalanceCommand command = balanceCommand.get();
         assertTrue(command instanceof ChangeConfigCommand || command instanceof TransferLeadershipCommand);
     }
 }

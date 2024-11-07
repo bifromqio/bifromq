@@ -18,7 +18,11 @@ import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.UnsafeByteOperations;
+import java.util.Iterator;
+import java.util.NavigableSet;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 
 public class BoundaryUtil {
     public static final ByteString MIN_KEY = ByteString.EMPTY;
@@ -213,6 +217,67 @@ public class BoundaryUtil {
         }
         return !(compare(boundary1.getEndKey(), boundary2.getStartKey()) <= 0
             || compare(boundary2.getEndKey(), boundary1.getStartKey()) <= 0);
+    }
+
+    public static boolean isOverlap(Set<Boundary> boundaries) {
+        if (boundaries.isEmpty() || boundaries.size() == 1) {
+            return false;
+        }
+        NavigableSet<Boundary> sorted = new TreeSet<>(BoundaryUtil::compare);
+        sorted.addAll(boundaries);
+        return isOverlap(sorted);
+    }
+
+    public static boolean isOverlap(NavigableSet<Boundary> sorted) {
+        Iterator<Boundary> iterator = sorted.iterator();
+        Boundary prev = iterator.next();
+        while (iterator.hasNext()) {
+            Boundary next = iterator.next();
+            if (isOverlap(prev, next)) {
+                return true;
+            }
+            prev = next;
+        }
+        return false;
+    }
+
+    public static boolean isValidSplitSet(Set<Boundary> boundaries) {
+        if (boundaries.isEmpty()) {
+            return false;
+        }
+        if (boundaries.size() == 1) {
+            return boundaries.iterator().next().equals(FULL_BOUNDARY);
+        }
+        NavigableSet<Boundary> sorted = new TreeSet<>(BoundaryUtil::compare);
+        sorted.addAll(boundaries);
+        return isValidSplitSet(sorted);
+    }
+
+    public static boolean isValidSplitSet(NavigableSet<Boundary> sorted) {
+        ByteString checkKey = null;
+        Iterator<Boundary> iterator = sorted.iterator();
+        boolean valid;
+        while (iterator.hasNext()) {
+            Boundary boundary = iterator.next();
+            if (checkKey == null) {
+                if (!boundary.hasStartKey()) {
+                    checkKey = boundary.hasEndKey() ? boundary.getEndKey() : null;
+                } else {
+                    return false;
+                }
+            } else {
+                if (checkKey.equals(boundary.getStartKey())) {
+                    if (boundary.hasEndKey()) {
+                        checkKey = boundary.getEndKey();
+                    } else if (iterator.hasNext()) {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     public static Boundary intersect(Boundary boundary1, Boundary boundary2) {

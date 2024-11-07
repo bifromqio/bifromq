@@ -27,6 +27,7 @@
 
     <modules>
         <module>bifromq-dist-client</module>
+        <module>bifromq-dist-worker-spi</module>
         <module>bifromq-dist-worker</module>
         <module>bifromq-dist-server</module>
         <module>bifromq-dist-rpc-definition</module>

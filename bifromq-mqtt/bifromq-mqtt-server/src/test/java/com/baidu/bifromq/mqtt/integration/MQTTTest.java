@@ -22,7 +22,6 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.IBaseKVMetaService;
-import com.baidu.bifromq.basekv.balance.option.KVRangeBalanceControllerOptions;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
@@ -35,6 +34,7 @@ import com.baidu.bifromq.dist.worker.IDistWorker;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.server.IInboxServer;
 import com.baidu.bifromq.inbox.store.IInboxStore;
+import com.baidu.bifromq.inbox.store.balance.RangeBootstrapBalancerFactory;
 import com.baidu.bifromq.mqtt.IMQTTBroker;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
@@ -56,9 +56,11 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.protobuf.Struct;
 import io.reactivex.rxjava3.core.Observable;
 import java.lang.reflect.Method;
 import java.time.Duration;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -182,10 +184,10 @@ public abstract class MQTTTest {
             .queryExecutor(queryExecutor)
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
-            .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .storeOptions(new KVRangeStoreOptions()
                 .setDataEngineConfigurator(new InMemKVEngineConfigurator())
                 .setWalEngineConfigurator(new InMemKVEngineConfigurator()))
+            .balancerFactoryConfig(Map.of(RangeBootstrapBalancerFactory.class.getName(), Struct.getDefaultInstance()))
             .build();
         distClient = IDistClient.newBuilder()
             .crdtService(crdtService)
@@ -222,10 +224,12 @@ public abstract class MQTTTest {
             .queryExecutor(queryExecutor)
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
-            .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .storeOptions(new KVRangeStoreOptions()
                 .setDataEngineConfigurator(new InMemKVEngineConfigurator())
                 .setWalEngineConfigurator(new InMemKVEngineConfigurator()))
+            .balancerFactoryConfig(
+                Map.of(com.baidu.bifromq.retain.store.balance.RangeBootstrapBalancerFactory.class.getName(),
+                    Struct.getDefaultInstance()))
             .build();
 
         distWorkerStoreClient = IBaseKVStoreClient.newBuilder()
@@ -242,7 +246,6 @@ public abstract class MQTTTest {
             .retainStoreClient(retainStoreKVStoreClient)
             .settingProvider(settingProvider)
             .build();
-        KVRangeBalanceControllerOptions balanceControllerOptions = new KVRangeBalanceControllerOptions();
         distWorker = IDistWorker.nonStandaloneBuilder()
             .rpcServerBuilder(rpcServerBuilder)
             .bootstrap(true)
@@ -255,12 +258,13 @@ public abstract class MQTTTest {
             .queryExecutor(queryExecutor)
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
-            .balanceControllerOptions(new KVRangeBalanceControllerOptions())
             .storeOptions(new KVRangeStoreOptions()
                 .setDataEngineConfigurator(new InMemKVEngineConfigurator())
                 .setWalEngineConfigurator(new InMemKVEngineConfigurator()))
-            .balanceControllerOptions(balanceControllerOptions)
             .subBrokerManager(inboxBrokerMgr)
+            .balancerFactoryConfig(
+                Map.of(com.baidu.bifromq.dist.worker.balance.RangeBootstrapBalancerFactory.class.getName(),
+                    Struct.getDefaultInstance()))
             .build();
         distServer = IDistServer.nonStandaloneBuilder()
             .rpcServerBuilder(rpcServerBuilder)

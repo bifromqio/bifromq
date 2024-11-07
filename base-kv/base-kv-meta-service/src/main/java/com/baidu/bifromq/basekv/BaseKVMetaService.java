@@ -21,6 +21,7 @@ import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
@@ -37,9 +38,15 @@ class BaseKVMetaService implements IBaseKVMetaService {
     private final Map<String, BaseKVClusterMetadataManager> metadataManagers = new ConcurrentHashMap<>();
     private final IORMap basekvDescriptor;
     private final CompositeDisposable disposables = new CompositeDisposable();
+    private final Duration proposalTimeout;
 
     BaseKVMetaService(ICRDTService crdtService) {
+        this(crdtService, Duration.ofSeconds(5));
+    }
+
+    BaseKVMetaService(ICRDTService crdtService, Duration proposalTimeout) {
         this.crdtService = crdtService;
+        this.proposalTimeout = proposalTimeout;
         basekvDescriptor = crdtService.host(BaseKVDescriptorCRDTURI);
         disposables.add(basekvDescriptor.inflation().subscribe(ts -> {
             Set<String> clusterIds = new HashSet<>();
@@ -57,7 +64,7 @@ class BaseKVMetaService implements IBaseKVMetaService {
     public IBaseKVClusterMetadataManager metadataManager(String clusterId) {
         return metadataManagers.computeIfAbsent(clusterId,
             k -> new BaseKVClusterMetadataManager(basekvDescriptor.getORMap(ByteString.copyFromUtf8(clusterId)),
-                crdtService.aliveReplicas(BaseKVDescriptorCRDTURI)));
+                crdtService.aliveReplicas(BaseKVDescriptorCRDTURI), proposalTimeout));
     }
 
     @Override

@@ -32,5 +32,6 @@
         <module>bifromq-retain-rpc-definition</module>
         <module>bifromq-retain-store</module>
         <module>bifromq-retain-server</module>
+        <module>bifromq-retain-store-spi</module>
     </modules>
 </project>

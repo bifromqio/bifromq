@@ -13,6 +13,9 @@
 
 package com.baidu.bifromq.basekv;
 
+import static com.baidu.bifromq.basekv.LoadRulesProposalHandler.Result.ACCEPTED;
+import static com.baidu.bifromq.basekv.LoadRulesProposalHandler.Result.NO_BALANCER;
+import static com.baidu.bifromq.basekv.LoadRulesProposalHandler.Result.REJECTED;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
@@ -22,8 +25,15 @@ import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
+import io.reactivex.rxjava3.observers.TestObserver;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -39,7 +49,7 @@ public class BaseKVClusterMetadataManagerTest {
         agentHost.start();
         crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
         crdtService.start(agentHost);
-        metaService = new BaseKVMetaService(crdtService);
+        metaService = new BaseKVMetaService(crdtService, Duration.ofMillis(1000));
     }
 
     @AfterMethod
@@ -51,30 +61,86 @@ public class BaseKVClusterMetadataManagerTest {
 
 
     @Test
-    public void noLoadRules() {
+    public void noLoadRules() throws InterruptedException {
         IBaseKVClusterMetadataManager manager = metaService.metadataManager("test");
-        String loadRules = manager.loadRules().blockingFirst();
-        assertEquals(loadRules, "{}");
+        TestObserver<Map<String, Struct>> testObserver = manager.loadRules().timeout(100, TimeUnit.MILLISECONDS).test();
+        testObserver.await();
+        testObserver.assertError(TimeoutException.class);
     }
 
     @Test
-    public void setLoadRules() {
-        String loadRulesJSON = "{\"key\":\"value\"}";
+    public void proposeLoadRulesTimeout() {
+        Struct loadRulesJSON =
+            Struct.newBuilder().putFields("key", Value.newBuilder().setStringValue("value").build()).build();
         IBaseKVClusterMetadataManager manager = metaService.metadataManager("test");
 
-        manager.setLoadRules(loadRulesJSON).join();
-        assertEquals(loadRulesJSON, manager.loadRules().blockingFirst());
-
-        loadRulesJSON = "";
-        manager.setLoadRules(loadRulesJSON).join();
-        assertEquals(loadRulesJSON, manager.loadRules().blockingFirst());
+        try {
+            manager.proposeLoadRules("balancer1", loadRulesJSON).join();
+        } catch (Throwable e) {
+            assertTrue(e.getCause() instanceof TimeoutException);
+        }
     }
 
     @Test
-    public void noLandscape() {
+    public void proposeLoadRules() {
+        Struct loadRulesJSON =
+            Struct.newBuilder().putFields("key", Value.newBuilder().setStringValue("value").build()).build();
         IBaseKVClusterMetadataManager manager = metaService.metadataManager("test");
-        assertTrue(manager.landscape().blockingFirst().isEmpty());
+        manager.setLoadRulesProposalHandler((balancerClassFQN, loadRules) -> ACCEPTED);
+
+        IBaseKVClusterMetadataManager.ProposalResult result =
+            manager.proposeLoadRules("balancer1", loadRulesJSON).join();
+        assertEquals(IBaseKVClusterMetadataManager.ProposalResult.ACCEPTED, result);
+
+        manager.loadRules().test().assertValue(Map.of("balancer1", loadRulesJSON));
     }
+
+    @Test
+    public void proposeLoadRulesRejected() {
+        Struct loadRulesJSON =
+            Struct.newBuilder().putFields("key", Value.newBuilder().setStringValue("value").build()).build();
+        IBaseKVClusterMetadataManager manager = metaService.metadataManager("test");
+        manager.setLoadRulesProposalHandler((balancerClassFQN, loadRules) -> REJECTED);
+
+        IBaseKVClusterMetadataManager.ProposalResult result =
+            manager.proposeLoadRules("balancer1", loadRulesJSON).join();
+        assertEquals(IBaseKVClusterMetadataManager.ProposalResult.REJECTED, result);
+
+        manager.loadRules().test().assertNoValues();
+    }
+
+    @Test
+    public void proposeLoadRulesDropped() {
+        Struct loadRulesJSON =
+            Struct.newBuilder().putFields("key", Value.newBuilder().setStringValue("value").build()).build();
+        IBaseKVClusterMetadataManager manager = metaService.metadataManager("test");
+        manager.setLoadRulesProposalHandler((balancerClassFQN, loadRules) -> NO_BALANCER);
+
+        IBaseKVClusterMetadataManager.ProposalResult result =
+            manager.proposeLoadRules("balancer1", loadRulesJSON).join();
+        assertEquals(IBaseKVClusterMetadataManager.ProposalResult.NO_BALANCER, result);
+        manager.loadRules().test().assertNoValues();
+    }
+
+    @Test
+    public void proposeLoadRulesOverridden() {
+        Struct loadRulesJSON1 =
+            Struct.newBuilder().putFields("key", Value.newBuilder().setStringValue("value1").build()).build();
+
+        Struct loadRulesJSON2 =
+            Struct.newBuilder().putFields("key", Value.newBuilder().setStringValue("value2").build()).build();
+        IBaseKVClusterMetadataManager manager = metaService.metadataManager("test");
+        manager.setLoadRulesProposalHandler((balancerClassFQN, loadRules) -> ACCEPTED);
+
+        CompletableFuture<IBaseKVClusterMetadataManager.ProposalResult> resultFuture =
+            manager.proposeLoadRules("balancer1", loadRulesJSON1);
+        IBaseKVClusterMetadataManager.ProposalResult result1 =
+            manager.proposeLoadRules("balancer1", loadRulesJSON2).join();
+        assertEquals(IBaseKVClusterMetadataManager.ProposalResult.OVERRIDDEN, resultFuture.join());
+        assertEquals(IBaseKVClusterMetadataManager.ProposalResult.ACCEPTED, result1);
+        manager.loadRules().test().assertValue(Map.of("balancer1", loadRulesJSON2));
+    }
+
 
     @Test
     public void reportStoreDescriptor() {
