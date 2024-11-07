@@ -18,8 +18,8 @@ import static com.baidu.bifromq.basekv.proto.State.StateType.Merged;
 import static com.baidu.bifromq.basekv.proto.State.StateType.MergedQuiting;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Normal;
 import static com.baidu.bifromq.basekv.proto.State.StateType.PreparedMerging;
-import static com.baidu.bifromq.basekv.proto.State.StateType.Purged;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Removed;
+import static com.baidu.bifromq.basekv.proto.State.StateType.ToBePurged;
 import static com.baidu.bifromq.basekv.proto.State.StateType.WaitingForMerge;
 import static com.baidu.bifromq.basekv.store.range.KVRangeFSM.Lifecycle.Closed;
 import static com.baidu.bifromq.basekv.store.range.KVRangeFSM.Lifecycle.Destroyed;
@@ -237,8 +237,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                 }
             }, fsmExecutor);
         quitSignal.thenAccept(v -> {
-            // check if the range needs to be recreated after quit, this situation happens there are series configchange causing the replica
-            // be removed and added-back again, but the log apply progress is fall behind.
+            // check if the range needs to be recreated after quit, this situation happens when there are serial configchange causing the replica
+            // be removed and added-back again, but the log apply progress falls behind.
             ClusterConfig config = wal.clusterConfig();
             if (config.getCorrelateId().equals(kvRange.state().getTaskId())) {
                 quitListener.onQuit(this, false);
@@ -329,7 +329,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                     compactWAL(false);
                 }
                 switch (kvRange.state().getType()) {
-                    case Purged, Merged, Removed -> quitSignal.complete(null);
+                    case Removed -> quitSignal.complete(null);
                 }
             }
         });
@@ -405,7 +405,7 @@ public class KVRangeFSM implements IKVRangeFSM {
     @Override
     public CompletableFuture<Void> destroy() {
         if (lifecycle.get() == Open) {
-            log.debug("Destroy range");
+            log.info("Destroying range");
             doClose()
                 .thenCompose(v -> {
                     if (lifecycle.compareAndSet(Closed, Destroying)) {
@@ -416,6 +416,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 })
                 .whenComplete((v, e) -> {
                     if (lifecycle.compareAndSet(Destroying, Destroyed)) {
+                        log.info("Range destroyed");
                         destroyedSignal.complete(null);
                     }
                 })
@@ -769,16 +770,28 @@ public class KVRangeFSM implements IKVRangeFSM {
                     }
                 });
             }
-            case Purged -> {
+            case ToBePurged -> {
                 String taskId = state.getTaskId();
-                rangeWriter.state(State.newBuilder()
-                    .setType(Removed)
-                    .setTaskId(taskId)
-                    .build());
-                onDone.complete(() -> {
-                    finishCommand(taskId);
-                    quitSignal.complete(null);
-                });
+                if (taskId.equals(config.getCorrelateId())) {
+                    // if configchange triggered by purge session succeed
+                    rangeWriter.state(State.newBuilder()
+                        .setType(Removed)
+                        .setTaskId(taskId)
+                        .build());
+                    onDone.complete(() -> {
+                        finishCommand(taskId);
+                        quitSignal.complete(null);
+                    });
+                } else {
+                    rangeWriter.state(State.newBuilder()
+                        .setType(Normal)
+                        .setTaskId(taskId)
+                        .build());
+                    onDone.complete(() -> {
+                        clusterConfigSubject.onNext(config);
+                        finishCommand(taskId);
+                    });
+                }
             }
             default ->
                 // skip internal config change triggered by leadership change
@@ -907,7 +920,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                         if (state.getType() == Normal) {
                             if (toBePurged) {
                                 rangeWriter.state(State.newBuilder()
-                                    .setType(Purged)
+                                    .setType(ToBePurged)
                                     .setTaskId(taskId)
                                     .build());
                             } else {
@@ -920,7 +933,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                         } else if (state.getType() == Merged) {
                             if (toBePurged) {
                                 rangeWriter.state(State.newBuilder()
-                                    .setType(Purged)
+                                    .setType(ToBePurged)
                                     .setTaskId(taskId)
                                     .build());
                             } else {
@@ -1365,7 +1378,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 if (state.getType() == WaitingForMerge
                     || state.getType() == Merged
                     || state.getType() == Removed
-                    || state.getType() == Purged) {
+                    || state.getType() == ToBePurged) {
                     onDone.complete(() -> finishCommandWithError(taskId,
                         new KVRangeException.BadRequest("Range is in state:" + state.getType().name())));
                     break;

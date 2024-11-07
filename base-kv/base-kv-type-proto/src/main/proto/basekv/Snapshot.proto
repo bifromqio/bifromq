@@ -17,7 +17,7 @@ message State{
     Merged = 5;
     MergedQuiting = 6;
     Removed = 7;
-    Purged = 8;
+    ToBePurged = 8;
   }
   StateType type = 1;
   optional string taskId = 2; // id of associated execution task

@@ -14,8 +14,8 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import static com.baidu.bifromq.basekv.proto.State.StateType.Merged;
-import static com.baidu.bifromq.basekv.proto.State.StateType.Purged;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Removed;
+import static com.baidu.bifromq.basekv.proto.State.StateType.ToBePurged;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 
 import com.baidu.bifromq.basekv.proto.State;
@@ -152,9 +152,9 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
                 new KVRangeException.BadVersion("Version Mismatch: expect=" + kvRange.version() + ", actual=" + ver));
             return onDone;
         }
-        if (state.getType() == Merged || state.getType() == Removed || state.getType() == Purged) {
+        if (state.getType() == Merged || state.getType() == Removed || state.getType() == ToBePurged) {
             onDone.completeExceptionally(
-                new KVRangeException.TryLater("Range has been " + state.getType().name().toLowerCase()));
+                new KVRangeException.TryLater("Range has been in state: " + state.getType().name().toLowerCase()));
             return onDone;
         }
         try {

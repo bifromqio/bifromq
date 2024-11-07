@@ -14,7 +14,6 @@
 package com.baidu.bifromq.basekv.store.range.hinter;
 
 import com.baidu.bifromq.basekv.store.api.IKVLoadRecord;
-import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.google.protobuf.ByteString;

@@ -80,7 +80,7 @@ public class KVRangeQueryRunnerTest extends MockableTest {
 
     @Test
     public void internalErrorByPurgedState() {
-        internalErrorByWrongState(State.StateType.Purged);
+        internalErrorByWrongState(State.StateType.ToBePurged);
     }
 
     private void internalErrorByWrongState(State.StateType stateType) {
