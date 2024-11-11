@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import static com.baidu.bifromq.inbox.util.KeyUtil.inboxPrefix;
+import static com.baidu.bifromq.inbox.util.KeyUtil.inboxBucketPrefix;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
@@ -48,7 +48,7 @@ public class InboxInsertScheduler extends MutationCallScheduler<InboxSubMessageP
 
     @Override
     protected ByteString rangeKey(InboxSubMessagePack request) {
-        return inboxPrefix(request.getTenantId(), request.getInboxId());
+        return inboxBucketPrefix(request.getTenantId(), request.getInboxId());
     }
 
     private static class InboxInsertBatcher extends MutationCallBatcher<InboxSubMessagePack, BatchInsertReply.Result> {

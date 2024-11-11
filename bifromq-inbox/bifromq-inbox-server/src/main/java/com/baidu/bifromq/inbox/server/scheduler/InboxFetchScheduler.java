@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import static com.baidu.bifromq.inbox.util.KeyUtil.inboxKeyPrefix;
+import static com.baidu.bifromq.inbox.util.KeyUtil.inboxBucketPrefix;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcher;
@@ -54,7 +54,7 @@ public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler
 
     @Override
     protected ByteString rangeKey(InboxFetch request) {
-        return inboxKeyPrefix(request.tenantId, request.inboxId, request.incarnation);
+        return inboxBucketPrefix(request.tenantId, request.inboxId);
     }
 
     private static class InboxFetchBatcher extends QueryCallBatcher<InboxFetch, Fetched> {

@@ -15,14 +15,13 @@ package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.inbox.util.KeyUtil.isInboxKey;
-import static com.baidu.bifromq.inbox.util.KeyUtil.parseInboxPrefix;
+import static com.baidu.bifromq.inbox.util.KeyUtil.parseInboxBucketPrefix;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.api.IKVRangeSplitHinter;
-import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.range.hinter.MutationKVLoadBasedSplitHinter;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
@@ -52,7 +51,7 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
                                                    Supplier<IKVCloseableReader> rangeReaderProvider) {
         return Collections.singletonList(new MutationKVLoadBasedSplitHinter(loadEstWindow, key -> {
             if (isInboxKey(key)) {
-                return Optional.of(upperBound(parseInboxPrefix(key)));
+                return Optional.of(upperBound(parseInboxBucketPrefix(key)));
             }
             return Optional.empty();
         }, "clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id)));

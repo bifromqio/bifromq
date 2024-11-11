@@ -29,6 +29,7 @@ public class KeyUtilTest {
         long incarnation = System.nanoTime();
         ByteString tenantPrefix = KeyUtil.tenantPrefix(tenantId);
         ByteString inboxPrefix = KeyUtil.inboxPrefix(tenantId, inboxId);
+        ByteString inboxBucketPrefix = KeyUtil.inboxBucketPrefix(tenantId, inboxId);
         ByteString inboxKeyPrefix = KeyUtil.inboxKeyPrefix(tenantId, inboxId, incarnation);
         ByteString qos0MsgKey = KeyUtil.qos0InboxMsgKey(inboxKeyPrefix, 1);
         ByteString bufferMsgKey = KeyUtil.bufferMsgKey(inboxKeyPrefix, 1);
@@ -51,6 +52,8 @@ public class KeyUtilTest {
         assertEquals(KeyUtil.parseTenantId(inboxPrefix), tenantId);
         assertEquals(KeyUtil.parseTenantId(inboxKeyPrefix), tenantId);
 
+        assertEquals(KeyUtil.parseInboxBucketPrefix(inboxPrefix), inboxBucketPrefix);
+        assertEquals(KeyUtil.parseInboxBucketPrefix(inboxKeyPrefix), inboxBucketPrefix);
         assertEquals(KeyUtil.parseInboxId(inboxPrefix), inboxId);
         assertEquals(KeyUtil.parseInboxId(inboxKeyPrefix), inboxId);
         assertEquals(KeyUtil.parseInboxPrefix(inboxKeyPrefix), inboxPrefix);
