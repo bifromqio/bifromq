@@ -15,8 +15,8 @@ package com.baidu.bifromq.apiserver.http.handler;
 
 import static com.baidu.bifromq.apiserver.Headers.HEADER_EXPIRY_SECONDS;
 import static com.baidu.bifromq.apiserver.http.handler.HeaderUtils.getHeader;
-import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+import static io.netty.handler.codec.http.HttpResponseStatus.TOO_MANY_REQUESTS;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
@@ -81,7 +81,7 @@ public final class ExpireRetainHandler extends TenantAwareHandler {
             }
             return retainClient.expireAll(reqBuilder.build())
                 .thenApply(r -> new DefaultFullHttpResponse(req.protocolVersion(),
-                    r.getResult() == ExpireAllReply.Result.OK ? OK : INTERNAL_SERVER_ERROR, Unpooled.EMPTY_BUFFER));
+                    r.getResult() == ExpireAllReply.Result.OK ? OK : TOO_MANY_REQUESTS, Unpooled.EMPTY_BUFFER));
         } catch (Throwable e) {
             return CompletableFuture.failedFuture(e);
         }

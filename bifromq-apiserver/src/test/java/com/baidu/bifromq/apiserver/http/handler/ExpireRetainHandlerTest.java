@@ -16,8 +16,8 @@ package com.baidu.bifromq.apiserver.http.handler;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_EXPIRY_SECONDS;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_TENANT_ID;
 import static com.baidu.bifromq.retain.rpc.proto.ExpireAllReply.Result.ERROR;
-import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+import static io.netty.handler.codec.http.HttpResponseStatus.TOO_MANY_REQUESTS;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
@@ -84,7 +84,7 @@ public class ExpireRetainHandlerTest extends AbstractHTTPRequestHandlerTest<Expi
                 .build()));
         CompletableFuture<FullHttpResponse> responseCompletableFuture = handler.handle(reqId, tenantId, req);
         FullHttpResponse httpResponse = responseCompletableFuture.join();
-        assertEquals(httpResponse.status(), INTERNAL_SERVER_ERROR);
+        assertEquals(httpResponse.status(), TOO_MANY_REQUESTS);
     }
 
     private DefaultFullHttpRequest buildRequest() {
