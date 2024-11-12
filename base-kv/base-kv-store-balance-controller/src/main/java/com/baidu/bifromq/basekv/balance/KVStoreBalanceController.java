@@ -167,7 +167,7 @@ public class KVStoreBalanceController {
                 }
                 balancer.update(landscape);
             } catch (Throwable e) {
-                log.error("Failed to update balancer[{}]", balancer.getClass().getSimpleName(), e);
+                log.error("Balancer[{}] update failed", balancer.getClass().getSimpleName(), e);
             }
         }
         balance(loadRules, landscape);
@@ -373,13 +373,19 @@ public class KVStoreBalanceController {
             }
             switch (code) {
                 case Ok -> {
-                    if (command instanceof RangeCommand rangeCommand) {
-                        rangeCommandHistory.compute(rangeCommand.getKvRangeId(), (k, v) -> {
-                            if (v == null) {
-                                v = rangeCommand.getExpectedVer();
-                            }
-                            return Math.max(v, rangeCommand.getExpectedVer());
-                        });
+                    switch (command.type()) {
+                        case SPLIT, MERGE, CHANGE_CONFIG -> {
+                            RangeCommand rangeCommand = (RangeCommand) command;
+                            rangeCommandHistory.compute(rangeCommand.getKvRangeId(), (k, v) -> {
+                                if (v == null) {
+                                    v = rangeCommand.getExpectedVer();
+                                }
+                                return Math.max(v, rangeCommand.getExpectedVer());
+                            });
+                        }
+                        default -> {
+                            // no nothing
+                        }
                     }
                     onDone.complete(true);
                 }

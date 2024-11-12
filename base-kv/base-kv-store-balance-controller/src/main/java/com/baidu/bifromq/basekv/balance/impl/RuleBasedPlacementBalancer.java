@@ -151,7 +151,8 @@ public abstract class RuleBasedPlacementBalancer extends StoreBalancer {
             sortedRangeLayout.putAll(rangeLayout);
             return Optional.of(sortedRangeLayout);
         } catch (Throwable e) {
-            log.error("Failed to generate range layout from load rules: {}", loadRules, e);
+            log.error("Balancer[{}] failed to generate range layout from load rules: {}",
+                this.getClass().getSimpleName(), loadRules, e);
             return Optional.empty();
         }
     }
@@ -159,11 +160,13 @@ public abstract class RuleBasedPlacementBalancer extends StoreBalancer {
     private boolean verify(Map<Boundary, ClusterConfig> rangeLayout, Set<KVRangeStoreDescriptor> landscape) {
         // 1. check boundary non overlap and form a complete landscape
         if (rangeLayout.keySet().stream().anyMatch(boundary -> boundary.equals(EMPTY_BOUNDARY))) {
-            log.error("Empty boundary found in range layout: {}", rangeLayout);
+            log.error("Balancer[{}] generated empty boundary in range layout: {}",
+                this.getClass().getSimpleName(), rangeLayout);
             return false;
         }
         if (!BoundaryUtil.isValidSplitSet(rangeLayout.keySet())) {
-            log.error("Invalid boundary found in range layout: {}", rangeLayout);
+            log.error("Balancer[{}] generated invalid boundary found in range layout: {}",
+                this.getClass().getSimpleName(), rangeLayout);
             return false;
         }
         // 2. check Set<String> is non-empty and conform to landscape
@@ -174,7 +177,8 @@ public abstract class RuleBasedPlacementBalancer extends StoreBalancer {
                 || !storeIds.containsAll(clusterConfig.getLearnersList())
                 || !storeIds.containsAll(clusterConfig.getNextVotersList())
                 || !storeIds.containsAll(clusterConfig.getNextLearnersList())) {
-                log.error("Invalid cluster config found in range layout: {}", rangeLayout);
+                log.error("Balancer[{}] generated invalid cluster config found in range layout: {}",
+                    this.getClass().getSimpleName(), rangeLayout);
                 return false;
             }
         }

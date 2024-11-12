@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basekv.balance.impl;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
@@ -22,11 +23,13 @@ import com.baidu.bifromq.basekv.balance.BalanceNow;
 import com.baidu.bifromq.basekv.balance.BalanceResult;
 import com.baidu.bifromq.basekv.balance.BalanceResultType;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
+import com.google.protobuf.ByteString;
 import java.util.HashSet;
 import java.util.Set;
 import org.testng.annotations.BeforeMethod;
@@ -50,38 +53,59 @@ public class ReplicaCntBalancerTest {
 
     @Test
     public void balanceToAddVoter() {
-        KVRangeId kvRangeId = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
-        KVRangeDescriptor kvRangeDescriptor = KVRangeDescriptor.newBuilder()
-            .setId(kvRangeId)
+        KVRangeId kvRangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
+        KVRangeDescriptor kvRangeDescriptor1 = KVRangeDescriptor.newBuilder()
+            .setId(kvRangeId1)
             .setRole(RaftNodeStatus.Leader)
             .setVer(1)
-            .setBoundary(FULL_BOUNDARY)
+            .setBoundary(Boundary.newBuilder().setEndKey(ByteString.copyFromUtf8("a")).build())
             .setConfig(ClusterConfig.newBuilder()
-                .addVoters("localStore")
+                .addVoters("s1")
+                .addVoters("s2")
+                .addVoters("s3")
                 .build())
             .build();
 
-        KVRangeStoreDescriptor storeDescriptor = KVRangeStoreDescriptor.newBuilder()
-            .setId("localStore")
-            .addRanges(kvRangeDescriptor)
-            .putStatistics("cpu.usage", 0.5)
+        KVRangeId kvRangeId2 = KVRangeId.newBuilder().setEpoch(1).setId(2).build();
+        KVRangeDescriptor kvRangeDescriptor2 = KVRangeDescriptor.newBuilder()
+            .setId(kvRangeId2)
+            .setRole(RaftNodeStatus.Leader)
+            .setVer(1)
+            .setBoundary(Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("a")).build())
+            .setConfig(ClusterConfig.newBuilder()
+                .addVoters("s1")
+                .addVoters("s2")
+                .build())
             .build();
-        KVRangeStoreDescriptor remoteStoreDescriptor = KVRangeStoreDescriptor.newBuilder()
-            .setId("remoteStore")
-            .addRanges(kvRangeDescriptor)
-            .putStatistics("cpu.usage", 0.5)
+
+        KVRangeStoreDescriptor store1Descriptor = KVRangeStoreDescriptor.newBuilder()
+            .setId("s1")
+            .addRanges(kvRangeDescriptor1)
+            .build();
+        KVRangeStoreDescriptor store2Descriptor = KVRangeStoreDescriptor.newBuilder()
+            .setId("s2")
+            .addRanges(kvRangeDescriptor2)
+            .build();
+        KVRangeStoreDescriptor store3Descriptor = KVRangeStoreDescriptor.newBuilder()
+            .setId("s3")
+            .addRanges(kvRangeDescriptor1)
             .build();
 
         Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
-        storeDescriptors.add(storeDescriptor);
-        storeDescriptors.add(remoteStoreDescriptor);
+        storeDescriptors.add(store1Descriptor);
+        storeDescriptors.add(store2Descriptor);
+        storeDescriptors.add(store3Descriptor);
 
+        balancer = new ReplicaCntBalancer("testCluster", "s2", 3, 0);
         balancer.update(storeDescriptors);
 
         BalanceResult result = balancer.balance();
         ChangeConfigCommand command = (ChangeConfigCommand) ((BalanceNow<?>) result).command;
-        assertTrue(command.getVoters().contains("localStore"));
-        assertTrue(command.getVoters().contains("remoteStore"));
+        assertEquals(command.getToStore(), "s2");
+        assertEquals(command.getKvRangeId(), kvRangeId2);
+        assertTrue(command.getVoters().contains("s1"));
+        assertTrue(command.getVoters().contains("s2"));
+        assertTrue(command.getVoters().contains("s3"));
         assertTrue(command.getLearners().isEmpty());
     }
 
@@ -103,19 +127,15 @@ public class ReplicaCntBalancerTest {
         KVRangeStoreDescriptor voterStore1Descriptor = KVRangeStoreDescriptor.newBuilder()
             .setId("localStore")
             .addRanges(kvRangeDescriptor)
-            .putStatistics("cpu.usage", 0.5)
             .build();
         KVRangeStoreDescriptor voterStore2Descriptor = KVRangeStoreDescriptor.newBuilder()
             .setId("voterStore2")
-            .putStatistics("cpu.usage", 0.5)
             .build();
         KVRangeStoreDescriptor voterStore3Descriptor = KVRangeStoreDescriptor.newBuilder()
             .setId("voterStore3")
-            .putStatistics("cpu.usage", 0.5)
             .build();
         KVRangeStoreDescriptor learnerStoreDescriptor = KVRangeStoreDescriptor.newBuilder()
             .setId("learnerStore")
-            .putStatistics("cpu.usage", 0.5)
             .build();
 
         Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
@@ -279,5 +299,118 @@ public class ReplicaCntBalancerTest {
         ChangeConfigCommand command = (ChangeConfigCommand) ((BalanceNow<?>) result).command;
         assertTrue(command.getLearners().contains("learnerStore"));
         assertTrue(command.getLearners().contains("learnerStore1"));
+    }
+
+    @Test
+    public void balanceVoterCount() {
+        KVRangeId kvRangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
+        KVRangeDescriptor kvRangeDescriptor1 = KVRangeDescriptor.newBuilder()
+            .setId(kvRangeId1)
+            .setVer(1)
+            .setRole(RaftNodeStatus.Leader)
+            .setBoundary(Boundary.newBuilder().setEndKey(ByteString.copyFromUtf8("z")).build())
+            .setConfig(ClusterConfig.newBuilder()
+                .addVoters("localStore")
+                .build())
+            .build();
+        KVRangeId kvRangeId2 = KVRangeId.newBuilder().setEpoch(1).setId(2).build();
+        KVRangeDescriptor kvRangeDescriptor2 = KVRangeDescriptor.newBuilder()
+            .setId(kvRangeId2)
+            .setVer(2)
+            .setRole(RaftNodeStatus.Leader)
+            .setBoundary(Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("z")).build())
+            .setConfig(ClusterConfig.newBuilder()
+                .addVoters("localStore")
+                .build())
+            .build();
+        KVRangeStoreDescriptor localStoreDescriptor = KVRangeStoreDescriptor.newBuilder()
+            .setId("localStore")
+            .addRanges(kvRangeDescriptor1)
+            .addRanges(kvRangeDescriptor2)
+            .build();
+        KVRangeStoreDescriptor underloadedStoreDescriptor = KVRangeStoreDescriptor.newBuilder()
+            .setId("underloadedStore")
+            .build();
+        Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
+        storeDescriptors.add(underloadedStoreDescriptor);
+        storeDescriptors.add(localStoreDescriptor);
+        balancer = new ReplicaCntBalancer("testCluster", "localStore", 1, 0);
+        balancer.update(storeDescriptors);
+
+        BalanceResult result = balancer.balance();
+        ChangeConfigCommand command = (ChangeConfigCommand) ((BalanceNow<?>) result).command;
+        assertEquals(command.getToStore(), "localStore");
+        assertEquals(command.getKvRangeId(), kvRangeId1);
+        assertEquals(command.getExpectedVer(), kvRangeDescriptor1.getVer());
+        assertTrue(command.getVoters().contains("underloadedStore"));
+        assertFalse(command.getVoters().contains("localStore"));
+    }
+
+    @Test
+    public void balanceLearnerCount() {
+        KVRangeId kvRangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
+        KVRangeDescriptor kvRangeDescriptor1 = KVRangeDescriptor.newBuilder()
+            .setId(kvRangeId1)
+            .setVer(1)
+            .setRole(RaftNodeStatus.Leader)
+            .setBoundary(Boundary.newBuilder().setEndKey(ByteString.copyFromUtf8("a")).build())
+            .setConfig(ClusterConfig.newBuilder()
+                .addVoters("s1")
+                .addLearners("s2")
+                .build())
+            .build();
+        KVRangeStoreDescriptor store1Descriptor = KVRangeStoreDescriptor.newBuilder()
+            .setId("s1")
+            .addRanges(kvRangeDescriptor1)
+            .build();
+
+        KVRangeId kvRangeId2 = KVRangeId.newBuilder().setEpoch(1).setId(2).build();
+        KVRangeDescriptor kvRangeDescriptor2 = KVRangeDescriptor.newBuilder()
+            .setId(kvRangeId2)
+            .setVer(2)
+            .setRole(RaftNodeStatus.Leader)
+            .setBoundary(Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("a"))
+                .setEndKey(ByteString.copyFromUtf8("z")).build())
+            .setConfig(ClusterConfig.newBuilder()
+                .addVoters("s2")
+                .addLearners("s1")
+                .build())
+            .build();
+        KVRangeStoreDescriptor store2Descriptor = KVRangeStoreDescriptor.newBuilder()
+            .setId("s2")
+            .addRanges(kvRangeDescriptor2)
+            .build();
+
+        // s3 is underloaded on learner count
+        KVRangeId kvRangeId3 = KVRangeId.newBuilder().setEpoch(1).setId(3).build();
+        KVRangeDescriptor kvRangeDescriptor3 = KVRangeDescriptor.newBuilder()
+            .setId(kvRangeId3)
+            .setVer(2)
+            .setRole(RaftNodeStatus.Leader)
+            .setBoundary(Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("z")).build())
+            .setConfig(ClusterConfig.newBuilder()
+                .addVoters("s3")
+                .addLearners("s2")
+                .build())
+            .build();
+        KVRangeStoreDescriptor store3Descriptor = KVRangeStoreDescriptor.newBuilder()
+            .setId("s3")
+            .addRanges(kvRangeDescriptor3)
+            .build();
+
+        Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
+        storeDescriptors.add(store1Descriptor);
+        storeDescriptors.add(store2Descriptor);
+        storeDescriptors.add(store3Descriptor);
+        balancer = new ReplicaCntBalancer("testCluster", "s1", 1, 1);
+        balancer.update(storeDescriptors);
+
+        BalanceResult result = balancer.balance();
+        ChangeConfigCommand command = (ChangeConfigCommand) ((BalanceNow<?>) result).command;
+        assertEquals(command.getToStore(), "s1");
+        assertEquals(command.getKvRangeId(), kvRangeId1);
+        assertEquals(command.getExpectedVer(), kvRangeDescriptor1.getVer());
+        assertTrue(command.getLearners().contains("s3"));
+        assertTrue(command.getVoters().contains("s1"));
     }
 }

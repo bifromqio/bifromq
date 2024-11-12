@@ -256,7 +256,6 @@ public class BoundaryUtil {
     public static boolean isValidSplitSet(NavigableSet<Boundary> sorted) {
         ByteString checkKey = null;
         Iterator<Boundary> iterator = sorted.iterator();
-        boolean valid;
         while (iterator.hasNext()) {
             Boundary boundary = iterator.next();
             if (checkKey == null) {
