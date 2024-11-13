@@ -13,11 +13,14 @@
 
 package com.baidu.bifromq.basekv.balance.command;
 
+/**
+ * The balance command type.
+ */
 public enum CommandType {
     CHANGE_CONFIG,
     RECOVERY,
     SPLIT,
     MERGE,
     TRANSFER_LEADERSHIP,
-    BOOTSRTAP
+    BOOTSTRAP
 }

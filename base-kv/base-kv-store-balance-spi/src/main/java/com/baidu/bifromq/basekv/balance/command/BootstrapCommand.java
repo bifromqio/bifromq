@@ -27,7 +27,7 @@ public class BootstrapCommand extends BalanceCommand {
 
     @Override
     public CommandType type() {
-        return CommandType.BOOTSRTAP;
+        return CommandType.BOOTSTRAP;
     }
 
     @Override

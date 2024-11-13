@@ -345,7 +345,7 @@ public class KVStoreBalanceController {
                         return true;
                     });
             }
-            case BOOTSRTAP -> {
+            case BOOTSTRAP -> {
                 assert command instanceof BootstrapCommand;
                 BootstrapCommand bootstrapCommand = (BootstrapCommand) command;
                 BootstrapRequest bootstrapRequest = BootstrapRequest.newBuilder()
