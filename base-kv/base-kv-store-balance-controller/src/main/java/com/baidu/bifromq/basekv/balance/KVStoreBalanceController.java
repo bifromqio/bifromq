@@ -56,6 +56,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -149,7 +150,8 @@ public class KVStoreBalanceController {
 
     private void trigger() {
         if (state.get() == State.Started && scheduling.compareAndSet(false, true)) {
-            executor.execute(this::updateAndBalance);
+            long jitter = ThreadLocalRandom.current().nextLong(0, retryDelay.toMillis());
+            executor.schedule(this::updateAndBalance, jitter, TimeUnit.MILLISECONDS);
         }
     }
 

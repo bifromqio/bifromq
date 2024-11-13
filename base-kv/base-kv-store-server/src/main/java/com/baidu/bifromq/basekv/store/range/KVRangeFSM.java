@@ -686,7 +686,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                                           IKVRangeWritable<?> rangeWriter) {
         CompletableFuture<Runnable> onDone = new CompletableFuture<>();
         State state = rangeWriter.state();
-        log.debug("Apply new config[term={}, index={}]: state={}, leader={}\n{}",
+        log.info("Apply new config[term={}, index={}]: state={}, leader={}\n{}",
             term, index, state, wal.isLeader(), config);
         if (config.getNextVotersCount() != 0 || config.getNextLearnersCount() != 0) {
             // skip joint-config
@@ -736,14 +736,17 @@ public class KVRangeFSM implements IKVRangeFSM {
                         onDone.complete(() -> {
                             clusterConfigSubject.onNext(config);
                             quitSignal.complete(null);
+                            finishCommand(taskId);
                         });
                     } else {
                         rangeWriter.state(State.newBuilder()
                             .setType(Normal)
                             .setTaskId(taskId)
                             .build());
-                        // no need to finish command here, it's already finished in RequestConfigChange entry application
-                        onDone.complete(() -> clusterConfigSubject.onNext(config));
+                        onDone.complete(() -> {
+                            clusterConfigSubject.onNext(config);
+                            finishCommand(taskId);
+                        });
                     }
                 }
             }
@@ -952,9 +955,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                 TransferLeadership request = command.getTransferLeadership();
                 if (reqVer != ver) {
                     // version not match, hint the caller
-                    onDone.complete(
-                        () -> finishCommandWithError(taskId,
-                            new KVRangeException.BadVersion("Version Mismatch")));
+                    onDone.complete(() -> finishCommandWithError(taskId,
+                        new KVRangeException.BadVersion("Version Mismatch")));
                     break;
                 }
                 if (state.getType() != Normal) {
@@ -963,8 +965,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                             "Transfer leader abort, range is in state:" + state.getType().name())));
                     break;
                 }
-                if (!wal.clusterConfig().getVotersList().contains(request.getNewLeader()) &&
-                    !wal.clusterConfig().getNextVotersList().contains(request.getNewLeader())) {
+                if (!wal.clusterConfig().getVotersList().contains(request.getNewLeader())
+                    && !wal.clusterConfig().getNextVotersList().contains(request.getNewLeader())) {
                     onDone.complete(
                         () -> finishCommandWithError(taskId, new KVRangeException.BadRequest("Invalid Leader")));
                     break;

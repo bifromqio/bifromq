@@ -22,30 +22,26 @@ import com.baidu.bifromq.basekv.balance.BalanceNow;
 import com.baidu.bifromq.basekv.balance.BalanceResult;
 import com.baidu.bifromq.basekv.balance.NoNeedBalance;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
-import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.balance.command.TransferLeadershipCommand;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
+import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.utils.DescriptorUtil;
 import com.baidu.bifromq.basekv.utils.KeySpaceDAG;
 import com.google.common.collect.Sets;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.NavigableSet;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
- * RangeLeaderBalancer is a load balancer that manages the distribution of leader replicas across storage nodes (Stores)
- * in a distributed key-value storage system. The goal of this balancer is to evenly distribute leader replicas of
- * effective ranges among available stores to prevent any single store from becoming overloaded with too many leader
- * roles.
+ * The goal of the balancer is to balance the leader count of each store by emitting TransferLeadership command.
  */
 public class RangeLeaderBalancer extends StoreBalancer {
     private volatile Set<KVRangeStoreDescriptor> effectiveEpoch = emptySet();
@@ -74,156 +70,83 @@ public class RangeLeaderBalancer extends StoreBalancer {
             // only operate on the leader range in effectiveRoute
             return NoNeedBalance.INSTANCE;
         }
-        Map<String, Set<KVRangeId>> effectiveLeaderRangesByStoreId = new HashMap<>();
-        for (KeySpaceDAG.LeaderRange leaderRange : effectiveRoute.values()) {
-            effectiveLeaderRangesByStoreId.computeIfAbsent(leaderRange.storeId(), k -> new HashSet<>())
-                .add(leaderRange.descriptor().getId());
-        }
-        return balanceStoreLeaders(allLeaderRangesByStoreId, effectiveLeaderRangesByStoreId, effectiveRoute.size());
+        Map<String, KVRangeStoreDescriptor> landscape = current.stream()
+            .collect(Collectors.toMap(KVRangeStoreDescriptor::getId, store -> store));
+        return balanceLeaderCount(landscape, effectiveRoute);
     }
 
-    private BalanceResult balanceStoreLeaders(
-        Map<String, Map<KVRangeId, KVRangeDescriptor>> allLeaderRangesByStoreId,
-        Map<String, Set<KVRangeId>> effectiveLeaderRangesByStoreId,
-        int effectiveLeaderRangeCount) {
-        double storeCount = allLeaderRangesByStoreId.size();
-        if (storeCount == 1) {
+    private BalanceResult balanceLeaderCount(Map<String, KVRangeStoreDescriptor> landscape,
+                                             NavigableMap<Boundary, KeySpaceDAG.LeaderRange> effectiveRoute) {
+        Map<String, Integer> storeLeaderCount = new HashMap<>();
+        for (Map.Entry<Boundary, KeySpaceDAG.LeaderRange> entry : effectiveRoute.entrySet()) {
+            String localStoreId = entry.getValue().storeId();
+            KVRangeDescriptor rangeDescriptor = entry.getValue().descriptor();
+            ClusterConfig clusterConfig = rangeDescriptor.getConfig();
+            clusterConfig.getVotersList().forEach(voter -> storeLeaderCount.computeIfAbsent(voter, k -> 0));
+            storeLeaderCount.compute(localStoreId, (k, v) -> v == null ? 1 : v + 1);
+        }
+        List<String> storeSortedByLeaderCount = storeLeaderCount.entrySet().stream()
+            .sorted(Comparator.comparingInt(Map.Entry::getValue))
+            .map(Map.Entry::getKey)
+            .toList();
+        String mostLeadersStore = storeSortedByLeaderCount.get(storeSortedByLeaderCount.size() - 1);
+        String leastLeadersStore = storeSortedByLeaderCount.get(0);
+        int mostLeadersCount = storeLeaderCount.get(mostLeadersStore);
+        int leastLeadersCount = storeLeaderCount.get(leastLeadersStore);
+
+        double totalLeaders = storeLeaderCount.values().stream().mapToInt(Integer::intValue).sum();
+        double targetLeadersPerStore = totalLeaders / landscape.size();
+        int atMostLeadersPerStore = (int) Math.ceil(targetLeadersPerStore);
+        int atLeastLeadersPerStore = (int) Math.floor(targetLeadersPerStore);
+
+        // no need to balance if the leader count is within the range
+        if (mostLeadersCount <= atMostLeadersPerStore && leastLeadersCount >= atLeastLeadersPerStore) {
             return NoNeedBalance.INSTANCE;
         }
-        int atMost = (int) Math.ceil(effectiveLeaderRangeCount / storeCount);
-        int atLeast = (int) Math.floor(effectiveLeaderRangeCount / storeCount);
-        Set<KVRangeId> localEffectiveLeaderRangeIds =
-            effectiveLeaderRangesByStoreId.getOrDefault(localStoreId, emptySet());
+        // scan the effective route to find the range to balance
+        for (Map.Entry<Boundary, KeySpaceDAG.LeaderRange> entry : effectiveRoute.entrySet()) {
+            KeySpaceDAG.LeaderRange leaderRange = entry.getValue();
+            String leaderStoreId = leaderRange.storeId();
+            KVRangeDescriptor rangeDescriptor = leaderRange.descriptor();
+            ClusterConfig clusterConfig = rangeDescriptor.getConfig();
+            Set<String> voters = Sets.newHashSet(clusterConfig.getVotersList());
 
-        // Case when local store has more leaders than the maximum allowed
-        if (localEffectiveLeaderRangeIds.size() > atMost) {
-            // Existing logic to redistribute leaders from overloaded store
-            return handleOverloadedStore(allLeaderRangesByStoreId, effectiveLeaderRangesByStoreId, atLeast,
-                localEffectiveLeaderRangeIds);
-            // Case when local store has exactly 'atMost' leaders
-        } else if (localEffectiveLeaderRangeIds.size() == atMost) {
-            // Handle the scenario where redistribution is necessary to balance other stores
-            return handleExactBalance(allLeaderRangesByStoreId, effectiveLeaderRangesByStoreId, atLeast,
-                localEffectiveLeaderRangeIds);
-        }
-
-        return NoNeedBalance.INSTANCE;
-    }
-
-    private BalanceResult handleOverloadedStore(
-        Map<String, Map<KVRangeId, KVRangeDescriptor>> allLeaderRangesByStoreId,
-        Map<String, Set<KVRangeId>> effectiveLeaderRangesByStoreId,
-        int atLeast,
-        Set<KVRangeId> localEffectiveLeaderRangeIds) {
-        NavigableSet<StoreLeaderCount> storeLeaders =
-            new TreeSet<>(Comparator.comparingInt(StoreLeaderCount::leaderCount));
-        effectiveLeaderRangesByStoreId.forEach(
-            (storeId, leaderRangeIds) -> storeLeaders.add(new StoreLeaderCount(storeId, leaderRangeIds.size())));
-        Sets.difference(allLeaderRangesByStoreId.keySet(), effectiveLeaderRangesByStoreId.keySet())
-            .forEach(storeId -> storeLeaders.add(new StoreLeaderCount(storeId, 0)));
-        BalanceTask balanceTask = findBestRangeToBalance(localEffectiveLeaderRangeIds,
-            allLeaderRangesByStoreId.get(localStoreId),
-            storeLeaders, atLeast);
-        KVRangeDescriptor rangeToBalance = balanceTask.range;
-        String targetStoreId = balanceTask.targetStoreId;
-        return generateBalanceCommand(rangeToBalance, targetStoreId);
-    }
-
-    private BalanceResult handleExactBalance(
-        Map<String, Map<KVRangeId, KVRangeDescriptor>> allLeaderRangesByStoreId,
-        Map<String, Set<KVRangeId>> effectiveLeaderRangesByStoreId,
-        int atLeast,
-        Set<KVRangeId> localEffectiveLeaderRangeIds) {
-        // If there are stores with fewer than 'atLeast' leaders, we should consider balancing
-        NavigableSet<StoreLeaderCount> storeOrderByLeaders =
-            new TreeSet<>(Comparator.comparingInt(StoreLeaderCount::leaderCount)
-                .thenComparing(StoreLeaderCount::storeId));
-        effectiveLeaderRangesByStoreId.forEach(
-            (storeId, leaderRangeIds) -> storeOrderByLeaders.add(new StoreLeaderCount(storeId, leaderRangeIds.size())));
-
-        if (!storeOrderByLeaders.last().storeId.equals(localStoreId)) {
-            return NoNeedBalance.INSTANCE;
-        }
-        for (StoreLeaderCount storeLeaderCount : storeOrderByLeaders) {
-            if (storeLeaderCount.leaderCount() < atLeast) {
-                // Transfer a leader from the local store to the store with fewer leaders
-                BalanceTask balanceTask = findBestRangeToBalance(localEffectiveLeaderRangeIds,
-                    allLeaderRangesByStoreId.get(localStoreId), storeOrderByLeaders, atLeast);
-                KVRangeDescriptor rangeToBalance = balanceTask.range;
-                String targetStoreId = balanceTask.targetStoreId;
-                return generateBalanceCommand(rangeToBalance, targetStoreId);
+            // check if current range leader store is most overloaded
+            if (leaderStoreId.equals(mostLeadersStore)) {
+                // leader store has overloaded leaders replicas
+                for (String underloadedStore : storeSortedByLeaderCount) {
+                    // move to one underloaded store which is current follower
+                    int leaderCount = storeLeaderCount.get(underloadedStore);
+                    if (leaderCount + 1 >= atMostLeadersPerStore
+                        && voters.contains(underloadedStore)
+                        && !underloadedStore.equals(leaderStoreId)) {
+                        if (leaderStoreId.equals(localStoreId)) {
+                            return BalanceNow.of(TransferLeadershipCommand.builder()
+                                .toStore(leaderStoreId)
+                                .kvRangeId(rangeDescriptor.getId())
+                                .expectedVer(rangeDescriptor.getVer())
+                                .newLeaderStore(underloadedStore)
+                                .build());
+                        }
+                        return NoNeedBalance.INSTANCE;
+                    }
+                }
             } else {
-                break;
+                // check if least overloaded store holds a voter replica of current range and safe to transfer leadership to it
+                int leaderCount = storeLeaderCount.get(leaderStoreId);
+                if (voters.contains(leastLeadersStore) && leaderCount - 1 > atLeastLeadersPerStore) {
+                    if (leaderStoreId.equals(localStoreId)) {
+                        return BalanceNow.of(TransferLeadershipCommand.builder()
+                            .toStore(leaderStoreId)
+                            .kvRangeId(rangeDescriptor.getId())
+                            .expectedVer(rangeDescriptor.getVer())
+                            .newLeaderStore(leastLeadersStore)
+                            .build());
+                    }
+                    return NoNeedBalance.INSTANCE;
+                }
             }
         }
         return NoNeedBalance.INSTANCE;
-    }
-
-    private BalanceResult generateBalanceCommand(KVRangeDescriptor rangeToBalance, String targetStoreId) {
-        if (rangeToBalance.getConfig().getVotersList().contains(targetStoreId)) {
-            return BalanceNow.of(TransferLeadershipCommand.builder()
-                .toStore(localStoreId)
-                .kvRangeId(rangeToBalance.getId())
-                .expectedVer(rangeToBalance.getVer())
-                .newLeaderStore(targetStoreId)
-                .build());
-        } else if (rangeToBalance.getConfig().getLearnersList().contains(targetStoreId)) {
-            Set<String> voters = Sets.newHashSet(rangeToBalance.getConfig().getVotersList());
-            Set<String> learners = Sets.newHashSet(rangeToBalance.getConfig().getLearnersList());
-            voters.remove(localStoreId);
-            voters.add(targetStoreId);
-            learners.add(localStoreId);
-            learners.remove(targetStoreId);
-            return BalanceNow.of(ChangeConfigCommand.builder()
-                .toStore(localStoreId)
-                .kvRangeId(rangeToBalance.getId())
-                .expectedVer(rangeToBalance.getVer())
-                .voters(voters)
-                .learners(learners)
-                .build());
-        } else {
-            Set<String> voters = Sets.newHashSet(rangeToBalance.getConfig().getVotersList());
-            Set<String> learners = Sets.newHashSet(rangeToBalance.getConfig().getLearnersList());
-            voters.remove(localStoreId);
-            voters.add(targetStoreId);
-            return BalanceNow.of(ChangeConfigCommand.builder()
-                .toStore(localStoreId)
-                .kvRangeId(rangeToBalance.getId())
-                .expectedVer(rangeToBalance.getVer())
-                .voters(voters)
-                .learners(learners)
-                .build());
-        }
-    }
-
-    private record BalanceTask(KVRangeDescriptor range, String targetStoreId) {
-
-    }
-
-    private BalanceTask findBestRangeToBalance(Set<KVRangeId> localEffectiveLeaderRangeIds,
-                                               Map<KVRangeId, KVRangeDescriptor> localLeaderRanges,
-                                               NavigableSet<StoreLeaderCount> storeLeaderCounts,
-                                               int atLeastLeaders) {
-        for (StoreLeaderCount storeLeaderCount : storeLeaderCounts) {
-            if (storeLeaderCount.leaderCount() <= atLeastLeaders) {
-                for (KVRangeId rangeId : localEffectiveLeaderRangeIds) {
-                    KVRangeDescriptor range = localLeaderRanges.get(rangeId);
-                    if (range.getConfig().getVotersList().contains(storeLeaderCount.storeId())) {
-                        return new BalanceTask(range, storeLeaderCount.storeId());
-                    }
-                }
-                for (KVRangeId rangeId : localEffectiveLeaderRangeIds) {
-                    KVRangeDescriptor range = localLeaderRanges.get(rangeId);
-                    if (range.getConfig().getLearnersList().contains(storeLeaderCount.storeId())) {
-                        return new BalanceTask(range, storeLeaderCount.storeId());
-                    }
-                }
-            }
-        }
-        return new BalanceTask(localLeaderRanges.get(localEffectiveLeaderRangeIds.iterator().next()),
-            storeLeaderCounts.first().storeId());
-    }
-
-    private record StoreLeaderCount(String storeId, int leaderCount) {
     }
 }
