@@ -136,7 +136,7 @@ public class KVRangeFSM implements IKVRangeFSM {
      * Callback for listening the quit signal which generated as the result of config change operation.
      */
     public interface QuitListener {
-        void onQuit(IKVRangeFSM rangeToQuit, boolean recreate);
+        void onQuit(IKVRangeFSM rangeToQuit);
     }
 
     enum Lifecycle {
@@ -236,21 +236,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                         () -> KVRangeFSM.this.restore(snapshot, leader, callback));
                 }
             }, fsmExecutor);
-        quitSignal.thenAccept(v -> {
-            // check if the range needs to be recreated after quit, this situation happens when there are serial configchange causing the replica
-            // be removed and added-back again, but the log apply progress falls behind.
-            ClusterConfig config = wal.clusterConfig();
-            if (config.getCorrelateId().equals(kvRange.state().getTaskId())) {
-                quitListener.onQuit(this, false);
-            } else {
-                Set<String> members = newHashSet();
-                members.addAll(config.getVotersList());
-                members.addAll(config.getLearnersList());
-                members.addAll(config.getNextVotersList());
-                members.addAll(config.getNextLearnersList());
-                quitListener.onQuit(this, members.contains(hostStoreId));
-            }
-        });
+        quitSignal.thenAccept(v -> quitListener.onQuit(this));
     }
 
     @Override
@@ -327,9 +313,6 @@ public class KVRangeFSM implements IKVRangeFSM {
                 if (!kvRange.hasCheckpoint(wal.latestSnapshot())) {
                     log.debug("Latest snapshot not available, do compaction: \n{}", wal.latestSnapshot());
                     compactWAL(false);
-                }
-                switch (kvRange.state().getType()) {
-                    case Removed -> quitSignal.complete(null);
                 }
             }
         });
@@ -819,7 +802,7 @@ public class KVRangeFSM implements IKVRangeFSM {
         switch (command.getCommandTypeCase()) {
             // admin commands
             case CHANGECONFIG -> {
-                ChangeConfig request = command.getChangeConfig();
+                ChangeConfig newConfig = command.getChangeConfig();
                 if (reqVer != ver) {
                     // version not match, hint the caller
                     onDone.complete(
@@ -833,7 +816,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 }
                 log.info(
                     "Changing Config[term={}, index={}, taskId={}, ver={}, state={}]: nextVoters={}, nextLearners={}",
-                    logTerm, logIndex, taskId, ver, state, request.getVotersList(), request.getLearnersList());
+                    logTerm, logIndex, taskId, ver, state, newConfig.getVotersList(), newConfig.getLearnersList());
                 // make a checkpoint if needed
                 CompletableFuture<Void> compactWALFuture = CompletableFuture.completedFuture(null);
                 if (wal.latestSnapshot().getLastAppliedIndex() < logIndex - 1) {
@@ -849,53 +832,58 @@ public class KVRangeFSM implements IKVRangeFSM {
                         log.error(
                             "WAL compact failed during ConfigChange[term={}, index={}, taskId={}]: ver={}, state={}",
                             logTerm, logIndex, taskId, ver, state);
+                        // abort log apply and retry
                         onDone.completeExceptionally(e);
                     } else {
-                        ClusterConfig currentConfig = wal.clusterConfig();
-                        boolean toBePurged = isGracefulQuit(currentConfig, request);
+                        ClusterConfig curConfig = wal.clusterConfig();
+                        boolean toBePurged = isGracefulQuit(curConfig, newConfig);
                         // notify new voters and learners host store to ensure the range exist
                         Set<String> newHostingStoreIds = difference(
                             difference(
-                                union(newHashSet(request.getVotersList()),
-                                    newHashSet(request.getLearnersList())),
-                                union(newHashSet(currentConfig.getVotersList()),
-                                    newHashSet(currentConfig.getLearnersList()))
+                                union(newHashSet(newConfig.getVotersList()), newHashSet(newConfig.getLearnersList())),
+                                union(newHashSet(curConfig.getVotersList()), newHashSet(curConfig.getLearnersList()))
                             ),
                             singleton(hostStoreId)
                         );
                         Set<String> nextVoters = toBePurged
-                            ? newHashSet(currentConfig.getVotersList()) : newHashSet(request.getVotersList());
+                            ? newHashSet(curConfig.getVotersList()) : newHashSet(newConfig.getVotersList());
                         Set<String> nextLearners = toBePurged
-                            ? emptySet() : newHashSet(request.getLearnersList());
+                            ? emptySet() : newHashSet(newConfig.getLearnersList());
                         List<CompletableFuture<?>> onceFutures = newHostingStoreIds.stream()
-                            .map(storeId -> messenger.once(m -> {
-                                        if (m.hasEnsureRangeReply()) {
-                                            EnsureRangeReply reply = m.getEnsureRangeReply();
-                                            return reply.getResult() == EnsureRangeReply.Result.OK;
-                                        }
-                                        return false;
-                                    })
-                                    .orTimeout(5, TimeUnit.SECONDS)
-                                    .exceptionally(t -> {
-                                        log.debug("EnsureRange failed: taskId={}, targetStoreId={}",
-                                            taskId, storeId, t);
-                                        return null;
-                                    })
+                            .map(storeId -> messenger
+                                .once(m -> {
+                                    if (m.hasEnsureRangeReply()) {
+                                        EnsureRangeReply reply = m.getEnsureRangeReply();
+                                        return reply.getResult() == EnsureRangeReply.Result.OK;
+                                    }
+                                    return false;
+                                })
+                                .orTimeout(5, TimeUnit.SECONDS)
                             )
                             .collect(Collectors.toList());
                         CompletableFuture.allOf(onceFutures.toArray(CompletableFuture[]::new))
-                            .thenAcceptAsync(v1 -> wal.changeClusterConfig(taskId, nextVoters, nextLearners)
-                                .whenCompleteAsync((v2, e2) -> {
-                                    if (e2 != null) {
-                                        String errorMessage =
-                                            String.format("ConfigChange aborted[taskId=%s] due to %s",
-                                                taskId, e2.getMessage());
-                                        log.debug(errorMessage);
-                                        finishCommandWithError(taskId, new KVRangeException.TryLater(errorMessage));
-                                        wal.stepDown();
-                                    }
-                                    // postpone finishing command when config entry is applied
-                                }, fsmExecutor), fsmExecutor);
+                            .whenCompleteAsync((v1, t) -> {
+                                if (t != null) {
+                                    String errorMessage = String.format("ConfigChange aborted[taskId=%s] due to %s",
+                                        taskId, t.getMessage());
+                                    log.warn(errorMessage);
+                                    finishCommandWithError(taskId, new KVRangeException.TryLater(errorMessage));
+                                    wal.stepDown();
+                                    return;
+                                }
+                                wal.changeClusterConfig(taskId, nextVoters, nextLearners)
+                                    .whenCompleteAsync((v2, e2) -> {
+                                        if (e2 != null) {
+                                            String errorMessage =
+                                                String.format("ConfigChange aborted[taskId=%s] due to %s",
+                                                    taskId, e2.getMessage());
+                                            log.debug(errorMessage);
+                                            finishCommandWithError(taskId, new KVRangeException.TryLater(errorMessage));
+                                            wal.stepDown();
+                                        }
+                                        // postpone finishing command when config entry is applied
+                                    }, fsmExecutor);
+                            }, fsmExecutor);
                         newHostingStoreIds.forEach(storeId -> {
                             log.debug("Send EnsureRequest: taskId={}, targetStoreId={}", taskId, storeId);
                             messenger.send(KVRangeMessage.newBuilder()

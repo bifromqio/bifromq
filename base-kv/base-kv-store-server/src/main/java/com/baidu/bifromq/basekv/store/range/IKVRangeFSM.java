@@ -26,6 +26,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * The interface of the range finite state machine.
+ */
 public interface IKVRangeFSM {
 
     KVRangeId id();
@@ -41,9 +44,9 @@ public interface IKVRangeFSM {
     void tick();
 
     /**
-     * Close the range, all activity of the range will stop after closed
+     * Close the range, all activities of the range will stop after closed.
      *
-     * @return
+     * @return a future that will be completed when the range is closed
      */
     CompletableFuture<Void> close();
 
@@ -51,14 +54,14 @@ public interface IKVRangeFSM {
      * Destroy the range from store, all range related data will be purged from the store. The range will be closed
      * implicitly
      *
-     * @return
+     * @return a future that will be completed when the range is destroyed
      */
     CompletableFuture<Void> destroy();
 
     /**
-     * Recover the range quorum, if it's unable to do election
+     * Recover the range quorum, if it's unable to do election.
      *
-     * @return
+     * @return a future that will be completed when the range is recovered
      */
     CompletableFuture<Void> recover();
 
