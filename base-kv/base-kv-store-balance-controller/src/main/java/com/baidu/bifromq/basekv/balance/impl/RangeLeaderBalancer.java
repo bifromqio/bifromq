@@ -95,7 +95,7 @@ public class RangeLeaderBalancer extends StoreBalancer {
         int leastLeadersCount = storeLeaderCount.get(leastLeadersStore);
 
         double totalLeaders = storeLeaderCount.values().stream().mapToInt(Integer::intValue).sum();
-        double targetLeadersPerStore = totalLeaders / landscape.size();
+        double targetLeadersPerStore = totalLeaders / storeLeaderCount.size();
         int atMostLeadersPerStore = (int) Math.ceil(targetLeadersPerStore);
         int atLeastLeadersPerStore = (int) Math.floor(targetLeadersPerStore);
 
