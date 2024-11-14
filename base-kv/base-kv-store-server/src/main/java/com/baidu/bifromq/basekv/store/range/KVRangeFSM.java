@@ -1479,21 +1479,12 @@ public class KVRangeFSM implements IKVRangeFSM {
     }
 
     private void detectZombieState(KVRangeDescriptor descriptor) {
-        ClusterConfig config = descriptor.getConfig();
-        Set<String> members = new HashSet<>(config.getVotersList());
-        members.addAll(config.getLearnersList());
-        members.addAll(config.getNextVotersList());
-        members.addAll(config.getNextLearnersList());
         if (zombieAt < 0) {
-            if (descriptor.getRole() == RaftNodeStatus.Candidate
-                && !members.isEmpty()
-                && !members.contains(hostStoreId)) {
+            if (descriptor.getRole() == RaftNodeStatus.Candidate) {
                 zombieAt = HLC.INST.getPhysical();
             }
         } else {
-            if (descriptor.getRole() != RaftNodeStatus.Candidate
-                || members.isEmpty()
-                || members.contains(hostStoreId)) {
+            if (descriptor.getRole() != RaftNodeStatus.Candidate) {
                 zombieAt = -1;
             }
         }
