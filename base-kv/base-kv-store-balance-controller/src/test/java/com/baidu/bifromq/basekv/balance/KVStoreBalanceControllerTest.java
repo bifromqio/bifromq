@@ -21,7 +21,7 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.baidu.bifromq.basekv.IBaseKVClusterMetadataManager;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
 import com.baidu.bifromq.basekv.balance.command.BootstrapCommand;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.balance.command.MergeCommand;

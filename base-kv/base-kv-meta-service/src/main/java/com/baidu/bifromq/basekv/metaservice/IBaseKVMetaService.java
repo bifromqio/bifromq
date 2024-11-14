@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv;
+package com.baidu.bifromq.basekv.metaservice;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import io.reactivex.rxjava3.core.Observable;

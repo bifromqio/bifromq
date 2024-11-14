@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.client;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.basekv.IBaseKVMetaService;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.UUID;

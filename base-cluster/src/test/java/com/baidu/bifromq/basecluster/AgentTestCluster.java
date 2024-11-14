@@ -98,9 +98,14 @@ public class AgentTestCluster {
         return getHost(hostId).local();
     }
 
-    public IAgent host(String hostId, String agentId) {
+    public IAgent hostAgent(String hostId, String agentId) {
         checkHost(hostId);
         return getHost(hostId).host(agentId);
+    }
+
+    public void stopHostAgent(String hostId, String agentId) {
+        checkHost(hostId);
+        getHost(hostId).stopHosting(agentId).join();
     }
 
     public Observable<Map<AgentMemberAddr, AgentMemberMetadata>> agent(String hostId, String agentId) {

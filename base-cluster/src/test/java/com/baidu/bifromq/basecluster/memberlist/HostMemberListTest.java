@@ -107,10 +107,10 @@ public class HostMemberListTest {
         assertEquals(local.getEndpoint().getPort(), LOCAL_ADDR.getPort());
         assertTrue(local.getIncarnation() >= 0);
         assertTrue(local.getAgentIdList().isEmpty());
-        assertTrue(memberList.agents().isEmpty());
+        assertEquals(memberList.landscape().blockingFirst().size(), 1);
         Map<HostEndpoint, Integer> hostMap = memberList.members().blockingFirst();
         assertEquals(hostMap.size(), 1);
-        assertTrue(local.getIncarnation() == hostMap.get(local.getEndpoint()));
+        assertEquals((int) hostMap.get(local.getEndpoint()), local.getIncarnation());
     }
 
     @Test
@@ -121,13 +121,13 @@ public class HostMemberListTest {
                 messenger, scheduler, store, addressResolver);
             HostMember local = memberList.local();
             IAgent agent = memberList.host(agentId);
-            assertEquals(memberList.agents().size(), 1);
-            assertTrue(memberList.agents().contains(agentId));
+            assertEquals(memberList.landscape().blockingFirst().size(), 1);
+            assertTrue(memberList.landscape().blockingFirst().get(local.getEndpoint()).contains(agentId));
             assertEquals(mockAgent.constructed().size(), 1);
-            assertTrue(local.getIncarnation() + 1 == memberList.local().getIncarnation());
+            assertEquals(memberList.local().getIncarnation(), local.getIncarnation() + 1);
             Map<HostEndpoint, Integer> hostMap = memberList.members().blockingFirst();
             assertEquals(hostMap.size(), 1);
-            assertTrue(local.getIncarnation() + 1 == hostMap.get(local.getEndpoint()));
+            assertEquals((int) hostMap.get(local.getEndpoint()), local.getIncarnation() + 1);
 
             verify(hostListCRDT, times(2)).execute(any(ORMapOperation.ORMapUpdate.class));
         }
@@ -144,7 +144,7 @@ public class HostMemberListTest {
             when(mockAgent.constructed().get(0).quit()).thenReturn(CompletableFuture.completedFuture(null));
             memberList.stopHosting(agentId);
             assertEquals(memberList.local().getAgentIdCount(), 0);
-            assertEquals(memberList.agents().size(), 0);
+            assertEquals(memberList.landscape().blockingFirst().size(), 1);
             assertTrue(local.getIncarnation() + 2 == memberList.local().getIncarnation());
             Map<HostEndpoint, Integer> hostMap = memberList.members().blockingFirst();
             assertTrue(local.getIncarnation() + 2 == hostMap.get(local.getEndpoint()));
@@ -254,6 +254,7 @@ public class HostMemberListTest {
         assertEquals(addrCap.getValue(), REMOTE_ADDR_1);
         assertTrue(reliableCap.getValue());
     }
+
     @Test
     public void handleFailAndClearZombie() {
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),

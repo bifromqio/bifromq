@@ -20,8 +20,8 @@ import static java.util.Collections.emptyMap;
 
 import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
-import com.baidu.bifromq.basekv.IBaseKVClusterMetadataManager;
-import com.baidu.bifromq.basekv.IBaseKVMetaService;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.protobuf.Struct;

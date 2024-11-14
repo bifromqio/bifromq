@@ -30,8 +30,8 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptyNavigableMap;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.basekv.IBaseKVClusterMetadataManager;
-import com.baidu.bifromq.basekv.IBaseKVMetaService;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.RPCBluePrint;
 import com.baidu.bifromq.basekv.exception.BaseKVException;
 import com.baidu.bifromq.basekv.proto.Boundary;
@@ -65,7 +65,6 @@ import com.baidu.bifromq.baserpc.utils.BehaviorSubject;
 import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.protobuf.Struct;
 import io.grpc.MethodDescriptor;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;

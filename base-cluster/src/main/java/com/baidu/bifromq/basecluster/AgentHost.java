@@ -159,6 +159,11 @@ final class AgentHost implements IAgentHost {
     }
 
     @Override
+    public Observable<Map<HostEndpoint, Set<String>>> landscape() {
+        return memberList.landscape();
+    }
+
+    @Override
     public void start() {
         if (state.compareAndSet(State.INIT, State.STARTING)) {
             messenger.start(memberSelector);

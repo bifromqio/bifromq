@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.server;
 
-import com.baidu.bifromq.basekv.IBaseKVMetaService;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import java.util.HashMap;
 import java.util.Map;
 

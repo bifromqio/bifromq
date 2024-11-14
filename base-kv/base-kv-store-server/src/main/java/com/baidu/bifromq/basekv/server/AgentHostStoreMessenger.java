@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.basekv.server;
 
+import static com.baidu.bifromq.basekv.Constants.toBaseKVAgentId;
+
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecluster.memberlist.agent.IAgent;
 import com.baidu.bifromq.basecluster.memberlist.agent.IAgentMember;
@@ -44,7 +46,7 @@ class AgentHostStoreMessenger implements IStoreMessenger {
         this.agentHost = agentHost;
         this.clusterId = clusterId;
         this.storeId = storeId;
-        this.agent = agentHost.host(agentId(clusterId));
+        this.agent = agentHost.host(toBaseKVAgentId(clusterId));
         this.agentMember = agent.register(storeId);
         log = SiftLogger.getLogger(AgentHostStoreMessenger.class, "clusterId", clusterId, "storeId", storeId);
     }

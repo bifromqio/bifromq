@@ -11,8 +11,11 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv;
+package com.baidu.bifromq.basekv.metaservice;
 
+import static com.baidu.bifromq.basekv.metaservice.NameUtil.toLandscapeURI;
+import static com.baidu.bifromq.basekv.metaservice.NameUtil.toLoadRulesURI;
+import static com.baidu.bifromq.basekv.metaservice.NameUtil.toLoadRulesProposalURI;
 import static com.baidu.bifromq.basekv.proto.ProposalResult.ACCEPTED;
 import static com.baidu.bifromq.basekv.proto.ProposalResult.REJECTED;
 
@@ -22,6 +25,7 @@ import com.baidu.bifromq.basecrdt.core.api.IORMap;
 import com.baidu.bifromq.basecrdt.core.api.MVRegOperation;
 import com.baidu.bifromq.basecrdt.core.api.ORMapOperation;
 import com.baidu.bifromq.basecrdt.proto.Replica;
+import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.proto.DescriptorKey;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
@@ -55,9 +59,7 @@ class BaseKVClusterMetadataManager implements IBaseKVClusterMetadataManager {
                                               Set<ByteString> replicaIds) {
     }
 
-    private static final ByteString ORMapKey_LoadRules_Proposal = ByteString.copyFromUtf8("LoadRulesProposal");
-    private static final ByteString ORMapKey_LoadRules = ByteString.copyFromUtf8("LoadRules");
-    private static final ByteString ORMapKey_Landscape = ByteString.copyFromUtf8("Landscape");
+    private final ICRDTService crdtService;
     private final IORMap loadRulesORMap;
     private final IORMap loadRulesProposalORMap;
     private final IORMap landscapeORMap;
@@ -68,12 +70,13 @@ class BaseKVClusterMetadataManager implements IBaseKVClusterMetadataManager {
     private final CompositeDisposable disposable = new CompositeDisposable();
     private volatile LoadRulesProposalHandler handler = null;
 
-    public BaseKVClusterMetadataManager(IORMap basekvClusterDescriptor,
-                                        Observable<Set<Replica>> aliveReplicas,
+    public BaseKVClusterMetadataManager(String clusterId,
+                                        ICRDTService crdtService,
                                         Duration proposalTimeout) {
-        this.loadRulesORMap = basekvClusterDescriptor.getORMap(ORMapKey_LoadRules);
-        this.loadRulesProposalORMap = basekvClusterDescriptor.getORMap(ORMapKey_LoadRules_Proposal);
-        this.landscapeORMap = basekvClusterDescriptor.getORMap(ORMapKey_Landscape);
+        this.crdtService = crdtService;
+        this.landscapeORMap = crdtService.host(toLandscapeURI(clusterId));
+        this.loadRulesORMap = crdtService.host(toLoadRulesURI(clusterId));
+        this.loadRulesProposalORMap = crdtService.host(toLoadRulesProposalURI(clusterId));
         this.proposalTimeout = proposalTimeout;
         disposable.add(landscapeORMap.inflation()
             .map(this::buildLandscape)
@@ -107,10 +110,11 @@ class BaseKVClusterMetadataManager implements IBaseKVClusterMetadataManager {
             })
             .filter(m -> !m.isEmpty())
             .subscribe(this::handleProposals));
-        disposable.add(Observable.combineLatest(landscapeSubject, aliveReplicas
-                    .map(replicas -> replicas.stream().map(Replica::getId).collect(Collectors.toSet())),
-                (StoreDescriptorAndReplicas::new))
-            .subscribe(this::checkAndHealStoreDescriptorList));
+        disposable.add(
+            Observable.combineLatest(landscapeSubject, crdtService.aliveReplicas(landscapeORMap.id().getUri())
+                        .map(replicas -> replicas.stream().map(Replica::getId).collect(Collectors.toSet())),
+                    (StoreDescriptorAndReplicas::new))
+                .subscribe(this::checkAndHealStoreDescriptorList));
     }
 
     @Override
@@ -203,6 +207,9 @@ class BaseKVClusterMetadataManager implements IBaseKVClusterMetadataManager {
         disposable.dispose();
         loadRulesSubject.onComplete();
         landscapeSubject.onComplete();
+        crdtService.stopHosting(landscapeORMap.id().getUri()).join();
+        crdtService.stopHosting(loadRulesORMap.id().getUri()).join();
+        crdtService.stopHosting(loadRulesProposalORMap.id().getUri()).join();
     }
 
     private void handleProposals(Map<String, LoadRulesProposition> proposals) {

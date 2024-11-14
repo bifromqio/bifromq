@@ -45,6 +45,7 @@ import org.slf4j.Logger;
 class CRDTCluster<O extends ICRDTOperation, C extends ICausalCRDT<O>> {
     private final Logger log;
     private final AtomicBoolean stopped = new AtomicBoolean(false);
+    private final IAgentHost agentHost;
     private final AgentMemberAddr endpoint;
     private final ReadWriteLock shutdownLock = new ReentrantReadWriteLock();
     private final Replica replicaId;
@@ -58,13 +59,14 @@ class CRDTCluster<O extends ICRDTOperation, C extends ICausalCRDT<O>> {
 
     CRDTCluster(String uri,
                 ICRDTStore store,
-                IAgentHost host,
+                IAgentHost agentHost,
                 Scheduler scheduler,
                 Subject<CRDTStoreMessage> storeMsgSubject) {
         this.store = store;
+        this.agentHost = agentHost;
         replicaId = generate(uri);
         log = new ReplicaLogger(replicaId, CRDTCluster.class);
-        membershipAgent = host.host(replicaId.getUri());
+        membershipAgent = agentHost.host(replicaId.getUri());
         endpoint = AgentMemberAddr.newBuilder()
             .setName(AgentUtil.toAgentMemberName(replicaId))
             .setEndpoint(membershipAgent.endpoint())
@@ -136,6 +138,7 @@ class CRDTCluster<O extends ICRDTOperation, C extends ICausalCRDT<O>> {
             if (stopped.compareAndSet(false, true)) {
                 disposables.dispose();
                 membershipAgent.deregister(localMembership)
+                    .thenCompose(v -> agentHost.stopHosting(replicaId.getUri()))
                     .thenCompose(v -> store.stopHosting(replicaId))
                     .whenComplete((v, e) -> {
                         if (e != null) {

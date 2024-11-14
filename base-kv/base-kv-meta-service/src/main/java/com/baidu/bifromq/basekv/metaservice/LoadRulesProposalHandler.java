@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023. The BifroMQ Authors. All Rights Reserved.
+ * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -11,9 +11,20 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv;
+package com.baidu.bifromq.basekv.metaservice;
 
+import com.google.protobuf.Struct;
 
-public class Constants {
-    public static final String RPC_METADATA_STORE_ID = "store_id";
+/**
+ * The proposal of LoadRules.
+ */
+public interface LoadRulesProposalHandler {
+    /**
+     * The handle result of the proposal.
+     */
+    enum Result {
+        ACCEPTED, REJECTED, NO_BALANCER
+    }
+
+    LoadRulesProposalHandler.Result handle(String balancerClassFQN, Struct loadRules);
 }

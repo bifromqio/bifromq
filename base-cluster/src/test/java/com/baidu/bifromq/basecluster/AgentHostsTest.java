@@ -39,7 +39,7 @@ public class AgentHostsTest extends AgentTestTemplate {
     @StoreCfgs(stores = {@StoreCfg(id = "s1")})
     @Test
     public void testRegister() {
-        IAgent agent = storeMgr.host("s1", "agent1");
+        IAgent agent = storeMgr.hostAgent("s1", "agent1");
         IAgentMember agentMember1 = agent.register("agentNode1");
         agentMember1.metadata(copyFromUtf8("123"));
         IAgentMember agentMember2 = agent.register("agentNode2");
@@ -57,7 +57,7 @@ public class AgentHostsTest extends AgentTestTemplate {
     @StoreCfgs(stores = {@StoreCfg(id = "s1")})
     @Test
     public void testUnregister() {
-        IAgent agent = storeMgr.host("s1", "agent1");
+        IAgent agent = storeMgr.hostAgent("s1", "agent1");
         IAgentMember agentMember1 = agent.register("agentNode1");
         IAgentMember agentMember2 = agent.register("agentNode2");
         agentMember1.metadata(copyFromUtf8("123"));
@@ -92,6 +92,50 @@ public class AgentHostsTest extends AgentTestTemplate {
         await().until(() -> storeMgr.membership("s5").size() == 5);
     }
 
+    @Test
+    @StoreCfgs(stores = {
+        @StoreCfg(id = "s1", isSeed = true),
+        @StoreCfg(id = "s2"),
+    })
+    public void testAgentLandscape() {
+        await().until(() -> storeMgr.membership("s1").size() == 2);
+        await().until(() -> storeMgr.membership("s2").size() == 2);
+
+        storeMgr.hostAgent("s1", "agent1");
+        storeMgr.hostAgent("s2", "agent2");
+
+        await().until(() -> {
+            Map<HostEndpoint, Set<String>> landscapeOnS1 = storeMgr.getHost("s1").landscape().blockingFirst();
+            Map<HostEndpoint, Set<String>> landscapeOnS2 = storeMgr.getHost("s2").landscape().blockingFirst();
+            return landscapeOnS1.equals(landscapeOnS2)
+                && landscapeOnS1.size() == 2
+                && landscapeOnS1.get(storeMgr.endpoint("s1")).equals(Set.of("agent1"))
+                && landscapeOnS1.get(storeMgr.endpoint("s2")).equals(Set.of("agent2"));
+        });
+
+        storeMgr.stopHostAgent("s1", "agent1");
+
+        await().until(() -> {
+            Map<HostEndpoint, Set<String>> landscapeOnS1 = storeMgr.getHost("s1").landscape().blockingFirst();
+            Map<HostEndpoint, Set<String>> landscapeOnS2 = storeMgr.getHost("s2").landscape().blockingFirst();
+            return landscapeOnS1.equals(landscapeOnS2)
+                && landscapeOnS1.size() == 2
+                && landscapeOnS1.get(storeMgr.endpoint("s1")).isEmpty()
+                && landscapeOnS1.get(storeMgr.endpoint("s2")).equals(Set.of("agent2"));
+        });
+
+        storeMgr.stopHostAgent("s2", "agent2");
+
+        await().until(() -> {
+            Map<HostEndpoint, Set<String>> landscapeOnS1 = storeMgr.getHost("s1").landscape().blockingFirst();
+            Map<HostEndpoint, Set<String>> landscapeOnS2 = storeMgr.getHost("s2").landscape().blockingFirst();
+            return landscapeOnS1.equals(landscapeOnS2)
+                && landscapeOnS1.size() == 2
+                && landscapeOnS1.get(storeMgr.endpoint("s1")).isEmpty()
+                && landscapeOnS1.get(storeMgr.endpoint("s2")).isEmpty();
+        });
+    }
+
     @StoreCfgs(stores = {
         @StoreCfg(id = "s1", isSeed = true),
         @StoreCfg(id = "s2"),
@@ -101,8 +145,8 @@ public class AgentHostsTest extends AgentTestTemplate {
         await().until(() -> storeMgr.membership("s1").size() == 2);
         await().until(() -> storeMgr.membership("s2").size() == 2);
 
-        IAgent agentOnS1 = storeMgr.host("s1", "agent1");
-        IAgent agentOnS2 = storeMgr.host("s2", "agent1");
+        IAgent agentOnS1 = storeMgr.hostAgent("s1", "agent1");
+        IAgent agentOnS2 = storeMgr.hostAgent("s2", "agent1");
 
         IAgentMember agentMember1 = agentOnS1.register("agentNode1");
         agentMember1.metadata(copyFromUtf8("1"));
@@ -144,9 +188,9 @@ public class AgentHostsTest extends AgentTestTemplate {
             Set<HostEndpoint> hosts_s3 = Sets.newHashSet(storeMgr.getHost("s3").membership().blockingFirst());
             return 3 == hosts_s3.size();
         });
-        IAgent agentOnS1 = storeMgr.host("s1", "agent1");
-        IAgent agentOnS2 = storeMgr.host("s2", "agent1");
-        IAgent agentOnS3 = storeMgr.host("s3", "agent1");
+        IAgent agentOnS1 = storeMgr.hostAgent("s1", "agent1");
+        IAgent agentOnS2 = storeMgr.hostAgent("s2", "agent1");
+        IAgent agentOnS3 = storeMgr.hostAgent("s3", "agent1");
         IAgentMember agentMember1OnS1 = agentOnS1.register("agentNode1");
         agentMember1OnS1.metadata(copyFromUtf8("1"));
 
@@ -205,7 +249,7 @@ public class AgentHostsTest extends AgentTestTemplate {
     @StoreCfgs(stores = {@StoreCfg(id = "s1", isSeed = true)})
     @Test
     public void testRefreshRoute() {
-        IAgent agent = storeMgr.host("s1", "agent1");
+        IAgent agent = storeMgr.hostAgent("s1", "agent1");
         IAgentMember agentMember1 = agent.register("agentNode1");
         agentMember1.metadata(copyFromUtf8("1"));
         IAgentMember agentMember2 = agent.register("agentNode2");
@@ -236,8 +280,8 @@ public class AgentHostsTest extends AgentTestTemplate {
     public void testMulticast() {
         String sender = "sender";
         String receiverGroup = "receiverGroup";
-        IAgent agentOnS1 = storeMgr.host("s1", "agent1");
-        IAgent agentOnS2 = storeMgr.host("s2", "agent1");
+        IAgent agentOnS1 = storeMgr.hostAgent("s1", "agent1");
+        IAgent agentOnS2 = storeMgr.hostAgent("s2", "agent1");
         IAgentMember agentMember1 = agentOnS1.register(sender);
         agentMember1.metadata(copyFromUtf8("1"));
 
@@ -296,9 +340,9 @@ public class AgentHostsTest extends AgentTestTemplate {
     })
     @Test
     public void testAgentClusterPartitionAndHealing() {
-        IAgent agentOnS1 = storeMgr.host("s1", "agent");
-        IAgent agentOnS2 = storeMgr.host("s2", "agent");
-        IAgent agentOnS3 = storeMgr.host("s3", "agent");
+        IAgent agentOnS1 = storeMgr.hostAgent("s1", "agent");
+        IAgent agentOnS2 = storeMgr.hostAgent("s2", "agent");
+        IAgent agentOnS3 = storeMgr.hostAgent("s3", "agent");
         IAgentMember agentMember1OnS1 = agentOnS1.register("agentNode1OnS1");
         agentMember1OnS1.metadata(copyFromUtf8("agentNode1OnS1"));
         IAgentMember agentMember2OnS1 = agentOnS1.register("agentNode2OnS1");

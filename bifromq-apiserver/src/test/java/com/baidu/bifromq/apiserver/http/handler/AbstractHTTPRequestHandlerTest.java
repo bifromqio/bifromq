@@ -19,7 +19,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertNotNull;
 
 import com.baidu.bifromq.apiserver.MockableTest;
-import com.baidu.bifromq.basekv.IBaseKVMetaService;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import io.netty.buffer.ByteBuf;

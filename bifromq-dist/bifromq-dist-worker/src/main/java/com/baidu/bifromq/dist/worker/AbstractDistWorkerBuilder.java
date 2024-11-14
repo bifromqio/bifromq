@@ -14,7 +14,7 @@
 package com.baidu.bifromq.dist.worker;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
-import com.baidu.bifromq.basekv.IBaseKVMetaService;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.dist.client.IDistClient;

@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.server;
 
-import static com.baidu.bifromq.basekv.server.AgentHostStoreMessenger.agentId;
+import static com.baidu.bifromq.basekv.Constants.toBaseKVAgentId;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -60,7 +60,7 @@ public class AgentHostStoreMessengerTest extends MockableTest {
         tgtStoreMessageSubject = PublishSubject.create();
         srcRange = KVRangeIdUtil.generate();
         targetRange = KVRangeIdUtil.generate();
-        when(agentHost.host(agentId(clusterId))).thenReturn(agent);
+        when(agentHost.host(toBaseKVAgentId(clusterId))).thenReturn(agent);
         when(agent.register(srcStore)).thenReturn(srcStoreAgentMember);
         when(agent.register(targetStore)).thenReturn(tgtStoreAgentMember);
         when(tgtStoreAgentMember.receive()).thenReturn(tgtStoreMessageSubject);
@@ -68,7 +68,7 @@ public class AgentHostStoreMessengerTest extends MockableTest {
 
     @Test
     public void init() {
-        when(agentHost.host(agentId(clusterId))).thenReturn(agent);
+        when(agentHost.host(toBaseKVAgentId(clusterId))).thenReturn(agent);
         AgentHostStoreMessenger messenger = new AgentHostStoreMessenger(agentHost, clusterId, srcStore);
 
         ArgumentCaptor<String> agentMemberCap = ArgumentCaptor.forClass(String.class);
@@ -98,7 +98,7 @@ public class AgentHostStoreMessengerTest extends MockableTest {
 
     @Test
     public void broadcast() {
-        when(agentHost.host(agentId(clusterId))).thenReturn(agent);
+        when(agentHost.host(toBaseKVAgentId(clusterId))).thenReturn(agent);
         AgentHostStoreMessenger messenger = new AgentHostStoreMessenger(agentHost, clusterId, srcStore);
         StoreMessage message = StoreMessage.newBuilder()
             .setFrom(srcStore)

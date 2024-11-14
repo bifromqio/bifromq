@@ -19,7 +19,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.basekv.IBaseKVClusterMetadataManager;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
 import com.google.protobuf.Struct;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;

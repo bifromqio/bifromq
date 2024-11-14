@@ -20,8 +20,11 @@ import com.baidu.bifromq.basecluster.membership.proto.HostEndpoint;
 import com.baidu.bifromq.basecluster.transport.ITransport;
 import com.baidu.bifromq.basecluster.transport.TCPTransport;
 import com.baidu.bifromq.basecluster.transport.Transport;
+import com.google.common.io.ByteSink;
+import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import java.net.InetSocketAddress;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -86,6 +89,13 @@ public interface IAgentHost {
      * @return an observable of agent host membership
      */
     Observable<Set<HostEndpoint>> membership();
+
+    /**
+     * Return the agent landscape of the cluster.
+     *
+     * @return the map of host id to the set of agent ids hosted by the host
+     */
+    Observable<Map<HostEndpoint, Set<String>>> landscape();
 
     /**
      * Start the agent host.

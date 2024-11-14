@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.server;
 
-import static com.baidu.bifromq.basekv.Constants.RPC_METADATA_STORE_ID;
+import static com.baidu.bifromq.basekv.RPCServerMetadataUtil.RPC_METADATA_STORE_ID;
 import static java.util.Collections.singletonMap;
 
 import com.baidu.bifromq.basekv.RPCBluePrint;

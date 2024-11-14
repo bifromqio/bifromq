@@ -17,7 +17,7 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.baserpc.UnaryResponse.response;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
-import com.baidu.bifromq.basekv.IBaseKVClusterMetadataManager;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
 import com.baidu.bifromq.basekv.store.IKVRangeStore;
 import com.baidu.bifromq.basekv.store.KVRangeStore;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException.BadRequest;

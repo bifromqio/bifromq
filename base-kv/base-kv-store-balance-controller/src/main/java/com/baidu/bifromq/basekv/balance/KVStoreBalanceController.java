@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.basekv.balance;
 
-import com.baidu.bifromq.basekv.IBaseKVClusterMetadataManager;
-import com.baidu.bifromq.basekv.LoadRulesProposalHandler;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
+import com.baidu.bifromq.basekv.metaservice.LoadRulesProposalHandler;
 import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.BootstrapCommand;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;

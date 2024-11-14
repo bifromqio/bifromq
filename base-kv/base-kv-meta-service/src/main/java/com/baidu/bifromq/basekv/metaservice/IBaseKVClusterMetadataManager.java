@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv;
+package com.baidu.bifromq.basekv.metaservice;
 
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.google.protobuf.Struct;

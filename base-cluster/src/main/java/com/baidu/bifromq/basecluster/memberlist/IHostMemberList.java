@@ -23,46 +23,46 @@ import java.util.concurrent.CompletableFuture;
 
 public interface IHostMemberList {
     /**
-     * The member from local
+     * The member from local.
      *
-     * @return
+     * @return the member object
      */
     HostMember local();
 
     boolean isZombie(HostEndpoint endpoint);
 
     /**
-     * Quit local host from the member list, after quit the memberlist instance should never be used
+     * Quit local host from the member list, after quit the memberlist instance should never be used.
      */
     CompletableFuture<Void> stop();
 
     /**
-     * An hot observable about members
+     * The hot observable about members.
      *
-     * @return
+     * @return the hot observable about members
      */
     Observable<Map<HostEndpoint, Integer>> members();
 
     /**
-     * Host the provided agent in local host. If the agent is already hosted, nothing will happen, otherwise
-     * other hosts which are residing same agent will get notified.
+     * Host the provided agent in local host. If the agent is already hosted, nothing will happen, otherwise other hosts
+     * which are residing same agent will get notified.
      *
-     * @param agentId
+     * @param agentId the agent id
      */
     IAgent host(String agentId);
 
     /**
-     * Stop hosting the agent. If the agent is not a resident, nothing will happen. The agent object is not expected
-     * to be used after calling this method.
+     * Stop hosting the agent. If the agent is not a resident, nothing will happen. The agent object is not expected to
+     * be used after calling this method.
      *
-     * @param agentId
+     * @param agentId the agent id
      */
     CompletableFuture<Void> stopHosting(String agentId);
 
     /**
-     * The agents currently are residing in local host
+     * The observable of agents landscape.
      *
-     * @return
+     * @return the observable
      */
-    Set<String> agents();
+    Observable<Map<HostEndpoint, Set<String>>> landscape();
 }

@@ -16,6 +16,8 @@ package com.baidu.bifromq.basecrdt.service;
 import static java.util.concurrent.Executors.newSingleThreadExecutor;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
+import com.baidu.bifromq.basecluster.membership.proto.HostEndpoint;
+import com.baidu.bifromq.basecrdt.core.api.CRDTURI;
 import com.baidu.bifromq.basecrdt.core.api.ICRDTOperation;
 import com.baidu.bifromq.basecrdt.core.api.ICausalCRDT;
 import com.baidu.bifromq.basecrdt.proto.Replica;
@@ -31,6 +33,7 @@ import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import io.reactivex.rxjava3.subjects.Subject;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -92,6 +95,21 @@ public class CRDTService implements ICRDTService {
         checkState();
         assert hostedCRDT.containsKey(uri);
         return hostedCRDT.get(uri).aliveReplicas();
+    }
+
+    @Override
+    public Observable<Set<String>> aliveCRDTs() {
+        return agentHost.landscape().map(agentLandscape -> {
+            Set<String> crdtUris = new HashSet<>();
+            for (Map.Entry<HostEndpoint, Set<String>> entry : agentLandscape.entrySet()) {
+                for (String agentId : entry.getValue()) {
+                    if (CRDTURI.isValidURI(agentId)) {
+                        crdtUris.add(agentId);
+                    }
+                }
+            }
+            return crdtUris;
+        });
     }
 
     @Override

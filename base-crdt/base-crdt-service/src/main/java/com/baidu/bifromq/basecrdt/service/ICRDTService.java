@@ -76,6 +76,13 @@ public interface ICRDTService {
      */
     Observable<Set<Replica>> aliveReplicas(String uri);
 
+    /**
+     * Get the alive CRDTs within the crdt services.
+     *
+     * @return the set of uri of alive CRDTs
+     */
+    Observable<Set<String>> aliveCRDTs();
+
     boolean isStarted();
 
     /**

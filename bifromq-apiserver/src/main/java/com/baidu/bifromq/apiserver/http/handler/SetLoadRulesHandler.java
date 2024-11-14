@@ -23,8 +23,8 @@ import static io.netty.handler.codec.http.HttpResponseStatus.REQUEST_TIMEOUT;
 
 import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
-import com.baidu.bifromq.basekv.IBaseKVClusterMetadataManager;
-import com.baidu.bifromq.basekv.IBaseKVMetaService;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.google.protobuf.Struct;
 import com.google.protobuf.util.JsonFormat;
 import io.netty.buffer.Unpooled;
@@ -51,9 +51,11 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Path("/rules/load")
 public class SetLoadRulesHandler implements IHTTPRequestHandler {
+    private final IBaseKVMetaService metaService;
     protected final Map<String, IBaseKVClusterMetadataManager> metadataManagers = new ConcurrentHashMap<>();
 
     protected SetLoadRulesHandler(IBaseKVMetaService metaService) {
+        this.metaService = metaService;
         metaService.clusterIds().subscribe(clusterIds -> {
             metadataManagers.keySet().removeIf(clusterId -> !clusterIds.contains(clusterId));
             for (String clusterId : clusterIds) {

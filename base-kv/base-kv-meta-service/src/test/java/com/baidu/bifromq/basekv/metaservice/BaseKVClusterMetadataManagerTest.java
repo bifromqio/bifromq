@@ -11,11 +11,12 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv;
+package com.baidu.bifromq.basekv.metaservice;
 
-import static com.baidu.bifromq.basekv.LoadRulesProposalHandler.Result.ACCEPTED;
-import static com.baidu.bifromq.basekv.LoadRulesProposalHandler.Result.NO_BALANCER;
-import static com.baidu.bifromq.basekv.LoadRulesProposalHandler.Result.REJECTED;
+import static com.baidu.bifromq.basekv.metaservice.LoadRulesProposalHandler.Result.ACCEPTED;
+import static com.baidu.bifromq.basekv.metaservice.LoadRulesProposalHandler.Result.NO_BALANCER;
+import static com.baidu.bifromq.basekv.metaservice.LoadRulesProposalHandler.Result.REJECTED;
+import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
@@ -90,9 +91,11 @@ public class BaseKVClusterMetadataManagerTest {
 
         IBaseKVClusterMetadataManager.ProposalResult result =
             manager.proposeLoadRules("balancer1", loadRulesJSON).join();
-        assertEquals(IBaseKVClusterMetadataManager.ProposalResult.ACCEPTED, result);
+        assertEquals(result, IBaseKVClusterMetadataManager.ProposalResult.ACCEPTED);
 
-        manager.loadRules().test().assertValue(Map.of("balancer1", loadRulesJSON));
+        TestObserver<Map<String, Struct>> observer = manager.loadRules().test();
+        await().until(() ->
+            !observer.values().isEmpty() && observer.values().get(0).equals(Map.of("balancer1", loadRulesJSON)));
     }
 
     @Test
@@ -104,7 +107,7 @@ public class BaseKVClusterMetadataManagerTest {
 
         IBaseKVClusterMetadataManager.ProposalResult result =
             manager.proposeLoadRules("balancer1", loadRulesJSON).join();
-        assertEquals(IBaseKVClusterMetadataManager.ProposalResult.REJECTED, result);
+        assertEquals(result, IBaseKVClusterMetadataManager.ProposalResult.REJECTED);
 
         manager.loadRules().test().assertNoValues();
     }
@@ -118,7 +121,7 @@ public class BaseKVClusterMetadataManagerTest {
 
         IBaseKVClusterMetadataManager.ProposalResult result =
             manager.proposeLoadRules("balancer1", loadRulesJSON).join();
-        assertEquals(IBaseKVClusterMetadataManager.ProposalResult.NO_BALANCER, result);
+        assertEquals(result, IBaseKVClusterMetadataManager.ProposalResult.NO_BALANCER);
         manager.loadRules().test().assertNoValues();
     }
 
@@ -136,8 +139,8 @@ public class BaseKVClusterMetadataManagerTest {
             manager.proposeLoadRules("balancer1", loadRulesJSON1);
         IBaseKVClusterMetadataManager.ProposalResult result1 =
             manager.proposeLoadRules("balancer1", loadRulesJSON2).join();
-        assertEquals(IBaseKVClusterMetadataManager.ProposalResult.OVERRIDDEN, resultFuture.join());
-        assertEquals(IBaseKVClusterMetadataManager.ProposalResult.ACCEPTED, result1);
+        assertEquals(resultFuture.join(), IBaseKVClusterMetadataManager.ProposalResult.OVERRIDDEN);
+        assertEquals(result1, IBaseKVClusterMetadataManager.ProposalResult.ACCEPTED);
         manager.loadRules().test().assertValue(Map.of("balancer1", loadRulesJSON2));
     }
 

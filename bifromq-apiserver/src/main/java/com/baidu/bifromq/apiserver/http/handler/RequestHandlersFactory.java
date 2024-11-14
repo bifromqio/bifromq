@@ -16,7 +16,7 @@ package com.baidu.bifromq.apiserver.http.handler;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandlersFactory;
 import com.baidu.bifromq.basecluster.IAgentHost;
-import com.baidu.bifromq.basekv.IBaseKVMetaService;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;

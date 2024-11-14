@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv;
+package com.baidu.bifromq.basekv.metaservice;
 
 import static org.testng.Assert.assertTrue;
 
@@ -19,7 +19,6 @@ import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import io.reactivex.rxjava3.observers.TestObserver;
 import java.net.InetSocketAddress;
 import java.util.Set;
@@ -71,8 +70,7 @@ public class BaseKVMetaServiceTest {
         TestObserver<Set<String>> clusterIdObserver1 = metaService1.clusterIds().test();
         TestObserver<Set<String>> clusterIdObserver2 = metaService2.clusterIds().test();
 
-        IBaseKVClusterMetadataManager metadataManager1 = metaService1.metadataManager("testCluster1");
-        metadataManager1.report(KVRangeStoreDescriptor.newBuilder().setId("testStoreId1").build());
+        crdtService1.host(NameUtil.toLandscapeURI("testCluster1"));
 
         clusterIdObserver1.awaitCount(2);
         clusterIdObserver1.assertValueAt(1, Set.of("testCluster1"));
@@ -80,8 +78,7 @@ public class BaseKVMetaServiceTest {
         clusterIdObserver2.awaitCount(2);
         clusterIdObserver2.assertValueAt(1, Set.of("testCluster1"));
 
-        IBaseKVClusterMetadataManager metadataManager2 = metaService1.metadataManager("testCluster2");
-        metadataManager2.report(KVRangeStoreDescriptor.newBuilder().setId("testStoreId2").build()).join();
+        crdtService1.host(NameUtil.toLandscapeURI("testCluster2"));
 
         clusterIdObserver1.awaitCount(3);
         clusterIdObserver1.assertValueAt(2, Set.of("testCluster1", "testCluster2"));
@@ -89,7 +86,7 @@ public class BaseKVMetaServiceTest {
         clusterIdObserver2.awaitCount(3);
         clusterIdObserver2.assertValueAt(2, Set.of("testCluster1", "testCluster2"));
 
-        metadataManager1.stopReport("testStoreId1").join();
+        crdtService1.stopHosting(NameUtil.toLandscapeURI("testCluster1")).join();
 
         clusterIdObserver1.awaitCount(4);
         clusterIdObserver1.assertValueAt(3, Set.of("testCluster2"));

@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basecrdt.service;
 
+import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotEquals;
 
 import com.baidu.bifromq.basecrdt.core.api.CCounterOperation;
@@ -21,6 +22,7 @@ import com.baidu.bifromq.basecrdt.core.api.CausalCRDTType;
 import com.baidu.bifromq.basecrdt.core.api.ICCounter;
 import com.baidu.bifromq.basecrdt.service.annotation.ServiceCfg;
 import com.baidu.bifromq.basecrdt.service.annotation.ServiceCfgs;
+import java.util.Set;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -44,11 +46,14 @@ public class CCounterTest extends CRDTServiceTestTemplate {
         counter1.execute(CCounterOperation.add(1)).join();
         counter2.execute(CCounterOperation.add(2)).join();
         awaitUntilTrue(() -> counter1.read() == counter2.read());
-        Assert.assertEquals(3, counter1.read());
+        Assert.assertEquals(counter1.read(), 3);
 
         counter2.execute(CCounterOperation.zeroOut()).join();
         awaitUntilTrue(() -> counter1.read() == counter2.read());
         awaitUntilTrue(() -> counter1.read() == 1);
+
+        assertEquals(service1.aliveCRDTs().blockingFirst(), Set.of(uri));
+        assertEquals(service1.aliveCRDTs().blockingFirst(), service2.aliveCRDTs().blockingFirst());
 
         service1.stopHosting(uri).join();
         service2.stopHosting(uri).join();

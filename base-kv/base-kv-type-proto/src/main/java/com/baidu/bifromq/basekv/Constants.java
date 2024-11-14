@@ -13,18 +13,10 @@
 
 package com.baidu.bifromq.basekv;
 
-import com.google.protobuf.Struct;
+public class Constants {
+    public static String BaseKVAgentPrefix = "BaseKV:";
 
-/**
- * The proposal of LoadRules.
- */
-public interface LoadRulesProposalHandler {
-    /**
-     * The handle result of the proposal.
-     */
-    enum Result {
-        ACCEPTED, REJECTED, NO_BALANCER
+    public static String toBaseKVAgentId(String clusterId) {
+        return BaseKVAgentPrefix + clusterId;
     }
-
-    LoadRulesProposalHandler.Result handle(String balancerClassFQN, Struct loadRules);
 }

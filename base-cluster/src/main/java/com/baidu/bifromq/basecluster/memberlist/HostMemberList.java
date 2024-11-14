@@ -259,8 +259,8 @@ public class HostMemberList implements IHostMemberList {
     }
 
     @Override
-    public Set<String> agents() {
-        return Sets.newHashSet(local.getAgentIdList());
+    public Observable<Map<HostEndpoint, Set<String>>> landscape() {
+        return membershipSubject.map(m -> Maps.transformValues(m, v -> Sets.newHashSet(v.getAgentIdList())));
     }
 
     private Map<HostEndpoint, HostMember> currentMembers() {
