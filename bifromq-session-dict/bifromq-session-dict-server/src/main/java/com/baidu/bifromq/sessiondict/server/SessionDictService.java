@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.sessiondict.server;
 
-import static com.baidu.bifromq.baserpc.UnaryResponse.response;
+import static com.baidu.bifromq.baserpc.server.UnaryResponse.response;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_BROKER_KEY;
 

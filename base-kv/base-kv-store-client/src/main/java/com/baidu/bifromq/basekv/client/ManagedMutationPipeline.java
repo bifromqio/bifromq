@@ -15,7 +15,7 @@ package com.baidu.bifromq.basekv.client;
 
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
-import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.client.IRPCClient;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import java.util.concurrent.CompletableFuture;

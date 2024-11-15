@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.mqtt.service;
 
-import com.baidu.bifromq.baserpc.IRPCServer;
+import com.baidu.bifromq.baserpc.server.IRPCServer;
 import com.baidu.bifromq.mqtt.inbox.RPCBluePrint;
 import lombok.extern.slf4j.Slf4j;
 
@@ -24,15 +24,17 @@ final class StandaloneLocalSessionServer extends AbstractLocalSessionServer<Stan
     public StandaloneLocalSessionServer(StandaloneLocalSessionServerBuilder builder) {
         super(builder);
         server = IRPCServer.newBuilder()
+            .bindService(service.bindService(),
+                RPCBluePrint.INSTANCE,
+                builder.attributes,
+                builder.defaultGroupTags,
+                builder.rpcExecutor)
             .id(builder.id)
             .host(builder.host)
             .port(builder.port)
-            .executor(builder.executor)
             .bossEventLoopGroup(builder.bossEventLoopGroup)
             .workerEventLoopGroup(builder.workerEventLoopGroup)
             .sslContext(builder.sslContext)
-            .crdtService(builder.crdtService)
-            .bindService(service.bindService(), RPCBluePrint.INSTANCE)
             .build();
     }
 

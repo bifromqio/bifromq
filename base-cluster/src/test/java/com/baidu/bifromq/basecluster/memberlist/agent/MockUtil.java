@@ -15,6 +15,7 @@ package com.baidu.bifromq.basecluster.memberlist.agent;
 
 import static org.mockito.Mockito.when;
 
+import com.baidu.bifromq.basecluster.agent.proto.AgentEndpoint;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberAddr;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberMetadata;
 import com.baidu.bifromq.basecluster.membership.proto.HostEndpoint;
@@ -37,8 +38,12 @@ public class MockUtil {
         return AgentMemberMetadata.newBuilder().setValue(value).setHlc(HLC.INST.get()).build();
     }
 
-    public static AgentMemberAddr toAgentMemberAddr(String name, HostEndpoint endpoint) {
-        return AgentMemberAddr.newBuilder().setName(name).setEndpoint(endpoint).build();
+    public static AgentMemberAddr toAgentMemberAddr(String name, AgentEndpoint endpoint) {
+        return AgentMemberAddr.newBuilder()
+            .setName(name)
+            .setEndpoint(endpoint.getEndpoint())
+            .setIncarnation(endpoint.getIncarnation())
+            .build();
     }
 
     public static void mockAgentMemberCRDT(IORMap orMap, Map<AgentMemberAddr, AgentMemberMetadata> members) {

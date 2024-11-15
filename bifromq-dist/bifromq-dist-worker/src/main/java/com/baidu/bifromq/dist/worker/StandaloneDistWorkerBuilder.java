@@ -31,8 +31,7 @@ public final class StandaloneDistWorkerBuilder extends AbstractDistWorkerBuilder
     EventLoopGroup bossEventLoopGroup;
     EventLoopGroup workerEventLoopGroup;
     SslContext sslContext;
-    Executor ioExecutor;
-    ICRDTService crdtService;
+    Executor rpcExecutor;
 
     public IDistWorker build() {
         return new StandaloneDistWorker(this);

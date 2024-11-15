@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 
@@ -36,7 +37,7 @@ abstract class AbstractBaseKVStoreServer<T extends AbstractBaseKVStoreServerBuil
     AbstractBaseKVStoreServer(T builder) {
         for (BaseKVStoreServiceBuilder<?> serviceBuilder : builder.serviceBuilders.values()) {
             BaseKVStoreService storeService = new BaseKVStoreService(serviceBuilder);
-            bindableStoreServices.add(new BindableStoreService(storeService));
+            bindableStoreServices.add(new BindableStoreService(storeService, serviceBuilder.rpcExecutor));
             storeServiceMap.put(storeService.clusterId(), storeService);
         }
     }
@@ -63,7 +64,7 @@ abstract class AbstractBaseKVStoreServer<T extends AbstractBaseKVStoreServerBuil
                 log.debug("BaseKVStore server for '{}' started", storeServiceMap.keySet());
                 state.set(State.STARTED);
             } catch (Throwable e) {
-                state.set(State.FATALFAILURE);
+                state.set(State.FATAL_FAILURE);
                 throw e;
             }
         }
@@ -89,15 +90,17 @@ abstract class AbstractBaseKVStoreServer<T extends AbstractBaseKVStoreServerBuil
         final ServerServiceDefinition serviceDefinition;
         final BluePrint bluePrint;
         final Map<String, String> metadata;
+        final Executor executor;
 
-        BindableStoreService(BaseKVStoreService storeService) {
+        BindableStoreService(BaseKVStoreService storeService, Executor executor) {
             serviceDefinition = RPCBluePrint.scope(storeService.bindService(), storeService.clusterId());
             bluePrint = RPCBluePrint.build(storeService.clusterId());
             metadata = singletonMap(RPC_METADATA_STORE_ID, storeService.storeId());
+            this.executor = executor;
         }
     }
 
     private enum State {
-        INIT, STARTING, STARTED, FATALFAILURE, STOPPING, STOPPED
+        INIT, STARTING, STARTED, FATAL_FAILURE, STOPPING, STOPPED
     }
 }

@@ -18,7 +18,7 @@ import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
-import com.baidu.bifromq.baserpc.ResponsePipeline;
+import com.baidu.bifromq.baserpc.server.ResponsePipeline;
 import com.baidu.bifromq.logger.SiftLogger;
 import io.grpc.stub.StreamObserver;
 import java.util.concurrent.CompletableFuture;

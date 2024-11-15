@@ -14,14 +14,20 @@
 package com.baidu.bifromq.inbox.server;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceServerRegister;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import com.google.common.util.concurrent.MoreExecutors;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Executor;
 
 abstract class AbstractInboxServerBuilder<T extends AbstractInboxServerBuilder<T>> implements IInboxServerBuilder {
     IEventCollector eventCollector;
@@ -32,6 +38,8 @@ abstract class AbstractInboxServerBuilder<T extends AbstractInboxServerBuilder<T
     IRetainClient retainClient;
     IBaseKVStoreClient inboxStoreClient;
     Map<String, String> attrs = new HashMap<>();
+    Set<String> defaultGroupTags = new HashSet<>();
+    Executor rpcExecutor = MoreExecutors.directExecutor();
 
     AbstractInboxServerBuilder() {
     }

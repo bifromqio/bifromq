@@ -19,6 +19,10 @@ final class NonStandaloneLocalSessionServer extends AbstractLocalSessionServer<N
 
     public NonStandaloneLocalSessionServer(NonStandaloneLocalSessionServerBuilder builder) {
         super(builder);
-        builder.rpcServerBuilder.bindService(service.bindService(), RPCBluePrint.INSTANCE);
+        builder.rpcServerBuilder.bindService(service.bindService(),
+            RPCBluePrint.INSTANCE,
+            builder.attributes,
+            builder.defaultGroupTags,
+            builder.rpcExecutor);
     }
 }

@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.sessiondict.client;
 
-import com.baidu.bifromq.baserpc.IConnectable;
+import com.baidu.bifromq.baserpc.client.IConnectable;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetRequest;
@@ -37,8 +37,6 @@ public interface ISessionDictClient extends IConnectable {
     static SessionDictClientBuilder newBuilder() {
         return new SessionDictClientBuilder();
     }
-
-    IRPCServiceTrafficGovernor trafficGovernor();
 
     ISessionRegistration reg(ClientInfo owner, IKillListener killListener);
 

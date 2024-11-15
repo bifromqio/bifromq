@@ -14,11 +14,13 @@
 package com.baidu.bifromq.basekv.server;
 
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import java.util.HashMap;
 import java.util.Map;
 
 public abstract class AbstractBaseKVStoreServerBuilder<P extends AbstractBaseKVStoreServerBuilder<P>> {
     final Map<String, BaseKVStoreServiceBuilder<P>> serviceBuilders = new HashMap<>();
+    IRPCServiceTrafficService trafficService;
     IBaseKVMetaService metaService;
 
     public abstract IBaseKVStoreServer build();
@@ -29,6 +31,12 @@ public abstract class AbstractBaseKVStoreServerBuilder<P extends AbstractBaseKVS
     public BaseKVStoreServiceBuilder<P> addService(String clusterId, boolean bootstrap) {
         assert !serviceBuilders.containsKey(clusterId);
         return newService(clusterId, bootstrap, (P) this);
+    }
+
+    @SuppressWarnings("unchecked")
+    public P trafficService(IRPCServiceTrafficService trafficService) {
+        this.trafficService = trafficService;
+        return (P) this;
     }
 
     @SuppressWarnings("unchecked")

@@ -22,11 +22,12 @@ import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceLandscape;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
@@ -39,6 +40,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.mockito.Mock;
@@ -52,11 +54,13 @@ public class APIServerTest extends MockableTest {
     @Mock
     private IAgentHost agentHost;
     @Mock
-    private IBaseKVMetaService metaService;
-    @Mock
     private IRPCServiceTrafficGovernor trafficGovernor;
     @Mock
-    private IMqttBrokerClient brokerClient;
+    private IRPCServiceLandscape serviceLandscape;
+    @Mock
+    private IRPCServiceTrafficService trafficService;
+    @Mock
+    private IBaseKVMetaService metaService;
     @Mock
     private IDistClient distClient;
     @Mock
@@ -71,13 +75,11 @@ public class APIServerTest extends MockableTest {
     public void setup() {
         super.setup();
         when(metaService.clusterIds()).thenReturn(Observable.empty());
-        when(trafficGovernor.serverList()).thenReturn(Observable.empty());
+        when(trafficService.services()).thenReturn(Observable.just(Set.of("test_service")));
+        when(trafficService.getServiceLandscape(anyString())).thenReturn(serviceLandscape);
+        when(trafficService.getTrafficGovernor(anyString())).thenReturn(trafficGovernor);
+        when(trafficGovernor.serverEndpoints()).thenReturn(Observable.empty());
         when(trafficGovernor.trafficRules()).thenReturn(Observable.empty());
-        when(brokerClient.trafficGovernor()).thenReturn(trafficGovernor);
-        when(distClient.trafficGovernor()).thenReturn(trafficGovernor);
-        when(inboxClient.trafficGovernor()).thenReturn(trafficGovernor);
-        when(sessionDictClient.trafficGovernor()).thenReturn(trafficGovernor);
-        when(retainClient.trafficGovernor()).thenReturn(trafficGovernor);
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
         EventLoopGroup workerGroup = new NioEventLoopGroup(1);
         apiServer = APIServer.builder()
@@ -88,8 +90,8 @@ public class APIServerTest extends MockableTest {
             .bossGroup(bossGroup)
             .workerGroup(workerGroup)
             .agentHost(agentHost)
+            .trafficService(trafficService)
             .metaService(metaService)
-            .brokerClient(brokerClient)
             .distClient(distClient)
             .inboxClient(inboxClient)
             .sessionDictClient(sessionDictClient)

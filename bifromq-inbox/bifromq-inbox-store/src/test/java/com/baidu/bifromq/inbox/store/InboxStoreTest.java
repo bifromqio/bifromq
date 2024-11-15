@@ -46,7 +46,8 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
-import com.baidu.bifromq.baserpc.IConnectable;
+import com.baidu.bifromq.baserpc.client.IConnectable;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
@@ -86,6 +87,7 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Struct;
 import io.micrometer.core.instrument.Gauge;
@@ -134,6 +136,7 @@ abstract class InboxStoreTest {
     protected SimpleMeterRegistry meterRegistry;
     private IAgentHost agentHost;
     private ICRDTService crdtService;
+    private IRPCServiceTrafficService trafficService;
     private IBaseKVMetaService metaService;
     private ExecutorService queryExecutor;
     private int tickerThreads = 2;
@@ -166,6 +169,7 @@ abstract class InboxStoreTest {
         crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
         crdtService.start(agentHost);
 
+        trafficService = IRPCServiceTrafficService.newInstance(crdtService);
         metaService = IBaseKVMetaService.newInstance(crdtService);
 
         String uuid = UUID.randomUUID().toString();
@@ -185,7 +189,7 @@ abstract class InboxStoreTest {
         storeClient = IBaseKVStoreClient
             .newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .metaService(metaService)
             .build();
         buildStoreServer();
@@ -201,7 +205,7 @@ abstract class InboxStoreTest {
             .bootstrap(true)
             .host("127.0.0.1")
             .agentHost(agentHost)
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .metaService(metaService)
             .inboxClient(inboxClient)
             .storeClient(storeClient)
@@ -209,6 +213,7 @@ abstract class InboxStoreTest {
             .eventCollector(eventCollector)
             .storeOptions(options)
             .queryExecutor(queryExecutor)
+            .rpcExecutor(MoreExecutors.directExecutor())
             .tickerThreads(tickerThreads)
             .balancerFactoryConfig(Map.of(RangeBootstrapBalancerFactory.class.getName(), Struct.getDefaultInstance()))
             .bgTaskExecutor(bgTaskExecutor)
@@ -228,6 +233,7 @@ abstract class InboxStoreTest {
         testStore.stop();
         storeClient.stop();
         inboxClient.close();
+        trafficService.stop();
         metaService.stop();
         crdtService.stop();
         agentHost.shutdown();

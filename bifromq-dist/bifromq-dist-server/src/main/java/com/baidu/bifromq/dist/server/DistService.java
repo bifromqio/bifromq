@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.server;
 
-import static com.baidu.bifromq.baserpc.UnaryResponse.response;
+import static com.baidu.bifromq.baserpc.server.UnaryResponse.response;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;

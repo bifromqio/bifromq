@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.mqtt;
 
-import com.baidu.bifromq.baserpc.RPCServerBuilder;
+import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;

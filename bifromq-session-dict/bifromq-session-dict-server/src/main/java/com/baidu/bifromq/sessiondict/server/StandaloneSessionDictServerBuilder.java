@@ -14,6 +14,7 @@
 package com.baidu.bifromq.sessiondict.server;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
@@ -29,11 +30,10 @@ public final class StandaloneSessionDictServerBuilder
     extends AbstractSessionDictServerBuilder<StandaloneSessionDictServerBuilder> {
     String host;
     int port;
-    ICRDTService crdtService;
+    IRPCServiceTrafficService trafficService;
     EventLoopGroup bossEventLoopGroup;
     EventLoopGroup workerEventLoopGroup;
     SslContext sslContext;
-    Executor executor;
 
     @Override
     public ISessionDictServer build() {

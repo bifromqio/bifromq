@@ -20,7 +20,7 @@ import com.baidu.bifromq.basekv.balance.KVStoreBalanceController;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
-import com.baidu.bifromq.baserpc.IConnectable;
+import com.baidu.bifromq.baserpc.client.IConnectable;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.store.gc.IInboxStoreGCProcessor;
 import com.baidu.bifromq.inbox.store.gc.InboxStoreGCProcessor;

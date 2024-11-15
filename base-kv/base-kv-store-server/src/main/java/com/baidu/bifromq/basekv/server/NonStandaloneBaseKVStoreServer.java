@@ -13,15 +13,19 @@
 
 package com.baidu.bifromq.basekv.server;
 
-import com.baidu.bifromq.baserpc.RPCServerBuilder;
-import lombok.extern.slf4j.Slf4j;
+import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
+import java.util.Collections;
 
 final class NonStandaloneBaseKVStoreServer extends AbstractBaseKVStoreServer<NonStandaloneBaseKVStoreServerBuilder> {
     NonStandaloneBaseKVStoreServer(NonStandaloneBaseKVStoreServerBuilder builder) {
         super(builder);
         RPCServerBuilder rpcServerBuilder = builder.rpcServerBuilder;
         for (BindableStoreService bindable : bindableStoreServices) {
-            rpcServerBuilder.bindService(bindable.serviceDefinition, bindable.bluePrint, bindable.metadata);
+            rpcServerBuilder.bindService(bindable.serviceDefinition,
+                bindable.bluePrint,
+                bindable.metadata,
+                Collections.emptySet(),
+                bindable.executor);
         }
     }
 }

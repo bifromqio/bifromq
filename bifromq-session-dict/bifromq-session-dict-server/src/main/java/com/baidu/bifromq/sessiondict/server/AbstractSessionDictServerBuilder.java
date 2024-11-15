@@ -13,9 +13,14 @@
 
 package com.baidu.bifromq.sessiondict.server;
 
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
+import com.google.common.util.concurrent.MoreExecutors;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Executor;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
@@ -24,6 +29,8 @@ abstract class AbstractSessionDictServerBuilder<T extends AbstractSessionDictSer
     implements ISessionDictServerBuilder {
     IMqttBrokerClient mqttBrokerClient;
     Map<String, String> attrs = new HashMap<>();
+    Set<String> defaultGroupTags = new HashSet<>();
+    Executor rpcExecutor = MoreExecutors.directExecutor();
 
     public T mqttBrokerClient(IMqttBrokerClient mqttBrokerClient) {
         this.mqttBrokerClient = mqttBrokerClient;
@@ -32,6 +39,16 @@ abstract class AbstractSessionDictServerBuilder<T extends AbstractSessionDictSer
 
     public T attributes(Map<String, String> attrs) {
         this.attrs = attrs;
+        return thisT();
+    }
+
+    public T defaultGroupTags(Set<String> defaultGroupTags) {
+        this.defaultGroupTags = defaultGroupTags;
+        return thisT();
+    }
+
+    public T rpcExecutor(Executor rpcExecutor) {
+        this.rpcExecutor = rpcExecutor;
         return thisT();
     }
 

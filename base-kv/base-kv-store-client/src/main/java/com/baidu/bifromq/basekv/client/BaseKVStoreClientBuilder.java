@@ -15,6 +15,9 @@ package com.baidu.bifromq.basekv.client;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceLandscape;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
+import com.google.common.util.concurrent.MoreExecutors;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.UUID;
@@ -25,17 +28,16 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Setter
 public final class BaseKVStoreClientBuilder {
-    final String id = UUID.randomUUID().toString();
     String clusterId;
     EventLoopGroup eventLoopGroup;
     SslContext sslContext;
     long keepAliveInSec;
     long idleTimeoutInSec;
 
-    ICRDTService crdtService;
+    IRPCServiceTrafficService trafficService;
     IBaseKVMetaService metaService;
 
-    Executor executor;
+    Executor executor = MoreExecutors.directExecutor();
     int queryPipelinesPerStore;
 
     public IBaseKVStoreClient build() {

@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.client;
 
-import com.baidu.bifromq.baserpc.IConnectable;
+import com.baidu.bifromq.baserpc.client.IConnectable;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
@@ -23,8 +23,6 @@ public interface IDistClient extends IConnectable {
     static DistClientBuilder newBuilder() {
         return new DistClientBuilder();
     }
-
-    IRPCServiceTrafficGovernor trafficGovernor();
 
     /**
      * publish a message at best effort, there are many edge cases that could lead to publish failure, so the normal

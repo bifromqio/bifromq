@@ -69,7 +69,8 @@ class CRDTCluster<O extends ICRDTOperation, C extends ICausalCRDT<O>> {
         membershipAgent = agentHost.host(replicaId.getUri());
         endpoint = AgentMemberAddr.newBuilder()
             .setName(AgentUtil.toAgentMemberName(replicaId))
-            .setEndpoint(membershipAgent.endpoint())
+            .setEndpoint(membershipAgent.local().getEndpoint())
+            .setIncarnation(membershipAgent.local().getIncarnation())
             .build();
         this.localMembership = membershipAgent.register(endpoint.getName());
         this.storeMsgSubject = storeMsgSubject;
@@ -138,8 +139,8 @@ class CRDTCluster<O extends ICRDTOperation, C extends ICausalCRDT<O>> {
             if (stopped.compareAndSet(false, true)) {
                 disposables.dispose();
                 membershipAgent.deregister(localMembership)
-                    .thenCompose(v -> agentHost.stopHosting(replicaId.getUri()))
                     .thenCompose(v -> store.stopHosting(replicaId))
+                    .thenCompose(v -> agentHost.stopHosting(replicaId.getUri()))
                     .whenComplete((v, e) -> {
                         if (e != null) {
                             log.warn("Error during close", e);

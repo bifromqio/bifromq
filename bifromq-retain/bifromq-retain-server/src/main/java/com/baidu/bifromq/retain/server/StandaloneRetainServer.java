@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.retain.server;
 
-import com.baidu.bifromq.baserpc.IRPCServer;
+import com.baidu.bifromq.baserpc.server.IRPCServer;
 import com.baidu.bifromq.retain.RPCBluePrint;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -25,16 +25,17 @@ final class StandaloneRetainServer extends AbstractRetainServer {
     StandaloneRetainServer(StandaloneRetainServerBuilder builder) {
         super(builder);
         this.rpcServer = IRPCServer.newBuilder()
-            .bindService(retainService.bindService(), RPCBluePrint.INSTANCE, builder.attrs)
+            .bindService(retainService.bindService(),
+                RPCBluePrint.INSTANCE,
+                builder.attrs,
+                builder.defaultGroupTags,
+                builder.rpcExecutor)
             .host(builder.host)
             .port(builder.port)
             .bossEventLoopGroup(builder.bossEventLoopGroup)
             .workerEventLoopGroup(builder.workerEventLoopGroup)
-            .crdtService(builder.crdtService)
-            .executor(builder.executor)
             .sslContext(builder.sslContext)
             .build();
-        ;
     }
 
     @Override

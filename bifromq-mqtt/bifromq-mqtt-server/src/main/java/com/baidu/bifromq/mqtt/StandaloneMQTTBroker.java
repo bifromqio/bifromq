@@ -26,10 +26,9 @@ final class StandaloneMQTTBroker extends AbstractMQTTBroker<StandaloneMQTTBroker
             .id(builder.id)
             .host(builder.rpcHost)
             .port(builder.rpcPort)
-            .executor(builder.ioExecutor)
+            .trafficService(builder.trafficService)
             .bossEventLoopGroup(builder.rpcBossGroup)
             .workerEventLoopGroup(builder.rpcWorkerGroup)
-            .crdtService(builder.crdtService)
             .sessionRegistry(builder.sessionRegistry)
             .distService(builder.distService)
             .build();

@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.client.scheduler;
 
-import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.dist.client.PubResult;

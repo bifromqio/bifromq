@@ -31,6 +31,10 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
+            <artifactId>base-rpc-server</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-util</artifactId>
         </dependency>
         <dependency>

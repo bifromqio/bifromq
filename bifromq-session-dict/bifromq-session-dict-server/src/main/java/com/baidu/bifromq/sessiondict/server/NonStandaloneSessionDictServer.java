@@ -18,6 +18,10 @@ import com.baidu.bifromq.sessiondict.RPCBluePrint;
 public class NonStandaloneSessionDictServer extends AbstractSessionDictServer {
     NonStandaloneSessionDictServer(NonStandaloneSessionDictServerBuilder builder) {
         super(builder);
-        builder.rpcServerBuilder.bindService(service.bindService(), RPCBluePrint.INSTANCE, builder.attrs);
+        builder.rpcServerBuilder.bindService(service.bindService(),
+            RPCBluePrint.INSTANCE,
+            builder.attrs,
+            builder.defaultGroupTags,
+            builder.rpcExecutor);
     }
 }

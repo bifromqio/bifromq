@@ -25,6 +25,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.baidu.bifromq.basecluster.agent.proto.AgentEndpoint;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberAddr;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberMetadata;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMessage;
@@ -62,20 +63,24 @@ import org.mockito.Mock;
 public class AgentMemberTest {
     private String agentId = "agentId";
     private ByteString hostId = ByteString.copyFromUtf8("host1");
-    private HostEndpoint endpoint1 = HostEndpoint.newBuilder()
-        .setId(hostId)
-        .setAddress("localhost")
-        .setPort(1111)
+    private AgentEndpoint endpoint1 = AgentEndpoint.newBuilder()
+        .setEndpoint(HostEndpoint.newBuilder()
+            .setId(hostId)
+            .setAddress("localhost")
+            .setPort(1111)
+            .build())
         .build();
-    private HostEndpoint endpoint2 = HostEndpoint.newBuilder()
-        .setId(hostId)
-        .setAddress("localhost")
-        .setPort(2222)
+    private AgentEndpoint endpoint2 = AgentEndpoint.newBuilder()
+        .setEndpoint(HostEndpoint.newBuilder()
+            .setId(hostId)
+            .setAddress("localhost")
+            .setPort(2222)
+            .build())
         .build();
     private String agentMemberName = "agentMemberName";
     private AgentMemberAddr agentMemberAddr = AgentMemberAddr.newBuilder()
         .setName(agentMemberName)
-        .setEndpoint(endpoint1)
+        .setEndpoint(endpoint1.getEndpoint())
         .build();
     private Replica replica = Replica.newBuilder().setUri(CRDTUtil.toAgentURI(agentId)).build();
     @Mock
@@ -86,13 +91,14 @@ public class AgentMemberTest {
     @Mock
     private Supplier<Set<AgentMemberAddr>> memberAddresses;
     @Mock
-    private IAgentHostProvider hostProvider;
+    private IAgentAddressProvider hostProvider;
     @Mock
     private IORMap orMap;
     private PublishSubject<Long> inflationSubject = PublishSubject.create();
     private PublishSubject<Set<HostEndpoint>> hostsSubjects = PublishSubject.create();
     private PublishSubject<AgentMessageEnvelope> messageSubject = PublishSubject.create();
     private AutoCloseable closeable;
+
     @BeforeMethod
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
@@ -125,19 +131,19 @@ public class AgentMemberTest {
         verify(orMap, times(2)).execute(orMapOpCap.capture());
         ORMapOperation op = orMapOpCap.getAllValues().get(0);
         assertTrue(op instanceof ORMapOperation.ORMapUpdate);
-        assertTrue(((ORMapOperation.ORMapUpdate) op).valueOp instanceof MVRegOperation);
+        assertTrue(((ORMapOperation.ORMapUpdate<?>) op).valueOp instanceof MVRegOperation);
         AgentMemberAddr key = AgentMemberAddr.parseFrom(op.keyPath[0]);
         assertEquals(key.getName(), agentMemberName);
-        assertEquals(key.getEndpoint(), endpoint1);
+        assertEquals(key.getEndpoint(), endpoint1.getEndpoint());
 
         AgentMemberMetadata agentMemberMetadata1 =
-            AgentMemberMetadata.parseFrom(((MVRegOperation) ((ORMapOperation.ORMapUpdate) op).valueOp).value);
+            AgentMemberMetadata.parseFrom(((MVRegOperation) ((ORMapOperation.ORMapUpdate<?>) op).valueOp).value);
         assertEquals(agentMemberMetadata1.getValue(), ByteString.EMPTY);
         assertTrue(agentMemberMetadata1.getHlc() > 0);
 
         op = orMapOpCap.getAllValues().get(1);
         AgentMemberMetadata agentMemberMetadata2 =
-            AgentMemberMetadata.parseFrom(((MVRegOperation) ((ORMapOperation.ORMapUpdate) op).valueOp).value);
+            AgentMemberMetadata.parseFrom(((MVRegOperation) ((ORMapOperation.ORMapUpdate<?>) op).valueOp).value);
         assertEquals(agentMemberMetadata2.getValue(), meta2);
         assertTrue(agentMemberMetadata1.getHlc() < agentMemberMetadata2.getHlc());
     }
@@ -185,7 +191,8 @@ public class AgentMemberTest {
         AgentMember agentMember = new AgentMember(agentMemberAddr, orMap, agentMessenger, scheduler, memberAddresses);
         try {
             when(memberAddresses.get()).thenReturn(Sets.newHashSet(agentMemberAddr));
-            agentMember.send(AgentMemberAddr.newBuilder().setName(agentMemberName2).setEndpoint(endpoint1).build(),
+            agentMember.send(
+                AgentMemberAddr.newBuilder().setName(agentMemberName2).setEndpoint(endpoint1.getEndpoint()).build(),
                 ByteString.EMPTY, false).join();
         } catch (Exception e) {
             assertTrue(e.getCause() instanceof UnknownHostException);
@@ -207,9 +214,9 @@ public class AgentMemberTest {
 
         assertEquals(msgCap.getValue().getPayload(), ByteString.EMPTY);
         assertEquals(msgCap.getValue().getSender().getName(), agentMemberName);
-        assertEquals(msgCap.getValue().getSender().getEndpoint(), endpoint1);
+        assertEquals(msgCap.getValue().getSender().getEndpoint(), endpoint1.getEndpoint());
         assertEquals(addrCap.getValue().getName(), agentMemberName2);
-        assertEquals(addrCap.getValue().getEndpoint(), endpoint1);
+        assertEquals(addrCap.getValue().getEndpoint(), endpoint1.getEndpoint());
         assertFalse(reliableCap.getValue());
     }
 
@@ -237,13 +244,13 @@ public class AgentMemberTest {
 
         assertEquals(msgCap.getAllValues().get(0).getSender().getName(), senderName);
         assertEquals(msgCap.getAllValues().get(1).getSender().getName(), senderName);
-        assertEquals(msgCap.getAllValues().get(0).getSender().getEndpoint(), endpoint1);
-        assertEquals(msgCap.getAllValues().get(1).getSender().getEndpoint(), endpoint1);
+        assertEquals(msgCap.getAllValues().get(0).getSender().getEndpoint(), endpoint1.getEndpoint());
+        assertEquals(msgCap.getAllValues().get(1).getSender().getEndpoint(), endpoint1.getEndpoint());
 
         Set<HostEndpoint> receiverEndpoints = addrCap.getAllValues().stream().map(AgentMemberAddr::getEndpoint).collect(
             Collectors.toSet());
-        assertTrue(receiverEndpoints.contains(endpoint1));
-        assertTrue(receiverEndpoints.contains(endpoint2));
+        assertTrue(receiverEndpoints.contains(endpoint1.getEndpoint()));
+        assertTrue(receiverEndpoints.contains(endpoint2.getEndpoint()));
 
         assertFalse(reliableCap.getAllValues().get(0));
         assertFalse(reliableCap.getAllValues().get(1));
@@ -260,19 +267,21 @@ public class AgentMemberTest {
         TestObserver<AgentMessage> testObserver = new TestObserver<>();
         agentMember1.receive().subscribe(testObserver);
         AgentMessage message1 = AgentMessage.newBuilder()
-            .setSender(AgentMemberAddr.newBuilder().setName(agentMemberName2).setEndpoint(endpoint2).build())
+            .setSender(
+                AgentMemberAddr.newBuilder().setName(agentMemberName2).setEndpoint(endpoint2.getEndpoint()).build())
             .setPayload(ByteString.copyFromUtf8("hello"))
             .build();
         AgentMessage message2 = AgentMessage.newBuilder()
-            .setSender(AgentMemberAddr.newBuilder().setName(agentMemberName2).setEndpoint(endpoint2).build())
+            .setSender(
+                AgentMemberAddr.newBuilder().setName(agentMemberName2).setEndpoint(endpoint2.getEndpoint()).build())
             .setPayload(ByteString.copyFromUtf8("world"))
             .build();
         messageSubject.onNext(AgentMessageEnvelope.newBuilder()
-            .setReceiver(AgentMemberAddr.newBuilder().setName(agentMemberName).setEndpoint(endpoint2))
+            .setReceiver(AgentMemberAddr.newBuilder().setName(agentMemberName).setEndpoint(endpoint2.getEndpoint()))
             .setMessage(message1)
             .build());
         messageSubject.onNext(AgentMessageEnvelope.newBuilder()
-            .setReceiver(AgentMemberAddr.newBuilder().setName(agentMemberName).setEndpoint(endpoint1))
+            .setReceiver(AgentMemberAddr.newBuilder().setName(agentMemberName).setEndpoint(endpoint1.getEndpoint()))
             .setMessage(message2)
             .build());
         testObserver.awaitCount(1);

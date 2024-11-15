@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.retain.server;
 
-import static com.baidu.bifromq.baserpc.UnaryResponse.response;
+import static com.baidu.bifromq.baserpc.server.UnaryResponse.response;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainMatchedBytes;
 
 import com.baidu.bifromq.basehlc.HLC;

@@ -14,6 +14,7 @@
 package com.baidu.bifromq.retain.server;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
@@ -26,12 +27,11 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Setter
 public final class StandaloneRetainServerBuilder extends AbstractRetainServerBuilder<StandaloneRetainServerBuilder> {
-    Executor executor;
     String host;
     int port;
+    IRPCServiceTrafficService trafficService;
     EventLoopGroup bossEventLoopGroup;
     EventLoopGroup workerEventLoopGroup;
-    ICRDTService crdtService;
     SslContext sslContext;
 
     @Override

@@ -26,9 +26,10 @@ import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeOptions;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
-import com.baidu.bifromq.baserpc.IRPCClient;
-import com.baidu.bifromq.baserpc.IRPCServer;
-import com.baidu.bifromq.baserpc.RPCServerBuilder;
+import com.baidu.bifromq.baserpc.client.IRPCClient;
+import com.baidu.bifromq.baserpc.server.IRPCServer;
+import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.server.IDistServer;
@@ -96,8 +97,8 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private PluginManager pluginMgr;
     private ExecutorService rpcClientExecutor;
     private ExecutorService rpcServerExecutor;
-    private ExecutorService baseKVClientExecutor;
-    private ExecutorService baseKVServerExecutor;
+    private ExecutorService storeClientExecutor;
+    private ExecutorService storeServerExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private AuthProviderManager authProviderMgr;
     private ClientBalancerManager clientBalancerMgr;
@@ -106,9 +107,9 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     private SettingProviderManager settingProviderMgr;
     private IAgentHost agentHost;
     private ICRDTService crdtService;
+    private IRPCServiceTrafficService trafficService;
     private IBaseKVMetaService metaService;
-    private IRPCServer sharedIORpcServer;
-    private IRPCServer sharedBaseKVRpcServer;
+    private IRPCServer rpcServer;
     private ISessionDictClient sessionDictClient;
     private ISessionDictServer sessionDictServer;
     private IDistClient distClient;
@@ -166,18 +167,18 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                     EnvProvider.INSTANCE.newThreadFactory("rpc-server-executor")), "rpc-server-executor");
         }
         if (config.getBaseKVClientConfig().getWorkerThreads() == null) {
-            baseKVClientExecutor = MoreExecutors.newDirectExecutorService();
+            storeClientExecutor = MoreExecutors.newDirectExecutorService();
         } else {
-            baseKVClientExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+            storeClientExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
                 new ThreadPoolExecutor(config.getBaseKVClientConfig().getWorkerThreads(),
                     config.getBaseKVClientConfig().getWorkerThreads(), 0L,
                     TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
                     EnvProvider.INSTANCE.newThreadFactory("basekv-client-executor")), "basekv-client-executor");
         }
         if (config.getBaseKVServerConfig().getWorkerThreads() == null) {
-            baseKVServerExecutor = MoreExecutors.newDirectExecutorService();
+            storeServerExecutor = MoreExecutors.newDirectExecutorService();
         } else {
-            baseKVServerExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+            storeServerExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
                 new ThreadPoolExecutor(config.getBaseKVServerConfig().getWorkerThreads(),
                     config.getBaseKVServerConfig().getWorkerThreads(), 0L,
                     TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
@@ -209,6 +210,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         crdtService.start(agentHost);
         log.debug("CRDT service started");
 
+        trafficService = IRPCServiceTrafficService.newInstance(crdtService);
         metaService = IBaseKVMetaService.newInstance(crdtService);
 
         EventLoopGroup rpcServerBossELG =
@@ -219,63 +221,46 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             NettyUtil.createEventLoopGroup(0, EnvProvider.INSTANCE.newThreadFactory("io-rpc-worker-elg"));
         new NettyEventExecutorMetrics(ioRPCWorkerELG).bindTo(Metrics.globalRegistry);
 
-        EventLoopGroup kvRPCWorkerELG =
-            NettyUtil.createEventLoopGroup(0, EnvProvider.INSTANCE.newThreadFactory("kv-rpc-worker-elg"));
-        new NettyEventExecutorMetrics(ioRPCWorkerELG).bindTo(Metrics.globalRegistry);
-
-        RPCServerBuilder sharedRPCServerBuilder = IRPCServer.newBuilder()
+        RPCServerBuilder rpcServerBuilder = IRPCServer.newBuilder()
             .host(config.getRpcServerConfig().getHost())
             .port(config.getRpcServerConfig().getPort())
+            .trafficService(trafficService)
             .bossEventLoopGroup(rpcServerBossELG)
-            .workerEventLoopGroup(ioRPCWorkerELG)
-            .crdtService(crdtService)
-            .executor(rpcServerExecutor);
-        RPCServerBuilder sharedBaseKVServerBuilder = IRPCServer.newBuilder()
-            .host(config.getBaseKVServerConfig().getHost())
-            .port(config.getBaseKVServerConfig().getPort())
-            .bossEventLoopGroup(rpcServerBossELG)
-            .workerEventLoopGroup(kvRPCWorkerELG)
-            .crdtService(crdtService)
-            .executor(baseKVServerExecutor);
+            .workerEventLoopGroup(ioRPCWorkerELG);
         if (config.getRpcServerConfig().isEnableSSL()) {
-            sharedRPCServerBuilder.sslContext(buildRPCServerSslContext(config.getRpcServerConfig().getSslConfig()));
-        }
-        if (config.getBaseKVServerConfig().isEnableSSL()) {
-            sharedBaseKVServerBuilder.sslContext(
-                buildRPCServerSslContext(config.getBaseKVServerConfig().getSslConfig()));
+            rpcServerBuilder.sslContext(buildRPCServerSslContext(config.getRpcServerConfig().getSslConfig()));
         }
         SslContext rpcClientSslContext = config.getRpcClientConfig().isEnableSSL()
             ? buildRPCClientSslContext(config.getRpcClientConfig().getSslConfig()) : null;
-        SslContext baseKVClientSslContext = config.getBaseKVClientConfig().isEnableSSL()
-            ? buildRPCClientSslContext(config.getBaseKVClientConfig().getSslConfig()) : null;
         distClient = IDistClient.newBuilder()
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .executor(rpcClientExecutor)
             .sslContext(rpcClientSslContext)
             .build();
         retainClient = IRetainClient.newBuilder()
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .executor(rpcClientExecutor)
             .sslContext(rpcClientSslContext)
             .build();
         retainStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IRetainStore.CLUSTER_NAME)
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .metaService(metaService)
-            .executor(baseKVClientExecutor)
-            .sslContext(baseKVClientSslContext)
+            .executor(storeClientExecutor)
+            .sslContext(rpcClientSslContext)
             .queryPipelinesPerStore(config
                 .getStateStoreConfig()
                 .getRetainStoreConfig()
                 .getQueryPipelinePerStore())
             .build();
         retainStore = IRetainStore.nonStandaloneBuilder()
-            .rpcServerBuilder(sharedBaseKVServerBuilder)
+            .rpcServerBuilder(rpcServerBuilder)
             .bootstrap(config.isBootstrap())
             .agentHost(agentHost)
             .metaService(metaService)
             .storeClient(retainStoreClient)
             .queryExecutor(MoreExecutors.directExecutor())
+            .rpcExecutor(storeServerExecutor)
             .tickerThreads(config.getStateStoreConfig().getTickerThreads())
             .bgTaskExecutor(bgTaskExecutor)
             .balanceRetryDelay(Duration.ofMillis(
@@ -301,29 +286,31 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                         .getWalEngineConfig(), "retain_wal")))
             .build();
         inboxClient = IInboxClient.newBuilder()
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .executor(rpcClientExecutor)
             .sslContext(rpcClientSslContext)
             .build();
         inboxStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .metaService(metaService)
-            .executor(baseKVClientExecutor)
-            .sslContext(baseKVClientSslContext)
+            .executor(storeClientExecutor)
+            .sslContext(rpcClientSslContext)
             .queryPipelinesPerStore(config.getStateStoreConfig().getInboxStoreConfig()
                 .getQueryPipelinePerStore())
             .build();
         inboxStore = IInboxStore.nonStandaloneBuilder()
-            .rpcServerBuilder(sharedBaseKVServerBuilder)
+            .rpcServerBuilder(rpcServerBuilder)
             .bootstrap(config.isBootstrap())
             .agentHost(agentHost)
+            .trafficService(trafficService)
             .metaService(metaService)
             .inboxClient(inboxClient)
             .storeClient(inboxStoreClient)
             .settingProvider(settingProviderMgr)
             .eventCollector(eventCollectorMgr)
             .queryExecutor(MoreExecutors.directExecutor())
+            .rpcExecutor(storeServerExecutor)
             .tickerThreads(config.getStateStoreConfig().getTickerThreads())
             .bgTaskExecutor(bgTaskExecutor)
             .loadEstimateWindow(Duration.ofSeconds(InboxStoreLoadEstimationWindowSeconds.INSTANCE.get()))
@@ -349,7 +336,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                         .getWalEngineConfig(), "inbox_wal")))
             .build();
         inboxServer = IInboxServer.nonStandaloneBuilder()
-            .rpcServerBuilder(sharedRPCServerBuilder)
+            .rpcServerBuilder(rpcServerBuilder)
             .eventCollector(eventCollectorMgr)
             .resourceThrottler(resourceThrottlerMgr)
             .settingProvider(settingProviderMgr)
@@ -360,17 +347,17 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .build();
         distWorkerClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .metaService(metaService)
-            .executor(baseKVClientExecutor)
-            .sslContext(baseKVClientSslContext)
+            .executor(storeClientExecutor)
+            .sslContext(rpcClientSslContext)
             .queryPipelinesPerStore(config
                 .getStateStoreConfig()
                 .getDistWorkerConfig()
                 .getQueryPipelinePerStore())
             .build();
         mqttBrokerClient = IMqttBrokerClient.newBuilder()
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .executor(rpcClientExecutor)
             .sslContext(rpcClientSslContext)
             .build();
@@ -378,31 +365,37 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         subBrokerManager = new SubBrokerManager(pluginMgr, mqttBrokerClient, inboxClient);
 
         sessionDictClient = ISessionDictClient.newBuilder()
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .executor(rpcClientExecutor)
             .sslContext(rpcClientSslContext)
             .build();
 
         sessionDictServer = ISessionDictServer.nonStandaloneBuilder()
-            .rpcServerBuilder(sharedRPCServerBuilder)
+            .rpcServerBuilder(rpcServerBuilder)
             .mqttBrokerClient(mqttBrokerClient)
+            // TODO: attributes
+            // TODO: defaultGroupTags
             .build();
         retainServer = IRetainServer.nonStandaloneBuilder()
-            .rpcServerBuilder(sharedRPCServerBuilder)
+            .rpcServerBuilder(rpcServerBuilder)
             .retainStoreClient(retainStoreClient)
             .settingProvider(settingProviderMgr)
             .subBrokerManager(subBrokerManager)
+            // TODO: attributes
+            // TODO: defaultGroupTags
             .build();
         distWorker = IDistWorker.nonStandaloneBuilder()
-            .rpcServerBuilder(sharedBaseKVServerBuilder)
+            .rpcServerBuilder(rpcServerBuilder)
             .bootstrap(config.isBootstrap())
             .agentHost(agentHost)
+            .trafficService(trafficService)
             .metaService(metaService)
             .eventCollector(eventCollectorMgr)
             .resourceThrottler(resourceThrottlerMgr)
             .distClient(distClient)
             .storeClient(distWorkerClient)
             .queryExecutor(MoreExecutors.directExecutor())
+            .rpcExecutor(storeServerExecutor)
             .tickerThreads(config.getStateStoreConfig().getTickerThreads())
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(new KVRangeStoreOptions()
@@ -428,16 +421,18 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .build();
 
         distServer = IDistServer.nonStandaloneBuilder()
-            .rpcServerBuilder(sharedRPCServerBuilder)
-            .crdtService(crdtService)
+            .rpcServerBuilder(rpcServerBuilder)
             .distWorkerClient(distWorkerClient)
             .settingProvider(settingProviderMgr)
             .eventCollector(eventCollectorMgr)
+            // TODO: attributes
+            // TODO: defaultGroupTags
             .build();
 
         MQTTServerConfig mqttServerConfig = config.getMqttServerConfig();
         IMQTTBrokerBuilder<?> brokerBuilder = IMQTTBroker.nonStandaloneBuilder()
-            .rpcServerBuilder(sharedRPCServerBuilder)
+            .trafficService(trafficService)
+            .rpcServerBuilder(rpcServerBuilder)
             .mqttBossELGThreads(mqttServerConfig.getBossELGThreads())
             .mqttWorkerELGThreads(mqttServerConfig.getWorkerELGThreads())
             .crdtService(crdtService)
@@ -490,9 +485,8 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         if (apiServerConfig.isEnable()) {
             apiServer = buildAPIServer(apiServerConfig);
         }
-        sharedBaseKVRpcServer = sharedBaseKVServerBuilder.build();
         mqttBroker = brokerBuilder.build();
-        sharedIORpcServer = sharedRPCServerBuilder.build();
+        rpcServer = rpcServerBuilder.build();
     }
 
     @Override
@@ -515,8 +509,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         distWorker.start();
         distServer.start();
 
-        sharedIORpcServer.start();
-        sharedBaseKVRpcServer.start();
+        rpcServer.start();
 
         mqttBroker.start();
         if (apiServer != null) {
@@ -553,8 +546,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         if (apiServer != null) {
             apiServer.shutdown();
         }
-        sharedIORpcServer.shutdown();
-        sharedBaseKVRpcServer.shutdown();
+        rpcServer.shutdown();
 
         distClient.stop();
         distServer.shutdown();
@@ -577,6 +569,8 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         sessionDictServer.shutdown();
 
         metaService.stop();
+
+        trafficService.stop();
 
         crdtService.stop();
 
@@ -602,12 +596,12 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             rpcServerExecutor.shutdownNow();
             log.debug("Shutdown rpc server executor");
         }
-        if (baseKVClientExecutor != null) {
-            baseKVClientExecutor.shutdownNow();
+        if (storeClientExecutor != null) {
+            storeClientExecutor.shutdownNow();
             log.debug("Shutdown baseKV client executor");
         }
-        if (baseKVServerExecutor != null) {
-            baseKVServerExecutor.shutdownNow();
+        if (storeServerExecutor != null) {
+            storeServerExecutor.shutdownNow();
             log.debug("Shutdown baseKV server executor");
         }
         if (bgTaskExecutor != null) {
@@ -639,8 +633,8 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .workerGroup(workerELG)
             .sslContext(sslContext)
             .agentHost(agentHost)
+            .trafficService(trafficService)
             .metaService(metaService)
-            .brokerClient(mqttBrokerClient)
             .distClient(distClient)
             .inboxClient(inboxClient)
             .sessionDictClient(sessionDictClient)

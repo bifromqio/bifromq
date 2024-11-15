@@ -16,8 +16,8 @@ package com.baidu.bifromq.inbox.client;
 import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_DELIVERERKEY;
 import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_ID;
 
-import com.baidu.bifromq.baserpc.IRPCClient;
-import com.baidu.bifromq.baserpc.IRPCClient.IMessageStream;
+import com.baidu.bifromq.baserpc.client.IRPCClient;
+import com.baidu.bifromq.baserpc.client.IRPCClient.IMessageStream;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetchHint;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetched;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;

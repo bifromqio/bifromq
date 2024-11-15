@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.dist.server;
 
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
@@ -27,6 +28,7 @@ import lombok.experimental.Accessors;
 public final class StandaloneDistServerBuilder extends AbstractDistServerBuilder<StandaloneDistServerBuilder> {
     String host;
     int port;
+    IRPCServiceTrafficService trafficService;
     EventLoopGroup bossEventLoopGroup;
     EventLoopGroup workerEventLoopGroup;
     Executor executor;

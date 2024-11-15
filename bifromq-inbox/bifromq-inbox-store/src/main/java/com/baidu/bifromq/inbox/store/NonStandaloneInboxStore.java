@@ -30,6 +30,7 @@ final class NonStandaloneInboxStore extends AbstractInboxStore<NonStandaloneInbo
             .storeOptions(builder.storeOptions)
             .agentHost(builder.agentHost)
             .queryExecutor(builder.queryExecutor)
+            .rpcExecutor(builder.rpcExecutor)
             .tickerThreads(builder.tickerThreads)
             .bgTaskExecutor(builder.bgTaskExecutor)
             .finish()

@@ -18,7 +18,7 @@ import static com.baidu.bifromq.plugin.eventcollector.distservice.DistError.Dist
 import static com.baidu.bifromq.plugin.eventcollector.distservice.DistError.DistErrorCode.RPC_FAILURE;
 
 import com.baidu.bifromq.baseenv.MemUsage;
-import com.baidu.bifromq.baserpc.ResponsePipeline;
+import com.baidu.bifromq.baserpc.server.ResponsePipeline;
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;

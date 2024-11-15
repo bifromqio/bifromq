@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.server;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
-import static com.baidu.bifromq.baserpc.UnaryResponse.response;
+import static com.baidu.bifromq.baserpc.server.UnaryResponse.response;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;

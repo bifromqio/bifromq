@@ -17,6 +17,7 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
@@ -33,8 +34,10 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
     String clusterId = IDistWorker.CLUSTER_NAME;
     boolean bootstrap;
     IAgentHost agentHost;
+    IRPCServiceTrafficService trafficService;
     IBaseKVMetaService metaService;
     Executor queryExecutor;
+    Executor rpcExecutor;
     int tickerThreads;
     ScheduledExecutorService bgTaskExecutor;
     IEventCollector eventCollector;
@@ -70,6 +73,11 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
         return thisT();
     }
 
+    public T trafficService(IRPCServiceTrafficService trafficService) {
+        this.trafficService = trafficService;
+        return thisT();
+    }
+
     public T metaService(IBaseKVMetaService metaService) {
         this.metaService = metaService;
         return thisT();
@@ -77,6 +85,11 @@ abstract class AbstractDistWorkerBuilder<T extends AbstractDistWorkerBuilder<T>>
 
     public T queryExecutor(Executor queryExecutor) {
         this.queryExecutor = queryExecutor;
+        return thisT();
+    }
+
+    public T rpcExecutor(Executor rpcExecutor) {
+        this.rpcExecutor = rpcExecutor;
         return thisT();
     }
 

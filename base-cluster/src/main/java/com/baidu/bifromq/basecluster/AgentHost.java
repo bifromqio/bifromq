@@ -13,9 +13,11 @@
 
 package com.baidu.bifromq.basecluster;
 
+import static com.baidu.bifromq.basecluster.memberlist.CRDTUtil.AGENT_HOST_MAP_URI;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 
+import com.baidu.bifromq.basecluster.agent.proto.AgentEndpoint;
 import com.baidu.bifromq.basecluster.fd.FailureDetector;
 import com.baidu.bifromq.basecluster.fd.IFailureDetector;
 import com.baidu.bifromq.basecluster.fd.IProbingTarget;
@@ -196,7 +198,12 @@ final class AgentHost implements IAgentHost {
     private void sendCRDTStoreMessage(CRDTStoreMessage storeMsg) {
         ClusterMessage msg = ClusterMessage.newBuilder().setCrdtStoreMessage(storeMsg).build();
         try {
-            HostEndpoint endpoint = HostEndpoint.parseFrom(storeMsg.getReceiver());
+            HostEndpoint endpoint;
+            if (storeMsg.getUri().equals(AGENT_HOST_MAP_URI)) {
+                endpoint = HostEndpoint.parseFrom(storeMsg.getReceiver());
+            } else {
+                endpoint = AgentEndpoint.parseFrom(storeMsg.getReceiver()).getEndpoint();
+            }
             messenger.send(msg, hostAddressResolver.resolve(endpoint), false);
         } catch (Exception e) {
             log.error("Target Host[{}] not found:\n{}", storeMsg.getReceiver(), storeMsg);

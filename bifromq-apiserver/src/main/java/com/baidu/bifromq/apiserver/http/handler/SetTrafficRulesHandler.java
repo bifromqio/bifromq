@@ -13,10 +13,14 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
+import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
+import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceLandscape;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.netty.buffer.Unpooled;
@@ -35,18 +39,32 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.ws.rs.PUT;
+import javax.ws.rs.Path;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public abstract class SetTrafficRulesHandler implements IHTTPRequestHandler {
-    protected abstract IRPCServiceTrafficGovernor trafficGovernor();
+@Path("/rules/traffic")
+public class SetTrafficRulesHandler implements IHTTPRequestHandler {
+    private final Map<String, IRPCServiceTrafficGovernor> governorMap = new ConcurrentHashMap<>();
+
+    public SetTrafficRulesHandler(IRPCServiceTrafficService trafficService) {
+        trafficService.services().subscribe(serviceUniqueNames -> {
+            governorMap.keySet().removeIf(serviceUniqueName -> !serviceUniqueNames.contains(serviceUniqueName));
+            for (String serviceUniqueName : serviceUniqueNames) {
+                governorMap.computeIfAbsent(serviceUniqueName, trafficService::getTrafficGovernor);
+            }
+        });
+    }
 
     @PUT
-    @Operation(summary = "Set the traffic directive")
+    @Operation(summary = "Set the traffic rules")
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER,
-            description = "optional caller provided request id", schema = @Schema(implementation = Long.class))
+            description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
+        @Parameter(name = "service_name", in = ParameterIn.HEADER, required = true,
+            description = "the service name", schema = @Schema(implementation = String.class)),
     })
     @RequestBody(required = false)
     @ApiResponses(value = {
@@ -55,12 +73,19 @@ public abstract class SetTrafficRulesHandler implements IHTTPRequestHandler {
     })
     @Override
     public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
-        Map<String, Map<String, Integer>> td = new HashMap<>();
+        String serviceName = HeaderUtils.getHeader(Headers.HEADER_SERVICE_NAME, req, true);
+        IRPCServiceTrafficGovernor governor = governorMap.get(serviceName);
+        if (governor == null) {
+            return CompletableFuture.completedFuture(new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
+                Unpooled.copiedBuffer(("Service not found: " + serviceName).getBytes())));
+        }
+
+        Map<String, Map<String, Integer>> trafficRules = new HashMap<>();
         try {
             ObjectMapper objectMapper = new ObjectMapper();
-            ObjectNode tdObject =
+            ObjectNode trObject =
                 (ObjectNode) objectMapper.readTree(req.content().toString(io.netty.util.CharsetUtil.UTF_8));
-            tdObject.fields().forEachRemaining(entry -> {
+            trObject.fields().forEachRemaining(entry -> {
                 String key = entry.getKey();
                 ObjectNode innerObject = (ObjectNode) entry.getValue();
                 Map<String, Integer> innerMap = new HashMap<>();
@@ -70,17 +95,17 @@ public abstract class SetTrafficRulesHandler implements IHTTPRequestHandler {
                 if (key.isEmpty()) {
                     throw new IllegalArgumentException("Empty tenantIdPrefix is not allowed");
                 }
-                td.put(key, innerMap);
+                trafficRules.put(key, innerMap);
             });
         } catch (Exception e) {
             return CompletableFuture.completedFuture(
                 new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.BAD_REQUEST,
                     Unpooled.copiedBuffer(e.getMessage().getBytes())));
         }
-        log.trace("Handling http set traffic directive request: {}", req);
-        return CompletableFuture.allOf(td.entrySet()
+        log.trace("Handling http set traffic rule request: {}", req);
+        return CompletableFuture.allOf(trafficRules.entrySet()
                 .stream()
-                .map(e -> trafficGovernor().setTrafficRules(e.getKey(), e.getValue()))
+                .map(e -> governor.setTrafficRules(e.getKey(), e.getValue()))
                 .toArray(CompletableFuture[]::new))
             .thenApply(
                 trafficDirective -> new DefaultFullHttpResponse(req.protocolVersion(), OK, Unpooled.EMPTY_BUFFER));

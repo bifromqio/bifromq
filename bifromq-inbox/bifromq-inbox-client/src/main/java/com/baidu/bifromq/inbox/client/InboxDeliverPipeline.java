@@ -16,7 +16,7 @@ package com.baidu.bifromq.inbox.client;
 import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.parseTenantId;
 import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_DELIVERERKEY;
 
-import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;

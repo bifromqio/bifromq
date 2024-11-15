@@ -134,6 +134,25 @@ public class AgentHostsTest extends AgentTestTemplate {
                 && landscapeOnS1.get(storeMgr.endpoint("s1")).isEmpty()
                 && landscapeOnS1.get(storeMgr.endpoint("s2")).isEmpty();
         });
+
+        storeMgr.hostAgent("s1", "agent1");
+        await().until(() -> {
+            Map<HostEndpoint, Set<String>> landscapeOnS1 = storeMgr.getHost("s1").landscape().blockingFirst();
+            Map<HostEndpoint, Set<String>> landscapeOnS2 = storeMgr.getHost("s2").landscape().blockingFirst();
+            return landscapeOnS1.equals(landscapeOnS2)
+                && landscapeOnS1.size() == 2
+                && landscapeOnS1.get(storeMgr.endpoint("s1")).equals(Set.of("agent1"))
+                && landscapeOnS1.get(storeMgr.endpoint("s2")).isEmpty();
+        });
+        storeMgr.hostAgent("s2", "agent2");
+        await().until(() -> {
+            Map<HostEndpoint, Set<String>> landscapeOnS1 = storeMgr.getHost("s1").landscape().blockingFirst();
+            Map<HostEndpoint, Set<String>> landscapeOnS2 = storeMgr.getHost("s2").landscape().blockingFirst();
+            return landscapeOnS1.equals(landscapeOnS2)
+                && landscapeOnS1.size() == 2
+                && landscapeOnS1.get(storeMgr.endpoint("s1")).equals(Set.of("agent1"))
+                && landscapeOnS1.get(storeMgr.endpoint("s2")).equals(Set.of("agent2"));
+        });
     }
 
     @StoreCfgs(stores = {
@@ -256,17 +275,19 @@ public class AgentHostsTest extends AgentTestTemplate {
         agentMember2.metadata(copyFromUtf8("2"));
         await().until(() -> agent.membership().blockingFirst().size() == 2);
 
+        AgentMemberAddr memberAddr = agentMember1.address();
         agent.deregister(agentMember1);
         await().until(() -> {
             try {
                 agentMember1.send(AgentMemberAddr.newBuilder()
                         .setName("agentNode2")
-                        .setEndpoint(storeMgr.endpoint("s1"))
+                        .setEndpoint(memberAddr.getEndpoint())
+                        .setIncarnation(memberAddr.getIncarnation())
                         .build(),
                     ByteString.EMPTY, true).join();
                 return false;
             } catch (Exception e) {
-                Assert.assertEquals(IllegalStateException.class, e.getClass());
+                Assert.assertEquals(e.getClass(), IllegalStateException.class);
                 return true;
             }
         });

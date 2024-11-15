@@ -14,7 +14,7 @@
 package com.baidu.bifromq.apiserver.http.handler;
 
 import static com.baidu.bifromq.apiserver.Headers.HEADER_BALANCER_CLASS;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_CLUSTER_ID;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_SERVICE_NAME;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -57,7 +57,7 @@ public class SetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<SetL
     @Test
     public void noClusterFound() {
         DefaultFullHttpRequest req = buildRequest(HttpMethod.PUT);
-        req.headers().set(HEADER_CLUSTER_ID.header, "fakeUserId");
+        req.headers().set(HEADER_SERVICE_NAME.header, "fakeUserId");
         req.headers().set(HEADER_BALANCER_CLASS.header, "fakeBalancerClass");
         SetLoadRulesHandler handler = new SetLoadRulesHandler(metaService);
         FullHttpResponse resp = handler.handle(123, req).join();
@@ -70,7 +70,7 @@ public class SetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<SetL
         String balancerClass = "balancerClass";
         Struct loadRules = Struct.getDefaultInstance();
         DefaultFullHttpRequest req = buildRequest(HttpMethod.PUT, Unpooled.copiedBuffer("{}".getBytes()));
-        req.headers().set(HEADER_CLUSTER_ID.header, clusterId);
+        req.headers().set(HEADER_SERVICE_NAME.header, clusterId);
         req.headers().set(HEADER_BALANCER_CLASS.header, balancerClass);
         when(metaService.metadataManager(eq(clusterId))).thenReturn(metadataManager);
         when(metadataManager.proposeLoadRules(eq(balancerClass), eq(loadRules))).thenReturn(
@@ -101,7 +101,7 @@ public class SetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<SetL
             CompletableFuture.failedFuture(new CompletionException(new TimeoutException("timeout"))));
 
         DefaultFullHttpRequest req = buildRequest(HttpMethod.PUT, Unpooled.copiedBuffer("{}".getBytes()));
-        req.headers().set(HEADER_CLUSTER_ID.header, clusterId);
+        req.headers().set(HEADER_SERVICE_NAME.header, clusterId);
         req.headers().set(HEADER_BALANCER_CLASS.header, balancerClass);
         SetLoadRulesHandler handler = new SetLoadRulesHandler(metaService);
         FullHttpResponse resp = handler.handle(123, req).join();
@@ -119,7 +119,7 @@ public class SetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<SetL
         when(metadataManager.proposeLoadRules(eq(balancerClass), eq(loadRules))).thenReturn(
             CompletableFuture.completedFuture(IBaseKVClusterMetadataManager.ProposalResult.ACCEPTED));
         DefaultFullHttpRequest req = buildRequest(HttpMethod.PUT, Unpooled.copiedBuffer("{}".getBytes()));
-        req.headers().set(HEADER_CLUSTER_ID.header, clusterId);
+        req.headers().set(HEADER_SERVICE_NAME.header, clusterId);
         req.headers().set(HEADER_BALANCER_CLASS.header, balancerClass);
         SetLoadRulesHandler handler = new SetLoadRulesHandler(metaService);
         FullHttpResponse resp = handler.handle(123, req).join();
@@ -137,7 +137,7 @@ public class SetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<SetL
         when(metadataManager.proposeLoadRules(eq(balancerClass), eq(loadRules))).thenReturn(
             CompletableFuture.completedFuture(IBaseKVClusterMetadataManager.ProposalResult.REJECTED));
         DefaultFullHttpRequest req = buildRequest(HttpMethod.PUT, Unpooled.copiedBuffer("{}".getBytes()));
-        req.headers().set(HEADER_CLUSTER_ID.header, clusterId);
+        req.headers().set(HEADER_SERVICE_NAME.header, clusterId);
         req.headers().set(HEADER_BALANCER_CLASS.header, balancerClass);
         SetLoadRulesHandler handler = new SetLoadRulesHandler(metaService);
         FullHttpResponse resp = handler.handle(123, req).join();
@@ -155,7 +155,7 @@ public class SetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<SetL
         when(metadataManager.proposeLoadRules(eq(balancerClass), eq(loadRules))).thenReturn(
             CompletableFuture.completedFuture(IBaseKVClusterMetadataManager.ProposalResult.NO_BALANCER));
         DefaultFullHttpRequest req = buildRequest(HttpMethod.PUT, Unpooled.copiedBuffer("{}".getBytes()));
-        req.headers().set(HEADER_CLUSTER_ID.header, clusterId);
+        req.headers().set(HEADER_SERVICE_NAME.header, clusterId);
         req.headers().set(HEADER_BALANCER_CLASS.header, balancerClass);
         SetLoadRulesHandler handler = new SetLoadRulesHandler(metaService);
         FullHttpResponse resp = handler.handle(123, req).join();
@@ -173,7 +173,7 @@ public class SetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<SetL
         when(metadataManager.proposeLoadRules(eq(balancerClass), eq(loadRules))).thenReturn(
             CompletableFuture.completedFuture(IBaseKVClusterMetadataManager.ProposalResult.OVERRIDDEN));
         DefaultFullHttpRequest req = buildRequest(HttpMethod.PUT, Unpooled.copiedBuffer("{}".getBytes()));
-        req.headers().set(HEADER_CLUSTER_ID.header, clusterId);
+        req.headers().set(HEADER_SERVICE_NAME.header, clusterId);
         req.headers().set(HEADER_BALANCER_CLASS.header, balancerClass);
         SetLoadRulesHandler handler = new SetLoadRulesHandler(metaService);
         FullHttpResponse resp = handler.handle(123, req).join();

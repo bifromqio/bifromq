@@ -30,6 +30,7 @@ final class NonStandaloneDistWorker extends AbstractDistWorker<NonStandaloneDist
             .storeOptions(builder.storeOptions)
             .agentHost(builder.agentHost)
             .queryExecutor(builder.queryExecutor)
+            .rpcExecutor(builder.rpcExecutor)
             .tickerThreads(builder.tickerThreads)
             .bgTaskExecutor(builder.bgTaskExecutor)
             .finish()

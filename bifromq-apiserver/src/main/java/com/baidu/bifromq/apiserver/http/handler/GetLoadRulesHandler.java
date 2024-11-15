@@ -68,8 +68,8 @@ public class GetLoadRulesHandler implements IHTTPRequestHandler {
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER,
             description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
-        @Parameter(name = "cluster_id", in = ParameterIn.HEADER, required = true,
-            description = "the cluster id", schema = @Schema(implementation = String.class))
+        @Parameter(name = "service_name", in = ParameterIn.HEADER, required = true,
+            description = "the service name", schema = @Schema(implementation = String.class))
     })
     @RequestBody(required = false)
     @ApiResponses(value = {
@@ -78,11 +78,11 @@ public class GetLoadRulesHandler implements IHTTPRequestHandler {
     @Override
     public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
         log.trace("Handling http get load rules request: {}", req);
-        String clusterId = HeaderUtils.getHeader(Headers.HEADER_CLUSTER_ID, req, true);
-        IBaseKVClusterMetadataManager metadataManager = metadataManagers.get(clusterId);
+        String serviceName = HeaderUtils.getHeader(Headers.HEADER_SERVICE_NAME, req, true);
+        IBaseKVClusterMetadataManager metadataManager = metadataManagers.get(serviceName);
         if (metadataManager == null) {
             return CompletableFuture.completedFuture(new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
-                Unpooled.copiedBuffer((clusterId + " not found").getBytes())));
+                Unpooled.copiedBuffer(("Service not found: " + serviceName).getBytes())));
         }
         return metadataManager.loadRules()
             .timeout(1, TimeUnit.SECONDS)

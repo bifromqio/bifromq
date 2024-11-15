@@ -16,9 +16,9 @@ package com.baidu.bifromq.basecluster.memberlist.agent;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.mvreg;
 import static java.util.Collections.emptyMap;
 
+import com.baidu.bifromq.basecluster.agent.proto.AgentEndpoint;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberAddr;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberMetadata;
-import com.baidu.bifromq.basecluster.membership.proto.HostEndpoint;
 import com.baidu.bifromq.basecrdt.core.api.IORMap;
 import com.baidu.bifromq.basecrdt.core.api.ORMapOperation;
 import com.baidu.bifromq.basecrdt.proto.Replica;
@@ -53,7 +53,7 @@ public final class Agent implements IAgent {
 
     private final ReadWriteLock quitLock = new ReentrantReadWriteLock();
     private final String agentId;
-    private final HostEndpoint hostEndpoint;
+    private final AgentEndpoint localEndpoint;
     private final AtomicReference<State> state = new AtomicReference<>(State.JOINED);
     private final IAgentMessenger messenger;
     private final Scheduler scheduler;
@@ -64,31 +64,31 @@ public final class Agent implements IAgent {
         BehaviorSubject.createDefault(emptyMap());
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final Gauge memberNumGauge;
-    private volatile Set<HostEndpoint> currentEndpoints = new HashSet<>();
+    private volatile Set<AgentEndpoint> currentAgentEndpoints = new HashSet<>();
 
     public Agent(String agentId,
-                 HostEndpoint hostEndpoint,
+                 AgentEndpoint endpoint,
                  IAgentMessenger messenger,
                  Scheduler scheduler,
                  ICRDTStore store,
-                 IAgentHostProvider hostProvider,
+                 IAgentAddressProvider hostProvider,
                  String... tags) {
         this.agentId = agentId;
-        this.hostEndpoint = hostEndpoint;
+        this.localEndpoint = endpoint;
         this.messenger = messenger;
         this.scheduler = scheduler;
         this.store = store;
         // using hostEndpoint as replicaId and localAddress
         agentCRDT = store.host(Replica.newBuilder()
             .setUri(CRDTUtil.toAgentURI(agentId))
-            .setId(hostEndpoint.toByteString())
-            .build(), hostEndpoint.toByteString());
+            .setId(localEndpoint.toByteString())
+            .build(), localEndpoint.toByteString());
         disposables.add(agentCRDT.inflation()
             .observeOn(scheduler)
             .subscribe(this::sync));
-        disposables.add(hostProvider.getHostEndpoints()
+        disposables.add(hostProvider.agentAddress()
             .observeOn(scheduler)
-            .subscribe(this::handleHostEndpointsUpdate));
+            .subscribe(this::handleAgentEndpointsUpdate));
         memberNumGauge = Gauge.builder("basecluster.agent.members", () -> agentMembersSubject.getValue().size())
             .tags(tags)
             .tags("id", agentId)
@@ -101,8 +101,8 @@ public final class Agent implements IAgent {
     }
 
     @Override
-    public HostEndpoint endpoint() {
-        return hostEndpoint;
+    public AgentEndpoint local() {
+        return localEndpoint;
     }
 
     @Override
@@ -115,7 +115,8 @@ public final class Agent implements IAgent {
         return runIfJoined(() -> {
             AgentMemberAddr memberAddr = AgentMemberAddr.newBuilder()
                 .setName(memberName)
-                .setEndpoint(hostEndpoint)
+                .setEndpoint(localEndpoint.getEndpoint())
+                .setIncarnation(localEndpoint.getIncarnation())
                 .build();
             return localMemberRegistry.computeIfAbsent(memberAddr,
                 k -> new AgentMember(memberAddr, agentCRDT, messenger, scheduler,
@@ -165,7 +166,7 @@ public final class Agent implements IAgent {
             Map<AgentMemberAddr, AgentMemberMetadata> agentMembersLocal = new HashMap<>();
             localMemberRegistry.values().forEach(member -> agentMembersLocal.put(member.address(), member.metadata()));
             for (AgentMemberAddr memberAddr : Sets.difference(agentMembersCRDT.keySet(), agentMembersLocal.keySet())) {
-                if (memberAddr.getEndpoint().equals(hostEndpoint)) {
+                if (memberAddr.getEndpoint().equals(localEndpoint.getEndpoint())) {
                     // obsolete member
                     agentCRDT.execute(ORMapOperation.remove(memberAddr.toByteString()).of(mvreg));
                 }
@@ -175,22 +176,26 @@ public final class Agent implements IAgent {
         });
     }
 
-    private void handleHostEndpointsUpdate(Set<HostEndpoint> endpoints) {
+    private void handleAgentEndpointsUpdate(Set<AgentEndpoint> agentEndpoints) {
         skipRunIfNotJoined(() -> {
-            Set<HostEndpoint> newEndpoints = Sets.newHashSet(endpoints);
-            newEndpoints.add(hostEndpoint);
-            Set<HostEndpoint> leftHosts = Sets.difference(currentEndpoints, newEndpoints);
+            Set<AgentEndpoint> newAgentEndpoints = Sets.newHashSet(agentEndpoints);
+            newAgentEndpoints.add(localEndpoint);
+            Set<AgentEndpoint> leftHosts = Sets.difference(currentAgentEndpoints, newAgentEndpoints);
             // drop members on left hosts
             Map<AgentMemberAddr, AgentMemberMetadata> agentMemberMap = CRDTUtil.toAgentMemberMap(agentCRDT);
             for (AgentMemberAddr memberAddr : agentMemberMap.keySet()) {
-                if (leftHosts.contains(memberAddr.getEndpoint())) {
+                AgentEndpoint agentEndpoint = AgentEndpoint.newBuilder()
+                    .setEndpoint(memberAddr.getEndpoint())
+                    .setIncarnation(memberAddr.getIncarnation())
+                    .build();
+                if (leftHosts.contains(agentEndpoint)) {
                     agentCRDT.execute(ORMapOperation.remove(memberAddr.toByteString()).of(mvreg));
                 }
             }
             // update landscape
-            currentEndpoints = newEndpoints;
+            currentAgentEndpoints = newAgentEndpoints;
             store.join(agentCRDT.id(),
-                currentEndpoints.stream().map(AbstractMessageLite::toByteString).collect(Collectors.toSet()));
+                currentAgentEndpoints.stream().map(AbstractMessageLite::toByteString).collect(Collectors.toSet()));
         });
     }
 

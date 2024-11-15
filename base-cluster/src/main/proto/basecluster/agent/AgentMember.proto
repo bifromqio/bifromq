@@ -7,9 +7,15 @@ option java_multiple_files = true;
 option java_package = "com.baidu.bifromq.basecluster.agent.proto";
 option optimize_for = SPEED;
 
+message AgentEndpoint {
+  basecluster.membership.HostEndpoint endpoint = 1;
+  uint64 incarnation = 2; // the incarnation of the agent endpoint
+}
+
 message AgentMemberAddr {
   string name = 1; // the name of the agent member, it's allowed to have same name registered in different hosts
   basecluster.membership.HostEndpoint endpoint = 2;
+  uint64 incarnation = 3; // the incarnation of hosted agent endpoint
 }
 
 message AgentMemberMetadata {

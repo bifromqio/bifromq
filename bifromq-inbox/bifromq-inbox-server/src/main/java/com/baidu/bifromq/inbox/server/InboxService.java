@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static com.baidu.bifromq.baserpc.UnaryResponse.response;
+import static com.baidu.bifromq.baserpc.server.UnaryResponse.response;
 import static com.baidu.bifromq.inbox.records.ScopedInbox.distInboxId;
 import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;

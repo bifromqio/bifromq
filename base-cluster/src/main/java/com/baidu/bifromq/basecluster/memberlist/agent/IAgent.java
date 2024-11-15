@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.basecluster.memberlist.agent;
 
+import com.baidu.bifromq.basecluster.agent.proto.AgentEndpoint;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberAddr;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberMetadata;
-import com.baidu.bifromq.basecluster.membership.proto.HostEndpoint;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -23,18 +23,23 @@ import java.util.concurrent.CompletableFuture;
 public interface IAgent {
     String id();
 
-    HostEndpoint endpoint();
+    /**
+     * The local agent address.
+     *
+     * @return the local agent address
+     */
+    AgentEndpoint local();
 
     /**
-     * A hot observable of agent membership
+     * A hot observable of agent membership.
      *
      * @return
      */
     Observable<Map<AgentMemberAddr, AgentMemberMetadata>> membership();
 
     /**
-     * Register a local agent member.
-     * It's allowed to register same member name in same logical agent from different agent hosts
+     * Register a local agent member. It's allowed to register same member name in same logical agent from different
+     * agent hosts
      *
      * @param memberName
      */

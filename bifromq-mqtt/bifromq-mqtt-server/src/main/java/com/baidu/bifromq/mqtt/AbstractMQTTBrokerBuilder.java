@@ -14,6 +14,7 @@
 package com.baidu.bifromq.mqtt;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.mqtt.service.ILocalDistService;
@@ -43,6 +44,7 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
     int mqttBossELGThreads;
     int mqttWorkerELGThreads;
     ICRDTService crdtService;
+    IRPCServiceTrafficService trafficService;
     IAuthProvider authProvider;
     IClientBalancer clientBalancer;
     IResourceThrottler resourceThrottler;
@@ -146,6 +148,11 @@ abstract class AbstractMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>>
 
     public T crdtService(ICRDTService crdtService) {
         this.crdtService = crdtService;
+        return thisT();
+    }
+
+    public T trafficService(IRPCServiceTrafficService trafficService) {
+        this.trafficService = trafficService;
         return thisT();
     }
 

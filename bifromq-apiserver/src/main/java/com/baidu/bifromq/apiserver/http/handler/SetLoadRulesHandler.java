@@ -51,11 +51,9 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Path("/rules/load")
 public class SetLoadRulesHandler implements IHTTPRequestHandler {
-    private final IBaseKVMetaService metaService;
-    protected final Map<String, IBaseKVClusterMetadataManager> metadataManagers = new ConcurrentHashMap<>();
+    private final Map<String, IBaseKVClusterMetadataManager> metadataManagers = new ConcurrentHashMap<>();
 
     protected SetLoadRulesHandler(IBaseKVMetaService metaService) {
-        this.metaService = metaService;
         metaService.clusterIds().subscribe(clusterIds -> {
             metadataManagers.keySet().removeIf(clusterId -> !clusterIds.contains(clusterId));
             for (String clusterId : clusterIds) {
@@ -70,8 +68,8 @@ public class SetLoadRulesHandler implements IHTTPRequestHandler {
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER,
             description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
-        @Parameter(name = "cluster_id", in = ParameterIn.HEADER, required = true,
-            description = "the cluster id", schema = @Schema(implementation = String.class)),
+        @Parameter(name = "service_name", in = ParameterIn.HEADER, required = true,
+            description = "the service name", schema = @Schema(implementation = String.class)),
         @Parameter(name = "balancer_class", in = ParameterIn.HEADER, required = true,
             description = "the balancer class FQN", schema = @Schema(implementation = String.class))
     })
@@ -82,7 +80,7 @@ public class SetLoadRulesHandler implements IHTTPRequestHandler {
     @Override
     public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
         log.trace("Handling http set load rules request: {}", req);
-        String clusterId = HeaderUtils.getHeader(Headers.HEADER_CLUSTER_ID, req, true);
+        String clusterId = HeaderUtils.getHeader(Headers.HEADER_SERVICE_NAME, req, true);
         String balancerClass = HeaderUtils.getHeader(Headers.HEADER_BALANCER_CLASS, req, true);
         IBaseKVClusterMetadataManager metadataManager = metadataManagers.get(clusterId);
         if (metadataManager == null) {

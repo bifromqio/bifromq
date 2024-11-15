@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import com.baidu.bifromq.baserpc.IRPCServer;
+import com.baidu.bifromq.baserpc.server.IRPCServer;
 import com.baidu.bifromq.inbox.RPCBluePrint;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -25,16 +25,18 @@ final class StandaloneInboxServer extends AbstractInboxServer {
     StandaloneInboxServer(StandaloneInboxServerBuilder builder) {
         super(builder);
         this.rpcServer = IRPCServer.newBuilder()
-            .bindService(inboxService.bindService(), RPCBluePrint.INSTANCE, builder.attrs)
+            .bindService(inboxService.bindService(),
+                RPCBluePrint.INSTANCE,
+                builder.attrs,
+                builder.defaultGroupTags,
+                builder.rpcExecutor)
             .host(builder.host)
             .port(builder.port)
+            .trafficService(builder.trafficService)
             .bossEventLoopGroup(builder.bossEventLoopGroup)
             .workerEventLoopGroup(builder.workerEventLoopGroup)
-            .crdtService(builder.crdtService)
-            .executor(builder.executor)
             .sslContext(builder.sslContext)
             .build();
-        ;
     }
 
     @Override

@@ -20,6 +20,10 @@ import lombok.extern.slf4j.Slf4j;
 final class NonStandaloneInboxServer extends AbstractInboxServer {
     NonStandaloneInboxServer(NonStandaloneInboxServerBuilder builder) {
         super(builder);
-        builder.rpcServerBuilder.bindService(inboxService.bindService(), RPCBluePrint.INSTANCE, builder.attrs);
+        builder.rpcServerBuilder.bindService(inboxService.bindService(),
+            RPCBluePrint.INSTANCE,
+            builder.attrs,
+            builder.defaultGroupTags,
+            builder.rpcExecutor);
     }
 }

@@ -17,9 +17,11 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.Struct;
 import java.time.Duration;
 import java.util.HashMap;
@@ -31,13 +33,15 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
     String clusterId = IInboxStore.CLUSTER_NAME;
     boolean bootstrap;
     IAgentHost agentHost;
+    IRPCServiceTrafficService trafficService;
     IBaseKVMetaService metaService;
     IInboxClient inboxClient;
     IBaseKVStoreClient storeClient;
     ISettingProvider settingProvider;
     IEventCollector eventCollector;
     KVRangeStoreOptions storeOptions;
-    Executor queryExecutor;
+    Executor queryExecutor = MoreExecutors.directExecutor();
+    Executor rpcExecutor = MoreExecutors.directExecutor();
     int tickerThreads;
     ScheduledExecutorService bgTaskExecutor;
     Duration balancerRetryDelay = Duration.ofSeconds(5);
@@ -62,6 +66,11 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
 
     public T agentHost(IAgentHost agentHost) {
         this.agentHost = agentHost;
+        return thisT();
+    }
+
+    public T trafficService(IRPCServiceTrafficService trafficService) {
+        this.trafficService = trafficService;
         return thisT();
     }
 
@@ -97,6 +106,11 @@ abstract class AbstractInboxStoreBuilder<T extends AbstractInboxStoreBuilder<T>>
 
     public T queryExecutor(Executor queryExecutor) {
         this.queryExecutor = queryExecutor;
+        return thisT();
+    }
+
+    public T rpcExecutor(Executor rpcExecutor) {
+        this.rpcExecutor = rpcExecutor;
         return thisT();
     }
 

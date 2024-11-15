@@ -14,6 +14,7 @@
 package com.baidu.bifromq.mqtt.service;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
@@ -24,11 +25,10 @@ import lombok.experimental.Accessors;
 @Setter
 public final class StandaloneLocalSessionServerBuilder
     extends AbstractLocalSessionServerBuilder<StandaloneLocalSessionServerBuilder> {
-    Executor executor;
     String id;
     String host;
     int port;
-    ICRDTService crdtService;
+    IRPCServiceTrafficService trafficService;
     EventLoopGroup bossEventLoopGroup;
     EventLoopGroup workerEventLoopGroup;
     SslContext sslContext;

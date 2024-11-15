@@ -13,9 +13,13 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
+import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
+import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceLandscape;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.netty.buffer.Unpooled;
@@ -33,18 +37,32 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.ws.rs.GET;
+import javax.ws.rs.Path;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public abstract class GetTrafficRulesHandler implements IHTTPRequestHandler {
-    protected abstract Single<Map<String, Map<String, Integer>>> trafficRules();
+@Path("/rules/traffic")
+public class GetTrafficRulesHandler implements IHTTPRequestHandler {
+    private final Map<String, IRPCServiceLandscape> landscapeMap = new ConcurrentHashMap<>();
+
+    public GetTrafficRulesHandler(IRPCServiceTrafficService trafficService) {
+        trafficService.services().subscribe(serviceUniqueNames -> {
+            landscapeMap.keySet().removeIf(serviceUniqueName -> !serviceUniqueNames.contains(serviceUniqueName));
+            for (String serviceUniqueName : serviceUniqueNames) {
+                landscapeMap.computeIfAbsent(serviceUniqueName, trafficService::getServiceLandscape);
+            }
+        });
+    }
 
     @GET
     @Operation(summary = "Get the traffic rules")
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER,
-            description = "optional caller provided request id", schema = @Schema(implementation = Long.class))
+            description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
+        @Parameter(name = "service_name", in = ParameterIn.HEADER, required = true,
+            description = "the service name", schema = @Schema(implementation = String.class))
     })
     @RequestBody(required = false)
     @ApiResponses(value = {
@@ -53,7 +71,14 @@ public abstract class GetTrafficRulesHandler implements IHTTPRequestHandler {
     @Override
     public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
         log.trace("Handling http get traffic rules request: {}", req);
-        return trafficRules()
+        String serviceName = HeaderUtils.getHeader(Headers.HEADER_SERVICE_NAME, req, true);
+        IRPCServiceLandscape landscape = landscapeMap.get(serviceName);
+        if (landscape == null) {
+            return CompletableFuture.completedFuture(new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
+                Unpooled.copiedBuffer(("Service not found: " + serviceName).getBytes())));
+        }
+        return landscape.trafficRules()
+            .firstElement()
             .toCompletionStage()
             .toCompletableFuture()
             .thenApply(trafficDirective -> {

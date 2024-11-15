@@ -14,6 +14,7 @@
 package com.baidu.bifromq.inbox.server;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
@@ -28,11 +29,10 @@ import lombok.experimental.Accessors;
 public final class StandaloneInboxServerBuilder extends AbstractInboxServerBuilder<StandaloneInboxServerBuilder> {
     String host;
     int port;
+    IRPCServiceTrafficService trafficService;
     EventLoopGroup bossEventLoopGroup;
     EventLoopGroup workerEventLoopGroup;
     SslContext sslContext;
-    ICRDTService crdtService;
-    Executor executor;
 
     public IInboxServer build() {
         return new StandaloneInboxServer(this);

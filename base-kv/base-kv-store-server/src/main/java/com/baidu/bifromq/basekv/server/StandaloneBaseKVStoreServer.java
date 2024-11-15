@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.basekv.server;
 
-import com.baidu.bifromq.baserpc.IRPCServer;
-import com.baidu.bifromq.baserpc.RPCServerBuilder;
-import lombok.extern.slf4j.Slf4j;
+import com.baidu.bifromq.baserpc.server.IRPCServer;
+import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
+import java.util.Collections;
 
 final class StandaloneBaseKVStoreServer extends AbstractBaseKVStoreServer<StandaloneBaseKVStoreServerBuilder> {
     private final IRPCServer rpcServer;
@@ -25,12 +25,17 @@ final class StandaloneBaseKVStoreServer extends AbstractBaseKVStoreServer<Standa
         RPCServerBuilder rpcServerBuilder = IRPCServer.newBuilder()
             .host(builder.host)
             .port(builder.port)
+            .trafficService(builder.trafficService)
+            .sslContext(builder.sslContext)
             .bossEventLoopGroup(builder.bossEventLoopGroup)
-            .workerEventLoopGroup(builder.workerEventLoopGroup)
-            .crdtService(builder.crdtService)
-            .executor(builder.ioExecutor);
+            .workerEventLoopGroup(builder.workerEventLoopGroup);
         for (BindableStoreService bindable : bindableStoreServices) {
-            rpcServerBuilder.bindService(bindable.serviceDefinition, bindable.bluePrint, bindable.metadata);
+            rpcServerBuilder.bindService(
+                bindable.serviceDefinition,
+                bindable.bluePrint,
+                bindable.metadata,
+                Collections.emptySet(),
+                bindable.executor);
         }
         rpcServer = rpcServerBuilder.build();
     }

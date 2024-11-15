@@ -15,17 +15,23 @@ package com.baidu.bifromq.dist.server;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.google.common.util.concurrent.MoreExecutors;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Executor;
 
 abstract class AbstractDistServerBuilder<T extends AbstractDistServerBuilder<T>> implements IDistServerBuilder {
     IBaseKVStoreClient distWorkerClient;
     ISettingProvider settingProvider;
     IEventCollector eventCollector;
-    ICRDTService crdtService;
     Map<String, String> attrs = new HashMap<>();
+    Set<String> defaultGroupTags = new HashSet<>();
+    Executor rpcExecutor = MoreExecutors.directExecutor();
 
     public T distWorkerClient(IBaseKVStoreClient distWorkerClient) {
         this.distWorkerClient = distWorkerClient;
@@ -42,13 +48,18 @@ abstract class AbstractDistServerBuilder<T extends AbstractDistServerBuilder<T>>
         return thisT();
     }
 
-    public T crdtService(ICRDTService crdtService) {
-        this.crdtService = crdtService;
+    public T attributes(Map<String, String> attrs) {
+        this.attrs = attrs;
         return thisT();
     }
 
-    public T attributes(Map<String, String> attrs) {
-        this.attrs = attrs;
+    public T defaultGroupTags(Set<String> defaultGroupTags) {
+        this.defaultGroupTags = defaultGroupTags;
+        return thisT();
+    }
+
+    public T rpcExecutor(Executor rpcExecutor) {
+        this.rpcExecutor = rpcExecutor;
         return thisT();
     }
 

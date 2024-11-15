@@ -17,6 +17,8 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.Struct;
 import java.time.Duration;
 import java.util.HashMap;
@@ -28,10 +30,12 @@ abstract class AbstractRetainStoreBuilder<T extends AbstractRetainStoreBuilder<T
     String clusterId = IRetainStore.CLUSTER_NAME;
     boolean bootstrap;
     IAgentHost agentHost;
+    IRPCServiceTrafficService trafficService;
     IBaseKVMetaService metaService;
     IBaseKVStoreClient storeClient;
     KVRangeStoreOptions storeOptions;
-    Executor queryExecutor;
+    Executor queryExecutor = MoreExecutors.directExecutor();
+    Executor rpcExecutor;
     int tickerThreads;
     ScheduledExecutorService bgTaskExecutor;
     Duration balancerRetryDelay = Duration.ofSeconds(5);
@@ -60,6 +64,11 @@ abstract class AbstractRetainStoreBuilder<T extends AbstractRetainStoreBuilder<T
         return thisT();
     }
 
+    public T trafficService(IRPCServiceTrafficService trafficService) {
+        this.trafficService = trafficService;
+        return thisT();
+    }
+
     public T metaService(IBaseKVMetaService metaService) {
         this.metaService = metaService;
         return thisT();
@@ -77,6 +86,11 @@ abstract class AbstractRetainStoreBuilder<T extends AbstractRetainStoreBuilder<T
 
     public T queryExecutor(Executor queryExecutor) {
         this.queryExecutor = queryExecutor;
+        return thisT();
+    }
+
+    public T rpcExecutor(Executor rpcExecutor) {
+        this.rpcExecutor = rpcExecutor;
         return thisT();
     }
 

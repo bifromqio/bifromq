@@ -25,7 +25,8 @@ import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
-import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.client.IRPCClient;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.worker.IDistWorker;
 import com.baidu.bifromq.dist.worker.balance.RangeBootstrapBalancerFactory;
@@ -37,6 +38,7 @@ import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.Struct;
 import java.time.Duration;
 import java.util.Map;
@@ -53,6 +55,7 @@ import org.testng.annotations.BeforeClass;
 public abstract class DistServiceTest {
     private IAgentHost agentHost;
     private ICRDTService crdtService;
+    private IRPCServiceTrafficService trafficService;
     private IBaseKVMetaService metaService;
     private IDistWorker distWorker;
     private IDistServer distServer;
@@ -97,9 +100,11 @@ public abstract class DistServiceTest {
         crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
         crdtService.start(agentHost);
 
+        trafficService = IRPCServiceTrafficService.newInstance(crdtService);
+
         metaService = IBaseKVMetaService.newInstance(crdtService);
 
-        distClient = IDistClient.newBuilder().crdtService(crdtService).build();
+        distClient = IDistClient.newBuilder().trafficService(trafficService).build();
 
         KVRangeStoreOptions kvRangeStoreOptions = new KVRangeStoreOptions();
         kvRangeStoreOptions.setDataEngineConfigurator(new InMemKVEngineConfigurator());
@@ -108,7 +113,7 @@ public abstract class DistServiceTest {
         workerClient = IBaseKVStoreClient
             .newBuilder()
             .clusterId(IDistWorker.CLUSTER_NAME)
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .metaService(metaService)
             .build();
         int tickerThreads = 2;
@@ -117,13 +122,14 @@ public abstract class DistServiceTest {
             .bootstrap(true)
             .host("127.0.0.1")
             .agentHost(agentHost)
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .metaService(metaService)
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)
             .distClient(distClient)
             .storeClient(workerClient)
             .queryExecutor(queryExecutor)
+            .rpcExecutor(MoreExecutors.directExecutor())
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(kvRangeStoreOptions)
@@ -134,10 +140,11 @@ public abstract class DistServiceTest {
             .build();
         distServer = IDistServer.standaloneBuilder()
             .host("127.0.0.1")
+            .trafficService(trafficService)
             .distWorkerClient(workerClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
-            .crdtService(crdtService)
+            .executor(MoreExecutors.directExecutor())
             .build();
 
         distWorker.start();
@@ -148,7 +155,7 @@ public abstract class DistServiceTest {
     }
 
     @AfterClass(alwaysRun = true)
-    public void teardown() throws Exception {
+    public void tearDown() throws Exception {
         log.info("Finish testing, and tearing down");
         new Thread(() -> {
             workerClient.stop();
@@ -156,6 +163,7 @@ public abstract class DistServiceTest {
             distClient.stop();
             distServer.shutdown();
             metaService.stop();
+            trafficService.stop();
             crdtService.stop();
             agentHost.shutdown();
             queryExecutor.shutdown();

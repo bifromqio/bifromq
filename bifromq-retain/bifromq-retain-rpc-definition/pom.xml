@@ -35,7 +35,7 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>base-rpc</artifactId>
+            <artifactId>base-rpc-common</artifactId>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>

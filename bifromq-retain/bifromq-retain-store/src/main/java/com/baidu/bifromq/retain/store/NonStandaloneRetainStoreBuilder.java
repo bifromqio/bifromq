@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.retain.store;
 
-import com.baidu.bifromq.baserpc.RPCServerBuilder;
+import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import lombok.Setter;

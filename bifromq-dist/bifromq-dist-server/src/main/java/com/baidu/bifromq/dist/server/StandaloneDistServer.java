@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.server;
 
-import com.baidu.bifromq.baserpc.IRPCServer;
+import com.baidu.bifromq.baserpc.server.IRPCServer;
 import com.baidu.bifromq.dist.RPCBluePrint;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -25,13 +25,16 @@ final class StandaloneDistServer extends AbstractDistServer {
     StandaloneDistServer(StandaloneDistServerBuilder builder) {
         super(builder);
         this.rpcServer = IRPCServer.newBuilder()
-            .executor(builder.executor)
-            .bindService(distService.bindService(), RPCBluePrint.INSTANCE, builder.attrs)
+            .bindService(distService.bindService(),
+                RPCBluePrint.INSTANCE,
+                builder.attrs,
+                builder.defaultGroupTags,
+                builder.executor)
             .host(builder.host)
             .port(builder.port)
+            .trafficService(builder.trafficService)
             .bossEventLoopGroup(builder.bossEventLoopGroup)
             .workerEventLoopGroup(builder.workerEventLoopGroup)
-            .crdtService(builder.crdtService)
             .sslContext(builder.sslContext)
             .build();
     }

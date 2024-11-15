@@ -14,7 +14,7 @@
 package com.baidu.bifromq.mqtt.service;
 
 import com.baidu.bifromq.baseenv.MemUsage;
-import com.baidu.bifromq.baserpc.ResponsePipeline;
+import com.baidu.bifromq.baserpc.server.ResponsePipeline;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import com.baidu.bifromq.sysprops.props.IngressSlowDownDirectMemoryUsage;

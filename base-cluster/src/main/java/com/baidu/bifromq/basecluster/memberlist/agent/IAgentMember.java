@@ -24,7 +24,7 @@ public interface IAgentMember {
     AgentMemberAddr address();
 
     /**
-     * Broadcast a message among the agent members
+     * Broadcast a message among the agent members.
      *
      * @param message
      * @param reliable

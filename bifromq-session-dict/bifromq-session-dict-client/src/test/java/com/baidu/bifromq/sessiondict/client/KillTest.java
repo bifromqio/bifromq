@@ -22,7 +22,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 
-import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillAllReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
@@ -43,8 +43,6 @@ import org.testng.annotations.Test;
 
 public class KillTest {
     private AutoCloseable closeable;
-    @Mock
-    IRPCServiceTrafficGovernor trafficGovernor;
     @Mock
     IRPCClient rpcClient;
 
@@ -67,7 +65,7 @@ public class KillTest {
             put("server3", Maps.newHashMap());
         }}));
         when(rpcClient.invoke(any(), any(), any(), any())).thenReturn(new CompletableFuture<>());
-        SessionDictClient client = new SessionDictClient(rpcClient, trafficGovernor);
+        SessionDictClient client = new SessionDictClient(rpcClient);
         String tenantId = "tenantId";
         ClientInfo killer = ClientInfo.newBuilder().setTenantId(tenantId).setType("abc").build();
         CompletableFuture<KillAllReply> reply = client.killAll(1, tenantId, null, killer,
@@ -100,7 +98,7 @@ public class KillTest {
             CompletableFuture.completedFuture(KillAllReply.newBuilder()
                 .setResult(KillAllReply.Result.OK)
                 .build()));
-        SessionDictClient client = new SessionDictClient(rpcClient, trafficGovernor);
+        SessionDictClient client = new SessionDictClient(rpcClient);
         String tenantId = "tenantId";
         ClientInfo killer = ClientInfo.newBuilder().setTenantId(tenantId).setType("abc").build();
         CompletableFuture<KillAllReply> reply = client.killAll(1, tenantId, null, killer,
@@ -127,7 +125,7 @@ public class KillTest {
             CompletableFuture.completedFuture(KillAllReply.newBuilder()
                 .setResult(KillAllReply.Result.OK)
                 .build()));
-        SessionDictClient client = new SessionDictClient(rpcClient, trafficGovernor);
+        SessionDictClient client = new SessionDictClient(rpcClient);
         String tenantId = "tenantId";
         ClientInfo killer = ClientInfo.newBuilder().setTenantId(tenantId).setType("abc").build();
         CompletableFuture<KillAllReply> reply = client.killAll(1, tenantId, null, killer,
@@ -152,7 +150,7 @@ public class KillTest {
             CompletableFuture.completedFuture(KillAllReply.newBuilder()
                 .setResult(KillAllReply.Result.OK)
                 .build()));
-        SessionDictClient client = new SessionDictClient(rpcClient, trafficGovernor);
+        SessionDictClient client = new SessionDictClient(rpcClient);
         String tenantId = "tenantId";
         ClientInfo killer = ClientInfo.newBuilder().setTenantId(tenantId).setType("abc").build();
         CompletableFuture<KillAllReply> reply = client.killAll(1, tenantId, null, killer,
@@ -168,7 +166,7 @@ public class KillTest {
             put("server3", Maps.newHashMap());
         }}));
         when(rpcClient.invoke(any(), any(), any(), any())).thenReturn(new CompletableFuture<>());
-        SessionDictClient client = new SessionDictClient(rpcClient, trafficGovernor);
+        SessionDictClient client = new SessionDictClient(rpcClient);
         String tenantId = "tenantId";
         String userId = "user1";
         ClientInfo killer = ClientInfo.newBuilder().setTenantId(tenantId).setType("abc").build();
@@ -193,7 +191,7 @@ public class KillTest {
             put("server3", Maps.newHashMap());
         }}));
         when(rpcClient.invoke(any(), any(), any(), any())).thenReturn(new CompletableFuture<>());
-        SessionDictClient client = new SessionDictClient(rpcClient, trafficGovernor);
+        SessionDictClient client = new SessionDictClient(rpcClient);
         String tenantId = "tenantId";
         String userId = "user1";
         String clientId = "client1";
@@ -221,7 +219,7 @@ public class KillTest {
         }}));
         when(rpcClient.invoke(any(), any(), any(), any())).thenReturn(
             CompletableFuture.failedFuture(new RuntimeException("MockedException")));
-        SessionDictClient client = new SessionDictClient(rpcClient, trafficGovernor);
+        SessionDictClient client = new SessionDictClient(rpcClient);
         String tenantId = "tenantId";
         String userId = "user1";
         String clientId = "client1";

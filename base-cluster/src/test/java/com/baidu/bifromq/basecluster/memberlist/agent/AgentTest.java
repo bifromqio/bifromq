@@ -22,6 +22,7 @@ import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
+import com.baidu.bifromq.basecluster.agent.proto.AgentEndpoint;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMember;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberAddr;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberMetadata;
@@ -59,15 +60,19 @@ import org.testng.annotations.Test;
 public class AgentTest {
     private String agentId = "agentA";
     private ByteString hostId = ByteString.copyFromUtf8("host1");
-    private HostEndpoint endpoint1 = HostEndpoint.newBuilder()
-        .setId(hostId)
-        .setAddress("localhost")
-        .setPort(1111)
+    private AgentEndpoint endpoint1 = AgentEndpoint.newBuilder()
+        .setEndpoint(HostEndpoint.newBuilder()
+            .setId(hostId)
+            .setAddress("localhost")
+            .setPort(1111)
+            .build())
         .build();
-    private HostEndpoint endpoint2 = HostEndpoint.newBuilder()
-        .setId(hostId)
-        .setAddress("localhost")
-        .setPort(2222)
+    private AgentEndpoint endpoint2 = AgentEndpoint.newBuilder()
+        .setEndpoint(HostEndpoint.newBuilder()
+            .setId(hostId)
+            .setAddress("localhost")
+            .setPort(2222)
+            .build())
         .build();
     private Replica replica;
     @Mock
@@ -76,11 +81,11 @@ public class AgentTest {
     @Mock
     private ICRDTStore crdtStore;
     @Mock
-    private IAgentHostProvider hostProvider;
+    private IAgentAddressProvider hostProvider;
     @Mock
     private IORMap orMap;
     private PublishSubject<Long> inflationSubject;
-    private PublishSubject<Set<HostEndpoint>> hostsSubjects;
+    private PublishSubject<Set<AgentEndpoint>> agentEndpointsSubject;
     private PublishSubject<AgentMessageEnvelope> messageSubject;
     private AutoCloseable closeable;
 
@@ -89,7 +94,7 @@ public class AgentTest {
         closeable = MockitoAnnotations.openMocks(this);
         scheduler = Schedulers.from(MoreExecutors.directExecutor());
         inflationSubject = PublishSubject.create();
-        hostsSubjects = PublishSubject.create();
+        agentEndpointsSubject = PublishSubject.create();
         messageSubject = PublishSubject.create();
         replica = Replica.newBuilder()
             .setUri(CRDTUtil.toAgentURI(agentId))
@@ -99,7 +104,7 @@ public class AgentTest {
         when(orMap.execute(any())).thenReturn(CompletableFuture.completedFuture(null));
         when(orMap.id()).thenReturn(replica);
         when(orMap.inflation()).thenReturn(inflationSubject);
-        when(hostProvider.getHostEndpoints()).thenReturn(hostsSubjects);
+        when(hostProvider.agentAddress()).thenReturn(agentEndpointsSubject);
         when(agentMessenger.receive()).thenReturn(messageSubject);
     }
 
@@ -112,7 +117,7 @@ public class AgentTest {
     public void init() {
         Agent agent = new Agent(agentId, endpoint1, agentMessenger, scheduler, crdtStore, hostProvider);
         assertEquals(agent.id(), agentId);
-        assertEquals(agent.endpoint(), endpoint1);
+        assertEquals(agent.local(), endpoint1);
     }
 
     @SneakyThrows
@@ -125,7 +130,7 @@ public class AgentTest {
         Agent agent = new Agent(agentId, endpoint1, agentMessenger, scheduler, crdtStore, hostProvider);
         IAgentMember agentMember = agent.register(agentMemberName);
         assertEquals(agentMember.address().getName(), agentMemberName);
-        assertEquals(agentMember.address().getEndpoint(), endpoint1);
+        assertEquals(agentMember.address().getEndpoint(), endpoint1.getEndpoint());
 
         ArgumentCaptor<ORMapOperation> orMapOpCap = ArgumentCaptor.forClass(ORMapOperation.class);
         verify(orMap, times(1)).execute(orMapOpCap.capture());
@@ -134,7 +139,7 @@ public class AgentTest {
         assertTrue(((ORMapOperation.ORMapUpdate) op).valueOp instanceof MVRegOperation);
         AgentMemberAddr key = AgentMemberAddr.parseFrom(op.keyPath[0]);
         assertEquals(key.getName(), agentMemberName);
-        assertEquals(key.getEndpoint(), endpoint1);
+        assertEquals(key.getEndpoint(), endpoint1.getEndpoint());
 
         AgentMemberMetadata agentMemberMetadata1 =
             AgentMemberMetadata.parseFrom(((MVRegOperation) ((ORMapOperation.ORMapUpdate) op).valueOp).value);
@@ -164,7 +169,8 @@ public class AgentTest {
         agent.membership().subscribe(testObserver);
         IAgentMember agentMember = agent.register(agentMemberName);
         AgentMember member = AgentMember.newBuilder()
-            .setAddr(AgentMemberAddr.newBuilder().setName(agentId).setEndpoint(endpoint1).build())
+            .setAddr(AgentMemberAddr.newBuilder().setName(agentId).setEndpoint(endpoint1.getEndpoint())
+                .setIncarnation(endpoint1.getIncarnation()).build())
             .setMetadata(AgentMemberMetadata.newBuilder().setValue(ByteString.EMPTY).build())
             .build();
         MockUtil.mockAgentMemberCRDT(orMap, Collections.singletonMap(
@@ -179,10 +185,11 @@ public class AgentTest {
     public void hostUpdate() {
         Agent agent = new Agent(agentId, endpoint1, agentMessenger, scheduler, crdtStore, hostProvider);
         MockUtil.mockAgentMemberCRDT(orMap, Collections.emptyMap());
-        Set<HostEndpoint> endpoints = Sets.newHashSet(endpoint1, endpoint2);
-        hostsSubjects.onNext(endpoints);
+        Set<AgentEndpoint> endpoints = Sets.newHashSet(endpoint1, endpoint2);
+        agentEndpointsSubject.onNext(endpoints);
 
-        verify(crdtStore).join(replica, endpoints.stream().map(HostEndpoint::toByteString).collect(Collectors.toSet()));
+        verify(crdtStore).join(replica,
+            endpoints.stream().map(AgentEndpoint::toByteString).collect(Collectors.toSet()));
     }
 
     @SneakyThrows
@@ -197,12 +204,12 @@ public class AgentTest {
         members.put(MockUtil.toAgentMemberAddr(agentMember2, endpoint2),
             MockUtil.toAgentMemberMetadata(ByteString.EMPTY));
         MockUtil.mockAgentMemberCRDT(orMap, members);
-        Set<HostEndpoint> endpoints = Sets.newHashSet(endpoint1, endpoint2);
-        hostsSubjects.onNext(endpoints);
+        Set<AgentEndpoint> endpoints = Sets.newHashSet(endpoint1, endpoint2);
+        agentEndpointsSubject.onNext(endpoints);
         // mock ormap again
         MockUtil.mockAgentMemberCRDT(orMap, members);
         endpoints = Sets.newHashSet(endpoint1);
-        hostsSubjects.onNext(endpoints);
+        agentEndpointsSubject.onNext(endpoints);
 
         ArgumentCaptor<ORMapOperation> orMapOpCap = ArgumentCaptor.forClass(ORMapOperation.class);
         verify(orMap).execute(orMapOpCap.capture());
@@ -211,9 +218,9 @@ public class AgentTest {
         assertEquals(((ORMapOperation.ORMapRemove) op).valueType, CausalCRDTType.mvreg);
         AgentMemberAddr key = AgentMemberAddr.parseFrom(op.keyPath[0]);
         assertEquals(key.getName(), agentMember2);
-        assertEquals(key.getEndpoint(), endpoint2);
+        assertEquals(key.getEndpoint(), endpoint2.getEndpoint());
 
-        verify(crdtStore).join(replica, endpoints.stream().map(HostEndpoint::toByteString).collect(
+        verify(crdtStore).join(replica, endpoints.stream().map(AgentEndpoint::toByteString).collect(
             Collectors.toSet()));
     }
 

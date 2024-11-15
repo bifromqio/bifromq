@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.mqtt.service;
 
-import static com.baidu.bifromq.baserpc.UnaryResponse.response;
+import static com.baidu.bifromq.baserpc.server.UnaryResponse.response;
 
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;

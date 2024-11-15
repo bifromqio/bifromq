@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.sessiondict.server;
 
-import com.baidu.bifromq.baserpc.AckStream;
+import com.baidu.bifromq.baserpc.server.AckStream;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
 import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
 import com.baidu.bifromq.sessiondict.rpc.proto.Session;

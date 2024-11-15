@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.client;
 
-import com.baidu.bifromq.baserpc.IConnectable;
+import com.baidu.bifromq.baserpc.client.IConnectable;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
@@ -50,8 +50,6 @@ public interface IInboxClient extends ISubBroker, IConnectable {
     default int id() {
         return 1;
     }
-
-    IRPCServiceTrafficGovernor trafficGovernor();
 
     CompletableFuture<GetReply> get(GetRequest request);
 

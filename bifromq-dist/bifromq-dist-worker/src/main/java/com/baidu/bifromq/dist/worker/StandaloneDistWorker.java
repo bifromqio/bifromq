@@ -23,7 +23,7 @@ final class StandaloneDistWorker extends AbstractDistWorker<StandaloneDistWorker
     public StandaloneDistWorker(StandaloneDistWorkerBuilder builder) {
         super(builder);
         storeServer = IBaseKVStoreServer.standaloneServer()
-            .crdtService(builder.crdtService)
+            .trafficService(builder.trafficService)
             .metaService(builder.metaService)
             // build basekv store service
             .addService(builder.clusterId, builder.bootstrap)
@@ -31,6 +31,7 @@ final class StandaloneDistWorker extends AbstractDistWorker<StandaloneDistWorker
             .storeOptions(builder.storeOptions)
             .agentHost(builder.agentHost)
             .queryExecutor(builder.queryExecutor)
+            .rpcExecutor(builder.rpcExecutor)
             .tickerThreads(builder.tickerThreads)
             .bgTaskExecutor(builder.bgTaskExecutor)
             .finish()
@@ -39,7 +40,6 @@ final class StandaloneDistWorker extends AbstractDistWorker<StandaloneDistWorker
             .port(builder.port)
             .bossEventLoopGroup(builder.bossEventLoopGroup)
             .workerEventLoopGroup(builder.workerEventLoopGroup)
-            .ioExecutor(builder.ioExecutor)
             .sslContext(builder.sslContext)
             .build();
     }

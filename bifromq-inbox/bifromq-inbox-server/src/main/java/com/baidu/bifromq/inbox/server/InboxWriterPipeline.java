@@ -16,7 +16,7 @@ package com.baidu.bifromq.inbox.server;
 import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_DELIVERERKEY;
 
 import com.baidu.bifromq.baseenv.MemUsage;
-import com.baidu.bifromq.baserpc.ResponsePipeline;
+import com.baidu.bifromq.baserpc.server.ResponsePipeline;
 import com.baidu.bifromq.inbox.records.ScopedInbox;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;

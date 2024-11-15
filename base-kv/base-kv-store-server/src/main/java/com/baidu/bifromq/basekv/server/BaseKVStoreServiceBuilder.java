@@ -31,11 +31,11 @@ public class BaseKVStoreServiceBuilder<P extends AbstractBaseKVStoreServerBuilde
     IKVRangeCoProcFactory coProcFactory;
     IAgentHost agentHost;
     Executor queryExecutor;
+    Executor rpcExecutor;
     int tickerThreads;
     ScheduledExecutorService bgTaskExecutor;
 
-    BaseKVStoreServiceBuilder(String clusterId, boolean bootstrap,
-                              P serverBuilder) {
+    BaseKVStoreServiceBuilder(String clusterId, boolean bootstrap, P serverBuilder) {
         this.clusterId = clusterId;
         this.bootstrap = bootstrap;
         this.serverBuilder = serverBuilder;

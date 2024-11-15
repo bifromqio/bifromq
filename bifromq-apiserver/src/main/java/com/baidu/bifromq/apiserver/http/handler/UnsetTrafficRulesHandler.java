@@ -13,10 +13,13 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
+import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
+import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import io.netty.buffer.Unpooled;
@@ -33,20 +36,35 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.ws.rs.DELETE;
+import javax.ws.rs.Path;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public abstract class UnsetTrafficRulesHandler implements IHTTPRequestHandler {
-    protected abstract IRPCServiceTrafficGovernor trafficGovernor();
+@Path("/rules/traffic")
+public class UnsetTrafficRulesHandler implements IHTTPRequestHandler {
+    private final Map<String, IRPCServiceTrafficGovernor> governorMap = new ConcurrentHashMap<>();
+
+    public UnsetTrafficRulesHandler(IRPCServiceTrafficService trafficService) {
+        trafficService.services().subscribe(serviceUniqueNames -> {
+            governorMap.keySet().removeIf(serviceUniqueName -> !serviceUniqueNames.contains(serviceUniqueName));
+            for (String serviceUniqueName : serviceUniqueNames) {
+                governorMap.computeIfAbsent(serviceUniqueName, trafficService::getTrafficGovernor);
+            }
+        });
+    }
 
     @DELETE
     @Operation(summary = "Unset the traffic directive")
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER,
-            description = "optional caller provided request id", schema = @Schema(implementation = Long.class))
+            description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
+        @Parameter(name = "service_name", in = ParameterIn.HEADER, required = true,
+            description = "the service name", schema = @Schema(implementation = String.class)),
     })
     @RequestBody(required = false)
     @ApiResponses(value = {
@@ -55,21 +73,28 @@ public abstract class UnsetTrafficRulesHandler implements IHTTPRequestHandler {
     })
     @Override
     public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
-        Set<String> td = new HashSet<>();
+        String serviceName = HeaderUtils.getHeader(Headers.HEADER_SERVICE_NAME, req, true);
+        IRPCServiceTrafficGovernor governor = governorMap.get(serviceName);
+        if (governor == null) {
+            return CompletableFuture.completedFuture(new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
+                Unpooled.copiedBuffer((serviceName + " not found").getBytes())));
+        }
+
+        Set<String> trafficRules = new HashSet<>();
         try {
             ObjectMapper objectMapper = new ObjectMapper();
             ArrayNode tdObject =
                 (ArrayNode) objectMapper.readTree(req.content().toString(io.netty.util.CharsetUtil.UTF_8));
-            tdObject.forEach(node -> td.add(node.asText()));
+            tdObject.forEach(node -> trafficRules.add(node.asText()));
         } catch (Exception e) {
             return CompletableFuture.completedFuture(
                 new DefaultFullHttpResponse(req.protocolVersion(), HttpResponseStatus.BAD_REQUEST,
                     Unpooled.copiedBuffer(e.getMessage().getBytes())));
         }
         log.trace("Handling http unset traffic directive request: {}", req);
-        return CompletableFuture.allOf(td
+        return CompletableFuture.allOf(trafficRules
                 .stream()
-                .map(t -> trafficGovernor().unsetTrafficDirective(t))
+                .map(governor::unsetTrafficRules)
                 .toArray(CompletableFuture[]::new))
             .thenApply(
                 trafficDirective -> new DefaultFullHttpResponse(req.protocolVersion(), OK, Unpooled.EMPTY_BUFFER));

@@ -14,16 +14,23 @@
 package com.baidu.bifromq.retain.server;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
+import com.google.common.util.concurrent.MoreExecutors;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Executor;
 
 abstract class AbstractRetainServerBuilder<T extends AbstractRetainServerBuilder<T>> implements IRetainServerBuilder {
     ISettingProvider settingProvider;
     ISubBrokerManager subBrokerManager;
     IBaseKVStoreClient retainStoreClient;
     Map<String, String> attrs = new HashMap<>();
+    Set<String> defaultGroupTags = new HashSet<>();
+    Executor rpcExecutor = MoreExecutors.directExecutor();
 
     public T subBrokerManager(ISubBrokerManager subBrokerManager) {
         this.subBrokerManager = subBrokerManager;
@@ -42,6 +49,16 @@ abstract class AbstractRetainServerBuilder<T extends AbstractRetainServerBuilder
 
     public T attributes(Map<String, String> attrs) {
         this.attrs = attrs;
+        return thisT();
+    }
+
+    public T defaultGroupTags(Set<String> defaultGroupTags) {
+        this.defaultGroupTags = defaultGroupTags;
+        return thisT();
+    }
+
+    public T rpcExecutor(Executor rpcExecutor) {
+        this.rpcExecutor = rpcExecutor;
         return thisT();
     }
 

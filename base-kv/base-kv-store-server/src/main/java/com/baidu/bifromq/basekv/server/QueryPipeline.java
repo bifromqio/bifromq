@@ -19,7 +19,7 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeROReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.NullableValue;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
-import com.baidu.bifromq.baserpc.ResponsePipeline;
+import com.baidu.bifromq.baserpc.server.ResponsePipeline;
 import com.baidu.bifromq.logger.SiftLogger;
 import io.grpc.stub.StreamObserver;
 import java.util.concurrent.CompletableFuture;

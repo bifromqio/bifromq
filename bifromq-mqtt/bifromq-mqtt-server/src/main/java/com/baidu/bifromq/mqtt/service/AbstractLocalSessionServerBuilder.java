@@ -13,10 +13,21 @@
 
 package com.baidu.bifromq.mqtt.service;
 
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
+import com.google.common.util.concurrent.MoreExecutors;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Executor;
+
 abstract class AbstractLocalSessionServerBuilder<T extends AbstractLocalSessionServerBuilder<T>>
     implements ILocalSessionServerBuilder {
     ILocalSessionRegistry sessionRegistry;
     ILocalDistService distService;
+    Map<String, String> attributes = new HashMap<>();
+    Set<String> defaultGroupTags = new HashSet<>();
+    Executor rpcExecutor = MoreExecutors.directExecutor();
 
     public T sessionRegistry(ILocalSessionRegistry sessionRegistry) {
         this.sessionRegistry = sessionRegistry;
@@ -25,6 +36,23 @@ abstract class AbstractLocalSessionServerBuilder<T extends AbstractLocalSessionS
 
     public T distService(ILocalDistService distService) {
         this.distService = distService;
+        return thisT();
+    }
+
+    public T attributes(Map<String, String> attributes) {
+        this.attributes.clear();
+        this.attributes.putAll(attributes);
+        return thisT();
+    }
+
+    public T defaultGroupTags(Set<String> defaultGroupTags) {
+        this.defaultGroupTags.clear();
+        this.defaultGroupTags.addAll(defaultGroupTags);
+        return thisT();
+    }
+
+    public T rpcExecutor(Executor rpcExecutor) {
+        this.rpcExecutor = rpcExecutor;
         return thisT();
     }
 

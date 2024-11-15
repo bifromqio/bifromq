@@ -47,6 +47,7 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.EntityUtil;
@@ -123,6 +124,7 @@ public abstract class DistWorkerTest {
 
     private IAgentHost agentHost;
     private ICRDTService crdtService;
+    private IRPCServiceTrafficService trafficService;
     private IBaseKVMetaService metaService;
     @Mock
     protected IEventCollector eventCollector;
@@ -190,6 +192,8 @@ public abstract class DistWorkerTest {
         crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
         crdtService.start(agentHost);
 
+        trafficService = IRPCServiceTrafficService.newInstance(crdtService);
+
         metaService = IBaseKVMetaService.newInstance(crdtService);
 
         String uuid = UUID.randomUUID().toString();
@@ -206,7 +210,7 @@ public abstract class DistWorkerTest {
             .newBuilder()
             .eventLoopGroup(NettyUtil.createEventLoopGroup())
             .clusterId(IDistWorker.CLUSTER_NAME)
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .metaService(metaService)
             .executor(MoreExecutors.directExecutor())
             .build();
@@ -214,10 +218,10 @@ public abstract class DistWorkerTest {
             .host("127.0.0.1")
             .bossEventLoopGroup(NettyUtil.createEventLoopGroup(1))
             .workerEventLoopGroup(NettyUtil.createEventLoopGroup())
-            .ioExecutor(MoreExecutors.directExecutor())
+            .rpcExecutor(MoreExecutors.directExecutor())
             .bootstrap(true)
             .agentHost(agentHost)
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .metaService(metaService)
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)
@@ -242,6 +246,7 @@ public abstract class DistWorkerTest {
             storeClient.stop();
             testWorker.stop();
             metaService.stop();
+            trafficService.stop();
             crdtService.stop();
             agentHost.shutdown();
             try {

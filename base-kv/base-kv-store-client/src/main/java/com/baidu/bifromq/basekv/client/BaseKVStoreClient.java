@@ -29,7 +29,6 @@ import static com.baidu.bifromq.basekv.utils.DescriptorUtil.toLeaderRanges;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptyNavigableMap;
 
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.RPCBluePrint;
@@ -59,15 +58,15 @@ import com.baidu.bifromq.basekv.store.proto.TransferLeadershipRequest;
 import com.baidu.bifromq.basekv.utils.DescriptorUtil;
 import com.baidu.bifromq.basekv.utils.KeySpaceDAG;
 import com.baidu.bifromq.baserpc.BluePrint;
-import com.baidu.bifromq.baserpc.IRPCClient;
-import com.baidu.bifromq.baserpc.exception.ServerNotFoundException;
-import com.baidu.bifromq.baserpc.utils.BehaviorSubject;
+import com.baidu.bifromq.baserpc.client.IRPCClient;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import io.grpc.MethodDescriptor;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import io.reactivex.rxjava3.subjects.Subject;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -90,7 +89,6 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     private final Logger log;
     private final String clusterId;
     private final IRPCClient rpcClient;
-    private final ICRDTService crdtService;
     private final IBaseKVMetaService metaService;
     private final AtomicBoolean closed = new AtomicBoolean();
     private final CompositeDisposable disposables = new CompositeDisposable();
@@ -143,17 +141,16 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
             bluePrint.methodDesc(toScopedFullMethodName(clusterId, getLinearizedQueryMethod().getFullMethodName()));
         this.queryMethod =
             bluePrint.methodDesc(toScopedFullMethodName(clusterId, getQueryMethod().getFullMethodName()));
-        this.crdtService = builder.crdtService;
         this.metaService = builder.metaService;
         this.queryPipelinesPerStore = builder.queryPipelinesPerStore <= 0 ? 5 : builder.queryPipelinesPerStore;
         this.rpcClient = IRPCClient.newBuilder()
+            .trafficService(builder.trafficService)
             .bluePrint(bluePrint)
             .executor(builder.executor)
             .eventLoopGroup(builder.eventLoopGroup)
             .sslContext(builder.sslContext)
             .idleTimeoutInSec(builder.idleTimeoutInSec)
             .keepAliveInSec(builder.keepAliveInSec)
-            .crdtService(crdtService)
             .build();
         metadataManager = metaService.metadataManager(clusterId);
         clusterInfoObservable = Observable.combineLatest(

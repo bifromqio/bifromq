@@ -19,8 +19,9 @@ import static com.baidu.bifromq.basecluster.memberlist.CRDTUtil.iterate;
 import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.mvreg;
 import static com.baidu.bifromq.basecrdt.store.ReplicaIdGenerator.generate;
 
+import com.baidu.bifromq.basecluster.agent.proto.AgentEndpoint;
 import com.baidu.bifromq.basecluster.memberlist.agent.Agent;
-import com.baidu.bifromq.basecluster.memberlist.agent.AgentHostProvider;
+import com.baidu.bifromq.basecluster.memberlist.agent.AgentAddressProvider;
 import com.baidu.bifromq.basecluster.memberlist.agent.AgentMessenger;
 import com.baidu.bifromq.basecluster.memberlist.agent.IAgent;
 import com.baidu.bifromq.basecluster.membership.proto.Doubt;
@@ -36,6 +37,7 @@ import com.baidu.bifromq.basecrdt.core.api.MVRegOperation;
 import com.baidu.bifromq.basecrdt.core.api.ORMapOperation;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.store.ICRDTStore;
+import com.baidu.bifromq.basehlc.HLC;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -224,15 +226,23 @@ public class HostMemberList implements IHostMemberList {
     public IAgent host(String agentId) {
         checkState();
         synchronized (this) {
-            if (!local.getAgentIdList().contains(agentId)) {
+            if (!local.containsAgent(agentId)) {
+                AgentEndpoint agentEndpoint = AgentEndpoint.newBuilder()
+                    .setEndpoint(local.getEndpoint())
+                    .setIncarnation(HLC.INST.get())
+                    .build();
                 agentMap.put(agentId, new Agent(agentId,
-                    local.getEndpoint(),
+                    agentEndpoint,
                     new AgentMessenger(agentId, this::getMemberAddress, messenger),
                     scheduler,
                     store,
-                    new AgentHostProvider(agentId, membershipSubject),
+                    new AgentAddressProvider(agentId, membershipSubject),
                     tags));
-                local = local.toBuilder().setIncarnation(local.getIncarnation() + 1).addAgentId(agentId).build();
+                local = local.toBuilder()
+                    .setIncarnation(local.getIncarnation() + 1)
+                    .addAgentId(agentId) // deprecate since 3.3.3
+                    .putAgent(agentId, agentEndpoint.getIncarnation())
+                    .build();
                 join(local);
             }
             return agentMap.get(agentId);
@@ -249,7 +259,9 @@ public class HostMemberList implements IHostMemberList {
                     local = local.toBuilder()
                         .setIncarnation(local.getIncarnation() + 1)
                         .clearAgentId()
-                        .addAllAgentId(agentMap.keySet())
+                        .addAllAgentId(agentMap.keySet()) // deprecate since 3.3.3
+                        .clearAgent()
+                        .putAllAgent(Maps.transformValues(agentMap, a -> a.local().getIncarnation()))
                         .build();
                 }
                 join(local);

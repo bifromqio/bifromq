@@ -13,10 +13,10 @@
 
 package com.baidu.bifromq.sessiondict.client;
 
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.baserpc.IRPCClient;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
+import com.baidu.bifromq.baserpc.client.IRPCClient;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.sessiondict.RPCBluePrint;
+import com.google.common.util.concurrent.MoreExecutors;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
@@ -29,20 +29,19 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @Setter
 public final class SessionDictClientBuilder implements ISessionDictClientBuilder {
-    private ICRDTService crdtService;
+    private IRPCServiceTrafficService trafficService;
     private EventLoopGroup eventLoopGroup;
     private SslContext sslContext;
-    private Executor executor;
+    private Executor executor = MoreExecutors.directExecutor();
 
     @Override
     public ISessionDictClient build() {
         return new SessionDictClient(IRPCClient.newBuilder()
             .bluePrint(RPCBluePrint.INSTANCE)
+            .trafficService(trafficService)
             .executor(executor)
             .eventLoopGroup(eventLoopGroup)
             .sslContext(sslContext)
-            .crdtService(crdtService)
-            .build(),
-            IRPCServiceTrafficGovernor.newInstance(RPCBluePrint.INSTANCE.serviceDescriptor().getName(), crdtService));
+            .build());
     }
 }

@@ -16,7 +16,7 @@ package com.baidu.bifromq.mqtt.inbox;
 import static com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply.Result.ERROR;
 import static java.util.Collections.emptyMap;
 
-import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
@@ -39,19 +39,10 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 final class MqttBrokerClient implements IMqttBrokerClient {
     private final AtomicBoolean hasStopped = new AtomicBoolean();
-    private final IRPCServiceTrafficGovernor trafficGovernor;
     private final IRPCClient rpcClient;
 
-    MqttBrokerClient(MqttBrokerClientBuilder builder) {
-        this.rpcClient = IRPCClient.newBuilder()
-            .bluePrint(RPCBluePrint.INSTANCE)
-            .executor(builder.executor)
-            .eventLoopGroup(builder.eventLoopGroup)
-            .sslContext(builder.sslContext)
-            .crdtService(builder.crdtService)
-            .build();
-        trafficGovernor = IRPCServiceTrafficGovernor
-            .newInstance(RPCBluePrint.INSTANCE.serviceDescriptor().getName(), builder.crdtService);
+    MqttBrokerClient(IRPCClient rpcClient) {
+        this.rpcClient = rpcClient;
     }
 
     public IDeliverer open(String delivererKey) {
@@ -66,18 +57,12 @@ final class MqttBrokerClient implements IMqttBrokerClient {
             log.debug("Stopping rpc client");
             rpcClient.stop();
             log.info("MQTT broker client closed");
-            trafficGovernor.destroy();
         }
     }
 
     @Override
     public Observable<IRPCClient.ConnState> connState() {
         return rpcClient.connState();
-    }
-
-    @Override
-    public IRPCServiceTrafficGovernor trafficGovernor() {
-        return trafficGovernor;
     }
 
     @Override

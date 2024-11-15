@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.sessiondict.client;
 
-import com.baidu.bifromq.baserpc.IRPCClient;
-import com.baidu.bifromq.baserpc.IRPCClient.IMessageStream;
+import com.baidu.bifromq.baserpc.client.IRPCClient;
+import com.baidu.bifromq.baserpc.client.IRPCClient.IMessageStream;
 import com.baidu.bifromq.sessiondict.rpc.proto.Quit;
 import com.baidu.bifromq.sessiondict.rpc.proto.Session;
 import com.baidu.bifromq.sessiondict.rpc.proto.SessionDictServiceGrpc;

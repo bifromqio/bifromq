@@ -17,9 +17,9 @@ import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandlersFactory;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
@@ -31,8 +31,8 @@ public class RequestHandlersFactory implements IHTTPRequestHandlersFactory {
     private final Map<Class<? extends IHTTPRequestHandler>, IHTTPRequestHandler> handlers = new HashMap<>();
 
     public RequestHandlersFactory(IAgentHost agentHost,
+                                  IRPCServiceTrafficService trafficService,
                                   IBaseKVMetaService metaService,
-                                  IMqttBrokerClient brokerClient,
                                   ISessionDictClient sessionDictClient,
                                   IDistClient distClient,
                                   IInboxClient inboxClient,
@@ -41,33 +41,16 @@ public class RequestHandlersFactory implements IHTTPRequestHandlersFactory {
         register(new GetLoadRulesHandler(metaService));
         register(new SetLoadRulesHandler(metaService));
 
-        register(new GetDictTrafficRulesHandler(sessionDictClient));
-        register(new GetDistTrafficRulesHandler(distClient));
-        register(new GetInboxTrafficRulesHandler(inboxClient));
-        register(new GetRetainTrafficRulesHandler(retainClient));
+        register(new GetTrafficRulesHandler(trafficService));
+        register(new SetTrafficRulesHandler(trafficService));
+        register(new UnsetTrafficRulesHandler(trafficService));
 
-        register(new SetDictTrafficRulesHandler(sessionDictClient));
-        register(new SetDistTrafficRulesHandler(distClient));
-        register(new SetInboxTrafficRulesHandler(inboxClient));
-        register(new SetRetainTrafficRulesHandler(retainClient));
-
-        register(new UnsetDictTrafficRulesHandler(sessionDictClient));
-        register(new UnsetDistTrafficRulesHandler(distClient));
-        register(new UnsetInboxTrafficRulesHandler(inboxClient));
-        register(new UnsetRetainTrafficRulesHandler(retainClient));
-
-        register(new GetBrokerServerLandscapeHandler(brokerClient));
-        register(new GetDictServerLandscapeHandler(sessionDictClient));
-        register(new GetDistServerLandscapeHandler(distClient));
-        register(new GetInboxServerLandscapeHandler(inboxClient));
-        register(new GetRetainServerLandscapeHandler(retainClient));
         register(new GetClusterHandler(agentHost));
-        register(new GetSessionInfoHandler(settingProvider, sessionDictClient));
-        register(new SetDistServerGroupsHandler(distClient));
-        register(new SetInboxServerGroupsHandler(inboxClient));
-        register(new SetRetainServerGroupsHandler(retainClient));
-        register(new SetDictServerGroupsHandler(sessionDictClient));
+        register(new ListAllServicesHandler(trafficService));
+        register(new GetServiceLandscapeHandler(trafficService));
+        register(new SetServerGroupTagsHandler(trafficService));
 
+        register(new GetSessionInfoHandler(settingProvider, sessionDictClient));
         register(new KillHandler(settingProvider, sessionDictClient));
         register(new RetainHandler(settingProvider, retainClient));
         register(new ExpireRetainHandler(settingProvider, retainClient));

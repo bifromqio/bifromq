@@ -44,6 +44,7 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.metrics.TenantMetric;
 import com.baidu.bifromq.retain.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.BatchRetainRequest;
@@ -62,6 +63,7 @@ import com.baidu.bifromq.retain.utils.KeyUtil;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Struct;
 import io.micrometer.core.instrument.Gauge;
@@ -99,6 +101,7 @@ public class RetainStoreTest {
     private static final String DB_WAL_NAME = "testWAL";
     private IAgentHost agentHost;
     private ICRDTService crdtService;
+    private IRPCServiceTrafficService trafficService;
     private IBaseKVMetaService metaService;
     protected SimpleMeterRegistry meterRegistry;
     protected IRetainStore testStore;
@@ -129,6 +132,7 @@ public class RetainStoreTest {
         crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
         crdtService.start(agentHost);
 
+        trafficService = IRPCServiceTrafficService.newInstance(crdtService);
         metaService = IBaseKVMetaService.newInstance(crdtService);
 
         String uuid = UUID.randomUUID().toString();
@@ -148,7 +152,7 @@ public class RetainStoreTest {
         storeClient = IBaseKVStoreClient
             .newBuilder()
             .clusterId(IRetainStore.CLUSTER_NAME)
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .metaService(metaService)
             .build();
         buildStoreServer();
@@ -163,11 +167,12 @@ public class RetainStoreTest {
             .bootstrap(true)
             .host("127.0.0.1")
             .agentHost(agentHost)
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .metaService(metaService)
             .storeClient(storeClient)
             .storeOptions(options)
             .queryExecutor(queryExecutor)
+            .rpcExecutor(MoreExecutors.directExecutor())
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .gcInterval(Duration.ofSeconds(60))
@@ -190,6 +195,7 @@ public class RetainStoreTest {
         log.info("Finish testing, and tearing down");
         testStore.stop();
         storeClient.stop();
+        trafficService.stop();
         metaService.stop();
         crdtService.stop();
         agentHost.shutdown();

@@ -68,7 +68,15 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>base-rpc</artifactId>
+            <artifactId>base-rpc-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>base-rpc-server</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>base-rpc-traffic-governor</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>

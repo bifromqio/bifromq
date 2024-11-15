@@ -45,6 +45,7 @@
 
         <module>build</module>
         <module>coverage-report</module>
+        <module>base-rpc/base-rpc-common</module>
     </modules>
     <packaging>pom</packaging>
 
@@ -167,7 +168,27 @@
             </dependency>
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
-                <artifactId>base-rpc</artifactId>
+                <artifactId>base-rpc-grpc-inproc</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
+                <artifactId>base-rpc-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
+                <artifactId>base-rpc-client</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
+                <artifactId>base-rpc-server</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
+                <artifactId>base-rpc-traffic-governor</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

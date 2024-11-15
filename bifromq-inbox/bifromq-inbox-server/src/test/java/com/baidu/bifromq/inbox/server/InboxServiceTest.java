@@ -23,11 +23,12 @@ import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
-import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.client.IRPCClient;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
@@ -39,6 +40,7 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.Struct;
 import java.lang.reflect.Method;
 import java.time.Duration;
@@ -61,6 +63,7 @@ public abstract class InboxServiceTest {
     protected IInboxClient inboxClient;
     private IAgentHost agentHost;
     private ICRDTService crdtService;
+    private IRPCServiceTrafficService trafficService;
     private IBaseKVMetaService metaService;
     @Mock
     protected IEventCollector eventCollector;
@@ -102,8 +105,10 @@ public abstract class InboxServiceTest {
         crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
         crdtService.start(agentHost);
 
+        trafficService = IRPCServiceTrafficService.newInstance(crdtService);
+
         metaService = IBaseKVMetaService.newInstance(crdtService);
-        inboxClient = IInboxClient.newBuilder().crdtService(crdtService).build();
+        inboxClient = IInboxClient.newBuilder().trafficService(trafficService).build();
 
         KVRangeStoreOptions kvRangeStoreOptions = new KVRangeStoreOptions();
         kvRangeStoreOptions.setDataEngineConfigurator(new InMemKVEngineConfigurator());
@@ -112,20 +117,21 @@ public abstract class InboxServiceTest {
         bgTaskExecutor = Executors.newSingleThreadScheduledExecutor();
         inboxStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .metaService(metaService)
             .build();
         inboxStore = IInboxStore.standaloneBuilder()
             .bootstrap(true)
             .host("127.0.0.1")
             .agentHost(agentHost)
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .metaService(metaService)
             .storeClient(inboxStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .storeOptions(kvRangeStoreOptions)
             .queryExecutor(queryExecutor)
+            .rpcExecutor(MoreExecutors.directExecutor())
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .balancerFactoryConfig(
@@ -133,7 +139,7 @@ public abstract class InboxServiceTest {
             .build();
         inboxServer = IInboxServer.standaloneBuilder()
             .host("127.0.0.1")
-            .crdtService(crdtService)
+            .trafficService(trafficService)
             .inboxClient(inboxClient)
             .distClient(distClient)
             .retainClient(retainClient)
@@ -158,6 +164,7 @@ public abstract class InboxServiceTest {
         inboxClient.close();
         inboxStoreClient.stop();
         metaService.stop();
+        trafficService.stop();
         crdtService.stop();
         agentHost.shutdown();
         queryExecutor.shutdown();

@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
@@ -20,15 +21,17 @@ import com.baidu.bifromq.apiserver.MockableTest;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceLandscape;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.Collection;
+import java.util.Collections;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
 
@@ -38,9 +41,11 @@ public class RequestHandlersFactoryTest extends MockableTest {
     @Mock
     private IBaseKVMetaService metaService;
     @Mock
+    private IRPCServiceTrafficService trafficService;
+    @Mock
     private IRPCServiceTrafficGovernor trafficGovernor;
     @Mock
-    private IMqttBrokerClient brokerClient;
+    private IRPCServiceLandscape serviceLandscape;
     @Mock
     private IDistClient distClient;
     @Mock
@@ -55,17 +60,16 @@ public class RequestHandlersFactoryTest extends MockableTest {
     @Test
     public void build() {
         when(metaService.clusterIds()).thenReturn(Observable.empty());
-        when(trafficGovernor.serverList()).thenReturn(Observable.empty());
+        when(trafficService.services()).thenReturn(Observable.just(Collections.emptySet()));
+        when(trafficService.getTrafficGovernor(anyString())).thenReturn(trafficGovernor);
+        when(trafficService.getServiceLandscape(anyString())).thenReturn(serviceLandscape);
+        when(trafficGovernor.serverEndpoints()).thenReturn(Observable.empty());
         when(trafficGovernor.trafficRules()).thenReturn(Observable.empty());
-        when(brokerClient.trafficGovernor()).thenReturn(trafficGovernor);
-        when(distClient.trafficGovernor()).thenReturn(trafficGovernor);
-        when(inboxClient.trafficGovernor()).thenReturn(trafficGovernor);
-        when(sessionDictClient.trafficGovernor()).thenReturn(trafficGovernor);
-        when(retainClient.trafficGovernor()).thenReturn(trafficGovernor);
-        RequestHandlersFactory handlersFactory =
-            new RequestHandlersFactory(agentHost, metaService, brokerClient, sessionDictClient,
-                distClient, inboxClient, retainClient, settingProvider);
+        when(serviceLandscape.serverEndpoints()).thenReturn(Observable.empty());
+        when(serviceLandscape.trafficRules()).thenReturn(Observable.empty());
+        RequestHandlersFactory handlersFactory = new RequestHandlersFactory(agentHost, trafficService, metaService,
+            sessionDictClient, distClient, inboxClient, retainClient, settingProvider);
         Collection<IHTTPRequestHandler> handlers = handlersFactory.build();
-        assertEquals(handlers.size(), 32);
+        assertEquals(handlers.size(), 17);
     }
 }

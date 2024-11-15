@@ -15,7 +15,7 @@ package com.baidu.bifromq.dist.client.scheduler;
 
 import static java.util.Collections.emptyMap;
 
-import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.dist.client.PubResult;
