@@ -53,7 +53,7 @@ class BaseKVMetaService implements IBaseKVMetaService {
     }
 
     @Override
-    public void stop() {
+    public void close() {
         metadataManagers.values().forEach(BaseKVClusterMetadataManager::stop);
     }
 }

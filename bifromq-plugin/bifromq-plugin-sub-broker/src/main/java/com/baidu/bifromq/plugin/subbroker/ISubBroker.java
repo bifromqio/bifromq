@@ -19,9 +19,9 @@ import org.pf4j.ExtensionPoint;
 /**
  * A sub broker is a downstream multi-tenant system which is capable of receiving subscribed messages in a batched way.
  */
-public interface ISubBroker extends ExtensionPoint {
+public interface ISubBroker extends AutoCloseable, ExtensionPoint {
     /**
-     * The id of the subscription broker
+     * The id of the subscription broker.
      *
      * @return the statically assigned id for the downstream sub broker system
      */
@@ -37,7 +37,7 @@ public interface ISubBroker extends ExtensionPoint {
     IDeliverer open(String delivererKey);
 
     /**
-     * Close the inbox broker
+     * Close the inbox broker.
      */
     void close();
 }

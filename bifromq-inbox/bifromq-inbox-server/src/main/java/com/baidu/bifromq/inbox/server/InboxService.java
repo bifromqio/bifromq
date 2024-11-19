@@ -108,7 +108,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final IInboxClient inboxClient;
     private final IDistClient distClient;
     private final IRetainClient retainClient;
-    private final IBaseKVStoreClient inboxStoreClient;
     private final InboxFetcherRegistry registry = new InboxFetcherRegistry();
     private final IInboxFetchScheduler fetchScheduler;
     private final IInboxGetScheduler getScheduler;
@@ -149,7 +148,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         this.inboxClient = inboxClient;
         this.distClient = distClient;
         this.retainClient = retainClient;
-        this.inboxStoreClient = inboxStoreClient;
         this.getScheduler = getScheduler;
         this.fetchScheduler = fetchScheduler;
         this.insertScheduler = insertScheduler;
@@ -330,7 +328,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         response(tenantId -> subScheduler.schedule(request)
             .thenCompose(subReply -> {
                 if (subReply.getCode() == SubReply.Code.OK || subReply.getCode() == SubReply.Code.EXISTS) {
-                    return distClient.match(request.getReqId(),
+                    return distClient.addTopicMatch(request.getReqId(),
                             request.getTenantId(),
                             request.getTopicFilter(),
                             distInboxId(request.getInboxId(), request.getIncarnation()),
@@ -447,7 +445,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                                      String inboxId,
                                                      long incarnation,
                                                      String topicFilter) {
-        return distClient.unmatch(reqId, tenantId, topicFilter, distInboxId(inboxId, incarnation),
+        return distClient.removeTopicMatch(reqId, tenantId, topicFilter, distInboxId(inboxId, incarnation),
             getDelivererKey(tenantId, inboxId), inboxClient.id());
     }
 

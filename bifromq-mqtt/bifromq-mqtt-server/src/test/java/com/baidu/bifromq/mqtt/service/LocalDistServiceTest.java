@@ -89,7 +89,7 @@ public class LocalDistServiceTest extends MockableTest {
             when(session.channelId()).thenReturn(channelId);
             long reqId = System.nanoTime();
             localDistService.match(reqId, topicFilter, session);
-            verify(distClient).match(eq(reqId), eq(tenantId), eq(topicFilter),
+            verify(distClient).addTopicMatch(eq(reqId), eq(tenantId), eq(topicFilter),
                 eq(ILocalDistService.globalize(channelId)),
                 eq(toDelivererKey(tenantId, ILocalDistService.globalize(channelId), serverId)), eq(0));
             reset(distClient);
@@ -108,7 +108,7 @@ public class LocalDistServiceTest extends MockableTest {
             when(session.channelId()).thenReturn(channelId);
             long reqId = System.nanoTime();
             localDistService.unmatch(reqId, topicFilter, session);
-            verify(distClient).unmatch(eq(reqId), eq(tenantId), eq(topicFilter),
+            verify(distClient).removeTopicMatch(eq(reqId), eq(tenantId), eq(topicFilter),
                 eq(ILocalDistService.globalize(channelId)),
                 eq(toDelivererKey(tenantId, ILocalDistService.globalize(channelId), serverId)), eq(0));
             reset(distClient);

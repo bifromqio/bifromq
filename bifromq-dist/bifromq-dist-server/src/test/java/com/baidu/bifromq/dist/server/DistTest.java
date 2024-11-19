@@ -102,7 +102,7 @@ public class DistTest extends DistServiceTest {
         ClientInfo clientInfo;
         int total = 1;
         for (int i = 0; i < total; i++) {
-            distClient().match(reqId, tenantId, "/sport/tennis" + i, "inbox" + i, "server1", 0)
+            distClient().addTopicMatch(reqId, tenantId, "/sport/tennis" + i, "inbox" + i, "server1", 0)
                 .join();
         }
         CountDownLatch latch = new CountDownLatch(total);
@@ -140,7 +140,7 @@ public class DistTest extends DistServiceTest {
         int totalMsg = 1;
         for (int i = 0; i < totalSub; i++) {
             MatchResult subResult =
-                distClient().match(reqId, tenantId, "$share/g1/sport/tennis" + i, "inbox" + i,
+                distClient().addTopicMatch(reqId, tenantId, "$share/g1/sport/tennis" + i, "inbox" + i,
                     "server1", 0).join();
             assertEquals(subResult, MatchResult.OK);
         }
@@ -194,7 +194,7 @@ public class DistTest extends DistServiceTest {
         ByteString payload = ByteString.EMPTY;
         int totalInbox = 100;
         for (int i = 0; i < totalInbox; i++) {
-            distClient().match(reqId, tenantId, "/sport/tennis", "inbox" + i, "server1", 0)
+            distClient().addTopicMatch(reqId, tenantId, "/sport/tennis", "inbox" + i, "server1", 0)
                 .join();
         }
 

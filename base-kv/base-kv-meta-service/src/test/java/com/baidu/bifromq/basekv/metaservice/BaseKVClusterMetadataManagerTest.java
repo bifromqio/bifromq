@@ -47,17 +47,15 @@ public class BaseKVClusterMetadataManagerTest {
     @BeforeMethod
     void setup() {
         agentHost = IAgentHost.newInstance(AgentHostOptions.builder().addr("127.0.0.1").build());
-        agentHost.start();
-        crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        crdtService.start(agentHost);
+        crdtService = ICRDTService.newInstance(agentHost, CRDTServiceOptions.builder().build());
         metaService = new BaseKVMetaService(crdtService, Duration.ofMillis(1000));
     }
 
     @AfterMethod
     void tearDown() {
-        metaService.stop();
-        crdtService.stop();
-        agentHost.shutdown();
+        metaService.close();
+        crdtService.close();
+        agentHost.close();
     }
 
 
@@ -141,7 +139,9 @@ public class BaseKVClusterMetadataManagerTest {
             manager.proposeLoadRules("balancer1", loadRulesJSON2).join();
         assertEquals(resultFuture.join(), IBaseKVClusterMetadataManager.ProposalResult.OVERRIDDEN);
         assertEquals(result1, IBaseKVClusterMetadataManager.ProposalResult.ACCEPTED);
-        manager.loadRules().test().assertValue(Map.of("balancer1", loadRulesJSON2));
+        TestObserver<?> observer = manager.loadRules().test();
+        await().until(() ->
+            !observer.values().isEmpty() && observer.values().get(0).equals(Map.of("balancer1", loadRulesJSON2)));
     }
 
 

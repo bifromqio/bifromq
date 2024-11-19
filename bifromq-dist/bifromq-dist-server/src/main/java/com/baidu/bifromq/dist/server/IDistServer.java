@@ -13,16 +13,10 @@
 
 package com.baidu.bifromq.dist.server;
 
-public interface IDistServer {
-    static StandaloneDistServerBuilder standaloneBuilder() {
-        return new StandaloneDistServerBuilder();
+public interface IDistServer extends AutoCloseable {
+    static DistServerBuilder builder() {
+        return new DistServerBuilder();
     }
 
-    static NonStandaloneDistServerBuilder nonStandaloneBuilder() {
-        return new NonStandaloneDistServerBuilder();
-    }
-
-    void start();
-
-    void shutdown();
+    void close();
 }

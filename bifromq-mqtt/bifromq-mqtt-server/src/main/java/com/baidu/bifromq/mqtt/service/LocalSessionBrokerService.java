@@ -81,7 +81,4 @@ final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.OnlineInboxB
             }
         }, responseObserver);
     }
-
-    public void close() {
-    }
 }

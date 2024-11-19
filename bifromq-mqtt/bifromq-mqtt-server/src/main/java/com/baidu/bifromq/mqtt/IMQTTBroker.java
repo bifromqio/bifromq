@@ -13,16 +13,12 @@
 
 package com.baidu.bifromq.mqtt;
 
-public interface IMQTTBroker {
-    static StandaloneMQTTBrokerBuilder standaloneBuilder() {
-        return new StandaloneMQTTBrokerBuilder();
-    }
-
-    static NonStandaloneMQTTBrokerBuilder nonStandaloneBuilder() {
-        return new NonStandaloneMQTTBrokerBuilder();
+public interface IMQTTBroker extends AutoCloseable {
+    static MQTTBrokerBuilder builder() {
+        return new MQTTBrokerBuilder();
     }
 
     void start();
 
-    void shutdown();
+    void close();
 }

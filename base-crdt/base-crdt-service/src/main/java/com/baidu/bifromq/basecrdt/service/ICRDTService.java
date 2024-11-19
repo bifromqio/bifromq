@@ -26,7 +26,7 @@ import lombok.NonNull;
 /**
  * The CRDT service with decentralized membership management based on base-cluster.
  */
-public interface ICRDTService {
+public interface ICRDTService extends AutoCloseable {
 
     /**
      * Construct a new instance.
@@ -34,8 +34,8 @@ public interface ICRDTService {
      * @param options the service options
      * @return the CRDT service object
      */
-    static ICRDTService newInstance(@NonNull CRDTServiceOptions options) {
-        return new CRDTService(options);
+    static ICRDTService newInstance(IAgentHost agentHost, @NonNull CRDTServiceOptions options) {
+        return new CRDTService(agentHost, options);
     }
 
     /**
@@ -83,15 +83,8 @@ public interface ICRDTService {
      */
     Observable<Set<String>> aliveCRDTs();
 
-    boolean isStarted();
-
-    /**
-     * Start the store by providing agentHost.
-     */
-    void start(IAgentHost agentHost);
-
     /**
      * Stop the store.
      */
-    void stop();
+    void close();
 }

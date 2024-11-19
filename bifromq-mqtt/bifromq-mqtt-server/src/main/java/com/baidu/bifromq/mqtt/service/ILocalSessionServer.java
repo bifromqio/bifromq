@@ -14,15 +14,7 @@
 package com.baidu.bifromq.mqtt.service;
 
 public interface ILocalSessionServer {
-    static StandaloneLocalSessionServerBuilder standaloneBuilder() {
-        return new StandaloneLocalSessionServerBuilder();
+    static LocalSessionServerBuilder builder() {
+        return new LocalSessionServerBuilder();
     }
-
-    static NonStandaloneLocalSessionServerBuilder nonStandaloneBuilder() {
-        return new NonStandaloneLocalSessionServerBuilder();
-    }
-
-    void start();
-
-    void shutdown();
 }

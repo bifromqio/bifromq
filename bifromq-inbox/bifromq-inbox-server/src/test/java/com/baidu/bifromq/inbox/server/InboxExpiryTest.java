@@ -259,7 +259,7 @@ public class InboxExpiryTest extends InboxServiceTest {
                 .setClient(clientInfo)
                 .setNow(now)
                 .build()).join();
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
                 .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         String topicFilter = "/a/b/c";
         inboxClient.sub(SubRequest.newBuilder()
@@ -273,7 +273,8 @@ public class InboxExpiryTest extends InboxServiceTest {
                 .build()).join();
 
         verify(distClient, timeout(5000).times(0)).pub(anyLong(), anyString(), any(), any());
-        verify(distClient, timeout(5000).times(1)).unmatch(anyLong(), eq(tenantId), eq(topicFilter), anyString(),
+        verify(distClient, timeout(5000).times(1)).removeTopicMatch(anyLong(), eq(tenantId), eq(topicFilter),
+            anyString(),
                 anyString(), anyInt());
         await().until(() -> {
             GetReply getReply = inboxClient.get(GetRequest.newBuilder()

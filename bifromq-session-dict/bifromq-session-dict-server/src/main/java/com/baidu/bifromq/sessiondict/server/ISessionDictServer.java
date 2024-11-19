@@ -13,16 +13,10 @@
 
 package com.baidu.bifromq.sessiondict.server;
 
-public interface ISessionDictServer {
-    static StandaloneSessionDictServerBuilder standaloneBuilder() {
-        return new StandaloneSessionDictServerBuilder();
+public interface ISessionDictServer extends AutoCloseable {
+    static SessionDictServerBuilder builder() {
+        return new SessionDictServerBuilder();
     }
 
-    static NonStandaloneSessionDictServerBuilder nonStandaloneBuilder() {
-        return new NonStandaloneSessionDictServerBuilder();
-    }
-
-    void start();
-
-    void shutdown();
+    void close();
 }

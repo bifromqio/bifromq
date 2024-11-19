@@ -126,6 +126,8 @@ final class AgentHost implements IAgentHost {
             options.suspicionMultiplier(), options.suspicionMaxTimeoutMultiplier(), tags);
         memberSelector = new MemberSelector(memberList, scheduler, hostAddressResolver);
         disposables.add(store.storeMessages().subscribe(this::sendCRDTStoreMessage));
+
+        start();
     }
 
     @Override
@@ -166,16 +168,7 @@ final class AgentHost implements IAgentHost {
     }
 
     @Override
-    public void start() {
-        if (state.compareAndSet(State.INIT, State.STARTING)) {
-            messenger.start(memberSelector);
-            deadDropper.start();
-            state.set(State.STARTED);
-        }
-    }
-
-    @Override
-    public void shutdown() {
+    public void close() {
         if (state.compareAndSet(State.STARTED, State.STOPPING)) {
             healer.stop();
             seeder.stop();
@@ -194,6 +187,15 @@ final class AgentHost implements IAgentHost {
                 }).join();
         }
     }
+
+    private void start() {
+        if (state.compareAndSet(State.INIT, State.STARTING)) {
+            messenger.start(memberSelector);
+            deadDropper.start();
+            state.set(State.STARTED);
+        }
+    }
+
 
     private void sendCRDTStoreMessage(CRDTStoreMessage storeMsg) {
         ClusterMessage msg = ClusterMessage.newBuilder().setCrdtStoreMessage(storeMsg).build();

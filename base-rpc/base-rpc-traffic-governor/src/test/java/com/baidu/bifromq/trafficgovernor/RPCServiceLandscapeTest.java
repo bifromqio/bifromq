@@ -61,8 +61,8 @@ public class RPCServiceLandscapeTest extends RPCServiceAnnouncerTest {
             return servers.isEmpty();
         });
 
-        trafficService.stop();
-        crdtService.stop();
+        trafficService.close();
+        crdtService.close();
     }
 
     @Test(groups = "integration")
@@ -90,8 +90,8 @@ public class RPCServiceLandscapeTest extends RPCServiceAnnouncerTest {
         });
         // stop the server
         serverReg.stop();
-        serverTrafficService.stop();
-        serverCrdtService.stop();
+        serverTrafficService.close();
+        serverCrdtService.close();
 
         await().until(() -> {
             Set<ServerEndpoint> servers = trafficDirector.serverEndpoints().blockingFirst();
@@ -110,11 +110,11 @@ public class RPCServiceLandscapeTest extends RPCServiceAnnouncerTest {
             return servers.stream().anyMatch(s -> s.id().equals(server) && s.hostAddr() instanceof InProcSocketAddress);
         });
 
-        clientTrafficService.stop();
-        clientCrdtService.stop();
+        clientTrafficService.close();
+        clientCrdtService.close();
 
         // stop the server
-        serverTrafficService.stop();
-        serverCrdtService.stop();
+        serverTrafficService.close();
+        serverCrdtService.close();
     }
 }

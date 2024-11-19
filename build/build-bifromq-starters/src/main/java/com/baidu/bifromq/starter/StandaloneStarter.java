@@ -204,11 +204,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .port(config.getClusterConfig().getPort())
             .build();
         agentHost = IAgentHost.newInstance(agentHostOptions);
-        agentHost.start();
-        log.debug("Agent host started");
-        crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        crdtService.start(agentHost);
-        log.debug("CRDT service started");
+        crdtService = ICRDTService.newInstance(agentHost, CRDTServiceOptions.builder().build());
 
         trafficService = IRPCServiceTrafficService.newInstance(crdtService);
         metaService = IBaseKVMetaService.newInstance(crdtService);
@@ -253,7 +249,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 .getRetainStoreConfig()
                 .getQueryPipelinePerStore())
             .build();
-        retainStore = IRetainStore.nonStandaloneBuilder()
+        retainStore = IRetainStore.builder()
             .rpcServerBuilder(rpcServerBuilder)
             .bootstrap(config.isBootstrap())
             .agentHost(agentHost)
@@ -263,7 +259,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .rpcExecutor(storeServerExecutor)
             .tickerThreads(config.getStateStoreConfig().getTickerThreads())
             .bgTaskExecutor(bgTaskExecutor)
-            .balanceRetryDelay(Duration.ofMillis(
+            .balancerRetryDelay(Duration.ofMillis(
                 config.getStateStoreConfig().getRetainStoreConfig().getBalanceConfig().getRetryDelayInMS()))
             .balancerFactoryConfig(
                 config.getStateStoreConfig().getRetainStoreConfig().getBalanceConfig().getBalancers())
@@ -299,11 +295,10 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .queryPipelinesPerStore(config.getStateStoreConfig().getInboxStoreConfig()
                 .getQueryPipelinePerStore())
             .build();
-        inboxStore = IInboxStore.nonStandaloneBuilder()
+        inboxStore = IInboxStore.builder()
             .rpcServerBuilder(rpcServerBuilder)
             .bootstrap(config.isBootstrap())
             .agentHost(agentHost)
-            .trafficService(trafficService)
             .metaService(metaService)
             .inboxClient(inboxClient)
             .storeClient(inboxStoreClient)
@@ -315,7 +310,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .bgTaskExecutor(bgTaskExecutor)
             .loadEstimateWindow(Duration.ofSeconds(InboxStoreLoadEstimationWindowSeconds.INSTANCE.get()))
             .gcInterval(Duration.ofSeconds(config.getStateStoreConfig().getInboxStoreConfig().getGcIntervalSeconds()))
-            .balanceRetryDelay(Duration.ofMillis(
+            .balancerRetryDelay(Duration.ofMillis(
                 config.getStateStoreConfig().getInboxStoreConfig().getBalanceConfig().getRetryDelayInMS()))
             .balancerFactoryConfig(config.getStateStoreConfig().getInboxStoreConfig().getBalanceConfig().getBalancers())
             .storeOptions(new KVRangeStoreOptions()
@@ -335,7 +330,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                         .getInboxStoreConfig()
                         .getWalEngineConfig(), "inbox_wal")))
             .build();
-        inboxServer = IInboxServer.nonStandaloneBuilder()
+        inboxServer = IInboxServer.builder()
             .rpcServerBuilder(rpcServerBuilder)
             .eventCollector(eventCollectorMgr)
             .resourceThrottler(resourceThrottlerMgr)
@@ -370,13 +365,13 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .sslContext(rpcClientSslContext)
             .build();
 
-        sessionDictServer = ISessionDictServer.nonStandaloneBuilder()
+        sessionDictServer = ISessionDictServer.builder()
             .rpcServerBuilder(rpcServerBuilder)
             .mqttBrokerClient(mqttBrokerClient)
             // TODO: attributes
             // TODO: defaultGroupTags
             .build();
-        retainServer = IRetainServer.nonStandaloneBuilder()
+        retainServer = IRetainServer.builder()
             .rpcServerBuilder(rpcServerBuilder)
             .retainStoreClient(retainStoreClient)
             .settingProvider(settingProviderMgr)
@@ -384,11 +379,10 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             // TODO: attributes
             // TODO: defaultGroupTags
             .build();
-        distWorker = IDistWorker.nonStandaloneBuilder()
+        distWorker = IDistWorker.builder()
             .rpcServerBuilder(rpcServerBuilder)
             .bootstrap(config.isBootstrap())
             .agentHost(agentHost)
-            .trafficService(trafficService)
             .metaService(metaService)
             .eventCollector(eventCollectorMgr)
             .resourceThrottler(resourceThrottlerMgr)
@@ -413,14 +407,14 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                         .getStateStoreConfig()
                         .getDistWorkerConfig()
                         .getWalEngineConfig(), "dist_wal")))
-            .balanceRetryDelay(Duration.ofMillis(
+            .balancerRetryDelay(Duration.ofMillis(
                 config.getStateStoreConfig().getDistWorkerConfig().getBalanceConfig().getRetryDelayInMS()))
             .balancerFactoryConfig(config.getStateStoreConfig().getDistWorkerConfig().getBalanceConfig().getBalancers())
             .subBrokerManager(subBrokerManager)
             .loadEstimateWindow(Duration.ofSeconds(DistWorkerLoadEstimationWindowSeconds.INSTANCE.get()))
             .build();
 
-        distServer = IDistServer.nonStandaloneBuilder()
+        distServer = IDistServer.builder()
             .rpcServerBuilder(rpcServerBuilder)
             .distWorkerClient(distWorkerClient)
             .settingProvider(settingProviderMgr)
@@ -430,12 +424,10 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             .build();
 
         MQTTServerConfig mqttServerConfig = config.getMqttServerConfig();
-        IMQTTBrokerBuilder<?> brokerBuilder = IMQTTBroker.nonStandaloneBuilder()
-            .trafficService(trafficService)
+        IMQTTBrokerBuilder brokerBuilder = IMQTTBroker.builder()
             .rpcServerBuilder(rpcServerBuilder)
             .mqttBossELGThreads(mqttServerConfig.getBossELGThreads())
             .mqttWorkerELGThreads(mqttServerConfig.getWorkerELGThreads())
-            .crdtService(crdtService)
             .authProvider(authProviderMgr)
             .clientBalancer(clientBalancerMgr)
             .eventCollector(eventCollectorMgr)
@@ -494,23 +486,12 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
         return StandaloneConfig.class;
     }
 
+    @Override
     public void start() {
         super.start();
         join();
-        sessionDictServer.start();
-
-        inboxStore.start();
-
-        inboxServer.start();
-
-        retainStore.start();
-        retainServer.start();
-
-        distWorker.start();
-        distServer.start();
-
+        log.info("Start RPC server");
         rpcServer.start();
-
         mqttBroker.start();
         if (apiServer != null) {
             apiServer.start();
@@ -542,39 +523,39 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
     }
 
     public void stop() {
-        mqttBroker.shutdown();
+        mqttBroker.close();
         if (apiServer != null) {
-            apiServer.shutdown();
+            apiServer.close();
         }
         rpcServer.shutdown();
 
-        distClient.stop();
-        distServer.shutdown();
+        distClient.close();
+        distServer.close();
 
-        distWorkerClient.stop();
-        distWorker.stop();
+        distWorkerClient.close();
+        distWorker.close();
 
-        inboxServer.shutdown();
+        inboxServer.close();
 
-        inboxStoreClient.stop();
-        inboxStore.stop();
+        inboxStoreClient.close();
+        inboxStore.close();
 
-        retainClient.stop();
-        retainServer.shutdown();
+        retainClient.close();
+        retainServer.close();
 
-        retainStoreClient.stop();
-        retainStore.stop();
+        retainStoreClient.close();
+        retainStore.close();
 
-        sessionDictClient.stop();
-        sessionDictServer.shutdown();
+        sessionDictClient.close();
+        sessionDictServer.close();
 
-        metaService.stop();
+        metaService.close();
 
-        trafficService.stop();
+        trafficService.close();
 
-        crdtService.stop();
+        crdtService.close();
 
-        agentHost.shutdown();
+        agentHost.close();
 
         authProviderMgr.close();
 
@@ -586,7 +567,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
 
         settingProviderMgr.close();
 
-        subBrokerManager.stop();
+        subBrokerManager.close();
 
         if (rpcClientExecutor != null) {
             rpcClientExecutor.shutdownNow();

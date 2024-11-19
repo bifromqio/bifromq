@@ -48,7 +48,7 @@ final class RetainClient implements IRetainClient {
     }
 
     @Override
-    public void stop() {
+    public void close() {
         if (closed.compareAndSet(false, true)) {
             log.info("Stopping retain client");
             log.debug("Stopping rpc client");

@@ -41,9 +41,8 @@ public class AgentHostNode1 {
         IAgentHost host = IAgentHost.newInstance(opt);
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             MoreExecutors.shutdownAndAwaitTermination(executorService, 5, TimeUnit.SECONDS);
-            host.shutdown();
+            host.close();
         }));
-        host.start();
         IAgent agent = host.host("service1");
         IAgentMember agentMember = agent.register("AgentNode1");
         agentMember.metadata(ByteString.copyFromUtf8("Greeting"));

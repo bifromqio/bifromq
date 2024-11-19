@@ -13,16 +13,10 @@
 
 package com.baidu.bifromq.inbox.server;
 
-public interface IInboxServer {
-    static StandaloneInboxServerBuilder standaloneBuilder() {
-        return new StandaloneInboxServerBuilder();
+public interface IInboxServer extends AutoCloseable {
+    static InboxServerBuilder builder() {
+        return new InboxServerBuilder();
     }
 
-    static NonStandaloneInboxServerBuilder nonStandaloneBuilder() {
-        return new NonStandaloneInboxServerBuilder();
-    }
-
-    void start();
-
-    void shutdown();
+    void close();
 }

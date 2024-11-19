@@ -429,7 +429,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     }
 
     @Override
-    public void stop() {
+    public void close() {
         if (closed.compareAndSet(false, true)) {
             log.info("Stopping BaseKVStore client: cluster[{}]", clusterId);
             disposables.dispose();

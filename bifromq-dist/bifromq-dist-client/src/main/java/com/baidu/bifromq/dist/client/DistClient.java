@@ -55,12 +55,12 @@ final class DistClient implements IDistClient {
     }
 
     @Override
-    public CompletableFuture<MatchResult> match(long reqId,
-                                                String tenantId,
-                                                String topicFilter,
-                                                String receiverId,
-                                                String delivererKey,
-                                                int subBrokerId) {
+    public CompletableFuture<MatchResult> addTopicMatch(long reqId,
+                                                        String tenantId,
+                                                        String topicFilter,
+                                                        String receiverId,
+                                                        String delivererKey,
+                                                        int subBrokerId) {
         MatchRequest request = MatchRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
@@ -84,8 +84,9 @@ final class DistClient implements IDistClient {
     }
 
     @Override
-    public CompletableFuture<UnmatchResult> unmatch(long reqId, String tenantId, String topicFilter, String receiverId,
-                                                    String delivererKey, int subBrokerId) {
+    public CompletableFuture<UnmatchResult> removeTopicMatch(long reqId, String tenantId, String topicFilter,
+                                                             String receiverId,
+                                                             String delivererKey, int subBrokerId) {
         UnmatchRequest request = UnmatchRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
@@ -109,7 +110,7 @@ final class DistClient implements IDistClient {
     }
 
     @Override
-    public void stop() {
+    public void close() {
         // close tenant logger and drain logs before closing the dist client
         if (closed.compareAndSet(false, true)) {
             log.info("Stopping dist client");

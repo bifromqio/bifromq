@@ -51,7 +51,7 @@ public class SubBrokerManager implements ISubBrokerManager {
     }
 
     @Override
-    public void stop() {
+    public void close() {
         if (stopped.compareAndSet(false, true)) {
             log.info("Stopping SubBrokerManager");
             receivers.values().forEach(ISubBroker::close);

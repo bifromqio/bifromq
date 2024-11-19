@@ -31,7 +31,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Agent host defines the interface for hosting agents and joining the cluster.
  */
-public interface IAgentHost {
+public interface IAgentHost extends AutoCloseable {
     /**
      * Create a new instance of agent host.
      *
@@ -98,12 +98,7 @@ public interface IAgentHost {
     Observable<Map<HostEndpoint, Set<String>>> landscape();
 
     /**
-     * Start the agent host.
-     */
-    void start();
-
-    /**
      * Shutdown the agent host.
      */
-    void shutdown();
+    void close();
 }

@@ -91,12 +91,12 @@ public class SubBrokerManagerTest {
     }
 
     @Test
-    public void stop() {
+    public void close() {
         when(subBroker1.id()).thenReturn(0);
         when(subBroker2.id()).thenReturn(1);
         when(plugin.getExtensions(ISubBroker.class)).thenReturn(List.of(subBroker1, subBroker2));
         SubBrokerManager subBrokerManager = new SubBrokerManager(plugin);
-        subBrokerManager.stop();
+        subBrokerManager.close();
         verify(subBroker1, times(1)).close();
         verify(subBroker2, times(1)).close();
     }

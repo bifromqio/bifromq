@@ -29,7 +29,7 @@ public interface ISettingProvider extends ExtensionPoint {
     <R> R provide(Setting setting, String tenantId);
 
     /**
-     * This method will be called during broker shutdown
+     * This method will be called during broker shutdown.
      */
     default void close() {
 

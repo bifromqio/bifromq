@@ -17,7 +17,7 @@ import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.Set;
 
-public interface IRPCServiceTrafficService {
+public interface IRPCServiceTrafficService extends AutoCloseable {
     static IRPCServiceTrafficService newInstance(ICRDTService crdtService) {
         return new RPCServiceTrafficService(crdtService);
     }
@@ -30,5 +30,5 @@ public interface IRPCServiceTrafficService {
 
     IRPCServiceTrafficGovernor getTrafficGovernor(String serviceUniqueName);
 
-    void stop();
+    void close();
 }

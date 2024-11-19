@@ -37,9 +37,8 @@ public class AgentHostNode2 {
         IAgentHost host = IAgentHost.newInstance(opt);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            host.shutdown();
+            host.close();
         }));
-        host.start();
 
         host.join(Sets.newHashSet(new InetSocketAddress("127.0.0.1", 3334)));
         IAgent agent = host.host("service1");

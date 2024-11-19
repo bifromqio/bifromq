@@ -95,7 +95,7 @@ public class LocalTopicRouter implements ILocalTopicRouter {
             routeMap.compute(new TopicFilter(tenantId, topicFilter, bucketId), (k, v) -> {
                 if (v == null || v.isCompletedExceptionally()) {
                     LocalRoutes localRoutes = new LocalRoutes(k.bucketId);
-                    return distClient.match(reqId,
+                    return distClient.addTopicMatch(reqId,
                             k.tenantId,
                             k.topicFilter,
                             localRoutes.localReceiverId(),
@@ -150,7 +150,7 @@ public class LocalTopicRouter implements ILocalTopicRouter {
                     } else {
                         localRoutes.routeList.remove(channelId);
                         if (localRoutes.routeList.isEmpty()) {
-                            distClient.unmatch(reqId,
+                            distClient.removeTopicMatch(reqId,
                                     k.tenantId,
                                     k.topicFilter,
                                     localRoutes.localReceiverId(),

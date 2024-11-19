@@ -13,17 +13,16 @@
 
 package com.baidu.bifromq.basekv.server;
 
+/**
+ * The interface of the BaseKV store server.
+ */
 public interface IBaseKVStoreServer {
-    static StandaloneBaseKVStoreServerBuilder standaloneServer() {
-        return new StandaloneBaseKVStoreServerBuilder();
-    }
-
-    static NonStandaloneBaseKVStoreServerBuilder nonStandaloneServer() {
-        return new NonStandaloneBaseKVStoreServerBuilder();
+    static BaseKVStoreServerBuilder builder() {
+        return new BaseKVStoreServerBuilder();
     }
 
     /**
-     * Get the member store of the provided cluster hosted by current store server
+     * Get the member store of the provided cluster hosted by current store server.
      *
      * @param clusterId the id of the cluster
      * @return the id of the store hosted by the store server

@@ -23,8 +23,8 @@ import lombok.experimental.Accessors;
 
 @Accessors(fluent = true)
 @Setter
-public class BaseKVStoreServiceBuilder<P extends AbstractBaseKVStoreServerBuilder<P>> {
-    final P serverBuilder;
+public class BaseKVStoreServiceBuilder {
+    final BaseKVStoreServerBuilder serverBuilder;
     final String clusterId;
     final boolean bootstrap;
     KVRangeStoreOptions storeOptions = new KVRangeStoreOptions();
@@ -35,13 +35,13 @@ public class BaseKVStoreServiceBuilder<P extends AbstractBaseKVStoreServerBuilde
     int tickerThreads;
     ScheduledExecutorService bgTaskExecutor;
 
-    BaseKVStoreServiceBuilder(String clusterId, boolean bootstrap, P serverBuilder) {
+    BaseKVStoreServiceBuilder(String clusterId, boolean bootstrap, BaseKVStoreServerBuilder serverBuilder) {
         this.clusterId = clusterId;
         this.bootstrap = bootstrap;
         this.serverBuilder = serverBuilder;
     }
 
-    public final P finish() {
+    public final BaseKVStoreServerBuilder finish() {
         serverBuilder.serviceBuilders.put(clusterId, this);
         return serverBuilder;
     }

@@ -68,7 +68,7 @@ public class LocalDistService implements ILocalDistService {
     public CompletableFuture<MatchResult> match(long reqId, String topicFilter, IMQTTTransientSession session) {
         String tenantId = session.clientInfo().getTenantId();
         if (TopicUtil.isSharedSubscription(topicFilter)) {
-            return distClient.match(reqId,
+            return distClient.addTopicMatch(reqId,
                 tenantId,
                 topicFilter,
                 ILocalDistService.globalize(session.channelId()),
@@ -82,7 +82,7 @@ public class LocalDistService implements ILocalDistService {
     public CompletableFuture<UnmatchResult> unmatch(long reqId, String topicFilter, IMQTTTransientSession session) {
         String tenantId = session.clientInfo().getTenantId();
         if (TopicUtil.isSharedSubscription(topicFilter)) {
-            return distClient.unmatch(reqId,
+            return distClient.removeTopicMatch(reqId,
                 tenantId,
                 topicFilter,
                 ILocalDistService.globalize(session.channelId()),

@@ -61,7 +61,6 @@ abstract class RPCServiceAnnouncer {
     private final CompositeDisposable disposable = new CompositeDisposable();
 
     protected RPCServiceAnnouncer(String serviceUniqueName, ICRDTService crdtService) {
-        assert crdtService.isStarted();
         this.serviceUniqueName = serviceUniqueName;
         this.crdtService = crdtService;
         this.rpcServiceCRDT = crdtService.host(CRDTURI.toURI(CausalCRDTType.ormap, "RPC:" + serviceUniqueName));

@@ -45,8 +45,8 @@ public class CRDTServiceTestCluster {
 
     public void stopService(String serviceId) {
         checkService(serviceId);
-        serviceMap.remove(serviceIdMap.remove(serviceId)).stop();
-        serviceHostMap.remove(serviceId).shutdown();
+        serviceMap.remove(serviceIdMap.remove(serviceId)).close();
+        serviceHostMap.remove(serviceId).close();
     }
 
     public ICRDTService getService(String serviceId) {
@@ -72,13 +72,8 @@ public class CRDTServiceTestCluster {
 
     private String loadService(String serviceId, AgentHostOptions hostOptions, CRDTServiceOptions serviceOptions) {
         log.info("Load service {}", serviceId);
-        IAgentHost host = serviceHostMap.computeIfAbsent(serviceId, id -> {
-            IAgentHost newHost = IAgentHost.newInstance(hostOptions);
-            newHost.start();
-            return newHost;
-        });
-        ICRDTService service = ICRDTService.newInstance(serviceOptions);
-        service.start(host);
+        IAgentHost host = serviceHostMap.computeIfAbsent(serviceId, id -> IAgentHost.newInstance(hostOptions));
+        ICRDTService service = ICRDTService.newInstance(host, serviceOptions);
         serviceIdMap.put(serviceId, service.id());
         serviceMap.put(service.id(), service);
         return service.id();

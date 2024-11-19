@@ -61,7 +61,8 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
             .build()).join();
         assertEquals(unsubReply.getReqId(), reqId);
         assertEquals(unsubReply.getCode(), UnsubReply.Code.NO_INBOX);
-        verify(distClient, never()).unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+        verify(distClient, never()).removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(),
+            anyInt());
     }
 
     @Test(groups = "integration")
@@ -100,7 +101,8 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
             .build()).join();
         assertEquals(unsubReply.getReqId(), reqId);
         assertEquals(unsubReply.getCode(), UnsubReply.Code.CONFLICT);
-        verify(distClient, never()).unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+        verify(distClient, never()).removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(),
+            anyInt());
     }
 
     @Test(groups = "integration")
@@ -127,9 +129,9 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
             .setNow(now)
             .build()).join();
 
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
-        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
         when(retainClient.match(any())).thenReturn(CompletableFuture.completedFuture(MatchReply.newBuilder()
             .setResult(MatchReply.Result.OK).build()));
@@ -159,7 +161,7 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
         assertEquals(unsubReply2.getReqId(), reqId);
         assertEquals(unsubReply2.getCode(), UnsubReply.Code.OK);
         verify(distClient, times(1))
-            .unmatch(anyLong(), eq(tenantId), eq(topicFilter), anyString(), anyString(), anyInt());
+            .removeTopicMatch(anyLong(), eq(tenantId), eq(topicFilter), anyString(), anyString(), anyInt());
     }
 
     @Test(groups = "integration")
@@ -198,7 +200,8 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
             .build()).join();
         assertEquals(unsubReply.getReqId(), reqId);
         assertEquals(unsubReply.getCode(), UnsubReply.Code.NO_SUB);
-        verify(distClient, never()).unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+        verify(distClient, never()).removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(),
+            anyInt());
     }
 
     @Test(groups = "integration")
@@ -226,9 +229,9 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
             .build()).join();
 
         when(settingProvider.provide(Setting.MaxTopicFiltersPerInbox, tenantId)).thenReturn(1);
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
-        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
         when(retainClient.match(any())).thenReturn(CompletableFuture.completedFuture(MatchReply.newBuilder()
             .setResult(MatchReply.Result.OK).build()));
@@ -304,7 +307,7 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
             .setClient(clientInfo)
             .setNow(now)
             .build()).join();
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         when(retainClient.match(any())).thenReturn(CompletableFuture.completedFuture(MatchReply.newBuilder()
             .setResult(MatchReply.Result.OK).build()));
@@ -322,7 +325,7 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
         assertEquals(subReply2.getReqId(), reqId);
         assertEquals(subReply2.getCode(), SubReply.Code.OK);
 
-        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(UnmatchResult.ERROR));
         UnsubReply unsubReply2 = inboxClient.unsub(UnsubRequest.newBuilder()
             .setReqId(reqId)

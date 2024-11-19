@@ -31,7 +31,7 @@ import com.baidu.bifromq.type.ClientInfo;
 import java.util.concurrent.CompletableFuture;
 import org.pf4j.ExtensionPoint;
 
-public interface IAuthProvider extends ExtensionPoint {
+public interface IAuthProvider extends ExtensionPoint, AutoCloseable {
     /**
      * Implement this method to hook authentication logic of mqtt3 client into BifroMQ.
      *
@@ -144,7 +144,7 @@ public interface IAuthProvider extends ExtensionPoint {
     }
 
     /**
-     * This method will be called during broker shutdown
+     * This method will be called during broker shutdown.
      */
     default void close() {
     }

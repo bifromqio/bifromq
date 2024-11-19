@@ -28,6 +28,8 @@ import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.client.IRPCClient;
+import com.baidu.bifromq.baserpc.server.IRPCServer;
+import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
@@ -78,6 +80,7 @@ public abstract class InboxServiceTest {
     private IBaseKVStoreClient inboxStoreClient;
     private IInboxStore inboxStore;
     private IInboxServer inboxServer;
+    private IRPCServer rpcServer;
     private ExecutorService queryExecutor;
     private int tickerThreads = 2;
     private ScheduledExecutorService bgTaskExecutor;
@@ -89,9 +92,9 @@ public abstract class InboxServiceTest {
         when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
         when(settingProvider.provide(any(), anyString())).thenAnswer(
             invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
-        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
@@ -100,10 +103,8 @@ public abstract class InboxServiceTest {
             .joinTimeout(Duration.ofMinutes(5))
             .build();
         agentHost = IAgentHost.newInstance(agentHostOpts);
-        agentHost.start();
 
-        crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        crdtService.start(agentHost);
+        crdtService = ICRDTService.newInstance(agentHost, CRDTServiceOptions.builder().build());
 
         trafficService = IRPCServiceTrafficService.newInstance(crdtService);
 
@@ -120,11 +121,11 @@ public abstract class InboxServiceTest {
             .trafficService(trafficService)
             .metaService(metaService)
             .build();
-        inboxStore = IInboxStore.standaloneBuilder()
+        RPCServerBuilder rpcServerBuilder = IRPCServer.newBuilder().host("127.0.0.1").trafficService(trafficService);
+        inboxStore = IInboxStore.builder()
             .bootstrap(true)
-            .host("127.0.0.1")
+            .rpcServerBuilder(rpcServerBuilder)
             .agentHost(agentHost)
-            .trafficService(trafficService)
             .metaService(metaService)
             .storeClient(inboxStoreClient)
             .settingProvider(settingProvider)
@@ -137,9 +138,8 @@ public abstract class InboxServiceTest {
             .balancerFactoryConfig(
                 Map.of(RangeBootstrapBalancerFactory.class.getName(), Struct.getDefaultInstance()))
             .build();
-        inboxServer = IInboxServer.standaloneBuilder()
-            .host("127.0.0.1")
-            .trafficService(trafficService)
+        inboxServer = IInboxServer.builder()
+            .rpcServerBuilder(rpcServerBuilder)
             .inboxClient(inboxClient)
             .distClient(distClient)
             .retainClient(retainClient)
@@ -148,8 +148,8 @@ public abstract class InboxServiceTest {
             .settingProvider(settingProvider)
             .inboxStoreClient(inboxStoreClient)
             .build();
-        inboxStore.start();
-        inboxServer.start();
+        rpcServer = rpcServerBuilder.build();
+        rpcServer.start();
         inboxStoreClient.join();
         inboxClient.connState().filter(s -> s == IRPCClient.ConnState.READY).blockingFirst();
         log.info("Setup finished, and start testing");
@@ -159,14 +159,15 @@ public abstract class InboxServiceTest {
     @AfterClass(alwaysRun = true)
     public void tearDown() {
         log.info("Finish testing, and tearing down");
-        inboxServer.shutdown();
-        inboxStore.stop();
+        inboxServer.close();
+        inboxStore.close();
+        rpcServer.shutdown();
         inboxClient.close();
-        inboxStoreClient.stop();
-        metaService.stop();
-        trafficService.stop();
-        crdtService.stop();
-        agentHost.shutdown();
+        inboxStoreClient.close();
+        metaService.close();
+        trafficService.close();
+        crdtService.close();
+        agentHost.close();
         queryExecutor.shutdown();
         bgTaskExecutor.shutdown();
         closeable.close();

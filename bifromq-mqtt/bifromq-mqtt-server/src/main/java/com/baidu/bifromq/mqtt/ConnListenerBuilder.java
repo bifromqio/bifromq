@@ -23,14 +23,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.NonNull;
 
-public abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C, M>, M extends AbstractMQTTBrokerBuilder<M>> {
+public abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C>> {
     protected final Map<ChannelOption<?>, Object> options = new LinkedHashMap<>();
     protected final Map<ChannelOption<?>, Object> childOptions = new LinkedHashMap<>();
-    private final M serverBuilder;
+    private final MQTTBrokerBuilder serverBuilder;
     protected String host;
     protected int port;
 
-    ConnListenerBuilder(M builder) {
+    ConnListenerBuilder(MQTTBrokerBuilder builder) {
         serverBuilder = builder;
         options.put(ChannelOption.SO_BACKLOG, 128);
         options.put(ChannelOption.SO_REUSEADDR, true);
@@ -79,24 +79,22 @@ public abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C, M>, M
         return thisT();
     }
 
-    public M buildListener() {
+    public MQTTBrokerBuilder buildListener() {
         return serverBuilder;
     }
 
-    public static class TCPConnListenerBuilder<M extends AbstractMQTTBrokerBuilder<M>>
-        extends ConnListenerBuilder<TCPConnListenerBuilder<M>, M> {
-        TCPConnListenerBuilder(M builder) {
+    public static class TCPConnListenerBuilder extends ConnListenerBuilder<TCPConnListenerBuilder> {
+        TCPConnListenerBuilder(MQTTBrokerBuilder builder) {
             super(builder);
             port(1883);
         }
     }
 
-    private abstract static class SecuredConnListenerBuilder
-        <L extends SecuredConnListenerBuilder<L, M>, M extends AbstractMQTTBrokerBuilder<M>>
-        extends ConnListenerBuilder<L, M> {
+    private abstract static class SecuredConnListenerBuilder<L extends SecuredConnListenerBuilder<L>>
+        extends ConnListenerBuilder<L> {
         protected SslContext sslContext;
 
-        SecuredConnListenerBuilder(M builder) {
+        SecuredConnListenerBuilder(MQTTBrokerBuilder builder) {
             super(builder);
         }
 
@@ -108,20 +106,18 @@ public abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C, M>, M
         }
     }
 
-    public static final class TLSConnListenerBuilder<M extends AbstractMQTTBrokerBuilder<M>>
-        extends SecuredConnListenerBuilder<TLSConnListenerBuilder<M>, M> {
+    public static final class TLSConnListenerBuilder extends SecuredConnListenerBuilder<TLSConnListenerBuilder> {
 
-        TLSConnListenerBuilder(M builder) {
+        TLSConnListenerBuilder(MQTTBrokerBuilder builder) {
             super(builder);
             port(8883);
         }
     }
 
-    public static final class WSConnListenerBuilder<M extends AbstractMQTTBrokerBuilder<M>>
-        extends ConnListenerBuilder<WSConnListenerBuilder<M>, M> {
+    public static final class WSConnListenerBuilder extends ConnListenerBuilder<WSConnListenerBuilder> {
         private String path = "mqtt";
 
-        WSConnListenerBuilder(M builder) {
+        WSConnListenerBuilder(MQTTBrokerBuilder builder) {
             super(builder);
         }
 
@@ -129,17 +125,16 @@ public abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C, M>, M
             return path;
         }
 
-        public WSConnListenerBuilder<M> path(String path) {
+        public WSConnListenerBuilder path(String path) {
             this.path = path;
             return this;
         }
     }
 
-    public static final class WSSConnListenerBuilder<M extends AbstractMQTTBrokerBuilder<M>>
-        extends SecuredConnListenerBuilder<WSSConnListenerBuilder<M>, M> {
+    public static final class WSSConnListenerBuilder extends SecuredConnListenerBuilder<WSSConnListenerBuilder> {
         private String path;
 
-        WSSConnListenerBuilder(M builder) {
+        WSSConnListenerBuilder(MQTTBrokerBuilder builder) {
             super(builder);
         }
 
@@ -147,7 +142,7 @@ public abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C, M>, M
             return path;
         }
 
-        public WSSConnListenerBuilder<M> path(String path) {
+        public WSSConnListenerBuilder path(String path) {
             this.path = path;
             return this;
         }

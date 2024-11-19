@@ -80,7 +80,7 @@ public class AgentTestCluster {
     public void stopHost(String hostId) {
         checkHost(hostId);
         inflationLogs.remove(hostId);
-        hostMap.remove(hostEndpointMap.get(hostId)).shutdown();
+        hostMap.remove(hostEndpointMap.get(hostId)).close();
     }
 
     public void isolate(String hostId) {
@@ -130,7 +130,6 @@ public class AgentTestCluster {
         options.port(transport.bindAddress().getPort());
         IAgentHost host =
             new AgentHost(transport, new HostAddressResolver(Duration.ofSeconds(1), Duration.ofSeconds(1)), options);
-        host.start();
         hostEndpointMap.put(storeId, host.local());
         hostMap.put(host.local(), host);
         hostTransportMap.put(storeId, transport);

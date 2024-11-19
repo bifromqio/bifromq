@@ -494,7 +494,7 @@ public class BaseSessionHandlerTest extends MockableTest {
                 : CompletableFuture.failedFuture(new RuntimeException("InternalError"));
         }
         OngoingStubbing<CompletableFuture<UnmatchResult>> ongoingStubbing =
-            when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()));
+            when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()));
         for (CompletableFuture<UnmatchResult> result : unsubResults) {
             ongoingStubbing = ongoingStubbing.thenReturn(result);
         }

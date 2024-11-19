@@ -14,12 +14,14 @@
 package com.baidu.bifromq.dist.client;
 
 import com.baidu.bifromq.baserpc.client.IConnectable;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import java.util.concurrent.CompletableFuture;
 
-public interface IDistClient extends IConnectable {
+/**
+ * The dist client interface.
+ */
+public interface IDistClient extends IConnectable, AutoCloseable {
     static DistClientBuilder newBuilder() {
         return new DistClientBuilder();
     }
@@ -37,7 +39,7 @@ public interface IDistClient extends IConnectable {
     CompletableFuture<PubResult> pub(long reqId, String topic, Message message, ClientInfo publisher);
 
     /**
-     * Add a topic match
+     * Add a topic match.
      *
      * @param reqId        the caller supplied request id for event tracing
      * @param tenantId     the id of caller tenant
@@ -47,15 +49,15 @@ public interface IDistClient extends IConnectable {
      * @param subBrokerId  the hosting subbroker of the receiver
      * @return correspond to Mqtt Sub QoS
      */
-    CompletableFuture<MatchResult> match(long reqId,
-                                         String tenantId,
-                                         String topicFilter,
-                                         String receiverId,
-                                         String delivererKey,
-                                         int subBrokerId);
+    CompletableFuture<MatchResult> addTopicMatch(long reqId,
+                                                 String tenantId,
+                                                 String topicFilter,
+                                                 String receiverId,
+                                                 String delivererKey,
+                                                 int subBrokerId);
 
     /**
-     * Remove a topic match
+     * Remove a topic match.
      *
      * @param reqId        the caller supplied request id for event tracing
      * @param tenantId     the id of caller tenant
@@ -65,12 +67,12 @@ public interface IDistClient extends IConnectable {
      * @param subBrokerId  the hosting subbroker of the receiver
      * @return true for remove successfully, false for match not found
      */
-    CompletableFuture<UnmatchResult> unmatch(long reqId,
-                                             String tenantId,
-                                             String topicFilter,
-                                             String receiverId,
-                                             String delivererKey,
-                                             int subBrokerId);
+    CompletableFuture<UnmatchResult> removeTopicMatch(long reqId,
+                                                      String tenantId,
+                                                      String topicFilter,
+                                                      String receiverId,
+                                                      String delivererKey,
+                                                      int subBrokerId);
 
-    void stop();
+    void close();
 }

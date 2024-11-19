@@ -13,16 +13,10 @@
 
 package com.baidu.bifromq.retain.server;
 
-public interface IRetainServer {
-    static StandaloneRetainServerBuilder standaloneBuilder() {
-        return new StandaloneRetainServerBuilder();
+public interface IRetainServer extends AutoCloseable {
+    static RetainServerBuilder builder() {
+        return new RetainServerBuilder();
     }
 
-    static NonStandaloneRetainServerBuilder nonStandaloneBuilder() {
-        return new NonStandaloneRetainServerBuilder();
-    }
-
-    void start();
-
-    void shutdown();
+    void close();
 }

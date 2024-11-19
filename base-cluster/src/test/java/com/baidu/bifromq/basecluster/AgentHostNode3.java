@@ -34,8 +34,7 @@ public class AgentHostNode3 {
             .port(5556);
         IAgentHost host = IAgentHost.newInstance(opt);
         // comment out following line to simulate crash and restart
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> host.shutdown()));
-        host.start();
+        Runtime.getRuntime().addShutdownHook(new Thread(host::close));
 
         host.join(Sets.newHashSet(new InetSocketAddress("127.0.0.1", 3334)));
         IAgent agent = host.host("service1");

@@ -58,7 +58,7 @@ class RPCServiceTrafficService implements IRPCServiceTrafficService {
     }
 
     @Override
-    public void stop() {
+    public void close() {
         trafficManagerMap.values().forEach(RPCServiceTrafficManager::close);
     }
 }

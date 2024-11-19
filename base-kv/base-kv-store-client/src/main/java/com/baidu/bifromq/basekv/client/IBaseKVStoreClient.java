@@ -37,7 +37,10 @@ import java.util.NavigableMap;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
-public interface IBaseKVStoreClient extends IConnectable {
+/**
+ * The interface of BaseKV Store Client.
+ */
+public interface IBaseKVStoreClient extends IConnectable, AutoCloseable {
     static BaseKVStoreClientBuilder newBuilder() {
         return new BaseKVStoreClientBuilder();
     }
@@ -63,85 +66,85 @@ public interface IBaseKVStoreClient extends IConnectable {
     CompletableFuture<KVRangeMergeReply> mergeRanges(String storeId, KVRangeMergeRequest request);
 
     /**
-     * Execute a read-write request, the requests from same calling thread will be processed orderly
+     * Execute a read-write request, the requests from same calling thread will be processed orderly.
      *
-     * @param storeId
-     * @param request
-     * @return
+     * @param storeId the store id
+     * @param request the request
+     * @return the future of the reply
      */
     CompletableFuture<KVRangeRWReply> execute(String storeId, KVRangeRWRequest request);
 
     /**
-     * Execute a read-write request, the requests with same orderKey will be processed orderly
+     * Execute a read-write request, the requests with same orderKey will be processed orderly.
      *
-     * @param storeId
-     * @param request
-     * @return
+     * @param storeId the store id
+     * @param request the request
+     * @return the future of the reply
      */
     CompletableFuture<KVRangeRWReply> execute(String storeId, KVRangeRWRequest request, String orderKey);
 
     /**
-     * Execute a read-only query, the requests from same calling thread will be processed orderly
+     * Execute a read-only query, the requests from same calling thread will be processed orderly.
      *
-     * @param storeId
-     * @param request
-     * @return
+     * @param storeId the store id
+     * @param request the request
+     * @return the future of the reply
      */
     CompletableFuture<KVRangeROReply> query(String storeId, KVRangeRORequest request);
 
     /**
-     * Execute a read-only request, the requests with same orderKey will be processed orderly
+     * Execute a read-only request, the requests with same orderKey will be processed orderly.
      *
-     * @param storeId
-     * @param request
-     * @return
+     * @param storeId the store id
+     * @param request the request
+     * @return the future of the reply
      */
     CompletableFuture<KVRangeROReply> query(String storeId, KVRangeRORequest request, String orderKey);
 
     /**
-     * Execute a read-only linearized query, the requests from same calling thread will be processed orderly
+     * Execute a read-only linearized query, the requests from same calling thread will be processed orderly.
      *
-     * @param storeId
-     * @param request
-     * @return
+     * @param storeId the store id
+     * @param request the request
+     * @return the future of the reply
      */
     CompletableFuture<KVRangeROReply> linearizedQuery(String storeId, KVRangeRORequest request);
 
     /**
-     * Execute a read-only linearized request, the requests with same orderKey will be processed orderly
+     * Execute a read-only linearized request, the requests with same orderKey will be processed orderly.
      *
-     * @param storeId
-     * @param request
-     * @return
+     * @param storeId the store id
+     * @param request the request
+     * @return the future of the reply
      */
     CompletableFuture<KVRangeROReply> linearizedQuery(String storeId, KVRangeRORequest request, String orderKey);
 
 
     /**
-     * Create a caller-managed pipeline for executing rw command orderly
+     * Create a caller-managed pipeline for executing rw command orderly.
      *
-     * @param storeId
-     * @return
+     * @param storeId the store id
+     * @return the mutation pipeline
      */
     IMutationPipeline createMutationPipeline(String storeId);
 
     /**
-     * Create a caller-managed pipeline for execute ro command orderly
+     * Create a caller-managed pipeline for execute ro command orderly.
      *
-     * @param storeId
-     * @return
+     * @param storeId the store id
+     * @return the query pipeline
      */
     IQueryPipeline createQueryPipeline(String storeId);
 
     /**
-     * Create a caller-managed pipeline for execute ro command orderly with linearizability guaranteed.
+     * Create a caller-managed pipeline for execute linearized ro command orderly.
      *
-     * @param storeId
-     * @return
+     * @param storeId the store id
+     * @return the query pipeline
      */
     IQueryPipeline createLinearizedQueryPipeline(String storeId);
 
     void join();
 
-    void stop();
+    void close();
 }

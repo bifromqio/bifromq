@@ -26,6 +26,8 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.client.IRPCClient;
+import com.baidu.bifromq.baserpc.server.IRPCServer;
+import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.worker.IDistWorker;
@@ -57,6 +59,7 @@ public abstract class DistServiceTest {
     private ICRDTService crdtService;
     private IRPCServiceTrafficService trafficService;
     private IBaseKVMetaService metaService;
+    private IRPCServer rpcServer;
     private IDistWorker distWorker;
     private IDistServer distServer;
     private IDistClient distClient;
@@ -95,10 +98,8 @@ public abstract class DistServiceTest {
             .joinTimeout(Duration.ofMinutes(5))
             .build();
         agentHost = IAgentHost.newInstance(agentHostOpts);
-        agentHost.start();
 
-        crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        crdtService.start(agentHost);
+        crdtService = ICRDTService.newInstance(agentHost, CRDTServiceOptions.builder().build());
 
         trafficService = IRPCServiceTrafficService.newInstance(crdtService);
 
@@ -117,12 +118,14 @@ public abstract class DistServiceTest {
             .metaService(metaService)
             .build();
         int tickerThreads = 2;
-        distWorker = IDistWorker
-            .standaloneBuilder()
-            .bootstrap(true)
-            .host("127.0.0.1")
-            .agentHost(agentHost)
+        RPCServerBuilder rpcServerBuilder = IRPCServer.newBuilder()
             .trafficService(trafficService)
+            .host("127.0.0.1");
+        distWorker = IDistWorker
+            .builder()
+            .rpcServerBuilder(rpcServerBuilder)
+            .bootstrap(true)
+            .agentHost(agentHost)
             .metaService(metaService)
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)
@@ -138,17 +141,15 @@ public abstract class DistServiceTest {
                 Map.of(RangeBootstrapBalancerFactory.class.getName(),
                     Struct.getDefaultInstance()))
             .build();
-        distServer = IDistServer.standaloneBuilder()
-            .host("127.0.0.1")
-            .trafficService(trafficService)
+        distServer = IDistServer.builder()
+            .rpcServerBuilder(rpcServerBuilder)
             .distWorkerClient(workerClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
-            .executor(MoreExecutors.directExecutor())
             .build();
 
-        distWorker.start();
-        distServer.start();
+        rpcServer = rpcServerBuilder.build();
+        rpcServer.start();
         workerClient.join();
         distClient.connState().filter(s -> s == IRPCClient.ConnState.READY).blockingFirst();
         log.info("Setup finished, and start testing");
@@ -158,14 +159,15 @@ public abstract class DistServiceTest {
     public void tearDown() throws Exception {
         log.info("Finish testing, and tearing down");
         new Thread(() -> {
-            workerClient.stop();
-            distWorker.stop();
-            distClient.stop();
-            distServer.shutdown();
-            metaService.stop();
-            trafficService.stop();
-            crdtService.stop();
-            agentHost.shutdown();
+            workerClient.close();
+            rpcServer.shutdown();
+            distWorker.close();
+            distClient.close();
+            distServer.close();
+            metaService.close();
+            trafficService.close();
+            crdtService.close();
+            agentHost.close();
             queryExecutor.shutdown();
             bgTaskExecutor.shutdown();
         }).start();

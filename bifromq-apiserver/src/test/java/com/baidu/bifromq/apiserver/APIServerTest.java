@@ -104,7 +104,7 @@ public class APIServerTest extends MockableTest {
     @AfterMethod(alwaysRun = true)
     public void teardown() {
         super.teardown();
-        apiServer.shutdown();
+        apiServer.close();
     }
 
     @Test(groups = "integration")

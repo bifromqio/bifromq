@@ -38,14 +38,12 @@ abstract class RPCServiceAnnouncerTest {
             .joinRetryInSec(5)
             .joinTimeout(Duration.ofMinutes(5))
             .build());
-        governorAgentHost.start();
         clientAgentHost = IAgentHost.newInstance(AgentHostOptions.builder()
             .addr("127.0.0.1")
             .baseProbeInterval(Duration.ofSeconds(10))
             .joinRetryInSec(5)
             .joinTimeout(Duration.ofMinutes(5))
             .build());
-        clientAgentHost.start();
         log.info("Agent host started");
 
         serverAgentHost = IAgentHost.newInstance(AgentHostOptions.builder()
@@ -54,7 +52,6 @@ abstract class RPCServiceAnnouncerTest {
             .joinRetryInSec(5)
             .joinTimeout(Duration.ofMinutes(5))
             .build());
-        serverAgentHost.start();
         log.info("Agent host started");
         governorAgentHost.join(
             Set.of(new InetSocketAddress(clientAgentHost.local().getAddress(), clientAgentHost.local().getPort())));
@@ -64,14 +61,13 @@ abstract class RPCServiceAnnouncerTest {
 
     @AfterClass(alwaysRun = true)
     public void tearDown() {
-        governorAgentHost.shutdown();
-        clientAgentHost.shutdown();
-        serverAgentHost.shutdown();
+        governorAgentHost.close();
+        clientAgentHost.close();
+        serverAgentHost.close();
     }
 
     protected ICRDTService newCRDTService(IAgentHost agentHost) {
-        ICRDTService crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        crdtService.start(agentHost);
+        ICRDTService crdtService = ICRDTService.newInstance(agentHost, CRDTServiceOptions.builder().build());
         log.info("CRDT service started");
         return crdtService;
     }

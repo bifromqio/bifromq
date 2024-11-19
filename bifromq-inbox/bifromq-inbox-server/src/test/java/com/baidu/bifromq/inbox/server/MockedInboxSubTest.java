@@ -65,7 +65,7 @@ public class MockedInboxSubTest extends MockedInboxService {
                 .setReqId(reqId)
                 .setCode(SubReply.Code.OK)
                 .build()));
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
 
         StreamObserver<SubReply> streamObserver = mock(StreamObserver.class);
@@ -103,7 +103,7 @@ public class MockedInboxSubTest extends MockedInboxService {
                 .setReqId(reqId)
                 .setCode(exist ? SubReply.Code.EXISTS : SubReply.Code.OK)
                 .build()));
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         StreamObserver<SubReply> streamObserver = mock(StreamObserver.class);
         inboxService.sub(SubRequest.newBuilder()
@@ -141,7 +141,7 @@ public class MockedInboxSubTest extends MockedInboxService {
                 .setReqId(reqId)
                 .setCode(exists ? SubReply.Code.EXISTS : SubReply.Code.OK)
                 .build()));
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         StreamObserver<SubReply> streamObserver = mock(StreamObserver.class);
         inboxService.sub(SubRequest.newBuilder()
@@ -177,7 +177,7 @@ public class MockedInboxSubTest extends MockedInboxService {
                 .setReqId(reqId)
                 .setCode(SubReply.Code.OK)
                 .build()));
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
 
         StreamObserver<SubReply> streamObserver = mock(StreamObserver.class);
@@ -213,7 +213,7 @@ public class MockedInboxSubTest extends MockedInboxService {
         when(retainClient.match(any())).thenReturn(CompletableFuture.completedFuture(MatchReply.newBuilder()
             .setResult(MatchReply.Result.OK).build()));
 
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.EXCEED_LIMIT));
 
         StreamObserver<SubReply> streamObserver = mock(StreamObserver.class);
@@ -228,7 +228,7 @@ public class MockedInboxSubTest extends MockedInboxService {
             .setNow(now)
             .build(), streamObserver);
 
-        verify(distClient).match(eq(reqId), eq(tenantId), eq(topicFilter),
+        verify(distClient).addTopicMatch(eq(reqId), eq(tenantId), eq(topicFilter),
             eq(distInboxId(inboxId, incarnation)), anyString(), eq(1));
         verify(streamObserver).onNext(argThat(reply ->
             reply.getReqId() == reqId && reply.getCode() == SubReply.Code.EXCEED_LIMIT));
@@ -250,7 +250,7 @@ public class MockedInboxSubTest extends MockedInboxService {
                 .build()));
         when(retainClient.match(any())).thenReturn(CompletableFuture.completedFuture(MatchReply.newBuilder()
             .setResult(MatchReply.Result.OK).build()));
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
 
         StreamObserver<SubReply> streamObserver = mock(StreamObserver.class);
@@ -265,7 +265,7 @@ public class MockedInboxSubTest extends MockedInboxService {
             .setNow(now)
             .build(), streamObserver);
 
-        verify(distClient).match(eq(reqId), eq(tenantId), eq(topicFilter),
+        verify(distClient).addTopicMatch(eq(reqId), eq(tenantId), eq(topicFilter),
             eq(distInboxId(inboxId, incarnation)), anyString(), eq(1));
         verify(streamObserver).onNext(argThat(reply ->
             reply.getReqId() == reqId && reply.getCode() == code));

@@ -31,11 +31,11 @@ import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBWALableKVEngineConfigurator;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.basekv.store.proto.KVRangeROReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
@@ -44,6 +44,8 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
+import com.baidu.bifromq.baserpc.server.IRPCServer;
+import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.metrics.TenantMetric;
 import com.baidu.bifromq.retain.rpc.proto.BatchMatchRequest;
@@ -104,6 +106,7 @@ public class RetainStoreTest {
     private IRPCServiceTrafficService trafficService;
     private IBaseKVMetaService metaService;
     protected SimpleMeterRegistry meterRegistry;
+    protected IRPCServer rpcServer;
     protected IRetainStore testStore;
     protected IBaseKVStoreClient storeClient;
     private ExecutorService queryExecutor;
@@ -127,10 +130,8 @@ public class RetainStoreTest {
             .joinTimeout(Duration.ofMinutes(5))
             .build();
         agentHost = IAgentHost.newInstance(agentHostOpts);
-        agentHost.start();
 
-        crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        crdtService.start(agentHost);
+        crdtService = ICRDTService.newInstance(agentHost, CRDTServiceOptions.builder().build());
 
         trafficService = IRPCServiceTrafficService.newInstance(crdtService);
         metaService = IBaseKVMetaService.newInstance(crdtService);
@@ -156,18 +157,17 @@ public class RetainStoreTest {
             .metaService(metaService)
             .build();
         buildStoreServer();
-        testStore.start();
-
+        rpcServer.start();
         storeClient.join();
         log.info("Setup finished, and start testing");
     }
 
     private void buildStoreServer() {
-        testStore = IRetainStore.standaloneBuilder()
+        RPCServerBuilder rpcServerBuilder = IRPCServer.newBuilder().host("127.0.0.1").trafficService(trafficService);
+        testStore = IRetainStore.builder()
             .bootstrap(true)
-            .host("127.0.0.1")
+            .rpcServerBuilder(rpcServerBuilder)
             .agentHost(agentHost)
-            .trafficService(trafficService)
             .metaService(metaService)
             .storeClient(storeClient)
             .storeOptions(options)
@@ -180,25 +180,28 @@ public class RetainStoreTest {
                 Map.of(RangeBootstrapBalancerFactory.class.getName(),
                     Struct.getDefaultInstance()))
             .build();
+        rpcServer = rpcServerBuilder.build();
     }
 
     protected void restartStoreServer() {
         log.info("Restarting test store server");
-        testStore.stop();
+        testStore.close();
+        rpcServer.shutdown();
         buildStoreServer();
-        testStore.start();
+        rpcServer.start();
         log.info("Test store server restarted");
     }
 
     @AfterClass(alwaysRun = true)
     public void tearDown() throws Exception {
         log.info("Finish testing, and tearing down");
-        testStore.stop();
-        storeClient.stop();
-        trafficService.stop();
-        metaService.stop();
-        crdtService.stop();
-        agentHost.shutdown();
+        testStore.close();
+        rpcServer.shutdown();
+        storeClient.close();
+        trafficService.close();
+        metaService.close();
+        crdtService.close();
+        agentHost.close();
         try {
             Files.walk(dbRootDir)
                 .sorted(Comparator.reverseOrder())

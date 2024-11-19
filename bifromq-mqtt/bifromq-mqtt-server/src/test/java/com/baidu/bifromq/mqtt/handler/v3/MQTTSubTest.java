@@ -49,11 +49,11 @@ public class MQTTSubTest extends BaseMQTTTest {
     @AfterMethod
     public void clean() {
         if (shouldCleanSubs) {
-            when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+            when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
                 .thenReturn(CompletableFuture.completedFuture(null));
             channel.close();
             verify(distClient, atLeast(1))
-                .unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+                .removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
         } else {
             channel.close();
         }

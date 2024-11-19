@@ -70,7 +70,8 @@ public class DistQoS1Test extends DistWorkerTest {
 
         when(writer1.deliver(any())).thenAnswer(answer(DeliveryResult.Code.NO_SUB));
 
-        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt())).thenReturn(
+        when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(),
+            anyInt())).thenReturn(
             CompletableFuture.completedFuture(null));
 
         match(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
@@ -98,7 +99,7 @@ public class DistQoS1Test extends DistWorkerTest {
         }
 
         verify(distClient, timeout(200).atLeastOnce())
-            .unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+            .removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
 
         unmatch(tenantA, "/a/b/c", MqttBroker, "inbox1", "server1");
     }
@@ -115,7 +116,7 @@ public class DistQoS1Test extends DistWorkerTest {
         when(mqttBroker.open("server1")).thenReturn(writer1);
 
         when(writer1.deliver(any())).thenAnswer(answer(DeliveryResult.Code.NO_SUB));
-        when(distClient.unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(null));
 
         match(tenantA, "$share/group//a/b/c", MqttBroker, "inbox1", "server1");
@@ -145,7 +146,7 @@ public class DistQoS1Test extends DistWorkerTest {
 
 
         verify(distClient, timeout(200).atLeastOnce())
-            .unmatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+            .removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
 
         verify(eventCollector, timeout(200).atLeastOnce()).report(argThat(e -> e.type() == EventType.DELIVER_NO_INBOX));
 

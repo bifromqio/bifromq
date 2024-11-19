@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.plugin.subbroker;
 
-public interface ISubBrokerManager {
+public interface ISubBrokerManager extends AutoCloseable {
     ISubBroker get(int subBrokerId);
 
-    void stop();
+    void close();
 }

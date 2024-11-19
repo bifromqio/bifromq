@@ -22,7 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @Slf4j
-public class SettingProviderManager implements ISettingProvider {
+public class SettingProviderManager implements ISettingProvider, AutoCloseable {
     private static final Logger pluginLog = LoggerFactory.getLogger("plugin.manager");
     private final AtomicBoolean stopped = new AtomicBoolean();
     private final ISettingProvider provider;

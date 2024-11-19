@@ -49,7 +49,7 @@ public class CRDTService implements ICRDTService {
     }
 
     private final ICRDTStore store;
-    private IAgentHost agentHost;
+    private final IAgentHost agentHost;
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private final Map<String, CRDTCluster<?, ?>> hostedCRDT = Maps.newConcurrentMap(); // key is the uri of crdt
     private final Subject<CRDTStoreMessage> incomingStoreMessages;
@@ -58,9 +58,11 @@ public class CRDTService implements ICRDTService {
     private final Scheduler scheduler = Schedulers.from(executor);
 
 
-    public CRDTService(CRDTServiceOptions options) {
+    public CRDTService(IAgentHost agentHost, CRDTServiceOptions options) {
+        this.agentHost = agentHost;
         store = ICRDTStore.newInstance(options.storeOptions);
         incomingStoreMessages = PublishSubject.<CRDTStoreMessage>create().toSerialized();
+        start();
     }
 
     @Override
@@ -112,27 +114,20 @@ public class CRDTService implements ICRDTService {
         });
     }
 
-    @Override
-    public boolean isStarted() {
-        return state.get() == State.STARTED;
-    }
-
     private CompletableFuture<Void> stopHostingInternal(String uri) {
         return hostedCRDT.remove(uri).close();
     }
 
-    @Override
-    public void start(IAgentHost agentHost) {
+    private void start() {
         if (state.compareAndSet(State.INIT, State.STARTING)) {
-            this.agentHost = agentHost;
             store.start(incomingStoreMessages);
             state.set(State.STARTED);
-            log.debug("Started CRDT service[{}]", store.id());
+            log.debug("CRDT service[{}] started", store.id());
         }
     }
 
     @Override
-    public void stop() {
+    public void close() {
         if (state.compareAndSet(State.STARTED, State.STOPPING)) {
             log.debug("Stopping CRDT service[{}]", id());
             log.debug("Stop hosting CRDTs");

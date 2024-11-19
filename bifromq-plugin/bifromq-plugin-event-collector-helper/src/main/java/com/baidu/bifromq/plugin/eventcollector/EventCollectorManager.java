@@ -28,7 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @Slf4j
-public class EventCollectorManager implements IEventCollector {
+public class EventCollectorManager implements IEventCollector, AutoCloseable {
     private static final Logger pluginLog = LoggerFactory.getLogger("plugin.manager");
     private static final EventPool ZERO_OUT_HOLDERS = new EventPool();
     private final AtomicBoolean stopped = new AtomicBoolean();

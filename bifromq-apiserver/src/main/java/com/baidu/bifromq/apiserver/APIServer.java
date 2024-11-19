@@ -133,7 +133,7 @@ public class APIServer implements IAPIServer {
     }
 
     @Override
-    public void shutdown() {
+    public void close() {
         if (state.compareAndSet(State.STARTED, State.STOPPING)) {
             log.info("Shutting down API server");
             serverChannel.channel().close().syncUninterruptibly();

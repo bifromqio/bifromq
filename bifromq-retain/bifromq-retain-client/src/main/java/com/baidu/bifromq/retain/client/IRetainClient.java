@@ -14,7 +14,6 @@
 package com.baidu.bifromq.retain.client;
 
 import com.baidu.bifromq.baserpc.client.IConnectable;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.retain.rpc.proto.ExpireAllReply;
 import com.baidu.bifromq.retain.rpc.proto.ExpireAllRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
@@ -25,7 +24,7 @@ import com.baidu.bifromq.type.QoS;
 import com.google.protobuf.ByteString;
 import java.util.concurrent.CompletableFuture;
 
-public interface IRetainClient extends IConnectable {
+public interface IRetainClient extends IConnectable, AutoCloseable {
     static RetainClientBuilder newBuilder() {
         return new RetainClientBuilder();
     }
@@ -41,5 +40,5 @@ public interface IRetainClient extends IConnectable {
 
     CompletableFuture<ExpireAllReply> expireAll(ExpireAllRequest request);
 
-    void stop();
+    void close();
 }

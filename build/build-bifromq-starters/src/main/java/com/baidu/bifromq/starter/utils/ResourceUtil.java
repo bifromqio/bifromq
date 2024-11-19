@@ -23,7 +23,6 @@ import lombok.extern.slf4j.Slf4j;
 public class ResourceUtil {
     private static final String CONF_DIR_PROP = "CONF_DIR";
 
-
     /**
      * Load file using following logic: 1. If pathToFile is absolute path, return the file if it exists. 2. If CONF_DIR
      * system property is set, try to load the file from that directory. 3. Try to load the file from the current

@@ -39,26 +39,22 @@ public class LandscapeCleanupTest {
     @BeforeMethod
     void setup() {
         agentHost1 = IAgentHost.newInstance(AgentHostOptions.builder().addr("127.0.0.1").build());
-        agentHost1.start();
-        crdtService1 = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        crdtService1.start(agentHost1);
+        crdtService1 = ICRDTService.newInstance(agentHost1, CRDTServiceOptions.builder().build());
         metaService1 = new BaseKVMetaService(crdtService1);
 
         agentHost2 = IAgentHost.newInstance(AgentHostOptions.builder().addr("127.0.0.1").build());
-        agentHost2.start();
 
         agentHost1.join(Set.of(new InetSocketAddress(agentHost2.local().getAddress(), agentHost2.local().getPort())))
             .join();
-        crdtService2 = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        crdtService2.start(agentHost2);
+        crdtService2 = ICRDTService.newInstance(agentHost2, CRDTServiceOptions.builder().build());
         metaService2 = new BaseKVMetaService(crdtService2);
     }
 
     @AfterMethod
     void tearDown() {
-        metaService1.stop();
-        crdtService1.stop();
-        agentHost1.shutdown();
+        metaService1.close();
+        crdtService1.close();
+        agentHost1.close();
     }
 
     @Test
@@ -81,9 +77,9 @@ public class LandscapeCleanupTest {
         await().until(() -> landscape.equals(manager1.landscape().blockingFirst())
             && landscape.equals(manager2.landscape().blockingFirst()));
 
-        metaService2.stop();
-        crdtService2.stop();
-        agentHost2.shutdown();
+        metaService2.close();
+        crdtService2.close();
+        agentHost2.close();
 
         Map<String, KVRangeStoreDescriptor> landscape1 = Map.of(descriptor1.getId(), descriptor1);
         await().until(() -> landscape1.equals(manager1.landscape().blockingFirst()));

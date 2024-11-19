@@ -179,7 +179,7 @@ final class SessionDictClient implements ISessionDictClient {
 
 
     @Override
-    public void stop() {
+    public void close() {
         if (closed.compareAndSet(false, true)) {
             log.info("Stopping session dict client");
             tenantSessionRegisterManagers.asMap().forEach((k, v) -> v.close());

@@ -111,7 +111,7 @@ public class DeliverExecutor {
                     case NO_SUB, NO_RECEIVER -> {
                         // unsub as side effect
                         MatchInfo matchInfo = matched.matchInfo;
-                        distClient.unmatch(System.nanoTime(),
+                        distClient.removeTopicMatch(System.nanoTime(),
                             matched.tenantId,
                             matchInfo.getTopicFilter(),
                             matchInfo.getReceiverId(),

@@ -15,7 +15,7 @@ package com.bifromq.plugin.resourcethrottler;
 
 import org.pf4j.ExtensionPoint;
 
-public interface IResourceThrottler extends ExtensionPoint {
+public interface IResourceThrottler extends ExtensionPoint, AutoCloseable {
     /**
      * Determine if the tenant has enough resource of given type
      *
@@ -26,7 +26,7 @@ public interface IResourceThrottler extends ExtensionPoint {
     boolean hasResource(String tenantId, TenantResourceType type);
 
     /**
-     * Will be called during broker shutdown
+     * Will be called during broker shutdown.
      */
     default void close() {
 

@@ -240,6 +240,7 @@ public class AuthProviderManager implements IAuthProvider {
         }
     }
 
+    @Override
     public void close() {
         if (stopped.compareAndSet(false, true)) {
             log.debug("Closing auth provider manager");

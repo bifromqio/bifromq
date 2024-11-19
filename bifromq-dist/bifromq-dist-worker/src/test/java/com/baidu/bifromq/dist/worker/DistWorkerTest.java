@@ -47,6 +47,8 @@ import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
+import com.baidu.bifromq.baserpc.server.IRPCServer;
+import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
@@ -147,6 +149,7 @@ public abstract class DistWorkerTest {
     @Mock
     protected IDeliverer writer3;
     protected SimpleMeterRegistry meterRegistry;
+    protected IRPCServer rpcServer;
     protected IDistWorker testWorker;
     protected IBaseKVStoreClient storeClient;
 
@@ -187,10 +190,8 @@ public abstract class DistWorkerTest {
             .joinTimeout(Duration.ofMinutes(5))
             .build();
         agentHost = IAgentHost.newInstance(agentHostOpts);
-        agentHost.start();
 
-        crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        crdtService.start(agentHost);
+        crdtService = ICRDTService.newInstance(agentHost, CRDTServiceOptions.builder().build());
 
         trafficService = IRPCServiceTrafficService.newInstance(crdtService);
 
@@ -214,14 +215,12 @@ public abstract class DistWorkerTest {
             .metaService(metaService)
             .executor(MoreExecutors.directExecutor())
             .build();
-        testWorker = IDistWorker.standaloneBuilder()
-            .host("127.0.0.1")
-            .bossEventLoopGroup(NettyUtil.createEventLoopGroup(1))
-            .workerEventLoopGroup(NettyUtil.createEventLoopGroup())
+        RPCServerBuilder rpcServerBuilder = IRPCServer.newBuilder().host("127.0.0.1").trafficService(trafficService);
+        testWorker = IDistWorker.builder()
+            .rpcServerBuilder(rpcServerBuilder)
             .rpcExecutor(MoreExecutors.directExecutor())
             .bootstrap(true)
             .agentHost(agentHost)
-            .trafficService(trafficService)
             .metaService(metaService)
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)
@@ -234,7 +233,8 @@ public abstract class DistWorkerTest {
             .subBrokerManager(receiverManager)
             .balancerFactoryConfig(Map.of(RangeBootstrapBalancerFactory.class.getName(), Struct.getDefaultInstance()))
             .build();
-        testWorker.start();
+        rpcServer = rpcServerBuilder.build();
+        rpcServer.start();
         storeClient.join();
         log.info("Setup finished, and start testing");
     }
@@ -243,12 +243,13 @@ public abstract class DistWorkerTest {
     public void tearDown() throws Exception {
         log.info("Finish testing, and tearing down");
         new Thread(() -> {
-            storeClient.stop();
-            testWorker.stop();
-            metaService.stop();
-            trafficService.stop();
-            crdtService.stop();
-            agentHost.shutdown();
+            storeClient.close();
+            testWorker.close();
+            rpcServer.shutdown();
+            metaService.close();
+            trafficService.close();
+            crdtService.close();
+            agentHost.close();
             try {
                 Files.walk(dbRootDir)
                     .sorted(Comparator.reverseOrder())

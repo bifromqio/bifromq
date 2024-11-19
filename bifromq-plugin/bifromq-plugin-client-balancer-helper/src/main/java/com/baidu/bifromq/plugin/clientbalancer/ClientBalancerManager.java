@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory;
  * Manager for client balancer plugins.
  */
 @Slf4j
-public class ClientBalancerManager implements IClientBalancer {
+public class ClientBalancerManager implements IClientBalancer, AutoCloseable {
     private static final Logger pluginLog = LoggerFactory.getLogger("plugin.manager");
     private final AtomicBoolean stopped = new AtomicBoolean();
     private final IClientBalancer delegate;

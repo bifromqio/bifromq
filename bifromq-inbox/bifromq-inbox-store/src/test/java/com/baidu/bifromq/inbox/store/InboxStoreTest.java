@@ -33,11 +33,11 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
-import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBWALableKVEngineConfigurator;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.basekv.store.proto.KVRangeROReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
@@ -47,6 +47,8 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.baserpc.client.IConnectable;
+import com.baidu.bifromq.baserpc.server.IRPCServer;
+import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachReply;
@@ -137,6 +139,7 @@ abstract class InboxStoreTest {
     private IAgentHost agentHost;
     private ICRDTService crdtService;
     private IRPCServiceTrafficService trafficService;
+    private IRPCServer rpcServer;
     private IBaseKVMetaService metaService;
     private ExecutorService queryExecutor;
     private int tickerThreads = 2;
@@ -145,7 +148,7 @@ abstract class InboxStoreTest {
 
     private KVRangeStoreOptions options;
     protected IBaseKVStoreClient storeClient;
-    protected StandaloneInboxStore testStore;
+    protected IInboxStore testStore;
 
     private AutoCloseable closeable;
 
@@ -164,10 +167,8 @@ abstract class InboxStoreTest {
             .joinTimeout(Duration.ofMinutes(5))
             .build();
         agentHost = IAgentHost.newInstance(agentHostOpts);
-        agentHost.start();
 
-        crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        crdtService.start(agentHost);
+        crdtService = ICRDTService.newInstance(agentHost, CRDTServiceOptions.builder().build());
 
         trafficService = IRPCServiceTrafficService.newInstance(crdtService);
         metaService = IBaseKVMetaService.newInstance(crdtService);
@@ -193,7 +194,7 @@ abstract class InboxStoreTest {
             .metaService(metaService)
             .build();
         buildStoreServer();
-        testStore.start();
+        rpcServer.start();
 
         storeClient.connState().filter(connState -> connState == IConnectable.ConnState.READY).blockingFirst();
         storeClient.join();
@@ -201,11 +202,11 @@ abstract class InboxStoreTest {
     }
 
     private void buildStoreServer() {
-        testStore = (StandaloneInboxStore) IInboxStore.standaloneBuilder()
+        RPCServerBuilder rpcServerBuilder = IRPCServer.newBuilder().host("127.0.0.1").trafficService(trafficService);
+        testStore = IInboxStore.builder()
             .bootstrap(true)
-            .host("127.0.0.1")
+            .rpcServerBuilder(rpcServerBuilder)
             .agentHost(agentHost)
-            .trafficService(trafficService)
             .metaService(metaService)
             .inboxClient(inboxClient)
             .storeClient(storeClient)
@@ -219,24 +220,27 @@ abstract class InboxStoreTest {
             .bgTaskExecutor(bgTaskExecutor)
             .gcInterval(Duration.ofSeconds(1))
             .build();
+        rpcServer = rpcServerBuilder.build();
     }
 
     protected void restartStoreServer() {
-        testStore.stop();
+        testStore.close();
+        rpcServer.shutdown();
         buildStoreServer();
-        testStore.start();
+        rpcServer.start();
     }
 
     @AfterClass(groups = "integration")
     public void tearDown() throws Exception {
         log.info("Finish testing, and tearing down");
-        testStore.stop();
-        storeClient.stop();
+        testStore.close();
+        rpcServer.shutdown();
+        storeClient.close();
         inboxClient.close();
-        trafficService.stop();
-        metaService.stop();
-        crdtService.stop();
-        agentHost.shutdown();
+        trafficService.close();
+        metaService.close();
+        crdtService.close();
+        agentHost.close();
         try {
             Files.walk(dbRootDir)
                 .sorted(Comparator.reverseOrder())

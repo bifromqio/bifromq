@@ -31,7 +31,6 @@ import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
-import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
 import java.util.concurrent.CompletableFuture;
@@ -60,7 +59,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
         assertEquals(subReply2.getReqId(), reqId);
         assertEquals(subReply2.getCode(), SubReply.Code.NO_INBOX);
         verify(distClient, times(0))
-            .match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+            .addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
 
     }
 
@@ -100,7 +99,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
         assertEquals(subReply2.getReqId(), reqId);
         assertEquals(subReply2.getCode(), SubReply.Code.CONFLICT);
 
-        verify(distClient, times(0)).match(anyLong(), anyString(), anyString(), anyString(), anyString(),
+        verify(distClient, times(0)).addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(),
             anyInt());
     }
 
@@ -128,7 +127,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setNow(now)
             .build()).join();
 
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         String topicFilter = "/a/b/c";
         SubReply subReply2 = inboxClient.sub(SubRequest.newBuilder()
@@ -144,7 +143,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
         assertEquals(subReply2.getReqId(), reqId);
         assertEquals(subReply2.getCode(), SubReply.Code.OK);
         verify(distClient, times(1))
-            .match(anyLong(), eq(tenantId), eq(topicFilter), anyString(), anyString(), anyInt());
+            .addTopicMatch(anyLong(), eq(tenantId), eq(topicFilter), anyString(), anyString(), anyInt());
     }
 
     @Test(groups = "integration")
@@ -184,7 +183,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
         assertEquals(subReply2.getReqId(), reqId);
         assertEquals(subReply2.getCode(), SubReply.Code.OK);
 
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         subReply2 = inboxClient.sub(SubRequest.newBuilder()
             .setReqId(reqId)
@@ -199,7 +198,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
         assertEquals(subReply2.getCode(), SubReply.Code.EXISTS);
 
         verify(distClient, times(2))
-            .match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+            .addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
     }
 
     @Test(groups = "integration")
@@ -227,7 +226,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .build()).join();
 
         when(settingProvider.provide(Setting.MaxTopicFiltersPerInbox, tenantId)).thenReturn(1);
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         SubReply subReply2 = inboxClient.sub(SubRequest.newBuilder()
             .setReqId(reqId)
@@ -253,7 +252,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
         assertEquals(subReply2.getReqId(), reqId);
         assertEquals(subReply2.getCode(), SubReply.Code.EXCEED_LIMIT);
 
-        verify(distClient, times(1)).match(anyLong(), anyString(), anyString(), anyString(), anyString(),
+        verify(distClient, times(1)).addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(),
             anyInt());
     }
 
@@ -280,7 +279,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setNow(now)
             .build()).join();
 
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.EXCEED_LIMIT));
 
         String topicFilter = "/a/b/c";
@@ -320,7 +319,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setNow(now)
             .build()).join();
 
-        when(distClient.match(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.ERROR));
 
         String topicFilter = "/a/b/c";

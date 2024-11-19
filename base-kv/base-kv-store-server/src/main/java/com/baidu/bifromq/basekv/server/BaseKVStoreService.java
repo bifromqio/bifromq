@@ -47,8 +47,12 @@ import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.collect.Sets;
 import io.grpc.stub.StreamObserver;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import lombok.Setter;
+import lombok.experimental.Accessors;
 import org.slf4j.Logger;
 
+@Accessors(fluent = true)
+@Setter
 class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBase {
     private final Logger log;
     private final CompositeDisposable disposables = new CompositeDisposable();
@@ -58,7 +62,7 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
     private final String clusterId;
     private final boolean bootstrap;
 
-    BaseKVStoreService(BaseKVStoreServiceBuilder<?> builder) {
+    BaseKVStoreService(BaseKVStoreServiceBuilder builder) {
         kvRangeStore = new KVRangeStore(
             builder.clusterId,
             builder.storeOptions,

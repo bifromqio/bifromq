@@ -20,7 +20,7 @@ import java.util.Set;
 /**
  * The meta service of base-kv.
  */
-public interface IBaseKVMetaService {
+public interface IBaseKVMetaService extends AutoCloseable {
     static IBaseKVMetaService newInstance(ICRDTService crdtService) {
         return new BaseKVMetaService(crdtService);
     }
@@ -43,5 +43,5 @@ public interface IBaseKVMetaService {
     /**
      * Stop the meta service.
      */
-    void stop();
+    void close();
 }

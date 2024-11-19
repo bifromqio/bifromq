@@ -139,11 +139,9 @@ public abstract class MQTTTest {
             .joinTimeout(Duration.ofMinutes(5))
             .build();
         agentHost = IAgentHost.newInstance(agentHostOpts);
-        agentHost.start();
         log.info("Agent host started");
 
-        crdtService = ICRDTService.newInstance(CRDTServiceOptions.builder().build());
-        crdtService.start(agentHost);
+        crdtService = ICRDTService.newInstance(agentHost, CRDTServiceOptions.builder().build());
         log.info("CRDT service started");
 
         trafficService = IRPCServiceTrafficService.newInstance(crdtService);
@@ -159,7 +157,7 @@ public abstract class MQTTTest {
         sessionDictClient = ISessionDictClient.newBuilder()
             .trafficService(trafficService)
             .build();
-        sessionDictServer = ISessionDictServer.nonStandaloneBuilder()
+        sessionDictServer = ISessionDictServer.builder()
             .rpcServerBuilder(rpcServerBuilder)
             .mqttBrokerClient(onlineInboxBrokerClient)
             .build();
@@ -172,11 +170,10 @@ public abstract class MQTTTest {
             .metaService(metaService)
             .executor(MoreExecutors.directExecutor())
             .build();
-        inboxStore = IInboxStore.nonStandaloneBuilder()
+        inboxStore = IInboxStore.builder()
             .rpcServerBuilder(rpcServerBuilder)
             .bootstrap(true)
             .agentHost(agentHost)
-            .trafficService(trafficService)
             .metaService(metaService)
             .storeClient(inboxStoreKVStoreClient)
             .settingProvider(settingProvider)
@@ -197,7 +194,7 @@ public abstract class MQTTTest {
             .newBuilder()
             .trafficService(trafficService)
             .build();
-        inboxServer = IInboxServer.nonStandaloneBuilder()
+        inboxServer = IInboxServer.builder()
             .rpcServerBuilder(rpcServerBuilder)
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)
@@ -214,7 +211,7 @@ public abstract class MQTTTest {
             .metaService(metaService)
             .executor(MoreExecutors.directExecutor())
             .build();
-        retainStore = IRetainStore.nonStandaloneBuilder()
+        retainStore = IRetainStore.builder()
             .rpcServerBuilder(rpcServerBuilder)
             .bootstrap(true)
             .agentHost(agentHost)
@@ -240,17 +237,16 @@ public abstract class MQTTTest {
             .build();
 
         inboxBrokerMgr = new SubBrokerManager(pluginMgr, onlineInboxBrokerClient, inboxClient);
-        retainServer = IRetainServer.nonStandaloneBuilder()
+        retainServer = IRetainServer.builder()
             .rpcServerBuilder(rpcServerBuilder)
             .subBrokerManager(inboxBrokerMgr)
             .retainStoreClient(retainStoreKVStoreClient)
             .settingProvider(settingProvider)
             .build();
-        distWorker = IDistWorker.nonStandaloneBuilder()
+        distWorker = IDistWorker.builder()
             .rpcServerBuilder(rpcServerBuilder)
             .bootstrap(true)
             .agentHost(agentHost)
-            .trafficService(trafficService)
             .metaService(metaService)
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)
@@ -268,14 +264,14 @@ public abstract class MQTTTest {
                 Map.of(com.baidu.bifromq.dist.worker.balance.RangeBootstrapBalancerFactory.class.getName(),
                     Struct.getDefaultInstance()))
             .build();
-        distServer = IDistServer.nonStandaloneBuilder()
+        distServer = IDistServer.builder()
             .rpcServerBuilder(rpcServerBuilder)
             .distWorkerClient(distWorkerStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .build();
 
-        mqttBroker = IMQTTBroker.nonStandaloneBuilder()
+        mqttBroker = IMQTTBroker.builder()
             .rpcServerBuilder(rpcServerBuilder)
             .mqttBossELGThreads(1)
             .mqttWorkerELGThreads(4)
@@ -293,22 +289,6 @@ public abstract class MQTTTest {
             .buildListener()
             .build();
 
-        sessionDictServer.start();
-        log.info("Session dict server started");
-        inboxStore.start();
-        log.info("Inbox store started");
-        inboxServer.start();
-        log.info("Inbox server started");
-
-        retainStore.start();
-        log.info("Retain store started");
-        retainServer.start();
-        log.info("Retain server started");
-
-        distWorker.start();
-        log.info("Dist worker started");
-        distServer.start();
-        log.info("Dist server started");
         sharedRpcServer = rpcServerBuilder.build();
         sharedRpcServer.start();
         log.info("Shared RPC server started");
@@ -348,50 +328,50 @@ public abstract class MQTTTest {
     @AfterClass(alwaysRun = true, groups = "integration")
     public final void tearDownClass() throws Exception {
         log.info("Start to tearing down");
-        mqttBroker.shutdown();
+        mqttBroker.close();
         log.info("Mqtt broker shut down");
         sharedRpcServer.shutdown();
         log.info("Shared rpc server shutdown");
 
-        distClient.stop();
+        distClient.close();
         log.info("Dist client stopped");
-        distServer.shutdown();
+        distServer.close();
         log.info("Dist worker stopped");
-        distWorkerStoreClient.stop();
+        distWorkerStoreClient.close();
         log.info("Dist server shut down");
-        distWorker.stop();
+        distWorker.close();
 
-        inboxBrokerMgr.stop();
+        inboxBrokerMgr.close();
         inboxClient.close();
         log.info("Inbox client stopped");
-        inboxServer.shutdown();
+        inboxServer.close();
         log.info("Inbox server shut down");
 
-        inboxStoreKVStoreClient.stop();
-        inboxStore.stop();
+        inboxStoreKVStoreClient.close();
+        inboxStore.close();
         log.info("Inbox store closed");
 
-        retainClient.stop();
+        retainClient.close();
         log.info("Retain client stopped");
-        retainServer.shutdown();
+        retainServer.close();
         log.info("Retain server shut down");
 
-        retainStoreKVStoreClient.stop();
-        retainStore.stop();
+        retainStoreKVStoreClient.close();
+        retainStore.close();
         log.info("Retain store closed");
 
-        sessionDictClient.stop();
+        sessionDictClient.close();
         log.info("Session dict client stopped");
-        sessionDictServer.shutdown();
+        sessionDictServer.close();
         log.info("Session dict server shut down");
 
-        metaService.stop();
+        metaService.close();
 
-        trafficService.stop();
+        trafficService.close();
 
-        crdtService.stop();
+        crdtService.close();
         log.info("CRDT service stopped");
-        agentHost.shutdown();
+        agentHost.close();
         log.info("Agent host stopped");
 
         log.info("Shutdown work executor");

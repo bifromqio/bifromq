@@ -13,16 +13,16 @@
 
 package com.baidu.bifromq.mqtt;
 
-public interface IMQTTBrokerBuilder<T extends AbstractMQTTBrokerBuilder<T>> {
+public interface IMQTTBrokerBuilder {
     String brokerId();
 
-    ConnListenerBuilder.TCPConnListenerBuilder<T> buildTcpConnListener();
+    ConnListenerBuilder.TCPConnListenerBuilder buildTcpConnListener();
 
-    ConnListenerBuilder.TLSConnListenerBuilder<T> buildTLSConnListener();
+    ConnListenerBuilder.TLSConnListenerBuilder buildTLSConnListener();
 
-    ConnListenerBuilder.WSConnListenerBuilder<T> buildWSConnListener();
+    ConnListenerBuilder.WSConnListenerBuilder buildWSConnListener();
 
-    ConnListenerBuilder.WSSConnListenerBuilder<T> buildWSSConnListener();
+    ConnListenerBuilder.WSSConnListenerBuilder buildWSSConnListener();
 
     IMQTTBroker build();
 }

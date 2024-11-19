@@ -37,8 +37,8 @@ public class RPCServiceTrafficGovernorTest extends RPCServiceAnnouncerTest {
         IRPCServiceTrafficGovernor trafficGovernor = trafficService.getTrafficGovernor(service);
         assertTrue(trafficGovernor.trafficRules().blockingFirst().isEmpty());
 
-        trafficService.stop();
-        crdtService.stop();
+        trafficService.close();
+        crdtService.close();
     }
 
     @Test(groups = "integration")
@@ -70,11 +70,11 @@ public class RPCServiceTrafficGovernorTest extends RPCServiceAnnouncerTest {
         await().until(() -> trafficGovernor.trafficRules().blockingFirst().equals(td)
             && serviceLandscape.trafficRules().blockingFirst().equals(td));
 
-        tgTrafficService.stop();
-        tgCrdtService.stop();
+        tgTrafficService.close();
+        tgCrdtService.close();
 
-        slTrafficService.stop();
-        slCrdtService.stop();
+        slTrafficService.close();
+        slCrdtService.close();
     }
 
     @Test(groups = "integration")
@@ -105,12 +105,12 @@ public class RPCServiceTrafficGovernorTest extends RPCServiceAnnouncerTest {
 
 
         serverReg.stop();
-        srTrafficService.stop();
-        tgTrafficService.stop();
-        slTrafficService.stop();
+        srTrafficService.close();
+        tgTrafficService.close();
+        slTrafficService.close();
 
-        srCrdtService.stop();
-        tgCrdtService.stop();
-        slCrdtService.stop();
+        srCrdtService.close();
+        tgCrdtService.close();
+        slCrdtService.close();
     }
 }

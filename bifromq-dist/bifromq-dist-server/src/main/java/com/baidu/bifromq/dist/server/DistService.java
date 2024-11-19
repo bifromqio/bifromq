@@ -43,9 +43,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
     private final MatchReqHandler matchReqHandler;
     private final UnmatchReqHandler unmatchReqHandler;
 
-    DistService(IBaseKVStoreClient distWorkerClient,
-                ISettingProvider settingProvider,
-                IEventCollector eventCollector) {
+    DistService(IBaseKVStoreClient distWorkerClient, ISettingProvider settingProvider, IEventCollector eventCollector) {
         this.eventCollector = eventCollector;
 
         IMatchCallScheduler matchCallScheduler = new MatchCallScheduler(distWorkerClient, settingProvider);

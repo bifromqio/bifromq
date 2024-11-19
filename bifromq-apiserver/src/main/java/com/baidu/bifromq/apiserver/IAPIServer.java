@@ -15,7 +15,7 @@ package com.baidu.bifromq.apiserver;
 
 import java.util.Optional;
 
-public interface IAPIServer {
+public interface IAPIServer extends AutoCloseable {
     String host();
 
     int listeningPort();
@@ -24,5 +24,5 @@ public interface IAPIServer {
 
     void start();
 
-    void shutdown();
+    void close();
 }
