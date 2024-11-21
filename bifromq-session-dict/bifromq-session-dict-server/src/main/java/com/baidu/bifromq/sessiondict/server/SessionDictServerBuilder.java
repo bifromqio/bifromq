@@ -35,7 +35,7 @@ public class SessionDictServerBuilder implements ISessionDictServerBuilder {
     IMqttBrokerClient mqttBrokerClient;
     Map<String, String> attrs = new HashMap<>();
     Set<String> defaultGroupTags = new HashSet<>();
-    Executor rpcExecutor = MoreExecutors.directExecutor();
+    int workerThreads;
 
     @Override
     public ISessionDictServer build() {

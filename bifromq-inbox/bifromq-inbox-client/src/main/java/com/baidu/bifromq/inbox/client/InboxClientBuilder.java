@@ -13,9 +13,7 @@
 
 package com.baidu.bifromq.inbox.client;
 
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baserpc.client.IRPCClient;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.inbox.RPCBluePrint;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -34,13 +32,13 @@ public final class InboxClientBuilder implements IInboxClientBuilder {
     IRPCServiceTrafficService trafficService;
     EventLoopGroup eventLoopGroup;
     SslContext sslContext;
-    Executor executor = MoreExecutors.directExecutor();
+    int workerThreads;
 
     public IInboxClient build() {
         return new InboxClient(IRPCClient.newBuilder()
             .bluePrint(RPCBluePrint.INSTANCE)
             .trafficService(trafficService)
-            .executor(executor)
+            .workerThreads(workerThreads)
             .eventLoopGroup(eventLoopGroup)
             .sslContext(sslContext)
             .build());

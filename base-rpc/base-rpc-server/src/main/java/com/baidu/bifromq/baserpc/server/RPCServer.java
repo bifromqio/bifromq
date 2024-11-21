@@ -33,12 +33,14 @@ import io.grpc.inprocess.InProcServerBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.netty4.NettyEventExecutorMetrics;
+import io.netty.channel.EventLoopGroup;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -54,6 +56,8 @@ class RPCServer implements IRPCServer {
     private final String id;
     private final Map<String, RPCServerBuilder.ServiceDefinition> serviceDefinitions;
     private final Map<String, IRPCServiceServerRegister.IServerRegistration> registrations = new HashMap<>();
+    private final EventLoopGroup bossEventLoopGroup;
+    private final EventLoopGroup workerEventLoopGroup;
     private final Server inProcServer;
     private final Server interProcServer;
 
@@ -89,20 +93,17 @@ class RPCServer implements IRPCServer {
         if (builder.sslContext != null) {
             nettyServerBuilder.sslContext(builder.sslContext);
         }
-        if (builder.bossEventLoopGroup == null) {
-            builder.bossEventLoopGroup =
-                NettyUtil.createEventLoopGroup(1, EnvProvider.INSTANCE.newThreadFactory("rpc-server-boss-elg"));
-            new NettyEventExecutorMetrics(builder.bossEventLoopGroup).bindTo(Metrics.globalRegistry);
-        }
-        if (builder.workerEventLoopGroup == null) {
-            builder.workerEventLoopGroup =
-                NettyUtil.createEventLoopGroup(0, EnvProvider.INSTANCE.newThreadFactory("rpc-server-worker-elg"));
-            new NettyEventExecutorMetrics(builder.workerEventLoopGroup).bindTo(Metrics.globalRegistry);
-        }
+        bossEventLoopGroup = NettyUtil.createEventLoopGroup(1,
+            EnvProvider.INSTANCE.newThreadFactory("rpc-server-boss-elg"));
+        new NettyEventExecutorMetrics(bossEventLoopGroup).bindTo(Metrics.globalRegistry);
+        workerEventLoopGroup = NettyUtil.createEventLoopGroup(builder.workerThreads,
+            EnvProvider.INSTANCE.newThreadFactory("rpc-server-worker-elg"));
+        new NettyEventExecutorMetrics(workerEventLoopGroup).bindTo(Metrics.globalRegistry);
         // if null, GRPC managed shared eventloop group will be used
-        nettyServerBuilder.bossEventLoopGroup(builder.bossEventLoopGroup)
-            .workerEventLoopGroup(builder.workerEventLoopGroup)
-            .channelType(NettyUtil.determineServerSocketChannelClass(builder.bossEventLoopGroup));
+        nettyServerBuilder
+            .bossEventLoopGroup(bossEventLoopGroup)
+            .workerEventLoopGroup(workerEventLoopGroup)
+            .channelType(NettyUtil.determineServerSocketChannelClass(bossEventLoopGroup));
         bindServiceToServer(nettyServerBuilder);
         interProcServer = nettyServerBuilder.build();
     }
@@ -163,18 +164,19 @@ class RPCServer implements IRPCServer {
                 shutdownInternalServer(interProcServer);
                 log.debug("Stopping in-proc server");
                 shutdownInternalServer(inProcServer);
+                bossEventLoopGroup.shutdownGracefully().sync();
+                workerEventLoopGroup.shutdownGracefully().sync();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             } finally {
                 state.set(State.STOPPED);
             }
         }
     }
 
+    @SneakyThrows
     private void shutdownInternalServer(Server server) {
-        try {
-            server.shutdownNow();
-            server.awaitTermination();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        server.shutdownNow();
+        server.awaitTermination();
     }
 }

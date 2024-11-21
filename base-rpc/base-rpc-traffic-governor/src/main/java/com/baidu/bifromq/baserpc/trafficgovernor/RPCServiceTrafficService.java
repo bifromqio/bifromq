@@ -15,6 +15,7 @@ package com.baidu.bifromq.baserpc.trafficgovernor;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,7 +35,8 @@ class RPCServiceTrafficService implements IRPCServiceTrafficService {
                 .filter(NameUtil::isLandscapeURI)
                 .map(NameUtil::parseServiceUniqueName)
                 .collect(Collectors.toSet()))
-            .distinctUntilChanged();
+            .distinctUntilChanged()
+            .observeOn(Schedulers.computation());
     }
 
     @Override

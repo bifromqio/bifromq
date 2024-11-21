@@ -17,6 +17,7 @@ import com.baidu.bifromq.apiserver.http.HTTPRouteMap;
 import com.baidu.bifromq.apiserver.http.IHTTPRouteMap;
 import com.baidu.bifromq.apiserver.http.handler.RequestHandlersFactory;
 import com.baidu.bifromq.basecluster.IAgentHost;
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
@@ -61,8 +62,7 @@ public class APIServer implements IAPIServer {
                       int port,
                       int tlsPort,
                       int maxContentLength,
-                      EventLoopGroup bossGroup,
-                      EventLoopGroup workerGroup,
+                      int workerThreads,
                       SslContext sslContext,
                       IRPCServiceTrafficService trafficService,
                       IBaseKVMetaService metaService,
@@ -75,8 +75,11 @@ public class APIServer implements IAPIServer {
         Preconditions.checkArgument(port >= 0);
         Preconditions.checkArgument(tlsPort >= 0);
         this.host = host;
-        this.bossGroup = bossGroup;
-        this.workerGroup = workerGroup;
+        this.bossGroup = NettyUtil.createEventLoopGroup(1,
+            EnvProvider.INSTANCE.newThreadFactory("api-server-boss-elg"));
+        this.workerGroup = NettyUtil.createEventLoopGroup(workerThreads,
+            EnvProvider.INSTANCE.newThreadFactory("api-server-worker-elg"));
+
         IHTTPRouteMap routeMap = new HTTPRouteMap(
             new RequestHandlersFactory(agentHost, trafficService, metaService, sessionDictClient,
                 distClient, inboxClient, retainClient, settingProvider));
@@ -140,6 +143,8 @@ public class APIServer implements IAPIServer {
             if (tlsServerChannel != null) {
                 serverChannel.channel().close().syncUninterruptibly();
             }
+            bossGroup.shutdownGracefully();
+            workerGroup.shutdownGracefully();
             log.info("API server shutdown");
             state.set(State.STOPPED);
         }

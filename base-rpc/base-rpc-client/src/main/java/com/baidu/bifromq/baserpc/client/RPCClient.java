@@ -33,7 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 final class RPCClient implements IRPCClient {
     private final BluePrint bluePrint;
-    private final IChannelHolder channelHolder;
+    private final IClientChannel channelHolder;
     private final CallOptions defaultCallOptions;
     private final RPCMeter meter;
     private final Map<String, IUnaryCaller<?, ?>> unaryCallers = Maps.newHashMap();
@@ -42,7 +42,7 @@ final class RPCClient implements IRPCClient {
     private volatile IServerSelector serverSelector = DummyServerSelector.INSTANCE;
 
     RPCClient(@NonNull BluePrint bluePrint,
-              @NonNull IChannelHolder channelHolder) {
+              @NonNull IClientChannel channelHolder) {
         this.channelHolder = channelHolder;
         this.bluePrint = bluePrint;
         this.meter = new RPCMeter(bluePrint.serviceDescriptor(), bluePrint);

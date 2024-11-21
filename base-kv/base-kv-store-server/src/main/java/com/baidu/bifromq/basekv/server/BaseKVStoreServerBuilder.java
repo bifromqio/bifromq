@@ -28,9 +28,9 @@ public class BaseKVStoreServerBuilder {
     RPCServerBuilder rpcServerBuilder;
     IBaseKVMetaService metaService;
 
-    public BaseKVStoreServiceBuilder addService(String clusterId, boolean bootstrap) {
+    public BaseKVStoreServiceBuilder addService(String clusterId) {
         assert !serviceBuilders.containsKey(clusterId);
-        return new BaseKVStoreServiceBuilder(clusterId, bootstrap, this);
+        return new BaseKVStoreServiceBuilder(clusterId, this);
     }
 
     public IBaseKVStoreServer build() {

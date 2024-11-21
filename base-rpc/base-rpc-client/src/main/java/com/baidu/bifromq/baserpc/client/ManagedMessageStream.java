@@ -42,7 +42,7 @@ class ManagedMessageStream<MsgT, AckT> extends ManagedBiDiStream<AckT, MsgT>
                          @Nullable String wchKey,
                          @Nullable String targetServerId,
                          Supplier<Map<String, String>> metadataSupplier,
-                         IChannelHolder channelHolder,
+                         IClientChannel channelHolder,
                          CallOptions callOptions,
                          MethodDescriptor<AckT, MsgT> methodDescriptor,
                          BluePrint bluePrint,

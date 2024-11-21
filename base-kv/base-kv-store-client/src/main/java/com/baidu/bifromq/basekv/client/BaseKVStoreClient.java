@@ -146,7 +146,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         this.rpcClient = IRPCClient.newBuilder()
             .trafficService(builder.trafficService)
             .bluePrint(bluePrint)
-            .executor(builder.executor)
+            .workerThreads(builder.workerThreads)
             .eventLoopGroup(builder.eventLoopGroup)
             .sslContext(builder.sslContext)
             .idleTimeoutInSec(builder.idleTimeoutInSec)

@@ -64,7 +64,6 @@ public abstract class DistServiceTest {
     private IDistServer distServer;
     private IDistClient distClient;
     private IBaseKVStoreClient workerClient;
-    private ExecutorService queryExecutor;
     private ScheduledExecutorService bgTaskExecutor;
     private ISettingProvider settingProvider = Setting::current;
     private IResourceThrottler resourceThrottler = (tenantId, type) -> true;
@@ -89,7 +88,6 @@ public abstract class DistServiceTest {
         closeable = MockitoAnnotations.openMocks(this);
         when(subBrokerMgr.get(anyInt())).thenReturn(inboxBroker);
         when(inboxBroker.open(anyString())).thenReturn(inboxDeliverer);
-        queryExecutor = Executors.newFixedThreadPool(2);
         bgTaskExecutor = Executors.newSingleThreadScheduledExecutor();
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")
@@ -124,15 +122,12 @@ public abstract class DistServiceTest {
         distWorker = IDistWorker
             .builder()
             .rpcServerBuilder(rpcServerBuilder)
-            .bootstrap(true)
             .agentHost(agentHost)
             .metaService(metaService)
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)
             .distClient(distClient)
             .storeClient(workerClient)
-            .queryExecutor(queryExecutor)
-            .rpcExecutor(MoreExecutors.directExecutor())
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(kvRangeStoreOptions)
@@ -158,19 +153,16 @@ public abstract class DistServiceTest {
     @AfterClass(alwaysRun = true)
     public void tearDown() throws Exception {
         log.info("Finish testing, and tearing down");
-        new Thread(() -> {
-            workerClient.close();
-            rpcServer.shutdown();
-            distWorker.close();
-            distClient.close();
-            distServer.close();
-            metaService.close();
-            trafficService.close();
-            crdtService.close();
-            agentHost.close();
-            queryExecutor.shutdown();
-            bgTaskExecutor.shutdown();
-        }).start();
+        workerClient.close();
+        distClient.close();
+        rpcServer.shutdown();
+        distWorker.close();
+        distServer.close();
+        metaService.close();
+        trafficService.close();
+        crdtService.close();
+        agentHost.close();
+        bgTaskExecutor.shutdown();
         closeable.close();
     }
 

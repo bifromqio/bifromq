@@ -60,7 +60,6 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
     private final IAgentHost agentHost;
     private final IBaseKVClusterMetadataManager metadataManager;
     private final String clusterId;
-    private final boolean bootstrap;
 
     BaseKVStoreService(BaseKVStoreServiceBuilder builder) {
         kvRangeStore = new KVRangeStore(
@@ -70,7 +69,6 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
             builder.queryExecutor,
             builder.tickerThreads,
             builder.bgTaskExecutor);
-        this.bootstrap = builder.bootstrap;
         this.clusterId = builder.clusterId;
         this.agentHost = builder.agentHost;
         log = SiftLogger.getLogger(BaseKVStoreService.class, "clusterId", clusterId, "storeId", kvRangeStore.id());
@@ -86,11 +84,9 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
     }
 
     public void start() {
-        log.debug("Starting BaseKVStore service: bootstrap={}", bootstrap);
+        log.debug("Starting BaseKVStore service");
         kvRangeStore.start(new AgentHostStoreMessenger(agentHost, clusterId, kvRangeStore.id()));
-        if (bootstrap) {
-            kvRangeStore.bootstrap(KVRangeIdUtil.generate(), FULL_BOUNDARY);
-        }
+        kvRangeStore.bootstrap(KVRangeIdUtil.generate(), FULL_BOUNDARY);
         // sync store descriptor via crdt
         disposables.add(kvRangeStore.describe().subscribe(metadataManager::report));
         log.debug("BaseKVStore service started");

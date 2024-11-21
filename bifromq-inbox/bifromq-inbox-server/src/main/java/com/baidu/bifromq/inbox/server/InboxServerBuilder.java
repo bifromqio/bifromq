@@ -50,7 +50,7 @@ public class InboxServerBuilder implements IInboxServerBuilder {
     IBaseKVStoreClient inboxStoreClient;
     Map<String, String> attrs = new HashMap<>();
     Set<String> defaultGroupTags = new HashSet<>();
-    Executor rpcExecutor = MoreExecutors.directExecutor();
+    int workerThreads;
 
     public IInboxServer build() {
         Preconditions.checkNotNull(rpcServerBuilder, "RPC Server Builder is null");

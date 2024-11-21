@@ -25,8 +25,11 @@ import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
@@ -38,12 +41,10 @@ class DistWorker implements IDistWorker {
     }
 
     private final String clusterId;
+    private final ExecutorService rpcExecutor;
     private final IBaseKVStoreServer storeServer;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final KVStoreBalanceController storeBalanceController;
-    private final ScheduledExecutorService jobScheduler;
-    private final AsyncRunner jobRunner;
-    private final boolean jobExecutorOwner;
     private final List<IDistWorkerBalancerFactory> effectiveBalancerFactories = new LinkedList<>();
     protected final DistWorkerCoProcFactory coProcFactory;
 
@@ -73,27 +74,28 @@ class DistWorker implements IDistWorker {
             effectiveBalancerFactories,
             builder.balancerRetryDelay,
             builder.bgTaskExecutor);
-        jobExecutorOwner = builder.bgTaskExecutor == null;
-        if (jobExecutorOwner) {
-            String threadName = String.format("dist-worker[%s]-job-executor", builder.clusterId);
-            jobScheduler = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-                new ScheduledThreadPoolExecutor(1, EnvProvider.INSTANCE.newThreadFactory(threadName)), threadName);
+
+        if (builder.workerThreads == 0) {
+            rpcExecutor = MoreExecutors.newDirectExecutorService();
         } else {
-            jobScheduler = builder.bgTaskExecutor;
+            rpcExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+                new ThreadPoolExecutor(builder.workerThreads,
+                    builder.workerThreads, 0L,
+                    TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                    EnvProvider.INSTANCE.newThreadFactory("dist-worker-executor")), "dist-worker-executor");
         }
-        jobRunner = new AsyncRunner("job.runner", jobScheduler, "type", "distworker");
 
         storeServer = IBaseKVStoreServer.builder()
             // attach to rpc server
             .rpcServerBuilder(builder.rpcServerBuilder)
             .metaService(builder.metaService)
             // build basekv store service
-            .addService(builder.clusterId, builder.bootstrap)
+            .addService(builder.clusterId)
             .coProcFactory(coProcFactory)
             .storeOptions(builder.storeOptions)
             .agentHost(builder.agentHost)
-            .queryExecutor(builder.queryExecutor)
-            .rpcExecutor(builder.rpcExecutor)
+            .queryExecutor(MoreExecutors.directExecutor())
+            .rpcExecutor(rpcExecutor)
             .tickerThreads(builder.tickerThreads)
             .bgTaskExecutor(builder.bgTaskExecutor)
             .finish()
@@ -119,16 +121,12 @@ class DistWorker implements IDistWorker {
     public void close() {
         if (status.compareAndSet(Status.STARTED, Status.STOPPING)) {
             log.info("Stopping DistWorker");
-            jobRunner.awaitDone();
             storeBalanceController.stop();
             storeServer.stop();
             log.debug("Stopping CoProcFactory");
             coProcFactory.close();
             effectiveBalancerFactories.forEach(IDistWorkerBalancerFactory::close);
-            if (jobExecutorOwner) {
-                log.debug("Stopping Job Executor");
-                MoreExecutors.shutdownAndAwaitTermination(jobScheduler, 5, TimeUnit.SECONDS);
-            }
+            MoreExecutors.shutdownAndAwaitTermination(rpcExecutor, 5, TimeUnit.SECONDS);
             log.info("DistWorker stopped");
             status.compareAndSet(Status.STOPPING, Status.STOPPED);
         }

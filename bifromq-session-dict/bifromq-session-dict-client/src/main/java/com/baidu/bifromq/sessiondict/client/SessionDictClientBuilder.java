@@ -32,14 +32,14 @@ public final class SessionDictClientBuilder implements ISessionDictClientBuilder
     private IRPCServiceTrafficService trafficService;
     private EventLoopGroup eventLoopGroup;
     private SslContext sslContext;
-    private Executor executor = MoreExecutors.directExecutor();
+    private int workerThreads;
 
     @Override
     public ISessionDictClient build() {
         return new SessionDictClient(IRPCClient.newBuilder()
             .bluePrint(RPCBluePrint.INSTANCE)
             .trafficService(trafficService)
-            .executor(executor)
+            .workerThreads(workerThreads)
             .eventLoopGroup(eventLoopGroup)
             .sslContext(sslContext)
             .build());

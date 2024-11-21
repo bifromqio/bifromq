@@ -42,7 +42,7 @@ public class RetainServerBuilder implements IRetainServerBuilder {
     IBaseKVStoreClient retainStoreClient;
     Map<String, String> attrs = new HashMap<>();
     Set<String> defaultGroupTags = new HashSet<>();
-    Executor rpcExecutor = MoreExecutors.directExecutor();
+    int workerThreads = 0;
 
     @Override
     public IRetainServer build() {

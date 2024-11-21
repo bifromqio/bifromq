@@ -78,11 +78,8 @@ public class InboxStoreGCProcessor implements IInboxStoreGCProcessor {
             setting -> doGC(reqId, setting, tenantId, expirySeconds, now)).toArray(CompletableFuture[]::new);
         return CompletableFuture.allOf(gcResults)
             .thenApply(v -> Arrays.stream(gcResults).map(CompletableFuture::join).toList())
-            .thenApply(gcReplies -> {
-                log.debug("All range gc succeed");
-                return gcReplies.stream()
-                    .anyMatch(r -> ((GCReply) r).getCode() != GCReply.Code.OK) ? Result.ERROR : Result.OK;
-            });
+            .thenApply(gcReplies -> gcReplies.stream()
+                .anyMatch(r -> ((GCReply) r).getCode() != GCReply.Code.OK) ? Result.ERROR : Result.OK);
     }
 
     private CompletableFuture<GCReply> doGC(long reqId,

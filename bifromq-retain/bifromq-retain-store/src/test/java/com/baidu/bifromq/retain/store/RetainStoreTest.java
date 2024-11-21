@@ -65,7 +65,6 @@ import com.baidu.bifromq.retain.utils.KeyUtil;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Struct;
 import io.micrometer.core.instrument.Gauge;
@@ -82,13 +81,9 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.MockitoAnnotations;
@@ -109,7 +104,6 @@ public class RetainStoreTest {
     protected IRPCServer rpcServer;
     protected IRetainStore testStore;
     protected IBaseKVStoreClient storeClient;
-    private ExecutorService queryExecutor;
     private int tickerThreads = 2;
     private ScheduledExecutorService bgTaskExecutor;
     private KVRangeStoreOptions options;
@@ -144,9 +138,6 @@ public class RetainStoreTest {
             .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString());
         ((RocksDBWALableKVEngineConfigurator) options.getWalEngineConfigurator())
             .dbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
-        queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
-            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-            EnvProvider.INSTANCE.newThreadFactory("query-executor"));
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
             EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
 
@@ -165,14 +156,11 @@ public class RetainStoreTest {
     private void buildStoreServer() {
         RPCServerBuilder rpcServerBuilder = IRPCServer.newBuilder().host("127.0.0.1").trafficService(trafficService);
         testStore = IRetainStore.builder()
-            .bootstrap(true)
             .rpcServerBuilder(rpcServerBuilder)
             .agentHost(agentHost)
             .metaService(metaService)
             .storeClient(storeClient)
             .storeOptions(options)
-            .queryExecutor(queryExecutor)
-            .rpcExecutor(MoreExecutors.directExecutor())
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .gcInterval(Duration.ofSeconds(60))
@@ -185,8 +173,8 @@ public class RetainStoreTest {
 
     protected void restartStoreServer() {
         log.info("Restarting test store server");
-        testStore.close();
         rpcServer.shutdown();
+        testStore.close();
         buildStoreServer();
         rpcServer.start();
         log.info("Test store server restarted");
@@ -195,9 +183,9 @@ public class RetainStoreTest {
     @AfterClass(alwaysRun = true)
     public void tearDown() throws Exception {
         log.info("Finish testing, and tearing down");
-        testStore.close();
-        rpcServer.shutdown();
         storeClient.close();
+        rpcServer.shutdown();
+        testStore.close();
         trafficService.close();
         metaService.close();
         crdtService.close();
@@ -210,7 +198,6 @@ public class RetainStoreTest {
         } catch (IOException e) {
             log.error("Failed to delete db root dir", e);
         }
-        queryExecutor.shutdown();
         bgTaskExecutor.shutdown();
         closeable.close();
     }

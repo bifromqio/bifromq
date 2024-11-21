@@ -56,7 +56,6 @@ import com.baidu.bifromq.sessiondict.server.ISessionDictServer;
 import com.baidu.bifromq.type.ClientInfo;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.collect.Sets;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.Struct;
 import io.reactivex.rxjava3.core.Observable;
 import java.lang.reflect.Method;
@@ -64,7 +63,6 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import lombok.extern.slf4j.Slf4j;
@@ -95,7 +93,7 @@ public abstract class MQTTTest {
     private ICRDTService crdtService;
     private IRPCServiceTrafficService trafficService;
     private IBaseKVMetaService metaService;
-    private IRPCServer sharedRpcServer;
+    private IRPCServer rpcServer;
     private IMqttBrokerClient onlineInboxBrokerClient;
     private ISessionDictClient sessionDictClient;
     private ISessionDictServer sessionDictServer;
@@ -114,7 +112,6 @@ public abstract class MQTTTest {
     private IMQTTBroker mqttBroker;
     private ISubBrokerManager inboxBrokerMgr;
     private PluginManager pluginMgr;
-    private ExecutorService queryExecutor;
     private int tickerThreads = 2;
     private ScheduledExecutorService bgTaskExecutor;
     private AutoCloseable closeable;
@@ -129,7 +126,6 @@ public abstract class MQTTTest {
 
         System.setProperty("distservice_topic_match_expiry_seconds", "1");
         pluginMgr = new DefaultPluginManager();
-        queryExecutor = Executors.newFixedThreadPool(2);
         bgTaskExecutor = Executors.newSingleThreadScheduledExecutor();
 
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
@@ -168,18 +164,14 @@ public abstract class MQTTTest {
             .clusterId(IInboxStore.CLUSTER_NAME)
             .trafficService(trafficService)
             .metaService(metaService)
-            .executor(MoreExecutors.directExecutor())
             .build();
         inboxStore = IInboxStore.builder()
             .rpcServerBuilder(rpcServerBuilder)
-            .bootstrap(true)
             .agentHost(agentHost)
             .metaService(metaService)
             .storeClient(inboxStoreKVStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
-            .queryExecutor(queryExecutor)
-            .rpcExecutor(MoreExecutors.directExecutor())
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(new KVRangeStoreOptions()
@@ -209,16 +201,12 @@ public abstract class MQTTTest {
             .clusterId(IRetainStore.CLUSTER_NAME)
             .trafficService(trafficService)
             .metaService(metaService)
-            .executor(MoreExecutors.directExecutor())
             .build();
         retainStore = IRetainStore.builder()
             .rpcServerBuilder(rpcServerBuilder)
-            .bootstrap(true)
             .agentHost(agentHost)
             .metaService(metaService)
             .storeClient(retainStoreKVStoreClient)
-            .queryExecutor(queryExecutor)
-            .rpcExecutor(MoreExecutors.directExecutor())
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(new KVRangeStoreOptions()
@@ -233,7 +221,6 @@ public abstract class MQTTTest {
             .clusterId(IDistWorker.CLUSTER_NAME)
             .trafficService(trafficService)
             .metaService(metaService)
-            .executor(MoreExecutors.directExecutor())
             .build();
 
         inboxBrokerMgr = new SubBrokerManager(pluginMgr, onlineInboxBrokerClient, inboxClient);
@@ -245,15 +232,12 @@ public abstract class MQTTTest {
             .build();
         distWorker = IDistWorker.builder()
             .rpcServerBuilder(rpcServerBuilder)
-            .bootstrap(true)
             .agentHost(agentHost)
             .metaService(metaService)
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)
             .distClient(distClient)
             .storeClient(distWorkerStoreClient)
-            .queryExecutor(queryExecutor)
-            .rpcExecutor(MoreExecutors.directExecutor())
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(new KVRangeStoreOptions()
@@ -289,8 +273,8 @@ public abstract class MQTTTest {
             .buildListener()
             .build();
 
-        sharedRpcServer = rpcServerBuilder.build();
-        sharedRpcServer.start();
+        rpcServer = rpcServerBuilder.build();
+        rpcServer.start();
         log.info("Shared RPC server started");
         mqttBroker.start();
         log.info("Mqtt broker started");
@@ -330,52 +314,51 @@ public abstract class MQTTTest {
         log.info("Start to tearing down");
         mqttBroker.close();
         log.info("Mqtt broker shut down");
-        sharedRpcServer.shutdown();
-        log.info("Shared rpc server shutdown");
-
         distClient.close();
-        log.info("Dist client stopped");
-        distServer.close();
-        log.info("Dist worker stopped");
         distWorkerStoreClient.close();
-        log.info("Dist server shut down");
-        distWorker.close();
+        log.info("Dist client stopped");
 
-        inboxBrokerMgr.close();
         inboxClient.close();
-        log.info("Inbox client stopped");
-        inboxServer.close();
-        log.info("Inbox server shut down");
-
         inboxStoreKVStoreClient.close();
-        inboxStore.close();
-        log.info("Inbox store closed");
+        log.info("Inbox client stopped");
 
         retainClient.close();
-        log.info("Retain client stopped");
-        retainServer.close();
-        log.info("Retain server shut down");
-
         retainStoreKVStoreClient.close();
-        retainStore.close();
-        log.info("Retain store closed");
+        log.info("Retain client stopped");
 
         sessionDictClient.close();
         log.info("Session dict client stopped");
+
+        rpcServer.shutdown();
+        log.info("Shared rpc server shutdown");
+
+        distServer.close();
+        log.info("Dist server shut down");
+        distWorker.close();
+        log.info("Dist worker stopped");
+
+        inboxBrokerMgr.close();
+        inboxServer.close();
+        log.info("Inbox server shut down");
+        inboxStore.close();
+        log.info("Inbox store closed");
+
+        retainServer.close();
+        log.info("Retain server shut down");
+
+        retainStore.close();
+        log.info("Retain store closed");
+
         sessionDictServer.close();
         log.info("Session dict server shut down");
 
         metaService.close();
-
         trafficService.close();
-
         crdtService.close();
         log.info("CRDT service stopped");
         agentHost.close();
         log.info("Agent host stopped");
 
-        log.info("Shutdown work executor");
-        queryExecutor.shutdownNow();
         log.info("Shutdown bg task executor");
         bgTaskExecutor.shutdownNow();
         closeable.close();

@@ -37,7 +37,7 @@ public final class BaseKVStoreClientBuilder {
     IRPCServiceTrafficService trafficService;
     IBaseKVMetaService metaService;
 
-    Executor executor = MoreExecutors.directExecutor();
+    int workerThreads = 0;
     int queryPipelinesPerStore;
 
     public IBaseKVStoreClient build() {

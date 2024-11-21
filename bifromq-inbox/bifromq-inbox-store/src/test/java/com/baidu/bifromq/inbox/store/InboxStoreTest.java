@@ -204,7 +204,6 @@ abstract class InboxStoreTest {
     private void buildStoreServer() {
         RPCServerBuilder rpcServerBuilder = IRPCServer.newBuilder().host("127.0.0.1").trafficService(trafficService);
         testStore = IInboxStore.builder()
-            .bootstrap(true)
             .rpcServerBuilder(rpcServerBuilder)
             .agentHost(agentHost)
             .metaService(metaService)
@@ -213,8 +212,6 @@ abstract class InboxStoreTest {
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .storeOptions(options)
-            .queryExecutor(queryExecutor)
-            .rpcExecutor(MoreExecutors.directExecutor())
             .tickerThreads(tickerThreads)
             .balancerFactoryConfig(Map.of(RangeBootstrapBalancerFactory.class.getName(), Struct.getDefaultInstance()))
             .bgTaskExecutor(bgTaskExecutor)
@@ -224,8 +221,8 @@ abstract class InboxStoreTest {
     }
 
     protected void restartStoreServer() {
-        testStore.close();
         rpcServer.shutdown();
+        testStore.close();
         buildStoreServer();
         rpcServer.start();
     }
@@ -233,10 +230,10 @@ abstract class InboxStoreTest {
     @AfterClass(groups = "integration")
     public void tearDown() throws Exception {
         log.info("Finish testing, and tearing down");
+        inboxClient.close();
+        storeClient.close();
         testStore.close();
         rpcServer.shutdown();
-        storeClient.close();
-        inboxClient.close();
         trafficService.close();
         metaService.close();
         crdtService.close();

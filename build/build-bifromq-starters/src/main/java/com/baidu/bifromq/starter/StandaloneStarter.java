@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023. The BifroMQ Authors. All Rights Reserved.
+ * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,618 +13,158 @@
 
 package com.baidu.bifromq.starter;
 
+import static com.baidu.bifromq.starter.utils.ConfigFileUtil.build;
 import static com.baidu.bifromq.starter.utils.ClusterDomainUtil.resolve;
+import static com.baidu.bifromq.starter.utils.ConfigFileUtil.serialize;
 
-import com.baidu.bifromq.apiserver.APIServer;
 import com.baidu.bifromq.apiserver.IAPIServer;
-import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
-import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
-import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
-import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.store.option.KVRangeOptions;
-import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
-import com.baidu.bifromq.baserpc.client.IRPCClient;
+import com.baidu.bifromq.baseenv.MemUsage;
 import com.baidu.bifromq.baserpc.server.IRPCServer;
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
-import com.baidu.bifromq.baserpc.utils.NettyUtil;
-import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.dist.server.IDistServer;
-import com.baidu.bifromq.dist.worker.IDistWorker;
-import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.server.IInboxServer;
-import com.baidu.bifromq.inbox.store.IInboxStore;
 import com.baidu.bifromq.mqtt.IMQTTBroker;
-import com.baidu.bifromq.mqtt.IMQTTBrokerBuilder;
-import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
-import com.baidu.bifromq.plugin.authprovider.AuthProviderManager;
-import com.baidu.bifromq.plugin.clientbalancer.ClientBalancerManager;
-import com.baidu.bifromq.plugin.eventcollector.EventCollectorManager;
-import com.baidu.bifromq.plugin.manager.BifroMQPluginManager;
-import com.baidu.bifromq.plugin.resourcethrottler.ResourceThrottlerManager;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
-import com.baidu.bifromq.plugin.settingprovider.SettingProviderManager;
-import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
-import com.baidu.bifromq.plugin.subbroker.SubBrokerManager;
-import com.baidu.bifromq.retain.client.IRetainClient;
-import com.baidu.bifromq.retain.server.IRetainServer;
-import com.baidu.bifromq.retain.store.IRetainStore;
-import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
-import com.baidu.bifromq.sessiondict.server.ISessionDictServer;
-import com.baidu.bifromq.starter.config.standalone.StandaloneConfig;
-import com.baidu.bifromq.starter.config.standalone.StandaloneConfigConsolidator;
-import com.baidu.bifromq.starter.config.standalone.model.apiserver.APIServerConfig;
-import com.baidu.bifromq.starter.config.standalone.model.mqttserver.MQTTServerConfig;
-import com.baidu.bifromq.starter.utils.ConfigUtil;
+import com.baidu.bifromq.starter.metrics.netty.PooledByteBufAllocator;
+import com.baidu.bifromq.starter.config.StandaloneConfig;
+import com.baidu.bifromq.starter.config.StandaloneConfigConsolidator;
+import com.baidu.bifromq.starter.module.APIServerModule;
+import com.baidu.bifromq.starter.module.ConfigModule;
+import com.baidu.bifromq.starter.module.CoreServiceModule;
+import com.baidu.bifromq.starter.module.DistServiceModule;
+import com.baidu.bifromq.starter.module.ExecutorsModule;
+import com.baidu.bifromq.starter.module.InboxServiceModule;
+import com.baidu.bifromq.starter.module.MQTTServiceModule;
+import com.baidu.bifromq.starter.module.PluginModule;
+import com.baidu.bifromq.starter.module.RPCClientSSLContextModule;
+import com.baidu.bifromq.starter.module.RPCServerBuilderModule;
+import com.baidu.bifromq.starter.module.RetainServiceModule;
+import com.baidu.bifromq.starter.module.SessionDictServiceModule;
 import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.sysprops.props.ClusterDomainResolveTimeoutSeconds;
-import com.baidu.bifromq.sysprops.props.DistWorkerLoadEstimationWindowSeconds;
-import com.baidu.bifromq.sysprops.props.InboxStoreLoadEstimationWindowSeconds;
-import com.baidu.bifromq.sysprops.props.RetainStoreLoadEstimationWindowSeconds;
 import com.google.common.base.Strings;
-import com.google.common.collect.Sets;
-import com.google.common.util.concurrent.MoreExecutors;
+import com.google.inject.AbstractModule;
+import com.google.inject.Guice;
+import com.google.inject.Inject;
+import com.google.inject.Injector;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
-import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
-import io.micrometer.core.instrument.binder.netty4.NettyEventExecutorMetrics;
-import io.netty.channel.EventLoopGroup;
-import io.netty.handler.ssl.SslContext;
-import io.reactivex.rxjava3.core.Observable;
+import io.micrometer.core.instrument.binder.jvm.ClassLoaderMetrics;
+import io.micrometer.core.instrument.binder.jvm.JvmCompilationMetrics;
+import io.micrometer.core.instrument.binder.jvm.JvmGcMetrics;
+import io.micrometer.core.instrument.binder.jvm.JvmHeapPressureMetrics;
+import io.micrometer.core.instrument.binder.jvm.JvmInfoMetrics;
+import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics;
+import io.micrometer.core.instrument.binder.jvm.JvmThreadMetrics;
+import io.micrometer.core.instrument.binder.netty4.NettyAllocatorMetrics;
+import io.micrometer.core.instrument.binder.system.ProcessorMetrics;
+import io.micrometer.core.instrument.binder.system.UptimeMetrics;
+import io.netty.buffer.UnpooledByteBufAllocator;
+import io.reactivex.rxjava3.plugins.RxJavaPlugins;
+import java.io.File;
 import java.lang.management.ManagementFactory;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedTransferQueue;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
-import org.pf4j.PluginManager;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.Options;
 import org.reflections.Reflections;
+import org.slf4j.Logger;
 
 @Slf4j
-public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
-    private StandaloneConfig config;
-    private PluginManager pluginMgr;
-    private ExecutorService rpcClientExecutor;
-    private ExecutorService rpcServerExecutor;
-    private ExecutorService storeClientExecutor;
-    private ExecutorService storeServerExecutor;
-    private ScheduledExecutorService bgTaskExecutor;
-    private AuthProviderManager authProviderMgr;
-    private ClientBalancerManager clientBalancerMgr;
-    private ResourceThrottlerManager resourceThrottlerMgr;
-    private EventCollectorManager eventCollectorMgr;
-    private SettingProviderManager settingProviderMgr;
-    private IAgentHost agentHost;
-    private ICRDTService crdtService;
-    private IRPCServiceTrafficService trafficService;
-    private IBaseKVMetaService metaService;
-    private IRPCServer rpcServer;
-    private ISessionDictClient sessionDictClient;
-    private ISessionDictServer sessionDictServer;
-    private IDistClient distClient;
-    private IBaseKVStoreClient distWorkerClient;
-    private IDistWorker distWorker;
-    private IDistServer distServer;
-    private IInboxClient inboxClient;
-    private IBaseKVStoreClient inboxStoreClient;
-    private IInboxStore inboxStore;
-    private IInboxServer inboxServer;
-    private IRetainClient retainClient;
-    private IBaseKVStoreClient retainStoreClient;
-    private IRetainStore retainStore;
-    private IRetainServer retainServer;
-    private IMqttBrokerClient mqttBrokerClient;
-    private IMQTTBroker mqttBroker;
-    private ISubBrokerManager subBrokerManager;
-    private IAPIServer apiServer;
+public class StandaloneStarter {
+    private static class LoggerModule extends AbstractModule {
+        @Override
+        protected void configure() {
+            bind(Logger.class).toInstance(log);
+        }
+    }
 
-    @Override
-    protected void init(StandaloneConfig config) {
+    private static final Options CLI_OPTIONS = new Options()
+        .addOption(Option.builder()
+            .option("c")
+            .longOpt("conf")
+            .desc("the conf file for Starter")
+            .hasArg(true)
+            .optionalArg(false)
+            .argName("CONF_FILE")
+            .required(true)
+            .build());
+
+    static {
+        // log unhandled error from rxjava
+        RxJavaPlugins.setErrorHandler(e -> log.error("Uncaught RxJava exception", e));
+        // log uncaught exception
+        Thread.setDefaultUncaughtExceptionHandler(
+            (t, e) -> log.error("Caught an uncaught exception in thread[{}]", t.getName(), e));
+
+    }
+
+    private final List<AutoCloseable> closeables = new LinkedList<>();
+    private final StandaloneConfig config;
+    private final IAgentHost agentHost;
+    private final IRPCServer rpcServer;
+    private final Optional<IAPIServer> apiServerOpt;
+    private final Optional<IMQTTBroker> mqttBrokerOpt;
+    private final GracefulShutdown gracefulShutdown;
+
+    @Inject
+    public StandaloneStarter(StandaloneConfig config,
+                             IAgentHost agentHost,
+                             RPCServerBuilder rpcServerBuilder,
+                             Optional<IAPIServer> apiServerOpt,
+                             Optional<IMQTTBroker> mqttBrokerOpt,
+                             GracefulShutdown gracefulShutdown) {
         this.config = config;
-        defaultSysProps();
-        StandaloneConfigConsolidator.consolidate(config);
-        printConfigs(config);
-
-        if (!Strings.isNullOrEmpty(config.getClusterConfig().getEnv())) {
-            Metrics.globalRegistry.config()
-                .commonTags("env", config.getClusterConfig().getEnv());
-        }
-
-        pluginMgr = new BifroMQPluginManager();
-        pluginMgr.loadPlugins();
-        pluginMgr.startPlugins();
-        pluginMgr.getPlugins().forEach(
-            plugin -> log.info("Loaded plugin: {}@{}",
-                plugin.getDescriptor().getPluginId(), plugin.getDescriptor().getVersion()));
-
-        if (config.getRpcClientConfig().getWorkerThreads() == null) {
-            rpcClientExecutor = MoreExecutors.newDirectExecutorService();
+        this.agentHost = agentHost;
+        if (rpcServerBuilder.bindServices() > 0) {
+            rpcServer = rpcServerBuilder.build();
         } else {
-            rpcClientExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-                new ThreadPoolExecutor(config.getRpcClientConfig().getWorkerThreads(),
-                    config.getRpcClientConfig().getWorkerThreads(), 0L,
-                    TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                    EnvProvider.INSTANCE.newThreadFactory("rpc-client-executor")), "rpc-client-executor");
+            rpcServer = null;
         }
-        if (config.getRpcServerConfig().getWorkerThreads() == null) {
-            rpcServerExecutor = MoreExecutors.newDirectExecutorService();
-        } else {
-            rpcServerExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-                new ThreadPoolExecutor(config.getRpcServerConfig().getWorkerThreads(),
-                    config.getRpcServerConfig().getWorkerThreads(), 0L,
-                    TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                    EnvProvider.INSTANCE.newThreadFactory("rpc-server-executor")), "rpc-server-executor");
-        }
-        if (config.getBaseKVClientConfig().getWorkerThreads() == null) {
-            storeClientExecutor = MoreExecutors.newDirectExecutorService();
-        } else {
-            storeClientExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-                new ThreadPoolExecutor(config.getBaseKVClientConfig().getWorkerThreads(),
-                    config.getBaseKVClientConfig().getWorkerThreads(), 0L,
-                    TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                    EnvProvider.INSTANCE.newThreadFactory("basekv-client-executor")), "basekv-client-executor");
-        }
-        if (config.getBaseKVServerConfig().getWorkerThreads() == null) {
-            storeServerExecutor = MoreExecutors.newDirectExecutorService();
-        } else {
-            storeServerExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-                new ThreadPoolExecutor(config.getBaseKVServerConfig().getWorkerThreads(),
-                    config.getBaseKVServerConfig().getWorkerThreads(), 0L,
-                    TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-                    EnvProvider.INSTANCE.newThreadFactory("basekv-server-executor")), "basekv-server-executor");
-        }
-        bgTaskExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            new ScheduledThreadPoolExecutor(config.getStateStoreConfig().getBgWorkerThreads(),
-                EnvProvider.INSTANCE.newThreadFactory("bg-task-executor")), "bg-task-executor");
-
-        eventCollectorMgr = new EventCollectorManager(pluginMgr);
-        resourceThrottlerMgr = new ResourceThrottlerManager(config.getResourceThrottlerFQN(), pluginMgr);
-
-        settingProviderMgr = new SettingProviderManager(config.getSettingProviderFQN(), pluginMgr);
-
-        authProviderMgr = new AuthProviderManager(config.getAuthProviderFQN(),
-            pluginMgr, settingProviderMgr, eventCollectorMgr);
-
-        clientBalancerMgr = new ClientBalancerManager(pluginMgr);
-
-        AgentHostOptions agentHostOptions = AgentHostOptions.builder()
-            .env(config.getClusterConfig().getEnv())
-            .addr(config.getClusterConfig().getHost())
-            .port(config.getClusterConfig().getPort())
-            .build();
-        agentHost = IAgentHost.newInstance(agentHostOptions);
-        crdtService = ICRDTService.newInstance(agentHost, CRDTServiceOptions.builder().build());
-
-        trafficService = IRPCServiceTrafficService.newInstance(crdtService);
-        metaService = IBaseKVMetaService.newInstance(crdtService);
-
-        EventLoopGroup rpcServerBossELG =
-            NettyUtil.createEventLoopGroup(1, EnvProvider.INSTANCE.newThreadFactory("rpc-boss-elg"));
-        new NettyEventExecutorMetrics(rpcServerBossELG).bindTo(Metrics.globalRegistry);
-
-        EventLoopGroup ioRPCWorkerELG =
-            NettyUtil.createEventLoopGroup(0, EnvProvider.INSTANCE.newThreadFactory("io-rpc-worker-elg"));
-        new NettyEventExecutorMetrics(ioRPCWorkerELG).bindTo(Metrics.globalRegistry);
-
-        RPCServerBuilder rpcServerBuilder = IRPCServer.newBuilder()
-            .host(config.getRpcServerConfig().getHost())
-            .port(config.getRpcServerConfig().getPort())
-            .trafficService(trafficService)
-            .bossEventLoopGroup(rpcServerBossELG)
-            .workerEventLoopGroup(ioRPCWorkerELG);
-        if (config.getRpcServerConfig().isEnableSSL()) {
-            rpcServerBuilder.sslContext(buildRPCServerSslContext(config.getRpcServerConfig().getSslConfig()));
-        }
-        SslContext rpcClientSslContext = config.getRpcClientConfig().isEnableSSL()
-            ? buildRPCClientSslContext(config.getRpcClientConfig().getSslConfig()) : null;
-        distClient = IDistClient.newBuilder()
-            .trafficService(trafficService)
-            .executor(rpcClientExecutor)
-            .sslContext(rpcClientSslContext)
-            .build();
-        retainClient = IRetainClient.newBuilder()
-            .trafficService(trafficService)
-            .executor(rpcClientExecutor)
-            .sslContext(rpcClientSslContext)
-            .build();
-        retainStoreClient = IBaseKVStoreClient.newBuilder()
-            .clusterId(IRetainStore.CLUSTER_NAME)
-            .trafficService(trafficService)
-            .metaService(metaService)
-            .executor(storeClientExecutor)
-            .sslContext(rpcClientSslContext)
-            .queryPipelinesPerStore(config
-                .getStateStoreConfig()
-                .getRetainStoreConfig()
-                .getQueryPipelinePerStore())
-            .build();
-        retainStore = IRetainStore.builder()
-            .rpcServerBuilder(rpcServerBuilder)
-            .bootstrap(config.isBootstrap())
-            .agentHost(agentHost)
-            .metaService(metaService)
-            .storeClient(retainStoreClient)
-            .queryExecutor(MoreExecutors.directExecutor())
-            .rpcExecutor(storeServerExecutor)
-            .tickerThreads(config.getStateStoreConfig().getTickerThreads())
-            .bgTaskExecutor(bgTaskExecutor)
-            .balancerRetryDelay(Duration.ofMillis(
-                config.getStateStoreConfig().getRetainStoreConfig().getBalanceConfig().getRetryDelayInMS()))
-            .balancerFactoryConfig(
-                config.getStateStoreConfig().getRetainStoreConfig().getBalanceConfig().getBalancers())
-            .loadEstimateWindow(Duration.ofSeconds(RetainStoreLoadEstimationWindowSeconds.INSTANCE.get()))
-            .gcInterval(Duration.ofSeconds(config.getStateStoreConfig().getRetainStoreConfig().getGcIntervalSeconds()))
-            .storeOptions(new KVRangeStoreOptions()
-                .setKvRangeOptions(new KVRangeOptions()
-                    .setCompactWALThreshold(config.getStateStoreConfig()
-                        .getRetainStoreConfig()
-                        .getCompactWALThreshold()))
-                .setDataEngineConfigurator(
-                    buildDataEngineConf(config
-                        .getStateStoreConfig()
-                        .getRetainStoreConfig()
-                        .getDataEngineConfig(), "retain_data"))
-                .setWalEngineConfigurator(
-                    buildWALEngineConf(config
-                        .getStateStoreConfig()
-                        .getRetainStoreConfig()
-                        .getWalEngineConfig(), "retain_wal")))
-            .build();
-        inboxClient = IInboxClient.newBuilder()
-            .trafficService(trafficService)
-            .executor(rpcClientExecutor)
-            .sslContext(rpcClientSslContext)
-            .build();
-        inboxStoreClient = IBaseKVStoreClient.newBuilder()
-            .clusterId(IInboxStore.CLUSTER_NAME)
-            .trafficService(trafficService)
-            .metaService(metaService)
-            .executor(storeClientExecutor)
-            .sslContext(rpcClientSslContext)
-            .queryPipelinesPerStore(config.getStateStoreConfig().getInboxStoreConfig()
-                .getQueryPipelinePerStore())
-            .build();
-        inboxStore = IInboxStore.builder()
-            .rpcServerBuilder(rpcServerBuilder)
-            .bootstrap(config.isBootstrap())
-            .agentHost(agentHost)
-            .metaService(metaService)
-            .inboxClient(inboxClient)
-            .storeClient(inboxStoreClient)
-            .settingProvider(settingProviderMgr)
-            .eventCollector(eventCollectorMgr)
-            .queryExecutor(MoreExecutors.directExecutor())
-            .rpcExecutor(storeServerExecutor)
-            .tickerThreads(config.getStateStoreConfig().getTickerThreads())
-            .bgTaskExecutor(bgTaskExecutor)
-            .loadEstimateWindow(Duration.ofSeconds(InboxStoreLoadEstimationWindowSeconds.INSTANCE.get()))
-            .gcInterval(Duration.ofSeconds(config.getStateStoreConfig().getInboxStoreConfig().getGcIntervalSeconds()))
-            .balancerRetryDelay(Duration.ofMillis(
-                config.getStateStoreConfig().getInboxStoreConfig().getBalanceConfig().getRetryDelayInMS()))
-            .balancerFactoryConfig(config.getStateStoreConfig().getInboxStoreConfig().getBalanceConfig().getBalancers())
-            .storeOptions(new KVRangeStoreOptions()
-                .setKvRangeOptions(new KVRangeOptions()
-                    .setCompactWALThreshold(config.getStateStoreConfig()
-                        .getInboxStoreConfig()
-                        .getCompactWALThreshold())
-                    .setEnableLoadEstimation(true))
-                .setDataEngineConfigurator(
-                    buildDataEngineConf(config
-                        .getStateStoreConfig()
-                        .getInboxStoreConfig()
-                        .getDataEngineConfig(), "inbox_data"))
-                .setWalEngineConfigurator(
-                    buildWALEngineConf(config
-                        .getStateStoreConfig()
-                        .getInboxStoreConfig()
-                        .getWalEngineConfig(), "inbox_wal")))
-            .build();
-        inboxServer = IInboxServer.builder()
-            .rpcServerBuilder(rpcServerBuilder)
-            .eventCollector(eventCollectorMgr)
-            .resourceThrottler(resourceThrottlerMgr)
-            .settingProvider(settingProviderMgr)
-            .inboxClient(inboxClient)
-            .distClient(distClient)
-            .retainClient(retainClient)
-            .inboxStoreClient(inboxStoreClient)
-            .build();
-        distWorkerClient = IBaseKVStoreClient.newBuilder()
-            .clusterId(IDistWorker.CLUSTER_NAME)
-            .trafficService(trafficService)
-            .metaService(metaService)
-            .executor(storeClientExecutor)
-            .sslContext(rpcClientSslContext)
-            .queryPipelinesPerStore(config
-                .getStateStoreConfig()
-                .getDistWorkerConfig()
-                .getQueryPipelinePerStore())
-            .build();
-        mqttBrokerClient = IMqttBrokerClient.newBuilder()
-            .trafficService(trafficService)
-            .executor(rpcClientExecutor)
-            .sslContext(rpcClientSslContext)
-            .build();
-
-        subBrokerManager = new SubBrokerManager(pluginMgr, mqttBrokerClient, inboxClient);
-
-        sessionDictClient = ISessionDictClient.newBuilder()
-            .trafficService(trafficService)
-            .executor(rpcClientExecutor)
-            .sslContext(rpcClientSslContext)
-            .build();
-
-        sessionDictServer = ISessionDictServer.builder()
-            .rpcServerBuilder(rpcServerBuilder)
-            .mqttBrokerClient(mqttBrokerClient)
-            // TODO: attributes
-            // TODO: defaultGroupTags
-            .build();
-        retainServer = IRetainServer.builder()
-            .rpcServerBuilder(rpcServerBuilder)
-            .retainStoreClient(retainStoreClient)
-            .settingProvider(settingProviderMgr)
-            .subBrokerManager(subBrokerManager)
-            // TODO: attributes
-            // TODO: defaultGroupTags
-            .build();
-        distWorker = IDistWorker.builder()
-            .rpcServerBuilder(rpcServerBuilder)
-            .bootstrap(config.isBootstrap())
-            .agentHost(agentHost)
-            .metaService(metaService)
-            .eventCollector(eventCollectorMgr)
-            .resourceThrottler(resourceThrottlerMgr)
-            .distClient(distClient)
-            .storeClient(distWorkerClient)
-            .queryExecutor(MoreExecutors.directExecutor())
-            .rpcExecutor(storeServerExecutor)
-            .tickerThreads(config.getStateStoreConfig().getTickerThreads())
-            .bgTaskExecutor(bgTaskExecutor)
-            .storeOptions(new KVRangeStoreOptions()
-                .setKvRangeOptions(new KVRangeOptions()
-                    .setCompactWALThreshold(config.getStateStoreConfig()
-                        .getRetainStoreConfig()
-                        .getCompactWALThreshold()))
-                .setDataEngineConfigurator(
-                    buildDataEngineConf(config
-                        .getStateStoreConfig()
-                        .getDistWorkerConfig()
-                        .getDataEngineConfig(), "dist_data"))
-                .setWalEngineConfigurator(
-                    buildWALEngineConf(config
-                        .getStateStoreConfig()
-                        .getDistWorkerConfig()
-                        .getWalEngineConfig(), "dist_wal")))
-            .balancerRetryDelay(Duration.ofMillis(
-                config.getStateStoreConfig().getDistWorkerConfig().getBalanceConfig().getRetryDelayInMS()))
-            .balancerFactoryConfig(config.getStateStoreConfig().getDistWorkerConfig().getBalanceConfig().getBalancers())
-            .subBrokerManager(subBrokerManager)
-            .loadEstimateWindow(Duration.ofSeconds(DistWorkerLoadEstimationWindowSeconds.INSTANCE.get()))
-            .build();
-
-        distServer = IDistServer.builder()
-            .rpcServerBuilder(rpcServerBuilder)
-            .distWorkerClient(distWorkerClient)
-            .settingProvider(settingProviderMgr)
-            .eventCollector(eventCollectorMgr)
-            // TODO: attributes
-            // TODO: defaultGroupTags
-            .build();
-
-        MQTTServerConfig mqttServerConfig = config.getMqttServerConfig();
-        IMQTTBrokerBuilder brokerBuilder = IMQTTBroker.builder()
-            .rpcServerBuilder(rpcServerBuilder)
-            .mqttBossELGThreads(mqttServerConfig.getBossELGThreads())
-            .mqttWorkerELGThreads(mqttServerConfig.getWorkerELGThreads())
-            .authProvider(authProviderMgr)
-            .clientBalancer(clientBalancerMgr)
-            .eventCollector(eventCollectorMgr)
-            .resourceThrottler(resourceThrottlerMgr)
-            .settingProvider(settingProviderMgr)
-            .distClient(distClient)
-            .inboxClient(inboxClient)
-            .sessionDictClient(sessionDictClient)
-            .retainClient(retainClient)
-            .connectTimeoutSeconds(mqttServerConfig.getConnTimeoutSec())
-            .connectRateLimit(mqttServerConfig.getMaxConnPerSec())
-            .disconnectRate(mqttServerConfig.getMaxDisconnPerSec())
-            .readLimit(mqttServerConfig.getMaxConnBandwidth())
-            .writeLimit(mqttServerConfig.getMaxConnBandwidth())
-            .defaultKeepAliveSeconds(mqttServerConfig.getDefaultKeepAliveSec())
-            .maxBytesInMessage(mqttServerConfig.getMaxMsgByteSize());
-        if (mqttServerConfig.getTcpListener().isEnable()) {
-            brokerBuilder.buildTcpConnListener()
-                .host(mqttServerConfig.getTcpListener().getHost())
-                .port(mqttServerConfig.getTcpListener().getPort())
-                .buildListener();
-        }
-        if (mqttServerConfig.getTlsListener().isEnable()) {
-            brokerBuilder.buildTLSConnListener()
-                .host(mqttServerConfig.getTlsListener().getHost())
-                .port(mqttServerConfig.getTlsListener().getPort())
-                .sslContext(buildServerSslContext(mqttServerConfig.getTlsListener().getSslConfig()))
-                .buildListener();
-        }
-        if (mqttServerConfig.getWsListener().isEnable()) {
-            brokerBuilder.buildWSConnListener()
-                .host(mqttServerConfig.getWsListener().getHost())
-                .port(mqttServerConfig.getWsListener().getPort())
-                .path(mqttServerConfig.getWsListener().getWsPath())
-                .buildListener();
-        }
-        if (mqttServerConfig.getWssListener().isEnable()) {
-            brokerBuilder.buildWSSConnListener()
-                .host(mqttServerConfig.getWssListener().getHost())
-                .port(mqttServerConfig.getWssListener().getPort())
-                .path(mqttServerConfig.getWssListener().getWsPath())
-                .sslContext(buildServerSslContext(mqttServerConfig.getWssListener().getSslConfig()))
-                .buildListener();
-        }
-
-        APIServerConfig apiServerConfig = config.getApiServerConfig();
-        if (apiServerConfig.isEnable()) {
-            apiServer = buildAPIServer(apiServerConfig);
-        }
-        mqttBroker = brokerBuilder.build();
-        rpcServer = rpcServerBuilder.build();
+        this.apiServerOpt = apiServerOpt;
+        this.mqttBrokerOpt = mqttBrokerOpt;
+        this.gracefulShutdown = gracefulShutdown;
     }
 
-    @Override
-    protected Class<StandaloneConfig> configClass() {
-        return StandaloneConfig.class;
-    }
-
-    @Override
-    public void start() {
-        super.start();
+    void start() {
+        startSystemMetrics();
         join();
-        log.info("Start RPC server");
-        rpcServer.start();
-        mqttBroker.start();
-        if (apiServer != null) {
-            apiServer.start();
+        if (rpcServer != null) {
+            log.info("Start RPC server");
+            rpcServer.start();
         }
-        Observable.combineLatest(
-                distWorkerClient.connState(),
-                inboxStoreClient.connState(),
-                retainStoreClient.connState(),
-                mqttBrokerClient.connState(),
-                inboxClient.connState(),
-                sessionDictClient.connState(),
-                retainClient.connState(),
-                distClient.connState(),
-                Sets::newHashSet
-            )
-            .mapOptional(states -> {
-                if (states.size() > 1) {
-                    return Optional.empty();
-                }
-                return states.stream().findFirst();
-            })
-            .filter(state -> state == IRPCClient.ConnState.READY)
-            .firstElement()
-            .blockingSubscribe();
-        inboxStoreClient.join();
-        retainStoreClient.join();
-        distWorkerClient.join();
+        mqttBrokerOpt.ifPresent(IMQTTBroker::start);
+        apiServerOpt.ifPresent(IAPIServer::start);
         log.info("Standalone broker started");
     }
 
-    public void stop() {
-        mqttBroker.close();
-        if (apiServer != null) {
-            apiServer.close();
+    void stop() {
+        gracefulShutdown.shutdown();
+        if (rpcServer != null) {
+            rpcServer.shutdown();
         }
-        rpcServer.shutdown();
-
-        distClient.close();
-        distServer.close();
-
-        distWorkerClient.close();
-        distWorker.close();
-
-        inboxServer.close();
-
-        inboxStoreClient.close();
-        inboxStore.close();
-
-        retainClient.close();
-        retainServer.close();
-
-        retainStoreClient.close();
-        retainStore.close();
-
-        sessionDictClient.close();
-        sessionDictServer.close();
-
-        metaService.close();
-
-        trafficService.close();
-
-        crdtService.close();
-
-        agentHost.close();
-
-        authProviderMgr.close();
-
-        resourceThrottlerMgr.close();
-
-        clientBalancerMgr.close();
-
-        eventCollectorMgr.close();
-
-        settingProviderMgr.close();
-
-        subBrokerManager.close();
-
-        if (rpcClientExecutor != null) {
-            rpcClientExecutor.shutdownNow();
-            log.debug("Shutdown rpc client executor");
-        }
-        if (rpcServerExecutor != null) {
-            rpcServerExecutor.shutdownNow();
-            log.debug("Shutdown rpc server executor");
-        }
-        if (storeClientExecutor != null) {
-            storeClientExecutor.shutdownNow();
-            log.debug("Shutdown baseKV client executor");
-        }
-        if (storeServerExecutor != null) {
-            storeServerExecutor.shutdownNow();
-            log.debug("Shutdown baseKV server executor");
-        }
-        if (bgTaskExecutor != null) {
-            bgTaskExecutor.shutdownNow();
-            log.debug("Shutdown Shared bg task executor");
-        }
-        pluginMgr.stopPlugins();
-        pluginMgr.unloadPlugins();
+        closeables.forEach(closable -> {
+            try {
+                closable.close();
+            } catch (Exception e) {
+                // Never happen
+            }
+        });
         log.info("Standalone broker stopped");
-        super.stop();
     }
 
-    private IAPIServer buildAPIServer(APIServerConfig apiServerConfig) {
-        String apiHost = Strings.isNullOrEmpty(apiServerConfig.getHost()) ? "0.0.0.0" : apiServerConfig.getHost();
-        EventLoopGroup bossELG = NettyUtil.createEventLoopGroup(apiServerConfig.getApiBossThreads(),
-            EnvProvider.INSTANCE.newThreadFactory("api-server-boss-elg"));
-        EventLoopGroup workerELG = NettyUtil.createEventLoopGroup(apiServerConfig.getApiWorkerThreads(),
-            EnvProvider.INSTANCE.newThreadFactory("api-server-worker-elg"));
-        SslContext sslContext = null;
-        if (apiServerConfig.getHttpsListenerConfig().isEnable()) {
-            sslContext = buildServerSslContext(apiServerConfig.getHttpsListenerConfig().getSslConfig());
-        }
-        return APIServer.builder()
-            .host(apiHost)
-            .port(apiServerConfig.getHttpPort())
-            .tlsPort(apiServerConfig.getHttpsListenerConfig().getPort())
-            .maxContentLength(apiServerConfig.getMaxContentLength())
-            .bossGroup(bossELG)
-            .workerGroup(workerELG)
-            .sslContext(sslContext)
-            .agentHost(agentHost)
-            .trafficService(trafficService)
-            .metaService(metaService)
-            .distClient(distClient)
-            .inboxClient(inboxClient)
-            .sessionDictClient(sessionDictClient)
-            .retainClient(retainClient)
-            .settingProvider(settingProviderMgr)
-            .build();
-    }
-
-    private void printConfigs(StandaloneConfig config) {
+    private static void printConfigs(StandaloneConfig config) {
         log.info("Available Processors: {}", EnvProvider.INSTANCE.availableProcessors());
         List<String> arguments = ManagementFactory.getRuntimeMXBean().getInputArguments();
         log.info("JVM arguments: \n  {}", String.join("\n  ", arguments));
@@ -646,7 +186,7 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
                 throw new RuntimeException("Failed to access INSTANCE field of subclass: " + subclass.getName(), e);
             }
         }
-        log.info("Consolidated Config(YAML): \n{}", ConfigUtil.serialize(config));
+        log.info("Consolidated Config(YAML): \n{}", serialize(config));
     }
 
     private void join() {
@@ -692,12 +232,73 @@ public class StandaloneStarter extends BaseEngineStarter<StandaloneConfig> {
             });
     }
 
-    private void defaultSysProps() {
-        // force using a single ByteBufAllocator for netty in both grpc and mqtt broker, to make memory tuning easier
-        System.setProperty("io.grpc.netty.useCustomAllocator", "false");
+    private void startSystemMetrics() {
+        // os metrics
+        // disable file descriptor metrics since its too heavy
+        new UptimeMetrics().bindTo(Metrics.globalRegistry);
+        new ProcessorMetrics().bindTo(Metrics.globalRegistry);
+        // jvm metrics
+        new JvmInfoMetrics().bindTo(Metrics.globalRegistry);
+        new ClassLoaderMetrics().bindTo(Metrics.globalRegistry);
+        new JvmCompilationMetrics().bindTo(Metrics.globalRegistry);
+        new JvmMemoryMetrics().bindTo(Metrics.globalRegistry);
+        new JvmThreadMetrics().bindTo(Metrics.globalRegistry);
+        JvmGcMetrics jvmGcMetrics = new JvmGcMetrics();
+        jvmGcMetrics.bindTo(Metrics.globalRegistry);
+        closeables.add(jvmGcMetrics);
+        JvmHeapPressureMetrics jvmHeapPressureMetrics = new JvmHeapPressureMetrics();
+        jvmHeapPressureMetrics.bindTo(Metrics.globalRegistry);
+        closeables.add(jvmHeapPressureMetrics);
+        // using nonblocking version of netty allocator metrics
+        new NettyAllocatorMetrics(PooledByteBufAllocator.INSTANCE).bindTo(Metrics.globalRegistry);
+        // netty default allocator metrics
+        new NettyAllocatorMetrics(UnpooledByteBufAllocator.DEFAULT).bindTo(Metrics.globalRegistry);
+
+        Gauge.builder("netty.direct.memory.usage", () -> MemUsage.local().nettyDirectMemoryUsage())
+            .register(Metrics.globalRegistry);
     }
 
     public static void main(String[] args) {
-        StarterRunner.run(StandaloneStarter.class, args);
+        CommandLineParser parser = new DefaultParser();
+        HelpFormatter formatter = new HelpFormatter();
+        try {
+            CommandLine cmd = parser.parse(CLI_OPTIONS, args);
+            File confFile = new File(cmd.getOptionValue("c"));
+            if (!confFile.exists()) {
+                throw new RuntimeException("Conf file does not exist: " + cmd.getOptionValue("c"));
+            }
+            StandaloneConfig config = build(confFile, StandaloneConfig.class);
+            StandaloneConfigConsolidator.consolidate(config);
+            printConfigs(config);
+
+            if (!Strings.isNullOrEmpty(config.getClusterConfig().getEnv())) {
+                Metrics.globalRegistry.config().commonTags("env", config.getClusterConfig().getEnv());
+            }
+
+            Injector injector = Guice.createInjector(
+                new ConfigModule(config),
+                new LoggerModule(),
+                new CoreServiceModule(),
+                new PluginModule(),
+                new RPCClientSSLContextModule(),
+                new ExecutorsModule(),
+                new RPCServerBuilderModule(),
+                new DistServiceModule(),
+                new InboxServiceModule(),
+                new RetainServiceModule(),
+                new SessionDictServiceModule(),
+                new MQTTServiceModule(),
+                new APIServerModule());
+
+            StandaloneStarter starter = injector.getInstance(StandaloneStarter.class);
+            starter.start();
+            Thread shutdownThread = new Thread(starter::stop);
+            shutdownThread.setName("shutdown");
+            Runtime.getRuntime().addShutdownHook(shutdownThread);
+        } catch (Throwable e) {
+            log.error("Failed to start BifroMQ", e);
+            System.out.println(e.getMessage());
+            formatter.printHelp("CMD", CLI_OPTIONS);
+        }
     }
 }

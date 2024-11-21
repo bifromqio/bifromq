@@ -155,7 +155,6 @@ public abstract class DistWorkerTest {
 
     protected String tenantA = "tenantA";
     protected String tenantB = "tenantB";
-    private ExecutorService queryExecutor;
     private final int tickerThreads = 2;
     private ScheduledExecutorService bgTaskExecutor;
     private Path dbRootDir;
@@ -175,9 +174,6 @@ public abstract class DistWorkerTest {
         lenient().when(receiverManager.get(InboxService)).thenReturn(inboxBroker);
         lenient().when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
 
-        queryExecutor = new ThreadPoolExecutor(2, 2, 0L,
-            TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
-            EnvProvider.INSTANCE.newThreadFactory("query-executor"));
         bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
             EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
 
@@ -213,20 +209,16 @@ public abstract class DistWorkerTest {
             .clusterId(IDistWorker.CLUSTER_NAME)
             .trafficService(trafficService)
             .metaService(metaService)
-            .executor(MoreExecutors.directExecutor())
             .build();
         RPCServerBuilder rpcServerBuilder = IRPCServer.newBuilder().host("127.0.0.1").trafficService(trafficService);
         testWorker = IDistWorker.builder()
             .rpcServerBuilder(rpcServerBuilder)
-            .rpcExecutor(MoreExecutors.directExecutor())
-            .bootstrap(true)
             .agentHost(agentHost)
             .metaService(metaService)
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)
             .distClient(distClient)
             .storeClient(storeClient)
-            .queryExecutor(queryExecutor)
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(options)
@@ -242,25 +234,22 @@ public abstract class DistWorkerTest {
     @AfterClass(alwaysRun = true)
     public void tearDown() throws Exception {
         log.info("Finish testing, and tearing down");
-        new Thread(() -> {
-            storeClient.close();
-            testWorker.close();
-            rpcServer.shutdown();
-            metaService.close();
-            trafficService.close();
-            crdtService.close();
-            agentHost.close();
-            try {
-                Files.walk(dbRootDir)
-                    .sorted(Comparator.reverseOrder())
-                    .map(Path::toFile)
-                    .forEach(File::delete);
-            } catch (IOException e) {
-                log.error("Failed to delete db root dir", e);
-            }
-            queryExecutor.shutdown();
-            bgTaskExecutor.shutdown();
-        }).start();
+        storeClient.close();
+        testWorker.close();
+        rpcServer.shutdown();
+        metaService.close();
+        trafficService.close();
+        crdtService.close();
+        agentHost.close();
+        try {
+            Files.walk(dbRootDir)
+                .sorted(Comparator.reverseOrder())
+                .map(Path::toFile)
+                .forEach(File::delete);
+        } catch (IOException e) {
+            log.error("Failed to delete db root dir", e);
+        }
+        bgTaskExecutor.shutdown();
         closeable.close();
     }
 

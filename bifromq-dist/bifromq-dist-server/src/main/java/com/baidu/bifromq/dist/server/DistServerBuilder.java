@@ -42,7 +42,7 @@ public class DistServerBuilder implements IDistServerBuilder {
     IEventCollector eventCollector;
     Map<String, String> attributes = new HashMap<>();
     Set<String> defaultGroupTags = new HashSet<>();
-    Executor rpcExecutor = MoreExecutors.directExecutor();
+    int workerThreads = 0;
 
     @Override
     public IDistServer build() {

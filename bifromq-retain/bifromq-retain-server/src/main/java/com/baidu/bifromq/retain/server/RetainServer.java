@@ -13,16 +13,26 @@
 
 package com.baidu.bifromq.retain.server;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.deliverer.MessageDeliverer;
 import com.baidu.bifromq.retain.RPCBluePrint;
 import com.baidu.bifromq.retain.server.scheduler.MatchCallScheduler;
 import com.baidu.bifromq.retain.server.scheduler.RetainCallScheduler;
 import com.baidu.bifromq.retain.store.gc.RetainStoreGCProcessor;
+import com.google.common.util.concurrent.MoreExecutors;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedTransferQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class RetainServer implements IRetainServer {
-    protected final RetainService retainService;
+    private final RetainService retainService;
+    private final ExecutorService rpcExecutor;
+
 
     RetainServer(RetainServerBuilder builder) {
         this.retainService = new RetainService(
@@ -30,16 +40,26 @@ class RetainServer implements IRetainServer {
             new MessageDeliverer(builder.subBrokerManager),
             new MatchCallScheduler(builder.retainStoreClient, builder.settingProvider),
             new RetainCallScheduler(builder.retainStoreClient));
+        if (builder.workerThreads == 0) {
+            rpcExecutor = MoreExecutors.newDirectExecutorService();
+        } else {
+            rpcExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+                new ThreadPoolExecutor(builder.workerThreads,
+                    builder.workerThreads, 0L,
+                    TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                    EnvProvider.INSTANCE.newThreadFactory("retain-server-executor")), "retain-server-executor");
+        }
         builder.rpcServerBuilder.bindService(retainService.bindService(),
             RPCBluePrint.INSTANCE,
             builder.attrs,
             builder.defaultGroupTags,
-            builder.rpcExecutor);
+            rpcExecutor);
     }
 
     @Override
     public void close() {
         log.info("Shutting down retain service");
         retainService.close();
+        MoreExecutors.shutdownAndAwaitTermination(rpcExecutor, 5, TimeUnit.SECONDS);
     }
 }

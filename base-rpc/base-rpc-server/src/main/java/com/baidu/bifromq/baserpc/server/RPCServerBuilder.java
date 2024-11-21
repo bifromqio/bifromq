@@ -16,23 +16,26 @@ package com.baidu.bifromq.baserpc.server;
 
 import com.baidu.bifromq.baserpc.BluePrint;
 import com.baidu.bifromq.baserpc.trafficgovernor.GlobalProcessId;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceServerRegister;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Strings;
 import io.grpc.ServerServiceDefinition;
-import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executor;
+import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.NonNull;
+import lombok.Setter;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
+@Accessors(fluent = true)
+@Setter
+@NoArgsConstructor(access = AccessLevel.PACKAGE)
 public final class RPCServerBuilder {
     record ServiceDefinition(ServerServiceDefinition definition,
                              BluePrint bluePrint,
@@ -41,49 +44,14 @@ public final class RPCServerBuilder {
                              Executor executor) {
     }
 
-    @Accessors(fluent = true)
     @Getter
     String id = GlobalProcessId.ID + "/" + hashCode();
     String host;
     int port = 0;
+    int workerThreads = 0;
     IRPCServiceTrafficService trafficService;
-    EventLoopGroup bossEventLoopGroup;
-    EventLoopGroup workerEventLoopGroup;
     SslContext sslContext;
     final Map<String, ServiceDefinition> serviceDefinitions = new HashMap<>();
-
-    public RPCServerBuilder id(String id) {
-        if (!Strings.isNullOrEmpty(id)) {
-            this.id = id;
-        }
-        return this;
-    }
-
-    public RPCServerBuilder host(String host) {
-        this.host = host;
-        return this;
-    }
-
-    public RPCServerBuilder port(int port) {
-        Preconditions.checkArgument(port >= 0, "Port number must be non-negative");
-        this.port = port;
-        return this;
-    }
-
-    public RPCServerBuilder trafficService(IRPCServiceTrafficService trafficService) {
-        this.trafficService = trafficService;
-        return this;
-    }
-
-    public RPCServerBuilder bossEventLoopGroup(EventLoopGroup bossEventLoopGroup) {
-        this.bossEventLoopGroup = bossEventLoopGroup;
-        return this;
-    }
-
-    public RPCServerBuilder workerEventLoopGroup(EventLoopGroup workerEventLoopGroup) {
-        this.workerEventLoopGroup = workerEventLoopGroup;
-        return this;
-    }
 
     public RPCServerBuilder sslContext(SslContext sslContext) {
         if (sslContext != null) {
@@ -91,6 +59,10 @@ public final class RPCServerBuilder {
         }
         this.sslContext = sslContext;
         return this;
+    }
+
+    public int bindServices() {
+        return serviceDefinitions.size();
     }
 
     public RPCServerBuilder bindService(@NonNull ServerServiceDefinition serviceDefinition,

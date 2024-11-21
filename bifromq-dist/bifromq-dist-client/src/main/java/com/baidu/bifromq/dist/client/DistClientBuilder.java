@@ -14,7 +14,6 @@
 package com.baidu.bifromq.dist.client;
 
 
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.dist.RPCBluePrint;
@@ -34,14 +33,14 @@ public final class DistClientBuilder implements IDistClientBuilder {
     IRPCServiceTrafficService trafficService;
     EventLoopGroup eventLoopGroup;
     SslContext sslContext;
-    Executor executor = MoreExecutors.directExecutor();
+    int workerThreads = 0;
 
     @Override
     public IDistClient build() {
         return new DistClient(IRPCClient.newBuilder()
             .bluePrint(RPCBluePrint.INSTANCE)
             .trafficService(trafficService)
-            .executor(executor)
+            .workerThreads(workerThreads)
             .eventLoopGroup(eventLoopGroup)
             .sslContext(sslContext)
             .build());

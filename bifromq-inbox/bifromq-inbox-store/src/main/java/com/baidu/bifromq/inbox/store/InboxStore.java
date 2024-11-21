@@ -33,8 +33,11 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +49,7 @@ class InboxStore implements IInboxStore {
     }
 
     private final String clusterId;
+    private final ExecutorService rpcExecutor;
     private final IBaseKVStoreServer storeServer;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final IBaseKVStoreClient storeClient;
@@ -94,17 +98,27 @@ class InboxStore implements IInboxStore {
             jobScheduler = builder.bgTaskExecutor;
         }
         jobRunner = new AsyncRunner("job.runner", jobScheduler, "type", "inboxstore");
+        if (builder.workerThreads == 0) {
+            rpcExecutor = MoreExecutors.newDirectExecutorService();
+        } else {
+            rpcExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+                new ThreadPoolExecutor(builder.workerThreads,
+                    builder.workerThreads, 0L,
+                    TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                    EnvProvider.INSTANCE.newThreadFactory("inbox-store-executor")), "inbox-store-executor");
+
+        }
         storeServer = IBaseKVStoreServer.builder()
             // attach to rpc server
             .rpcServerBuilder(builder.rpcServerBuilder)
             .metaService(builder.metaService)
             // build basekv store service
-            .addService(builder.clusterId, builder.bootstrap)
+            .addService(builder.clusterId)
             .coProcFactory(coProcFactory)
             .storeOptions(builder.storeOptions)
             .agentHost(builder.agentHost)
-            .queryExecutor(builder.queryExecutor)
-            .rpcExecutor(builder.rpcExecutor)
+            .queryExecutor(MoreExecutors.directExecutor())
+            .rpcExecutor(rpcExecutor)
             .tickerThreads(builder.tickerThreads)
             .bgTaskExecutor(builder.bgTaskExecutor)
             .finish()
@@ -138,10 +152,10 @@ class InboxStore implements IInboxStore {
     public void close() {
         if (status.compareAndSet(Status.STARTED, Status.STOPPING)) {
             log.info("Stopping InboxStore");
-            jobRunner.awaitDone();
-            if (gcJob != null && !gcJob.isDone()) {
-                gcJob.join();
-            }
+//            if (gcJob != null && !gcJob.isDone()) {
+//                gcJob.cancel(true);
+//            }
+            jobRunner.awaitDone().toCompletableFuture().join();
             balanceController.stop();
             storeServer.stop();
             log.debug("Stopping CoProcFactory");
@@ -151,6 +165,7 @@ class InboxStore implements IInboxStore {
                 log.debug("Shutting down job executor");
                 MoreExecutors.shutdownAndAwaitTermination(jobScheduler, 5, TimeUnit.SECONDS);
             }
+            MoreExecutors.shutdownAndAwaitTermination(rpcExecutor, 5, TimeUnit.SECONDS);
             log.info("InboxStore stopped");
             status.compareAndSet(Status.STOPPING, Status.STOPPED);
         }
@@ -169,6 +184,7 @@ class InboxStore implements IInboxStore {
                 return;
             }
             long reqId = HLC.INST.getPhysical();
+            log.debug("Start GC job, reqId={}", reqId);
             gcJob = inboxStoreGCProc.gc(reqId, null, null, HLC.INST.getPhysical())
                 .handle((v, e) -> {
                     scheduleGC(gcInterval);

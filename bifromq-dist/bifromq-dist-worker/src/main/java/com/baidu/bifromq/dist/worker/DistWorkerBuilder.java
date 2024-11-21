@@ -43,11 +43,9 @@ import lombok.experimental.Accessors;
 public class DistWorkerBuilder implements IDistWorkerBuilder {
     String clusterId = IDistWorker.CLUSTER_NAME;
     RPCServerBuilder rpcServerBuilder;
-    boolean bootstrap;
     IAgentHost agentHost;
     IBaseKVMetaService metaService;
-    Executor queryExecutor;
-    Executor rpcExecutor;
+    int workerThreads;
     int tickerThreads;
     ScheduledExecutorService bgTaskExecutor;
     IEventCollector eventCollector;

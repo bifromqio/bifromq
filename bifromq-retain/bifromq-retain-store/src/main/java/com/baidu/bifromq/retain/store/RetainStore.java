@@ -32,8 +32,11 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +48,7 @@ class RetainStore implements IRetainStore {
     }
 
     private final String clusterId;
+    private final ExecutorService rpcExecutor;
     private final IBaseKVStoreServer storeServer;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final IBaseKVStoreClient storeClient;
@@ -92,18 +96,27 @@ class RetainStore implements IRetainStore {
             jobScheduler = builder.bgTaskExecutor;
         }
         jobRunner = new AsyncRunner("job.runner", jobScheduler, "type", "retainstore");
+        if (builder.workerThreads == 0) {
+            rpcExecutor = MoreExecutors.newDirectExecutorService();
+        } else {
+            rpcExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+                new ThreadPoolExecutor(builder.workerThreads,
+                    builder.workerThreads, 0L,
+                    TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                    EnvProvider.INSTANCE.newThreadFactory("retain-store-executor")), "retain-store-executor");
+        }
 
         storeServer = IBaseKVStoreServer.builder()
             // attach to rpc server
             .rpcServerBuilder(builder.rpcServerBuilder)
             .metaService(builder.metaService)
             // build basekv store service
-            .addService(builder.clusterId, builder.bootstrap)
+            .addService(builder.clusterId)
             .coProcFactory(coProcFactory)
             .storeOptions(builder.storeOptions)
             .agentHost(builder.agentHost)
-            .queryExecutor(builder.queryExecutor)
-            .rpcExecutor(builder.rpcExecutor)
+            .queryExecutor(MoreExecutors.directExecutor())
+            .rpcExecutor(rpcExecutor)
             .tickerThreads(builder.tickerThreads)
             .bgTaskExecutor(builder.bgTaskExecutor)
             .finish()
@@ -136,9 +149,8 @@ class RetainStore implements IRetainStore {
     public void close() {
         if (status.compareAndSet(Status.STARTED, Status.STOPPING)) {
             log.info("Stopping RetainStore");
-            jobRunner.awaitDone();
             if (gcJob != null && !gcJob.isDone()) {
-                gcJob.join();
+                gcJob.cancel(true);
             }
             balanceController.stop();
             storeServer.stop();
@@ -148,6 +160,7 @@ class RetainStore implements IRetainStore {
                 log.debug("Shutting down job executor");
                 MoreExecutors.shutdownAndAwaitTermination(jobScheduler, 5, TimeUnit.SECONDS);
             }
+            MoreExecutors.shutdownAndAwaitTermination(rpcExecutor, 5, TimeUnit.SECONDS);
             log.info("RetainStore shutdown");
             status.compareAndSet(Status.STOPPING, Status.STOPPED);
         }
@@ -163,6 +176,7 @@ class RetainStore implements IRetainStore {
                 return;
             }
             long reqId = HLC.INST.getPhysical();
+            log.debug("Retain Store GC: id={}", id());
             gcJob = gcProcessor.gc(reqId, null, null, HLC.INST.getPhysical())
                 .thenAccept(v -> {
                     log.debug("Retain Store GC succeed: id={}", id());

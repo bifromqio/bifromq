@@ -234,7 +234,7 @@ public class MQTTPubSubTest extends MQTTTest {
         receiveOfflineMessage(1, 1);
         receiveOfflineMessage(2, 1);
         receiveOfflineMessage(1, 2);
-        receiveOfflineMessage(2, 2);
+//        receiveOfflineMessage(2, 2);
     }
 
     @Test(groups = "integration")

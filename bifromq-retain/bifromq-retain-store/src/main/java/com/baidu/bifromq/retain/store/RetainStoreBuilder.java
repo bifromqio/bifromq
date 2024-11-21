@@ -40,13 +40,11 @@ import lombok.experimental.Accessors;
 public class RetainStoreBuilder implements IRetainStoreBuilder {
     String clusterId = IRetainStore.CLUSTER_NAME;
     RPCServerBuilder rpcServerBuilder;
-    boolean bootstrap;
     IAgentHost agentHost;
     IBaseKVMetaService metaService;
     IBaseKVStoreClient storeClient;
     KVRangeStoreOptions storeOptions;
-    Executor queryExecutor = MoreExecutors.directExecutor();
-    Executor rpcExecutor;
+    int workerThreads;
     int tickerThreads;
     ScheduledExecutorService bgTaskExecutor;
     Duration balancerRetryDelay = Duration.ofSeconds(5);

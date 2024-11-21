@@ -26,7 +26,6 @@ import lombok.experimental.Accessors;
 public class BaseKVStoreServiceBuilder {
     final BaseKVStoreServerBuilder serverBuilder;
     final String clusterId;
-    final boolean bootstrap;
     KVRangeStoreOptions storeOptions = new KVRangeStoreOptions();
     IKVRangeCoProcFactory coProcFactory;
     IAgentHost agentHost;
@@ -35,9 +34,8 @@ public class BaseKVStoreServiceBuilder {
     int tickerThreads;
     ScheduledExecutorService bgTaskExecutor;
 
-    BaseKVStoreServiceBuilder(String clusterId, boolean bootstrap, BaseKVStoreServerBuilder serverBuilder) {
+    BaseKVStoreServiceBuilder(String clusterId, BaseKVStoreServerBuilder serverBuilder) {
         this.clusterId = clusterId;
-        this.bootstrap = bootstrap;
         this.serverBuilder = serverBuilder;
     }
 

@@ -67,8 +67,10 @@ class MQTTBroker implements IMQTTBroker {
         this.builder = builder;
         this.bossGroup = NettyUtil.createEventLoopGroup(builder.mqttBossELGThreads,
             EnvProvider.INSTANCE.newThreadFactory("mqtt-boss-elg"));
+        new NettyEventExecutorMetrics(bossGroup).bindTo(Metrics.globalRegistry);
         this.workerGroup = NettyUtil.createEventLoopGroup(builder.mqttWorkerELGThreads,
             EnvProvider.INSTANCE.newThreadFactory("mqtt-worker-elg"));
+        new NettyEventExecutorMetrics(workerGroup).bindTo(Metrics.globalRegistry);
         connRateLimiter = RateLimiter.create(builder.connectRateLimit);
         remoteAddrHandler = new ClientAddrHandler();
         new NettyEventExecutorMetrics(bossGroup).bindTo(Metrics.globalRegistry);
@@ -78,14 +80,6 @@ class MQTTBroker implements IMQTTBroker {
             .sessionRegistry(builder.sessionRegistry)
             .distService(builder.distService)
             .build();
-    }
-
-    protected void beforeBrokerStart() {
-
-    }
-
-    protected void afterBrokerStop() {
-
     }
 
     @Override
@@ -107,7 +101,6 @@ class MQTTBroker implements IMQTTBroker {
                 .defaultKeepAliveTimeSeconds(builder.defaultKeepAliveSeconds)
                 .build();
             log.info("Starting MQTT broker");
-            beforeBrokerStart();
             log.debug("Starting server channel");
             if (builder.tcpListenerBuilder != null) {
                 tcpChannelF = this.bindTCPChannel(builder.tcpListenerBuilder);
@@ -164,7 +157,6 @@ class MQTTBroker implements IMQTTBroker {
         log.debug("Boss group shutdown");
         workerGroup.shutdownGracefully().syncUninterruptibly();
         log.debug("Worker group shutdown");
-        afterBrokerStop();
         log.info("MQTT broker shutdown");
     }
 

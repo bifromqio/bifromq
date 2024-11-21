@@ -80,15 +80,11 @@ public class APIServerTest extends MockableTest {
         when(trafficService.getTrafficGovernor(anyString())).thenReturn(trafficGovernor);
         when(trafficGovernor.serverEndpoints()).thenReturn(Observable.empty());
         when(trafficGovernor.trafficRules()).thenReturn(Observable.empty());
-        EventLoopGroup bossGroup = new NioEventLoopGroup(1);
-        EventLoopGroup workerGroup = new NioEventLoopGroup(1);
         apiServer = APIServer.builder()
             .host(host)
             .port(0)
             .tlsPort(0)
             .maxContentLength(1024 * 1024)
-            .bossGroup(bossGroup)
-            .workerGroup(workerGroup)
             .agentHost(agentHost)
             .trafficService(trafficService)
             .metaService(metaService)

@@ -43,7 +43,6 @@ import lombok.experimental.Accessors;
 public class InboxStoreBuilder implements IInboxStoreBuilder {
     String clusterId = IInboxStore.CLUSTER_NAME;
     RPCServerBuilder rpcServerBuilder;
-    boolean bootstrap;
     IAgentHost agentHost;
     IBaseKVMetaService metaService;
     IInboxClient inboxClient;
@@ -51,8 +50,7 @@ public class InboxStoreBuilder implements IInboxStoreBuilder {
     ISettingProvider settingProvider;
     IEventCollector eventCollector;
     KVRangeStoreOptions storeOptions;
-    Executor queryExecutor = MoreExecutors.directExecutor();
-    Executor rpcExecutor = MoreExecutors.directExecutor();
+    int workerThreads;
     int tickerThreads;
     ScheduledExecutorService bgTaskExecutor;
     Duration balancerRetryDelay = Duration.ofSeconds(5);

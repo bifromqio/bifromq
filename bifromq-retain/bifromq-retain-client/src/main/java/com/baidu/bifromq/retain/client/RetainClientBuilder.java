@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.retain.client;
 
-import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.retain.RPCBluePrint;
@@ -33,13 +32,13 @@ public final class RetainClientBuilder implements IRetainClientBuilder {
     IRPCServiceTrafficService trafficService;
     EventLoopGroup eventLoopGroup;
     SslContext sslContext;
-    Executor executor = MoreExecutors.directExecutor();
+    int workerThreads;
 
     public IRetainClient build() {
         return new RetainClient(IRPCClient.newBuilder()
             .bluePrint(RPCBluePrint.INSTANCE)
             .trafficService(trafficService)
-            .executor(executor)
+            .workerThreads(workerThreads)
             .eventLoopGroup(eventLoopGroup)
             .sslContext(sslContext)
             .build());

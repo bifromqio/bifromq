@@ -81,7 +81,6 @@ public abstract class InboxServiceTest {
     private IInboxStore inboxStore;
     private IInboxServer inboxServer;
     private IRPCServer rpcServer;
-    private ExecutorService queryExecutor;
     private int tickerThreads = 2;
     private ScheduledExecutorService bgTaskExecutor;
     private AutoCloseable closeable;
@@ -114,7 +113,6 @@ public abstract class InboxServiceTest {
         KVRangeStoreOptions kvRangeStoreOptions = new KVRangeStoreOptions();
         kvRangeStoreOptions.setDataEngineConfigurator(new InMemKVEngineConfigurator());
         kvRangeStoreOptions.setWalEngineConfigurator(new InMemKVEngineConfigurator());
-        queryExecutor = Executors.newFixedThreadPool(2);
         bgTaskExecutor = Executors.newSingleThreadScheduledExecutor();
         inboxStoreClient = IBaseKVStoreClient.newBuilder()
             .clusterId(IInboxStore.CLUSTER_NAME)
@@ -123,7 +121,6 @@ public abstract class InboxServiceTest {
             .build();
         RPCServerBuilder rpcServerBuilder = IRPCServer.newBuilder().host("127.0.0.1").trafficService(trafficService);
         inboxStore = IInboxStore.builder()
-            .bootstrap(true)
             .rpcServerBuilder(rpcServerBuilder)
             .agentHost(agentHost)
             .metaService(metaService)
@@ -131,8 +128,6 @@ public abstract class InboxServiceTest {
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .storeOptions(kvRangeStoreOptions)
-            .queryExecutor(queryExecutor)
-            .rpcExecutor(MoreExecutors.directExecutor())
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .balancerFactoryConfig(
@@ -159,16 +154,15 @@ public abstract class InboxServiceTest {
     @AfterClass(alwaysRun = true)
     public void tearDown() {
         log.info("Finish testing, and tearing down");
-        inboxServer.close();
-        inboxStore.close();
-        rpcServer.shutdown();
         inboxClient.close();
         inboxStoreClient.close();
+        rpcServer.shutdown();
+        inboxServer.close();
+        inboxStore.close();
         metaService.close();
         trafficService.close();
         crdtService.close();
         agentHost.close();
-        queryExecutor.shutdown();
         bgTaskExecutor.shutdown();
         closeable.close();
     }

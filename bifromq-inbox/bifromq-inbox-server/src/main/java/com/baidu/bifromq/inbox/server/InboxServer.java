@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.inbox.server;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.inbox.RPCBluePrint;
 import com.baidu.bifromq.inbox.server.scheduler.InboxAttachScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxCommitScheduler;
@@ -25,12 +26,20 @@ import com.baidu.bifromq.inbox.server.scheduler.InboxInsertScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxSubScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxTouchScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxUnSubScheduler;
+import com.google.common.util.concurrent.MoreExecutors;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedTransferQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class InboxServer implements IInboxServer {
-    protected final InboxService inboxService;
+    private final InboxService inboxService;
+    private final ExecutorService rpcExecutor;
 
     InboxServer(InboxServerBuilder builder) {
         this.inboxService = InboxService.builder()
@@ -53,11 +62,20 @@ class InboxServer implements IInboxServer {
             .unsubScheduler(new InboxUnSubScheduler(builder.inboxStoreClient))
             .touchScheduler(new InboxTouchScheduler(builder.inboxStoreClient))
             .build();
+        if (builder.workerThreads == 0) {
+            rpcExecutor = MoreExecutors.newDirectExecutorService();
+        } else {
+            rpcExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+                new ThreadPoolExecutor(builder.workerThreads,
+                    builder.workerThreads, 0L,
+                    TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                    EnvProvider.INSTANCE.newThreadFactory("inbox-server-executor")), "inbox-server-executor");
+        }
         builder.rpcServerBuilder.bindService(inboxService.bindService(),
             RPCBluePrint.INSTANCE,
             builder.attrs,
             builder.defaultGroupTags,
-            builder.rpcExecutor);
+            rpcExecutor);
         start();
     }
 
@@ -71,5 +89,6 @@ class InboxServer implements IInboxServer {
     public void close() {
         log.debug("Stopping inbox service");
         inboxService.stop();
+        MoreExecutors.shutdownAndAwaitTermination(rpcExecutor, 5, TimeUnit.SECONDS);
     }
 }
