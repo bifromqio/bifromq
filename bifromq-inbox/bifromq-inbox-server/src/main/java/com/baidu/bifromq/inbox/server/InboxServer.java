@@ -73,7 +73,7 @@ class InboxServer implements IInboxServer {
         }
         builder.rpcServerBuilder.bindService(inboxService.bindService(),
             RPCBluePrint.INSTANCE,
-            builder.attrs,
+            builder.attributes,
             builder.defaultGroupTags,
             rpcExecutor);
         start();

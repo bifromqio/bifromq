@@ -51,7 +51,7 @@ class RetainServer implements IRetainServer {
         }
         builder.rpcServerBuilder.bindService(retainService.bindService(),
             RPCBluePrint.INSTANCE,
-            builder.attrs,
+            builder.attributes,
             builder.defaultGroupTags,
             rpcExecutor);
     }

@@ -431,7 +431,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     @Override
     public void close() {
         if (closed.compareAndSet(false, true)) {
-            log.info("Stopping BaseKVStore client: cluster[{}]", clusterId);
+            log.debug("Stopping BaseKVStore client: cluster[{}]", clusterId);
             disposables.dispose();
             log.debug("Closing execution pipelines: cluster[{}]", clusterId);
             mutPplns.values().forEach(pplns -> pplns.values().forEach(IMutationPipeline::close));
@@ -441,7 +441,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
             lnrQueryPplns.values().forEach(pplns -> pplns.forEach(IQueryPipeline::close));
             log.debug("Stopping rpc client: cluster[{}]", clusterId);
             rpcClient.stop();
-            log.info("BaseKVStore client stopped: cluster[{}]", clusterId);
+            log.debug("BaseKVStore client stopped: cluster[{}]", clusterId);
         }
     }
 

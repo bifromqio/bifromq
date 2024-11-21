@@ -82,8 +82,8 @@ public class SessionDictServiceModule extends AbstractModule {
                 .rpcServerBuilder(rpcServerBuilder)
                 .mqttBrokerClient(mqttBrokerClient)
                 .workerThreads(serverConfig.getWorkerThreads())
-                // TODO: attributes
-                // TODO: defaultGroupTags
+                .attributes(serverConfig.getAttributes())
+                .defaultGroupTags(serverConfig.getDefaultGroups())
                 .build());
         }
     }

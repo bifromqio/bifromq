@@ -40,7 +40,7 @@ public class StandaloneConfigConsolidator {
 
     private static void consolidateClusterConfig(StandaloneConfig config) {
         ClusterConfig clusterConfig = config.getClusterConfig();
-        if (clusterConfig.getHost() == null) {
+        if (Strings.isNullOrEmpty(clusterConfig.getHost())) {
             clusterConfig.setHost(resolveHost(config));
         }
         if (Strings.isNullOrEmpty(clusterConfig.getEnv())) {

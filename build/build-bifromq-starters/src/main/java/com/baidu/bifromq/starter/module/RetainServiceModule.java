@@ -101,8 +101,8 @@ public class RetainServiceModule extends AbstractModule {
                 .retainStoreClient(retainStoreClient)
                 .settingProvider(settingProviderMgr)
                 .subBrokerManager(subBrokerMgr)
-                // TODO: attributes
-                // TODO: defaultGroupTags
+                .attributes(serverConfig.getAttributes())
+                .defaultGroupTags(serverConfig.getDefaultGroups())
                 .build());
         }
     }

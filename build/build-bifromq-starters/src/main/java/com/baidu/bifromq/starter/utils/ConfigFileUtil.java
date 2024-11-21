@@ -17,12 +17,17 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
+import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import java.io.File;
 import java.io.IOException;
+import org.yaml.snakeyaml.LoaderOptions;
 
 public class ConfigFileUtil {
     public static <T> T build(File confFile, Class<T> clazz) {
-        ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+        LoaderOptions loaderOptions = new LoaderOptions();
+        loaderOptions.setAllowDuplicateKeys(false);
+        YAMLFactory yamlFactory = YAMLFactory.builder().loaderOptions(loaderOptions).build();
+        YAMLMapper mapper = new YAMLMapper(yamlFactory);
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         try {
             return mapper.readValue(confFile, clazz);

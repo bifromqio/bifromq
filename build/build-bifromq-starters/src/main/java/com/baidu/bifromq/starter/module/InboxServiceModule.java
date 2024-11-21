@@ -120,6 +120,8 @@ public class InboxServiceModule extends AbstractModule {
                 .retainClient(retainClient)
                 .inboxStoreClient(inboxStoreClient)
                 .workerThreads(serverConfig.getWorkerThreads())
+                .attributes(serverConfig.getAttributes())
+                .defaultGroupTags(serverConfig.getDefaultGroups())
                 .build());
         }
     }

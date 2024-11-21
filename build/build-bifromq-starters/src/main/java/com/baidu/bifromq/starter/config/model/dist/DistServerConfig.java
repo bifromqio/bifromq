@@ -13,6 +13,10 @@
 
 package com.baidu.bifromq.starter.config.model.dist;
 
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -21,4 +25,6 @@ import lombok.Setter;
 public class DistServerConfig {
     private boolean enable = true;
     private int workerThreads = 0;
+    private Map<String, String> attributes = new HashMap<>();
+    private Set<String> defaultGroups = new HashSet<>();
 }

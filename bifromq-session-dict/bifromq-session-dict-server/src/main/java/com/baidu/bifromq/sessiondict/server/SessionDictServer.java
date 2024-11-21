@@ -43,7 +43,7 @@ class SessionDictServer implements ISessionDictServer {
         }
         builder.rpcServerBuilder.bindService(service.bindService(),
             RPCBluePrint.INSTANCE,
-            builder.attrs,
+            builder.attributes,
             builder.defaultGroupTags,
             rpcExecutor);
     }

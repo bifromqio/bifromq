@@ -16,12 +16,10 @@ package com.baidu.bifromq.sessiondict.server;
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.MoreExecutors;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Executor;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -33,7 +31,7 @@ import lombok.experimental.Accessors;
 public class SessionDictServerBuilder implements ISessionDictServerBuilder {
     RPCServerBuilder rpcServerBuilder;
     IMqttBrokerClient mqttBrokerClient;
-    Map<String, String> attrs = new HashMap<>();
+    Map<String, String> attributes = new HashMap<>();
     Set<String> defaultGroupTags = new HashSet<>();
     int workerThreads;
 

@@ -22,12 +22,10 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.MoreExecutors;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Executor;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -48,7 +46,7 @@ public class InboxServerBuilder implements IInboxServerBuilder {
     IDistClient distClient;
     IRetainClient retainClient;
     IBaseKVStoreClient inboxStoreClient;
-    Map<String, String> attrs = new HashMap<>();
+    Map<String, String> attributes = new HashMap<>();
     Set<String> defaultGroupTags = new HashSet<>();
     int workerThreads;
 
