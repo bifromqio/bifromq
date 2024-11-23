@@ -52,7 +52,7 @@ class InboxStore implements IInboxStore {
     private final ExecutorService rpcExecutor;
     private final IBaseKVStoreServer storeServer;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
-    private final IBaseKVStoreClient storeClient;
+    private final IBaseKVStoreClient inboxStoreClient;
     private final IInboxClient inboxClient;
     private final KVStoreBalanceController balanceController;
     private final AsyncRunner jobRunner;
@@ -66,7 +66,7 @@ class InboxStore implements IInboxStore {
 
     InboxStore(InboxStoreBuilder builder) {
         this.clusterId = builder.clusterId;
-        this.storeClient = builder.storeClient;
+        this.inboxStoreClient = builder.inboxStoreClient;
         this.inboxClient = builder.inboxClient;
         this.gcInterval = builder.gcInterval;
         coProcFactory =
@@ -85,7 +85,7 @@ class InboxStore implements IInboxStore {
 
         balanceController = new KVStoreBalanceController(
             builder.metaService.metadataManager(clusterId),
-            storeClient,
+            inboxStoreClient,
             effectiveBalancerFactories,
             builder.balancerRetryDelay,
             builder.bgTaskExecutor);
@@ -137,15 +137,15 @@ class InboxStore implements IInboxStore {
             storeServer.start();
             balanceController.start(storeServer.storeId(clusterId));
             status.compareAndSet(Status.STARTING, Status.STARTED);
-            this.inboxStoreGCProc = new InboxStoreGCProcessor(inboxClient, storeClient, id());
-            storeClient
+            this.inboxStoreGCProc = new InboxStoreGCProcessor(inboxClient, inboxStoreClient, id());
+            inboxStoreClient
                 .connState()
                 // observe the first READY state
                 .filter(connState -> connState == IConnectable.ConnState.READY)
                 .takeUntil(connState -> connState == IConnectable.ConnState.READY)
                 .doOnComplete(() -> scheduleGC(Duration.ofSeconds(5)))
                 .subscribe();
-            log.info("Inbox store started");
+            log.debug("Inbox store started");
         }
     }
 
@@ -166,7 +166,7 @@ class InboxStore implements IInboxStore {
                 MoreExecutors.shutdownAndAwaitTermination(jobScheduler, 5, TimeUnit.SECONDS);
             }
             MoreExecutors.shutdownAndAwaitTermination(rpcExecutor, 5, TimeUnit.SECONDS);
-            log.info("InboxStore stopped");
+            log.debug("InboxStore stopped");
             status.compareAndSet(Status.STOPPING, Status.STOPPED);
         }
     }

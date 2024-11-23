@@ -13,10 +13,10 @@
 
 package com.baidu.bifromq.basehookloader;
 
+import static org.testng.Assert.assertEquals;
+
 import java.util.Map;
 import org.testng.annotations.Test;
-
-import static org.testng.Assert.assertEquals;
 
 public class BaseHookLoaderTest {
     @Test

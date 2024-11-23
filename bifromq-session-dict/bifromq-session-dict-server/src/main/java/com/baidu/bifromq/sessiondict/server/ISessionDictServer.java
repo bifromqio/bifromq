@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.sessiondict.server;
 
-public interface ISessionDictServer extends AutoCloseable {
+public interface ISessionDictServer {
     static SessionDictServerBuilder builder() {
         return new SessionDictServerBuilder();
     }

@@ -15,9 +15,9 @@ package com.bifromq.plugin.resourcethrottler;
 
 import org.pf4j.ExtensionPoint;
 
-public interface IResourceThrottler extends ExtensionPoint, AutoCloseable {
+public interface IResourceThrottler extends ExtensionPoint {
     /**
-     * Determine if the tenant has enough resource of given type
+     * Determine if the tenant has enough resource of given type.
      *
      * @param tenantId the id of the tenant
      * @param type     the resource type

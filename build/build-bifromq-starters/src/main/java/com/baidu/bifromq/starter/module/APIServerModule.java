@@ -38,34 +38,12 @@ import java.util.Optional;
 public class APIServerModule extends AbstractModule {
     private static class APIServerProvider implements Provider<Optional<IAPIServer>> {
         private final StandaloneConfig config;
-        private final IAgentHost agentHost;
-        private final IRPCServiceTrafficService trafficService;
-        private final IBaseKVMetaService metaService;
-        private final IDistClient distClient;
-        private final IRetainClient retainClient;
-        private final IInboxClient inboxClient;
-        private final ISessionDictClient sessionDictClient;
-        private final SettingProviderManager settingProviderMgr;
+        private final ServiceInjector injector;
 
         @Inject
-        private APIServerProvider(StandaloneConfig config,
-                                  IAgentHost agentHost,
-                                  IRPCServiceTrafficService trafficService,
-                                  IBaseKVMetaService metaService,
-                                  IDistClient distClient,
-                                  IRetainClient retainClient,
-                                  IInboxClient inboxClient,
-                                  ISessionDictClient sessionDictClient,
-                                  SettingProviderManager settingProviderMgr) {
+        private APIServerProvider(StandaloneConfig config, ServiceInjector injector) {
             this.config = config;
-            this.agentHost = agentHost;
-            this.trafficService = trafficService;
-            this.metaService = metaService;
-            this.distClient = distClient;
-            this.retainClient = retainClient;
-            this.inboxClient = inboxClient;
-            this.sessionDictClient = sessionDictClient;
-            this.settingProviderMgr = settingProviderMgr;
+            this.injector = injector;
         }
 
         @Override
@@ -87,14 +65,14 @@ public class APIServerModule extends AbstractModule {
                 .maxContentLength(serverConfig.getMaxContentLength())
                 .workerThreads(serverConfig.getWorkerThreads())
                 .sslContext(sslContext)
-                .agentHost(agentHost)
-                .trafficService(trafficService)
-                .metaService(metaService)
-                .distClient(distClient)
-                .inboxClient(inboxClient)
-                .sessionDictClient(sessionDictClient)
-                .retainClient(retainClient)
-                .settingProvider(settingProviderMgr)
+                .agentHost(injector.getInstance(IAgentHost.class))
+                .trafficService(injector.getInstance(IRPCServiceTrafficService.class))
+                .metaService(injector.getInstance(IBaseKVMetaService.class))
+                .distClient(injector.getInstance(IDistClient.class))
+                .inboxClient(injector.getInstance(IInboxClient.class))
+                .sessionDictClient(injector.getInstance(ISessionDictClient.class))
+                .retainClient(injector.getInstance(IRetainClient.class))
+                .settingProvider(injector.getInstance(SettingProviderManager.class))
                 .build());
         }
     }

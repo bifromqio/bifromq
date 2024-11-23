@@ -14,9 +14,7 @@
 package com.baidu.bifromq.starter.module;
 
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
-import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.sessiondict.server.ISessionDictServer;
 import com.baidu.bifromq.starter.config.StandaloneConfig;
 import com.baidu.bifromq.starter.config.model.dict.SessionDictServerConfig;
@@ -24,52 +22,18 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import com.google.inject.TypeLiteral;
-import io.netty.channel.EventLoopGroup;
-import io.netty.handler.ssl.SslContext;
 import java.util.Optional;
-import javax.inject.Named;
+import javax.inject.Singleton;
 
 public class SessionDictServiceModule extends AbstractModule {
-    private static class SessionDictClientProvider implements Provider<ISessionDictClient> {
-        private final StandaloneConfig config;
-        private final EventLoopGroup eventLoopGroup;
-        private final SslContext sslContext;
-        private final IRPCServiceTrafficService trafficService;
-
-        @Inject
-        private SessionDictClientProvider(StandaloneConfig config,
-                                          @Named("rpcClientEventLoop") EventLoopGroup eventLoopGroup,
-                                          @Named("rpcClientSSLContext") Optional<SslContext> sslContext,
-                                          IRPCServiceTrafficService trafficService) {
-            this.config = config;
-            this.eventLoopGroup = eventLoopGroup;
-            this.sslContext = sslContext.orElse(null);
-            this.trafficService = trafficService;
-        }
-
-        @Override
-        public ISessionDictClient get() {
-            return ISessionDictClient.newBuilder()
-                .workerThreads(config.getSessionDictServiceConfig().getClient().getWorkerThreads())
-                .trafficService(trafficService)
-                .eventLoopGroup(eventLoopGroup)
-                .sslContext(sslContext)
-                .build();
-        }
-    }
-
     private static class SessionDictServerProvider implements Provider<Optional<ISessionDictServer>> {
         private final StandaloneConfig config;
-        private final RPCServerBuilder rpcServerBuilder;
-        private final IMqttBrokerClient mqttBrokerClient;
+        private final ServiceInjector injector;
 
         @Inject
-        private SessionDictServerProvider(StandaloneConfig config,
-                                          RPCServerBuilder rpcServerBuilder,
-                                          IMqttBrokerClient mqttBrokerClient) {
+        private SessionDictServerProvider(StandaloneConfig config, ServiceInjector injector) {
             this.config = config;
-            this.rpcServerBuilder = rpcServerBuilder;
-            this.mqttBrokerClient = mqttBrokerClient;
+            this.injector = injector;
         }
 
         @Override
@@ -79,8 +43,8 @@ public class SessionDictServiceModule extends AbstractModule {
                 return Optional.empty();
             }
             return Optional.of(ISessionDictServer.builder()
-                .rpcServerBuilder(rpcServerBuilder)
-                .mqttBrokerClient(mqttBrokerClient)
+                .rpcServerBuilder(injector.getInstance(RPCServerBuilder.class))
+                .mqttBrokerClient(injector.getInstance(IMqttBrokerClient.class))
                 .workerThreads(serverConfig.getWorkerThreads())
                 .attributes(serverConfig.getAttributes())
                 .defaultGroupTags(serverConfig.getDefaultGroups())
@@ -90,10 +54,8 @@ public class SessionDictServiceModule extends AbstractModule {
 
     @Override
     protected void configure() {
-        bind(ISessionDictClient.class).toProvider(SessionDictClientProvider.class)
-            .asEagerSingleton();
         bind(new TypeLiteral<Optional<ISessionDictServer>>() {
         }).toProvider(SessionDictServerProvider.class)
-            .asEagerSingleton();
+            .in(Singleton.class);
     }
 }

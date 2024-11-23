@@ -17,7 +17,6 @@ import static com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply.Result.ERROR;
 import static java.util.Collections.emptyMap;
 
 import com.baidu.bifromq.baserpc.client.IRPCClient;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubRequest;
@@ -53,10 +52,10 @@ final class MqttBrokerClient implements IMqttBrokerClient {
     @Override
     public void close() {
         if (hasStopped.compareAndSet(false, true)) {
-            log.info("Closing MQTT broker client");
+            log.debug("Closing MQTT broker client");
             log.debug("Stopping rpc client");
             rpcClient.stop();
-            log.info("MQTT broker client closed");
+            log.debug("MQTT broker client closed");
         }
     }
 

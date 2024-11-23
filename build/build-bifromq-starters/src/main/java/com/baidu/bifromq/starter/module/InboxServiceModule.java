@@ -22,7 +22,6 @@ import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.store.option.KVRangeOptions;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.server.IInboxServer;
@@ -37,71 +36,24 @@ import com.baidu.bifromq.starter.config.model.inbox.InboxStoreConfig;
 import com.baidu.bifromq.sysprops.props.InboxStoreLoadEstimationWindowSeconds;
 import com.google.inject.AbstractModule;
 import com.google.inject.Inject;
+import com.google.inject.Key;
 import com.google.inject.Provider;
 import com.google.inject.TypeLiteral;
 import com.google.inject.name.Names;
-import io.netty.channel.EventLoopGroup;
-import io.netty.handler.ssl.SslContext;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.ScheduledExecutorService;
-import javax.inject.Named;
+import javax.inject.Singleton;
 
 public class InboxServiceModule extends AbstractModule {
-    private static class InboxClientProvider implements Provider<IInboxClient> {
-        private final EventLoopGroup eventLoopGroup;
-        private final SslContext sslContext;
-        private final IRPCServiceTrafficService trafficService;
-
-        @Inject
-        private InboxClientProvider(@Named("rpcClientEventLoop") EventLoopGroup eventLoopGroup,
-                                    @Named("rpcClientSSLContext") Optional<SslContext> sslContext,
-                                    IRPCServiceTrafficService trafficService) {
-            this.eventLoopGroup = eventLoopGroup;
-            this.sslContext = sslContext.orElse(null);
-            this.trafficService = trafficService;
-        }
-
-        @Override
-        public IInboxClient get() {
-            return IInboxClient.newBuilder()
-                .trafficService(trafficService)
-                .eventLoopGroup(eventLoopGroup)
-                .sslContext(sslContext)
-                .build();
-        }
-    }
-
     private static class InboxServerProvider implements Provider<Optional<IInboxServer>> {
         private final StandaloneConfig config;
-        private final RPCServerBuilder rpcServerBuilder;
-        private final IDistClient distClient;
-        private final IInboxClient inboxClient;
-        private final IRetainClient retainClient;
-        private final IBaseKVStoreClient inboxStoreClient;
-        private final EventCollectorManager eventCollectorMgr;
-        private final ResourceThrottlerManager resourceThrottlerMgr;
-        private final SettingProviderManager settingProviderMgr;
+        private final ServiceInjector injector;
 
         @Inject
-        private InboxServerProvider(StandaloneConfig config,
-                                    RPCServerBuilder rpcServerBuilder,
-                                    IDistClient distClient,
-                                    IInboxClient inboxClient,
-                                    IRetainClient retainClient,
-                                    @Named("inboxStoreClient") IBaseKVStoreClient inboxStoreClient,
-                                    EventCollectorManager eventCollectorMgr,
-                                    ResourceThrottlerManager resourceThrottlerMgr,
-                                    SettingProviderManager settingProviderMgr) {
+        private InboxServerProvider(StandaloneConfig config, ServiceInjector injector) {
             this.config = config;
-            this.rpcServerBuilder = rpcServerBuilder;
-            this.distClient = distClient;
-            this.inboxClient = inboxClient;
-            this.retainClient = retainClient;
-            this.inboxStoreClient = inboxStoreClient;
-            this.eventCollectorMgr = eventCollectorMgr;
-            this.resourceThrottlerMgr = resourceThrottlerMgr;
-            this.settingProviderMgr = settingProviderMgr;
+            this.injector = injector;
         }
 
         @Override
@@ -111,14 +63,15 @@ public class InboxServiceModule extends AbstractModule {
                 return Optional.empty();
             }
             return Optional.of(IInboxServer.builder()
-                .rpcServerBuilder(rpcServerBuilder)
-                .eventCollector(eventCollectorMgr)
-                .resourceThrottler(resourceThrottlerMgr)
-                .settingProvider(settingProviderMgr)
-                .inboxClient(inboxClient)
-                .distClient(distClient)
-                .retainClient(retainClient)
-                .inboxStoreClient(inboxStoreClient)
+                .rpcServerBuilder(injector.getInstance(RPCServerBuilder.class))
+                .eventCollector(injector.getInstance(EventCollectorManager.class))
+                .resourceThrottler(injector.getInstance(ResourceThrottlerManager.class))
+                .settingProvider(injector.getInstance(SettingProviderManager.class))
+                .inboxClient(injector.getInstance(IInboxClient.class))
+                .distClient(injector.getInstance(IDistClient.class))
+                .retainClient(injector.getInstance(IRetainClient.class))
+                .inboxStoreClient(
+                    injector.getInstance(Key.get(IBaseKVStoreClient.class, Names.named("inboxStoreClient"))))
                 .workerThreads(serverConfig.getWorkerThreads())
                 .attributes(serverConfig.getAttributes())
                 .defaultGroupTags(serverConfig.getDefaultGroups())
@@ -126,72 +79,14 @@ public class InboxServiceModule extends AbstractModule {
         }
     }
 
-    private static class InboxStoreClientProvider implements Provider<IBaseKVStoreClient> {
-        private final StandaloneConfig config;
-        private final EventLoopGroup eventLoopGroup;
-        private final IRPCServiceTrafficService trafficService;
-        private final IBaseKVMetaService metaService;
-        private final SslContext rpcClientSSLContext;
-
-        @Inject
-        private InboxStoreClientProvider(StandaloneConfig config,
-                                         IRPCServiceTrafficService trafficService,
-                                         IBaseKVMetaService metaService,
-                                         @Named("rpcClientSSLContext") Optional<SslContext> rpcClientSSLContext,
-                                         @Named("rpcClientEventLoop") EventLoopGroup eventLoopGroup) {
-            this.config = config;
-            this.trafficService = trafficService;
-            this.metaService = metaService;
-            this.rpcClientSSLContext = rpcClientSSLContext.orElse(null);
-            this.eventLoopGroup = eventLoopGroup;
-        }
-
-
-        @Override
-        public IBaseKVStoreClient get() {
-            InboxStoreConfig storeConfig = config.getInboxServiceConfig().getStore();
-            return IBaseKVStoreClient.newBuilder()
-                .clusterId(IInboxStore.CLUSTER_NAME)
-                .trafficService(trafficService)
-                .metaService(metaService)
-                .workerThreads(storeConfig.getWorkerThreads())
-                .eventLoopGroup(eventLoopGroup)
-                .sslContext(rpcClientSSLContext)
-                .queryPipelinesPerStore(storeConfig.getQueryPipelinePerStore())
-                .build();
-        }
-    }
-
     private static class InboxStoreProvider implements Provider<Optional<IInboxStore>> {
         private final StandaloneConfig config;
-        private final RPCServerBuilder rpcServerBuilder;
-        private final IAgentHost agentHost;
-        private final IBaseKVMetaService metaService;
-        private final EventCollectorManager eventCollectorMgr;
-        private final SettingProviderManager settingProviderMgr;
-        private final IInboxClient inboxClient;
-        private final IBaseKVStoreClient inboxStoreClient;
-        private final ScheduledExecutorService bgTaskExecutor;
+        private final ServiceInjector injector;
 
         @Inject
-        private InboxStoreProvider(StandaloneConfig config,
-                                   RPCServerBuilder rpcServerBuilder,
-                                   IAgentHost agentHost,
-                                   IBaseKVMetaService metaService,
-                                   EventCollectorManager eventCollectorMgr,
-                                   SettingProviderManager settingProviderMgr,
-                                   IInboxClient inboxClient,
-                                   @Named("inboxStoreClient") IBaseKVStoreClient inboxStoreClient,
-                                   @Named("bgTaskScheduler") ScheduledExecutorService bgTaskScheduler) {
+        private InboxStoreProvider(StandaloneConfig config, ServiceInjector injector) {
             this.config = config;
-            this.rpcServerBuilder = rpcServerBuilder;
-            this.agentHost = agentHost;
-            this.metaService = metaService;
-            this.eventCollectorMgr = eventCollectorMgr;
-            this.settingProviderMgr = settingProviderMgr;
-            this.inboxClient = inboxClient;
-            this.inboxStoreClient = inboxStoreClient;
-            this.bgTaskExecutor = bgTaskScheduler;
+            this.injector = injector;
         }
 
 
@@ -202,16 +97,18 @@ public class InboxServiceModule extends AbstractModule {
                 return Optional.empty();
             }
             return Optional.of(IInboxStore.builder()
-                .rpcServerBuilder(rpcServerBuilder)
-                .agentHost(agentHost)
-                .metaService(metaService)
-                .inboxClient(inboxClient)
-                .storeClient(inboxStoreClient)
-                .settingProvider(settingProviderMgr)
-                .eventCollector(eventCollectorMgr)
+                .rpcServerBuilder(injector.getInstance(RPCServerBuilder.class))
+                .agentHost(injector.getInstance(IAgentHost.class))
+                .metaService(injector.getInstance(IBaseKVMetaService.class))
+                .inboxClient(injector.getInstance(IInboxClient.class))
+                .inboxStoreClient(
+                    injector.getInstance(Key.get(IBaseKVStoreClient.class, Names.named("inboxStoreClient"))))
+                .settingProvider(injector.getInstance(SettingProviderManager.class))
+                .eventCollector(injector.getInstance(EventCollectorManager.class))
                 .tickerThreads(storeConfig.getTickerThreads())
                 .workerThreads(storeConfig.getWorkerThreads())
-                .bgTaskExecutor(bgTaskExecutor)
+                .bgTaskExecutor(
+                    injector.getInstance(Key.get(ScheduledExecutorService.class, Names.named("bgTaskScheduler"))))
                 .loadEstimateWindow(Duration.ofSeconds(InboxStoreLoadEstimationWindowSeconds.INSTANCE.get()))
                 .gcInterval(
                     Duration.ofSeconds(storeConfig.getGcIntervalSeconds()))
@@ -232,13 +129,9 @@ public class InboxServiceModule extends AbstractModule {
 
     @Override
     protected void configure() {
-        bind(IInboxClient.class).toProvider(InboxClientProvider.class).asEagerSingleton();
-        bind(IBaseKVStoreClient.class)
-            .annotatedWith(Names.named("inboxStoreClient"))
-            .toProvider(InboxStoreClientProvider.class).asEagerSingleton();
         bind(new TypeLiteral<Optional<IInboxServer>>() {
-        }).toProvider(InboxServerProvider.class).asEagerSingleton();
+        }).toProvider(InboxServerProvider.class).in(Singleton.class);
         bind(new TypeLiteral<Optional<IInboxStore>>() {
-        }).toProvider(InboxStoreProvider.class).asEagerSingleton();
+        }).toProvider(InboxStoreProvider.class).in(Singleton.class);
     }
 }

@@ -22,7 +22,6 @@ import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.store.option.KVRangeOptions;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.server.IDistServer;
 import com.baidu.bifromq.dist.worker.IDistWorker;
@@ -32,68 +31,28 @@ import com.baidu.bifromq.plugin.settingprovider.SettingProviderManager;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.starter.config.StandaloneConfig;
 import com.baidu.bifromq.starter.config.model.dist.DistServerConfig;
-import com.baidu.bifromq.starter.config.model.dist.DistWorkerClientConfig;
 import com.baidu.bifromq.starter.config.model.dist.DistWorkerConfig;
 import com.baidu.bifromq.sysprops.props.DistWorkerLoadEstimationWindowSeconds;
 import com.google.inject.AbstractModule;
 import com.google.inject.Inject;
+import com.google.inject.Key;
 import com.google.inject.Provider;
 import com.google.inject.TypeLiteral;
 import com.google.inject.name.Names;
-import io.netty.channel.EventLoopGroup;
-import io.netty.handler.ssl.SslContext;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.ScheduledExecutorService;
-import javax.inject.Named;
+import javax.inject.Singleton;
 
 public class DistServiceModule extends AbstractModule {
-    private static class DistClientProvider implements Provider<IDistClient> {
-        private final StandaloneConfig config;
-        private final EventLoopGroup eventLoopGroup;
-        private final SslContext sslContext;
-        private final IRPCServiceTrafficService trafficService;
-
-        @Inject
-        private DistClientProvider(StandaloneConfig config,
-                                   @Named("rpcClientEventLoop") EventLoopGroup eventLoopGroup,
-                                   @Named("rpcClientSSLContext") Optional<SslContext> sslContext,
-                                   IRPCServiceTrafficService trafficService) {
-            this.config = config;
-            this.eventLoopGroup = eventLoopGroup;
-            this.sslContext = sslContext.orElse(null);
-            this.trafficService = trafficService;
-        }
-
-        @Override
-        public IDistClient get() {
-            return IDistClient.newBuilder()
-                .workerThreads(config.getDistServiceConfig().getClient().getWorkerThreads())
-                .trafficService(trafficService)
-                .eventLoopGroup(eventLoopGroup)
-                .sslContext(sslContext)
-                .build();
-        }
-    }
-
     private static class DistServerProvider implements Provider<Optional<IDistServer>> {
         private final StandaloneConfig config;
-        private final RPCServerBuilder rpcServerBuilder;
-        private final IBaseKVStoreClient distWorkerClient;
-        private final EventCollectorManager eventCollectorMgr;
-        private final SettingProviderManager settingProviderMgr;
+        private final ServiceInjector injector;
 
         @Inject
-        private DistServerProvider(StandaloneConfig config,
-                                   RPCServerBuilder rpcServerBuilder,
-                                   @Named("distWorkerClient") IBaseKVStoreClient distWorkerClient,
-                                   SettingProviderManager settingProviderMgr,
-                                   EventCollectorManager eventCollectorMgr) {
+        private DistServerProvider(StandaloneConfig config, ServiceInjector injector) {
             this.config = config;
-            this.rpcServerBuilder = rpcServerBuilder;
-            this.distWorkerClient = distWorkerClient;
-            this.settingProviderMgr = settingProviderMgr;
-            this.eventCollectorMgr = eventCollectorMgr;
+            this.injector = injector;
         }
 
         @Override
@@ -103,10 +62,11 @@ public class DistServiceModule extends AbstractModule {
                 return Optional.empty();
             }
             return Optional.of(IDistServer.builder()
-                .rpcServerBuilder(rpcServerBuilder)
-                .distWorkerClient(distWorkerClient)
-                .settingProvider(settingProviderMgr)
-                .eventCollector(eventCollectorMgr)
+                .rpcServerBuilder(injector.getInstance(RPCServerBuilder.class))
+                .distWorkerClient(
+                    injector.getInstance(Key.get(IBaseKVStoreClient.class, Names.named("distWorkerClient"))))
+                .settingProvider(injector.getInstance(SettingProviderManager.class))
+                .eventCollector(injector.getInstance(EventCollectorManager.class))
                 .workerThreads(serverConfig.getWorkerThreads())
                 .attributes(serverConfig.getAttributes())
                 .defaultGroupTags(serverConfig.getDefaultGroups())
@@ -114,74 +74,14 @@ public class DistServiceModule extends AbstractModule {
         }
     }
 
-    private static class DistWorkerClientProvider implements Provider<IBaseKVStoreClient> {
-        private final StandaloneConfig config;
-        private final EventLoopGroup eventLoopGroup;
-        private final IRPCServiceTrafficService trafficService;
-        private final IBaseKVMetaService metaService;
-        private final SslContext rpcClientSSLContext;
-
-        @Inject
-        private DistWorkerClientProvider(StandaloneConfig config,
-                                         IRPCServiceTrafficService trafficService,
-                                         IBaseKVMetaService metaService,
-                                         @Named("rpcClientSSLContext") Optional<SslContext> rpcClientSSLContext,
-                                         @Named("rpcClientEventLoop") EventLoopGroup eventLoopGroup) {
-            this.config = config;
-            this.trafficService = trafficService;
-            this.metaService = metaService;
-            this.rpcClientSSLContext = rpcClientSSLContext.orElse(null);
-            this.eventLoopGroup = eventLoopGroup;
-        }
-
-        @Override
-        public IBaseKVStoreClient get() {
-            DistWorkerClientConfig workerConfig = config.getDistServiceConfig().getWorkerClient();
-            return IBaseKVStoreClient.newBuilder()
-                .clusterId(IDistWorker.CLUSTER_NAME)
-                .trafficService(trafficService)
-                .metaService(metaService)
-                .workerThreads(workerConfig.getWorkerThreads())
-                .eventLoopGroup(eventLoopGroup)
-                .sslContext(rpcClientSSLContext)
-                .queryPipelinesPerStore(workerConfig.getQueryPipelinePerStore())
-                .build();
-        }
-    }
-
     private static class DistWorkerProvider implements Provider<Optional<IDistWorker>> {
         private final StandaloneConfig config;
-        private final RPCServerBuilder rpcServerBuilder;
-        private final IAgentHost agentHost;
-        private final IBaseKVMetaService metaService;
-        private final EventCollectorManager eventCollectorMgr;
-        private final ResourceThrottlerManager resourceThrottlerMgr;
-        private final IDistClient distClient;
-        private final IBaseKVStoreClient distWorkerClient;
-        private final ISubBrokerManager subBrokerManager;
-        private final ScheduledExecutorService bgTaskExecutor;
+        private final ServiceInjector injector;
 
         @Inject
-        private DistWorkerProvider(StandaloneConfig config,
-                                   RPCServerBuilder rpcServerBuilder,
-                                   IAgentHost agentHost,
-                                   IBaseKVMetaService metaService,
-                                   EventCollectorManager eventCollectorMgr,
-                                   ResourceThrottlerManager resourceThrottlerMgr,
-                                   IDistClient distClient,
-                                   @Named("distWorkerClient") IBaseKVStoreClient distWorkerClient,
-                                   ISubBrokerManager subBrokerManager,
-                                   @Named("bgTaskScheduler") ScheduledExecutorService bgTaskExecutor) {
+        private DistWorkerProvider(StandaloneConfig config, ServiceInjector injector) {
             this.config = config;
-            this.rpcServerBuilder = rpcServerBuilder;
-            this.agentHost = agentHost;
-            this.metaService = metaService;
-            this.eventCollectorMgr = eventCollectorMgr;
-            this.resourceThrottlerMgr = resourceThrottlerMgr;
-            this.distClient = distClient;
-            this.distWorkerClient = distWorkerClient;
-            this.subBrokerManager = subBrokerManager;
-            this.bgTaskExecutor = bgTaskExecutor;
+            this.injector = injector;
         }
 
         @Override
@@ -192,16 +92,18 @@ public class DistServiceModule extends AbstractModule {
             }
 
             return Optional.of(IDistWorker.builder()
-                .rpcServerBuilder(rpcServerBuilder)
-                .agentHost(agentHost)
-                .metaService(metaService)
-                .eventCollector(eventCollectorMgr)
-                .resourceThrottler(resourceThrottlerMgr)
-                .distClient(distClient)
-                .storeClient(distWorkerClient)
+                .rpcServerBuilder(injector.getInstance(RPCServerBuilder.class))
+                .agentHost(injector.getInstance(IAgentHost.class))
+                .metaService(injector.getInstance(IBaseKVMetaService.class))
+                .eventCollector(injector.getInstance(EventCollectorManager.class))
+                .resourceThrottler(injector.getInstance(ResourceThrottlerManager.class))
+                .distClient(injector.getInstance(IDistClient.class))
+                .distWorkerClient(
+                    injector.getInstance(Key.get(IBaseKVStoreClient.class, Names.named("distWorkerClient"))))
                 .workerThreads(workerConfig.getWorkerThreads())
                 .tickerThreads(workerConfig.getTickerThreads())
-                .bgTaskExecutor(bgTaskExecutor)
+                .bgTaskExecutor(
+                    injector.getInstance(Key.get(ScheduledExecutorService.class, Names.named("bgTaskScheduler"))))
                 .storeOptions(new KVRangeStoreOptions()
                     .setKvRangeOptions(new KVRangeOptions()
                         .setCompactWALThreshold(workerConfig.getCompactWALThreshold()))
@@ -211,7 +113,7 @@ public class DistServiceModule extends AbstractModule {
                         .getWalEngineConfig(), "dist_wal")))
                 .balancerRetryDelay(Duration.ofMillis(workerConfig.getBalanceConfig().getRetryDelayInMS()))
                 .balancerFactoryConfig(workerConfig.getBalanceConfig().getBalancers())
-                .subBrokerManager(subBrokerManager)
+                .subBrokerManager(injector.getInstance(ISubBrokerManager.class))
                 .loadEstimateWindow(Duration.ofSeconds(DistWorkerLoadEstimationWindowSeconds.INSTANCE.get()))
                 .build());
         }
@@ -219,13 +121,9 @@ public class DistServiceModule extends AbstractModule {
 
     @Override
     protected void configure() {
-        bind(IDistClient.class).toProvider(DistClientProvider.class).asEagerSingleton();
-        bind(IBaseKVStoreClient.class)
-            .annotatedWith(Names.named("distWorkerClient"))
-            .toProvider(DistWorkerClientProvider.class).asEagerSingleton();
         bind(new TypeLiteral<Optional<IDistServer>>() {
-        }).toProvider(DistServerProvider.class).asEagerSingleton();
+        }).toProvider(DistServerProvider.class).in(Singleton.class);
         bind(new TypeLiteral<Optional<IDistWorker>>() {
-        }).toProvider(DistWorkerProvider.class).asEagerSingleton();
+        }).toProvider(DistWorkerProvider.class).in(Singleton.class);
     }
 }

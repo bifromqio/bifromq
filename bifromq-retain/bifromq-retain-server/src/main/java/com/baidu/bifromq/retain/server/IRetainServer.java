@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.retain.server;
 
-public interface IRetainServer extends AutoCloseable {
+public interface IRetainServer {
     static RetainServerBuilder builder() {
         return new RetainServerBuilder();
     }

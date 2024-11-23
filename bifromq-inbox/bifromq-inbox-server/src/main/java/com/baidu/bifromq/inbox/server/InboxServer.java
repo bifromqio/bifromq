@@ -87,8 +87,9 @@ class InboxServer implements IInboxServer {
     @SneakyThrows
     @Override
     public void close() {
-        log.debug("Stopping inbox service");
+        log.info("Stopping InboxService");
         inboxService.stop();
         MoreExecutors.shutdownAndAwaitTermination(rpcExecutor, 5, TimeUnit.SECONDS);
+        log.info("InboxService stopped");
     }
 }

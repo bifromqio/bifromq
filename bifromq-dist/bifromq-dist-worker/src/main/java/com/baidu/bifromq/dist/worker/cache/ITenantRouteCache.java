@@ -15,7 +15,6 @@ package com.baidu.bifromq.dist.worker.cache;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.dist.entity.Matching;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 

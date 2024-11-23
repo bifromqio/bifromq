@@ -14,11 +14,10 @@
 package com.baidu.bifromq.dist.worker;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
-import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
@@ -27,7 +26,6 @@ import com.google.protobuf.Struct;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -51,7 +49,7 @@ public class DistWorkerBuilder implements IDistWorkerBuilder {
     IEventCollector eventCollector;
     IResourceThrottler resourceThrottler;
     IDistClient distClient;
-    IBaseKVStoreClient storeClient;
+    IBaseKVStoreClient distWorkerClient;
     ISubBrokerManager subBrokerManager;
     KVRangeStoreOptions storeOptions;
     Duration balancerRetryDelay = Duration.ofSeconds(5);

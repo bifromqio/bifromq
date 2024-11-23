@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
-import static com.baidu.bifromq.plugin.settingprovider.Setting.ResendTimeoutSeconds;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.DebugModeEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ForceTransient;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.InBoundBandWidth;
@@ -21,6 +20,7 @@ import static com.baidu.bifromq.plugin.settingprovider.Setting.MQTT3Enabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MQTT4Enabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MQTT5Enabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxResendTimes;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxSessionExpirySeconds;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicAlias;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicFiltersPerSub;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLength;
@@ -29,14 +29,14 @@ import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevels;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxUserPayloadBytes;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaximumQoS;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxSessionExpirySeconds;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.QoS0DropOldest;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.SessionInboxSize;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.OutBoundBandWidth;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.PayloadFormatValidationEnabled;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.QoS0DropOldest;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ReceivingMaximum;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.ResendTimeoutSeconds;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainMessageMatchLimit;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.SessionInboxSize;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.SharedSubscriptionEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.SubscriptionIdentifierEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.WildcardSubscriptionEnabled;

@@ -16,12 +16,7 @@ package com.baidu.bifromq.apiserver.http.handler;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.baserpc.proto.RPCServer;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceLandscape;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.baserpc.trafficgovernor.ServerEndpoint;
-import com.baidu.bifromq.retain.client.IRetainClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -36,7 +31,6 @@ import java.util.Base64;
 import java.util.Map;
 import java.util.Set;
 import lombok.SneakyThrows;
-import org.mockito.Mock;
 import org.testng.annotations.Test;
 
 public class GetServiceLandscapeHandlerTest extends AbstractHTTPRequestHandlerTest<GetServiceLandscapeHandler> {
@@ -54,9 +48,10 @@ public class GetServiceLandscapeHandlerTest extends AbstractHTTPRequestHandlerTe
             Set.of("group1", "group2"),
             Map.of("key1", "value1", "key2", "value2"), false);
         when(trafficService.services()).thenReturn(Observable.just(Set.of("test")));
-        when(serviceLandscape.serverEndpoints()).thenReturn(Observable.just(Set.of(serverEndpoint)));
+        when(trafficGovernor.serverEndpoints()).thenReturn(Observable.just(Set.of(serverEndpoint)));
 
         GetServiceLandscapeHandler handler = new GetServiceLandscapeHandler(trafficService);
+        handler.start();
         DefaultFullHttpRequest req = buildRequest(HttpMethod.GET);
         req.headers().set("service_name", "test");
         FullHttpResponse resp = handler.handle(111, req).join();

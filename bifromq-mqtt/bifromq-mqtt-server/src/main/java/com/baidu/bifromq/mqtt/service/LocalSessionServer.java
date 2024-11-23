@@ -14,7 +14,6 @@
 package com.baidu.bifromq.mqtt.service;
 
 import com.baidu.bifromq.mqtt.inbox.RPCBluePrint;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j

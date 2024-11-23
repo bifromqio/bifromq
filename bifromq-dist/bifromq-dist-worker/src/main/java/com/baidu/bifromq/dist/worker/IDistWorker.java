@@ -16,7 +16,7 @@ package com.baidu.bifromq.dist.worker;
 /**
  * Dist worker interface.
  */
-public interface IDistWorker extends AutoCloseable {
+public interface IDistWorker {
     String CLUSTER_NAME = "dist.worker";
 
     static DistWorkerBuilder builder() {

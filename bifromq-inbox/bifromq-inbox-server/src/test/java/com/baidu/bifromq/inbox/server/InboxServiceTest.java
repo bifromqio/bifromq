@@ -42,13 +42,11 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.Struct;
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import lombok.SneakyThrows;
@@ -124,7 +122,7 @@ public abstract class InboxServiceTest {
             .rpcServerBuilder(rpcServerBuilder)
             .agentHost(agentHost)
             .metaService(metaService)
-            .storeClient(inboxStoreClient)
+            .inboxStoreClient(inboxStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .storeOptions(kvRangeStoreOptions)

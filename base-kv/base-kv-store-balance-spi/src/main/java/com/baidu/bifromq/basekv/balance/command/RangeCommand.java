@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.balance.command;
 
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;

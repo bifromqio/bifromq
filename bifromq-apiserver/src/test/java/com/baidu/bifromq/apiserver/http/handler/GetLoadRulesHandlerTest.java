@@ -69,6 +69,7 @@ public class GetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<GetL
         when(metadataManager.loadRules()).thenReturn(mockLoadRulesSubject);
 
         GetLoadRulesHandler handler = new GetLoadRulesHandler(metaService);
+        handler.start();
         FullHttpResponse resp = handler.handle(123, req).join();
         assertEquals(resp.status(), HttpResponseStatus.NOT_FOUND);
 
@@ -92,6 +93,7 @@ public class GetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<GetL
         mockClusterIdSubject.onNext(Set.of(clusterId));
         mockLoadRulesSubject.onNext(loadRules);
         GetLoadRulesHandler handler = new GetLoadRulesHandler(metaService);
+        handler.start();
         FullHttpResponse resp = handler.handle(123, req).join();
         assertEquals(resp.status(), HttpResponseStatus.OK);
     }

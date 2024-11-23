@@ -21,8 +21,8 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.MatchResult;
+import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
 import com.baidu.bifromq.plugin.subbroker.DeliveryReply;

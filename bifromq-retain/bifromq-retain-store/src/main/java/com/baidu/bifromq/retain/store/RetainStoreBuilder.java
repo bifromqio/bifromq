@@ -14,17 +14,14 @@
 package com.baidu.bifromq.retain.store;
 
 import com.baidu.bifromq.basecluster.IAgentHost;
-import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.Struct;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -42,7 +39,7 @@ public class RetainStoreBuilder implements IRetainStoreBuilder {
     RPCServerBuilder rpcServerBuilder;
     IAgentHost agentHost;
     IBaseKVMetaService metaService;
-    IBaseKVStoreClient storeClient;
+    IBaseKVStoreClient retainStoreClient;
     KVRangeStoreOptions storeOptions;
     int workerThreads;
     int tickerThreads;

@@ -36,26 +36,17 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.Path;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/rules/traffic")
-public class UnsetTrafficRulesHandler implements IHTTPRequestHandler {
-    private final Map<String, IRPCServiceTrafficGovernor> governorMap = new ConcurrentHashMap<>();
-
+public class UnsetTrafficRulesHandler extends AbstractTrafficRulesHandler implements IHTTPRequestHandler {
     public UnsetTrafficRulesHandler(IRPCServiceTrafficService trafficService) {
-        trafficService.services().subscribe(serviceUniqueNames -> {
-            governorMap.keySet().removeIf(serviceUniqueName -> !serviceUniqueNames.contains(serviceUniqueName));
-            for (String serviceUniqueName : serviceUniqueNames) {
-                governorMap.computeIfAbsent(serviceUniqueName, trafficService::getTrafficGovernor);
-            }
-        });
+        super(trafficService);
     }
 
     @DELETE

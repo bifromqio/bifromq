@@ -13,23 +13,6 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
-import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
-import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStart;
-import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStop;
-import com.baidu.bifromq.type.ClientInfo;
-import lombok.SneakyThrows;
-import lombok.extern.slf4j.Slf4j;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
-
-import java.util.function.Supplier;
-
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionNumGauge;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionSpaceGauge;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCountGauge;
@@ -43,6 +26,22 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
+
+import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
+import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
+import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStart;
+import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStop;
+import com.baidu.bifromq.type.ClientInfo;
+import java.util.function.Supplier;
+import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class TenantInboxSetTest extends MeterTest {

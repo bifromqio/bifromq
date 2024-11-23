@@ -13,10 +13,10 @@
 
 package com.baidu.bifromq.plugin.eventcollector;
 
-import org.testng.annotations.Test;
-
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
+
+import org.testng.annotations.Test;
 
 public class EventPoolTest {
     @Test

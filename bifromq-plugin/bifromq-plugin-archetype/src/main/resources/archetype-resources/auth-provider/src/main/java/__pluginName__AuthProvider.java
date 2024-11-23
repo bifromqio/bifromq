@@ -11,9 +11,8 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package ${groupId};
+package $
 
-import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.authprovider.type.Error;
 import com.baidu.bifromq.plugin.authprovider.type.Failed;
@@ -26,11 +25,10 @@ import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
 import com.baidu.bifromq.plugin.authprovider.type.Reject;
 import com.baidu.bifromq.type.ClientInfo;
+import java.util.concurrent.CompletableFuture;
 import org.pf4j.Extension;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.concurrent.CompletableFuture;
 
 @Extension
 public class ${pluginName}AuthProvider implements IAuthProvider {

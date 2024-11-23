@@ -23,7 +23,6 @@ import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
 @Slf4j

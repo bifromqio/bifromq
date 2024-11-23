@@ -18,7 +18,6 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 
 public interface IKVRangeQueryRunner {
     CompletableFuture<Boolean> exist(long ver, ByteString key, boolean linearized);

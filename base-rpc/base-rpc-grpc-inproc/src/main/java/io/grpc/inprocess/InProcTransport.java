@@ -49,7 +49,6 @@ import io.grpc.internal.GrpcAttributes;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.InUseStateAggregator;
 import io.grpc.internal.InsightBuilder;
-import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.NoopClientStream;
 import io.grpc.internal.ObjectPool;
 import io.grpc.internal.ServerListener;

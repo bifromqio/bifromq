@@ -20,7 +20,6 @@ import static org.testng.Assert.assertTrue;
 
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
-
 import java.util.HashSet;
 import java.util.NavigableSet;
 import java.util.Set;

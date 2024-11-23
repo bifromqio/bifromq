@@ -26,6 +26,7 @@ import io.micrometer.core.instrument.binder.netty4.NettyEventExecutorMetrics;
 import io.netty.channel.EventLoopGroup;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import javax.inject.Singleton;
 
 public class ExecutorsModule extends AbstractModule {
     private static class RPCClientEventLoopProvider implements Provider<EventLoopGroup> {
@@ -66,9 +67,9 @@ public class ExecutorsModule extends AbstractModule {
     protected void configure() {
         bind(EventLoopGroup.class).annotatedWith(Names.named("rpcClientEventLoop"))
             .toProvider(RPCClientEventLoopProvider.class)
-            .asEagerSingleton();
+            .in(Singleton.class);
         bind(ScheduledExecutorService.class).annotatedWith(Names.named("bgTaskScheduler"))
             .toProvider(BackgroundTaskSchedulerProvider.class)
-            .asEagerSingleton();
+            .in(Singleton.class);
     }
 }

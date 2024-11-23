@@ -22,72 +22,34 @@ import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.store.option.KVRangeOptions;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.plugin.settingprovider.SettingProviderManager;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
-import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.server.IRetainServer;
 import com.baidu.bifromq.retain.store.IRetainStore;
 import com.baidu.bifromq.starter.config.StandaloneConfig;
 import com.baidu.bifromq.starter.config.model.retain.RetainServerConfig;
-import com.baidu.bifromq.starter.config.model.retain.RetainStoreClientConfig;
 import com.baidu.bifromq.starter.config.model.retain.RetainStoreConfig;
 import com.baidu.bifromq.sysprops.props.RetainStoreLoadEstimationWindowSeconds;
 import com.google.inject.AbstractModule;
 import com.google.inject.Inject;
+import com.google.inject.Key;
 import com.google.inject.Provider;
 import com.google.inject.TypeLiteral;
 import com.google.inject.name.Names;
-import io.netty.channel.EventLoopGroup;
-import io.netty.handler.ssl.SslContext;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.ScheduledExecutorService;
-import javax.inject.Named;
+import javax.inject.Singleton;
 
 public class RetainServiceModule extends AbstractModule {
-    private static class RetainClientProvider implements Provider<IRetainClient> {
-        private final EventLoopGroup eventLoopGroup;
-        private final SslContext sslContext;
-        private final IRPCServiceTrafficService trafficService;
-
-        @Inject
-        private RetainClientProvider(@Named("rpcClientEventLoop") EventLoopGroup eventLoopGroup,
-                                     @Named("rpcClientSSLContext") Optional<SslContext> sslContext,
-                                     IRPCServiceTrafficService trafficService) {
-            this.eventLoopGroup = eventLoopGroup;
-            this.sslContext = sslContext.orElse(null);
-            this.trafficService = trafficService;
-        }
-
-        @Override
-        public IRetainClient get() {
-            return IRetainClient.newBuilder()
-                .trafficService(trafficService)
-                .eventLoopGroup(eventLoopGroup)
-                .sslContext(sslContext)
-                .build();
-        }
-    }
-
     private static class RetainServerProvider implements Provider<Optional<IRetainServer>> {
         private final StandaloneConfig config;
-        private final RPCServerBuilder rpcServerBuilder;
-        private final IBaseKVStoreClient retainStoreClient;
-        private final SettingProviderManager settingProviderMgr;
-        private final ISubBrokerManager subBrokerMgr;
+        private final ServiceInjector injector;
 
         @Inject
-        private RetainServerProvider(StandaloneConfig config,
-                                     RPCServerBuilder rpcServerBuilder,
-                                     @Named("retainStoreClient") IBaseKVStoreClient retainStoreClient,
-                                     SettingProviderManager settingProviderMgr,
-                                     ISubBrokerManager subBrokerMgr) {
+        private RetainServerProvider(StandaloneConfig config, ServiceInjector injector) {
             this.config = config;
-            this.rpcServerBuilder = rpcServerBuilder;
-            this.retainStoreClient = retainStoreClient;
-            this.settingProviderMgr = settingProviderMgr;
-            this.subBrokerMgr = subBrokerMgr;
+            this.injector = injector;
         }
 
         @Override
@@ -97,73 +59,25 @@ public class RetainServiceModule extends AbstractModule {
                 return Optional.empty();
             }
             return Optional.of(IRetainServer.builder()
-                .rpcServerBuilder(rpcServerBuilder)
-                .retainStoreClient(retainStoreClient)
-                .settingProvider(settingProviderMgr)
-                .subBrokerManager(subBrokerMgr)
+                .rpcServerBuilder(injector.getInstance(RPCServerBuilder.class))
+                .retainStoreClient(
+                    injector.getInstance(Key.get(IBaseKVStoreClient.class, Names.named("retainStoreClient"))))
+                .settingProvider(injector.getInstance(SettingProviderManager.class))
+                .subBrokerManager(injector.getInstance(ISubBrokerManager.class))
                 .attributes(serverConfig.getAttributes())
                 .defaultGroupTags(serverConfig.getDefaultGroups())
                 .build());
         }
     }
 
-    private static class RetainStoreClientProvider implements Provider<IBaseKVStoreClient> {
-        private final StandaloneConfig config;
-        private final EventLoopGroup eventLoopGroup;
-        private final IRPCServiceTrafficService trafficService;
-        private final IBaseKVMetaService metaService;
-        private final SslContext rpcClientSSLContext;
-
-        @Inject
-        private RetainStoreClientProvider(StandaloneConfig config,
-                                          @Named("rpcClientEventLoop") EventLoopGroup eventLoopGroup,
-                                          IRPCServiceTrafficService trafficService,
-                                          IBaseKVMetaService metaService,
-                                          @Named("rpcClientSSLContext") Optional<SslContext> rpcClientSSLContext) {
-            this.config = config;
-            this.eventLoopGroup = eventLoopGroup;
-            this.trafficService = trafficService;
-            this.metaService = metaService;
-            this.rpcClientSSLContext = rpcClientSSLContext.orElse(null);
-        }
-
-
-        @Override
-        public IBaseKVStoreClient get() {
-            RetainStoreClientConfig clientConfig = config.getRetainServiceConfig().getStoreClient();
-            return IBaseKVStoreClient.newBuilder()
-                .clusterId(IRetainStore.CLUSTER_NAME)
-                .trafficService(trafficService)
-                .metaService(metaService)
-                .eventLoopGroup(eventLoopGroup)
-                .workerThreads(clientConfig.getWorkerThreads())
-                .sslContext(rpcClientSSLContext)
-                .queryPipelinesPerStore(clientConfig.getQueryPipelinePerStore())
-                .build();
-        }
-    }
-
     private static class RetainStoreProvider implements Provider<Optional<IRetainStore>> {
         private final StandaloneConfig config;
-        private final RPCServerBuilder rpcServerBuilder;
-        private final IAgentHost agentHost;
-        private final IBaseKVMetaService metaService;
-        private final IBaseKVStoreClient retainStoreClient;
-        private final ScheduledExecutorService bgTaskScheduler;
+        private final ServiceInjector injector;
 
         @Inject
-        private RetainStoreProvider(StandaloneConfig config,
-                                    RPCServerBuilder rpcServerBuilder,
-                                    IAgentHost agentHost,
-                                    IBaseKVMetaService metaService,
-                                    @Named("retainStoreClient") IBaseKVStoreClient retainStoreClient,
-                                    @Named("bgTaskScheduler") ScheduledExecutorService bgTaskScheduler) {
+        private RetainStoreProvider(StandaloneConfig config, ServiceInjector injector) {
             this.config = config;
-            this.rpcServerBuilder = rpcServerBuilder;
-            this.agentHost = agentHost;
-            this.metaService = metaService;
-            this.retainStoreClient = retainStoreClient;
-            this.bgTaskScheduler = bgTaskScheduler;
+            this.injector = injector;
         }
 
         @Override
@@ -173,13 +87,15 @@ public class RetainServiceModule extends AbstractModule {
                 return Optional.empty();
             }
             return Optional.of(IRetainStore.builder()
-                .rpcServerBuilder(rpcServerBuilder)
-                .agentHost(agentHost)
-                .metaService(metaService)
-                .storeClient(retainStoreClient)
+                .rpcServerBuilder(injector.getInstance(RPCServerBuilder.class))
+                .agentHost(injector.getInstance(IAgentHost.class))
+                .metaService(injector.getInstance(IBaseKVMetaService.class))
+                .retainStoreClient(
+                    injector.getInstance(Key.get(IBaseKVStoreClient.class, Names.named("retainStoreClient"))))
                 .workerThreads(storeConfig.getWorkerThreads())
                 .tickerThreads(storeConfig.getTickerThreads())
-                .bgTaskExecutor(bgTaskScheduler)
+                .bgTaskExecutor(
+                    injector.getInstance(Key.get(ScheduledExecutorService.class, Names.named("bgTaskScheduler"))))
                 .balancerRetryDelay(Duration.ofMillis(storeConfig.getBalanceConfig().getRetryDelayInMS()))
                 .balancerFactoryConfig(storeConfig.getBalanceConfig().getBalancers())
                 .loadEstimateWindow(Duration.ofSeconds(RetainStoreLoadEstimationWindowSeconds.INSTANCE.get()))
@@ -195,16 +111,11 @@ public class RetainServiceModule extends AbstractModule {
 
     @Override
     protected void configure() {
-        bind(IRetainClient.class).toProvider(RetainClientProvider.class).asEagerSingleton();
-        bind(IBaseKVStoreClient.class)
-            .annotatedWith(Names.named("retainStoreClient"))
-            .toProvider(RetainStoreClientProvider.class)
-            .asEagerSingleton();
         bind(new TypeLiteral<Optional<IRetainServer>>() {
         }).toProvider(RetainServerProvider.class)
-            .asEagerSingleton();
+            .in(Singleton.class);
         bind(new TypeLiteral<Optional<IRetainStore>>() {
         }).toProvider(RetainStoreProvider.class)
-            .asEagerSingleton();
+            .in(Singleton.class);
     }
 }

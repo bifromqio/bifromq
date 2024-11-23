@@ -20,7 +20,6 @@ import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.mqtt.MockableTest;
-import com.baidu.bifromq.mqtt.handler.MQTTMessageDebounceHandler;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.mqtt.MqttFixedHeader;

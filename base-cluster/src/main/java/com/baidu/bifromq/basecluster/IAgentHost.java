@@ -20,8 +20,6 @@ import com.baidu.bifromq.basecluster.membership.proto.HostEndpoint;
 import com.baidu.bifromq.basecluster.transport.ITransport;
 import com.baidu.bifromq.basecluster.transport.TCPTransport;
 import com.baidu.bifromq.basecluster.transport.Transport;
-import com.google.common.io.ByteSink;
-import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import java.net.InetSocketAddress;
 import java.util.Map;

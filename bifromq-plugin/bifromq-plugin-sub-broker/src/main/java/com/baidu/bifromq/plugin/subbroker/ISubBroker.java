@@ -13,13 +13,12 @@
 
 package com.baidu.bifromq.plugin.subbroker;
 
-import java.util.concurrent.CompletableFuture;
 import org.pf4j.ExtensionPoint;
 
 /**
  * A sub broker is a downstream multi-tenant system which is capable of receiving subscribed messages in a batched way.
  */
-public interface ISubBroker extends AutoCloseable, ExtensionPoint {
+public interface ISubBroker extends ExtensionPoint {
     /**
      * The id of the subscription broker.
      *

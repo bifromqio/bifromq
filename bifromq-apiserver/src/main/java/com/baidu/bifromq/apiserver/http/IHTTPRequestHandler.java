@@ -19,7 +19,18 @@ import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.info.Info;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * HTTP request handler interface.
+ */
 @OpenAPIDefinition(info = @Info(title = "BifroMQ RESTful API", version = "${project.version}"))
 public interface IHTTPRequestHandler {
     CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req);
+
+    default void start() {
+
+    }
+
+    default void close() {
+
+    }
 }

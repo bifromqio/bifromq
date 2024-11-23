@@ -89,7 +89,6 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Struct;
 import io.micrometer.core.instrument.Gauge;
@@ -208,7 +207,7 @@ abstract class InboxStoreTest {
             .agentHost(agentHost)
             .metaService(metaService)
             .inboxClient(inboxClient)
-            .storeClient(storeClient)
+            .inboxStoreClient(storeClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .storeOptions(options)

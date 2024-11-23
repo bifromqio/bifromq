@@ -61,10 +61,6 @@ public final class RPCServerBuilder {
         return this;
     }
 
-    public int bindServices() {
-        return serviceDefinitions.size();
-    }
-
     public RPCServerBuilder bindService(@NonNull ServerServiceDefinition serviceDefinition,
                                         @NonNull BluePrint bluePrint,
                                         @NonNull Map<String, String> attributes,

@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.store.range.hinter;
 
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
@@ -23,9 +22,7 @@ import com.baidu.bifromq.basekv.store.api.IKVLoadRecord;
 import com.baidu.bifromq.basekv.store.range.IKVLoadRecorder;
 import com.baidu.bifromq.basekv.store.range.KVLoadRecorder;
 import com.google.protobuf.ByteString;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
 

@@ -17,7 +17,6 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
-import com.baidu.bifromq.basekv.store.api.IKVReader;
 import java.util.function.Supplier;
 
 public class TestCoProcFactory implements IKVRangeCoProcFactory {

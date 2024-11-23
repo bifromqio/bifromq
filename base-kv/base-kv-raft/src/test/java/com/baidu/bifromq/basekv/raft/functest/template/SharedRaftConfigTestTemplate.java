@@ -21,12 +21,10 @@ import com.baidu.bifromq.basekv.raft.RaftConfig;
 import com.baidu.bifromq.basekv.raft.functest.RaftNodeGroup;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Config;
 import com.baidu.bifromq.basekv.raft.functest.annotation.Ticker;
-
 import java.lang.reflect.Method;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 
 @Slf4j
 public abstract class SharedRaftConfigTestTemplate extends RaftGroupTestTemplate {

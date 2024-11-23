@@ -17,8 +17,8 @@ import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceServerRegister;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceLandscape;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceServerRegister;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.baserpc.trafficgovernor.ServerEndpoint;
 import io.grpc.inprocess.InProcSocketAddress;

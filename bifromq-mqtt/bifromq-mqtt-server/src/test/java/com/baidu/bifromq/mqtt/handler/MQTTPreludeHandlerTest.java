@@ -23,8 +23,6 @@ import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertNull;
 
 import com.baidu.bifromq.mqtt.MockableTest;
-import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
-import com.baidu.bifromq.mqtt.handler.MQTTPreludeHandler;
 import com.baidu.bifromq.mqtt.handler.v3.MQTT3ConnectHandler;
 import com.baidu.bifromq.mqtt.handler.v5.MQTT5ConnectHandler;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;

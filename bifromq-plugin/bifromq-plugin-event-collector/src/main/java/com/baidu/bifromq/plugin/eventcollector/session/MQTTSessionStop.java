@@ -13,14 +13,14 @@
 
 package com.baidu.bifromq.plugin.eventcollector.session;
 
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_STOP;
+
 import com.baidu.bifromq.plugin.eventcollector.ClientEvent;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
 import lombok.experimental.Accessors;
-
-import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_STOP;
 
 @Getter
 @Setter

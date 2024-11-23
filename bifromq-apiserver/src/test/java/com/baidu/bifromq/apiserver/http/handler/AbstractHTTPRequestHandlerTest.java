@@ -20,7 +20,7 @@ import static org.testng.Assert.assertNotNull;
 
 import com.baidu.bifromq.apiserver.MockableTest;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceLandscape;
+import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
@@ -40,7 +40,7 @@ public abstract class AbstractHTTPRequestHandlerTest<T> extends MockableTest {
     @Mock
     protected IRPCServiceTrafficService trafficService;
     @Mock
-    protected IRPCServiceLandscape serviceLandscape;
+    protected IRPCServiceTrafficGovernor trafficGovernor;
     @Mock
     protected IBaseKVMetaService metaService;
 
@@ -50,7 +50,7 @@ public abstract class AbstractHTTPRequestHandlerTest<T> extends MockableTest {
     @Override
     public void setup() {
         super.setup();
-        when(trafficService.getServiceLandscape(anyString())).thenReturn(serviceLandscape);
+        when(trafficService.getTrafficGovernor(anyString())).thenReturn(trafficGovernor);
         when(settingProvider.provide(any(), anyString())).thenAnswer(
             invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
     }

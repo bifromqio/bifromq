@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.starter.module;
 
-import static com.baidu.bifromq.starter.utils.ResourceUtil.loadFile;
 import static com.baidu.bifromq.starter.module.SSLUtil.defaultSslProvider;
+import static com.baidu.bifromq.starter.utils.ResourceUtil.loadFile;
 
 import com.baidu.bifromq.starter.config.StandaloneConfig;
 import com.baidu.bifromq.starter.config.model.SSLContextConfig;
@@ -30,6 +30,7 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import java.util.Optional;
+import javax.inject.Singleton;
 
 public class RPCClientSSLContextModule extends AbstractModule {
     private static class RPCClientSSLContextProvider implements Provider<Optional<SslContext>> {
@@ -74,6 +75,6 @@ public class RPCClientSSLContextModule extends AbstractModule {
         bind(new TypeLiteral<Optional<SslContext>>() {
         }).annotatedWith(Names.named("rpcClientSSLContext"))
             .toProvider(RPCClientSSLContextProvider.class)
-            .asEagerSingleton();
+            .in(Singleton.class);
     }
 }

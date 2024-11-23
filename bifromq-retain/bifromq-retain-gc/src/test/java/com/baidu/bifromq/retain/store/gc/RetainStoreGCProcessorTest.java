@@ -14,7 +14,6 @@
 package com.baidu.bifromq.retain.store.gc;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
-import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -33,7 +32,6 @@ import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.retain.rpc.proto.GCRequest;
 import com.google.protobuf.ByteString;
 import java.util.Collections;
-import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import org.mockito.Mock;

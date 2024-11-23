@@ -77,6 +77,7 @@ public class SetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<SetL
             CompletableFuture.completedFuture(IBaseKVClusterMetadataManager.ProposalResult.ACCEPTED));
 
         SetLoadRulesHandler handler = new SetLoadRulesHandler(metaService);
+        handler.start();
         FullHttpResponse resp = handler.handle(123, req).join();
         assertEquals(resp.status(), HttpResponseStatus.NOT_FOUND);
 
@@ -104,6 +105,7 @@ public class SetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<SetL
         req.headers().set(HEADER_SERVICE_NAME.header, clusterId);
         req.headers().set(HEADER_BALANCER_CLASS.header, balancerClass);
         SetLoadRulesHandler handler = new SetLoadRulesHandler(metaService);
+        handler.start();
         FullHttpResponse resp = handler.handle(123, req).join();
         assertEquals(resp.status(), HttpResponseStatus.REQUEST_TIMEOUT);
     }
@@ -122,6 +124,7 @@ public class SetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<SetL
         req.headers().set(HEADER_SERVICE_NAME.header, clusterId);
         req.headers().set(HEADER_BALANCER_CLASS.header, balancerClass);
         SetLoadRulesHandler handler = new SetLoadRulesHandler(metaService);
+        handler.start();
         FullHttpResponse resp = handler.handle(123, req).join();
         assertEquals(resp.status(), HttpResponseStatus.OK);
     }
@@ -140,6 +143,7 @@ public class SetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<SetL
         req.headers().set(HEADER_SERVICE_NAME.header, clusterId);
         req.headers().set(HEADER_BALANCER_CLASS.header, balancerClass);
         SetLoadRulesHandler handler = new SetLoadRulesHandler(metaService);
+        handler.start();
         FullHttpResponse resp = handler.handle(123, req).join();
         assertEquals(resp.status(), HttpResponseStatus.BAD_REQUEST);
     }
@@ -176,6 +180,7 @@ public class SetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<SetL
         req.headers().set(HEADER_SERVICE_NAME.header, clusterId);
         req.headers().set(HEADER_BALANCER_CLASS.header, balancerClass);
         SetLoadRulesHandler handler = new SetLoadRulesHandler(metaService);
+        handler.start();
         FullHttpResponse resp = handler.handle(123, req).join();
         assertEquals(resp.status(), HttpResponseStatus.CONFLICT);
     }

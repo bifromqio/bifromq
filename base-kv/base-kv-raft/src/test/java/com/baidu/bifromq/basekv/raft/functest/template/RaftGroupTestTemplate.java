@@ -15,7 +15,6 @@ package com.baidu.bifromq.basekv.raft.functest.template;
 
 import com.baidu.bifromq.basekv.raft.functest.annotation.Cluster;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
-
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashSet;

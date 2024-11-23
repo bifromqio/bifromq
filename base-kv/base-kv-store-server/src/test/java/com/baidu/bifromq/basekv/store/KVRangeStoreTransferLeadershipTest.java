@@ -20,11 +20,9 @@ import static org.testng.Assert.fail;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.raft.exception.LeaderTransferException;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
-import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.Listeners;
-import org.testng.annotations.Test;
-
 import java.util.concurrent.TimeUnit;
+import lombok.extern.slf4j.Slf4j;
+import org.testng.annotations.Test;
 
 @Slf4j
 public class KVRangeStoreTransferLeadershipTest extends KVRangeStoreClusterTestTemplate {

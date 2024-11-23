@@ -130,7 +130,7 @@ class MQTTBroker implements IMQTTBroker {
 
     @Override
     public final void close() {
-        log.info("Shutting down MQTT broker");
+        log.info("Stopping MQTT broker");
         if (tcpChannelF != null) {
             tcpChannelF.channel().close().syncUninterruptibly();
             log.debug("Stopped accepting mqtt connection over tcp channel");
@@ -157,7 +157,7 @@ class MQTTBroker implements IMQTTBroker {
         log.debug("Boss group shutdown");
         workerGroup.shutdownGracefully().syncUninterruptibly();
         log.debug("Worker group shutdown");
-        log.info("MQTT broker shutdown");
+        log.info("MQTT broker stopped");
     }
 
     private ChannelFuture bindTCPChannel(ConnListenerBuilder.TCPConnListenerBuilder connBuilder) {

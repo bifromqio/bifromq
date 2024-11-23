@@ -14,7 +14,6 @@
 package com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed;
 
 import com.baidu.bifromq.plugin.eventcollector.EventType;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ClientDisconnectEvent;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;

@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.store;
 
-public interface IInboxStore extends AutoCloseable {
+public interface IInboxStore {
     String CLUSTER_NAME = "inbox.store";
 
     static InboxStoreBuilder builder() {

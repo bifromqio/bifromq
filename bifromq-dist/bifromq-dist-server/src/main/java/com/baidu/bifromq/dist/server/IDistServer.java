@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.server;
 
-public interface IDistServer extends AutoCloseable {
+public interface IDistServer {
     static DistServerBuilder builder() {
         return new DistServerBuilder();
     }

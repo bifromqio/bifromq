@@ -13,30 +13,11 @@
 
 package com.baidu.bifromq.baserpc.client;
 
-import static com.baidu.bifromq.baserpc.utils.NettyUtil.determineSocketChannelClass;
-
 import com.baidu.bifromq.baserpc.BluePrint;
-import com.baidu.bifromq.baserpc.client.interceptor.TenantAwareClientInterceptor;
-import com.baidu.bifromq.baserpc.client.loadbalancer.IServerSelector;
-import com.baidu.bifromq.baserpc.client.loadbalancer.TrafficDirectiveLoadBalancerProvider;
-import com.baidu.bifromq.baserpc.client.nameresolver.TrafficGovernorNameResolverProvider;
-import com.baidu.bifromq.baserpc.client.util.BehaviorSubject;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceLandscape;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.google.common.base.Preconditions;
-import io.grpc.Channel;
-import io.grpc.ConnectivityState;
-import io.grpc.LoadBalancerProvider;
-import io.grpc.LoadBalancerRegistry;
-import io.grpc.ManagedChannel;
-import io.grpc.netty.LocalInProcNettyChannelBuilder;
-import io.grpc.netty.NegotiationType;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
-import io.reactivex.rxjava3.core.Observable;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import lombok.Setter;

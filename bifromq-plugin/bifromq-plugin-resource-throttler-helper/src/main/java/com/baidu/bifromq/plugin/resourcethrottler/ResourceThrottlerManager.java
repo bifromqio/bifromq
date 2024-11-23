@@ -27,7 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @Slf4j
-public class ResourceThrottlerManager implements IResourceThrottler {
+public class ResourceThrottlerManager implements IResourceThrottler, AutoCloseable {
     private static final Logger pluginLog = LoggerFactory.getLogger("plugin.manager");
     private final AtomicBoolean stopped = new AtomicBoolean();
     private final IResourceThrottler delegate;

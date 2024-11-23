@@ -16,8 +16,6 @@ package com.baidu.bifromq.basekv.localengine;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 public interface IKVSpace extends IKVSpaceReader {
     Observable<Map<ByteString, ByteString>> metadata();

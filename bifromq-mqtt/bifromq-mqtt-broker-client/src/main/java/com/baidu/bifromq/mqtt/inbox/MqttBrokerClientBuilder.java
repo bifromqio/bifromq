@@ -15,10 +15,8 @@ package com.baidu.bifromq.mqtt.inbox;
 
 import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
-import com.google.common.util.concurrent.MoreExecutors;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
-import java.util.concurrent.Executor;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import lombok.Setter;

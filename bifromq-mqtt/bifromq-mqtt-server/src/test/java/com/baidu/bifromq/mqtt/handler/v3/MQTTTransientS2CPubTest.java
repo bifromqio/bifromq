@@ -14,11 +14,6 @@
 package com.baidu.bifromq.mqtt.handler.v3;
 
 
-import static org.mockito.Mockito.verify;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertNotEquals;
-import static org.testng.Assert.assertNull;
-
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j

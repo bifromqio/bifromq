@@ -58,8 +58,9 @@ class RetainServer implements IRetainServer {
 
     @Override
     public void close() {
-        log.info("Shutting down retain service");
+        log.info("Stopping RetainService");
         retainService.close();
         MoreExecutors.shutdownAndAwaitTermination(rpcExecutor, 5, TimeUnit.SECONDS);
+        log.debug("RetainService stopped");
     }
 }

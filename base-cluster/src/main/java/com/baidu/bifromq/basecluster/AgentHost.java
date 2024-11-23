@@ -170,6 +170,7 @@ final class AgentHost implements IAgentHost {
     @Override
     public void close() {
         if (state.compareAndSet(State.STARTED, State.STOPPING)) {
+            log.info("Stopping AgentHost");
             healer.stop();
             seeder.stop();
             deadDropper.stop();
@@ -185,6 +186,7 @@ final class AgentHost implements IAgentHost {
                     disposables.dispose();
                     state.set(State.SHUTDOWN);
                 }).join();
+            log.debug("AgentHost stopped");
         }
     }
 

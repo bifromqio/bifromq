@@ -19,7 +19,6 @@ import static org.awaitility.Awaitility.await;
 import com.baidu.bifromq.basekv.annotation.Cluster;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
 @Slf4j

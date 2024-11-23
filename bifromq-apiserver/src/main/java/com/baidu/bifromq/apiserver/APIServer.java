@@ -14,6 +14,8 @@
 package com.baidu.bifromq.apiserver;
 
 import com.baidu.bifromq.apiserver.http.HTTPRouteMap;
+import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
+import com.baidu.bifromq.apiserver.http.IHTTPRequestHandlersFactory;
 import com.baidu.bifromq.apiserver.http.IHTTPRouteMap;
 import com.baidu.bifromq.apiserver.http.handler.RequestHandlersFactory;
 import com.baidu.bifromq.basecluster.IAgentHost;
@@ -29,7 +31,6 @@ import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.google.common.base.Preconditions;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
@@ -39,6 +40,7 @@ import io.netty.channel.epoll.EpollMode;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.ssl.SslContext;
 import java.net.InetSocketAddress;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.Builder;
@@ -51,11 +53,16 @@ public class APIServer implements IAPIServer {
     }
 
     private final String host;
+    private final int port;
+    private final int tlsPort;
     private final EventLoopGroup bossGroup;
     private final EventLoopGroup workerGroup;
-    private final ChannelFuture serverChannel;
-    private final ChannelFuture tlsServerChannel;
+    private final ServerBootstrap serverBootstrap;
+    private final ServerBootstrap tlsServerBootstrap;
+    private final Collection<IHTTPRequestHandler> handlers;
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
+    private Channel serverChannel;
+    private Channel tlsServerChannel;
 
     @Builder
     private APIServer(String host,
@@ -75,22 +82,29 @@ public class APIServer implements IAPIServer {
         Preconditions.checkArgument(port >= 0);
         Preconditions.checkArgument(tlsPort >= 0);
         this.host = host;
+        this.port = port;
+        this.tlsPort = tlsPort;
         this.bossGroup = NettyUtil.createEventLoopGroup(1,
             EnvProvider.INSTANCE.newThreadFactory("api-server-boss-elg"));
         this.workerGroup = NettyUtil.createEventLoopGroup(workerThreads,
             EnvProvider.INSTANCE.newThreadFactory("api-server-worker-elg"));
-
-        IHTTPRouteMap routeMap = new HTTPRouteMap(
-            new RequestHandlersFactory(agentHost, trafficService, metaService, sessionDictClient,
-                distClient, inboxClient, retainClient, settingProvider));
-        this.serverChannel =
-            buildServerChannel(port, new NonTLSServerInitializer(routeMap, settingProvider, maxContentLength));
+        IHTTPRequestHandlersFactory handlersFactory = new RequestHandlersFactory(agentHost,
+            trafficService,
+            metaService,
+            sessionDictClient,
+            distClient,
+            inboxClient,
+            retainClient,
+            settingProvider);
+        this.handlers = handlersFactory.build();
+        IHTTPRouteMap routeMap = new HTTPRouteMap(handlers);
+        this.serverBootstrap =
+            buildServerChannel(new NonTLSServerInitializer(routeMap, settingProvider, maxContentLength));
         if (sslContext != null) {
-            this.tlsServerChannel =
-                buildServerChannel(tlsPort,
-                    new TLSServerInitializer(sslContext, routeMap, settingProvider, maxContentLength));
+            this.tlsServerBootstrap = buildServerChannel(
+                new TLSServerInitializer(sslContext, routeMap, settingProvider, maxContentLength));
         } else {
-            this.tlsServerChannel = null;
+            this.tlsServerBootstrap = null;
         }
     }
 
@@ -103,14 +117,14 @@ public class APIServer implements IAPIServer {
     @Override
     public int listeningPort() {
         checkStarted();
-        return ((InetSocketAddress) serverChannel.channel().localAddress()).getPort();
+        return ((InetSocketAddress) serverChannel.localAddress()).getPort();
     }
 
     @Override
     public Optional<Integer> listeningTlsPort() {
         checkStarted();
         if (tlsServerChannel != null) {
-            return Optional.of(((InetSocketAddress) tlsServerChannel.channel().localAddress()).getPort());
+            return Optional.of(((InetSocketAddress) tlsServerChannel.localAddress()).getPort());
         }
         return Optional.empty();
     }
@@ -119,12 +133,13 @@ public class APIServer implements IAPIServer {
     public void start() {
         if (state.compareAndSet(State.INIT, State.STARTING)) {
             try {
+                handlers.forEach(IHTTPRequestHandler::start);
                 log.info("Starting API server");
-                Channel channel = serverChannel.sync().channel();
-                log.debug("Accepting API request at {}", channel.localAddress());
-                if (tlsServerChannel != null) {
-                    channel = tlsServerChannel.sync().channel();
-                    log.debug("Accepting API request at {}", channel.localAddress());
+                this.serverChannel = serverBootstrap.bind(host, port).sync().channel();
+                log.debug("Accepting API request at {}", serverChannel.localAddress());
+                if (tlsServerBootstrap != null) {
+                    this.tlsServerChannel = tlsServerBootstrap.bind(host, tlsPort).sync().channel();
+                    log.debug("Accepting API request at {}", tlsServerChannel.localAddress());
                 }
                 log.info("API server started");
                 state.set(State.STARTED);
@@ -138,19 +153,20 @@ public class APIServer implements IAPIServer {
     @Override
     public void close() {
         if (state.compareAndSet(State.STARTED, State.STOPPING)) {
-            log.info("Shutting down API server");
-            serverChannel.channel().close().syncUninterruptibly();
+            log.info("Stopping API server");
+            serverChannel.close().syncUninterruptibly();
             if (tlsServerChannel != null) {
-                serverChannel.channel().close().syncUninterruptibly();
+                serverChannel.close().syncUninterruptibly();
             }
             bossGroup.shutdownGracefully();
             workerGroup.shutdownGracefully();
-            log.info("API server shutdown");
+            handlers.forEach(IHTTPRequestHandler::close);
+            log.debug("API server stopped");
             state.set(State.STOPPED);
         }
     }
 
-    private ChannelFuture buildServerChannel(int port, ChannelInitializer<SocketChannel> channelInitializer) {
+    private ServerBootstrap buildServerChannel(ChannelInitializer<SocketChannel> channelInitializer) {
         ServerBootstrap b = new ServerBootstrap();
         b.group(bossGroup, workerGroup)
             // TODO - externalize following configs if needed
@@ -162,8 +178,7 @@ public class APIServer implements IAPIServer {
         if (Epoll.isAvailable()) {
             b.option(EpollChannelOption.EPOLL_MODE, EpollMode.EDGE_TRIGGERED);
         }
-        // Bind and start to accept incoming connections.
-        return b.bind(host, port);
+        return b;
     }
 
     private void checkStarted() {

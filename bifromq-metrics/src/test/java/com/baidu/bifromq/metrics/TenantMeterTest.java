@@ -18,10 +18,6 @@ import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertTrue;
 
 import io.micrometer.core.instrument.Metrics;
-import java.lang.ref.Cleaner;
-import java.lang.ref.WeakReference;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Test;
 

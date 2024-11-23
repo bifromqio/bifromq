@@ -64,7 +64,7 @@ class RetainStore implements IRetainStore {
 
     public RetainStore(RetainStoreBuilder builder) {
         this.clusterId = builder.clusterId;
-        this.storeClient = builder.storeClient;
+        this.storeClient = builder.retainStoreClient;
         this.gcInterval = builder.gcInterval;
         coProcFactory = new RetainStoreCoProcFactory(builder.loadEstimateWindow);
         Map<String, IRetainStoreBalancerFactory> loadedFactories =
@@ -142,7 +142,7 @@ class RetainStore implements IRetainStore {
                 .takeUntil(connState -> connState == IConnectable.ConnState.READY)
                 .doOnComplete(this::scheduleGC)
                 .subscribe();
-            log.info("Retain store started");
+            log.debug("Retain store started");
         }
     }
 
@@ -161,7 +161,7 @@ class RetainStore implements IRetainStore {
                 MoreExecutors.shutdownAndAwaitTermination(jobScheduler, 5, TimeUnit.SECONDS);
             }
             MoreExecutors.shutdownAndAwaitTermination(rpcExecutor, 5, TimeUnit.SECONDS);
-            log.info("RetainStore shutdown");
+            log.debug("RetainStore shutdown");
             status.compareAndSet(Status.STOPPING, Status.STOPPED);
         }
     }

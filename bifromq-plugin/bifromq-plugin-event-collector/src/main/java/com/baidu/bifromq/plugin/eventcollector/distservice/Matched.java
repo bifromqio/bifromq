@@ -15,7 +15,6 @@ package com.baidu.bifromq.plugin.eventcollector.distservice;
 
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
-import com.baidu.bifromq.type.QoS;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;

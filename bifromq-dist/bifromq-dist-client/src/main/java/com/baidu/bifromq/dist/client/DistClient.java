@@ -14,8 +14,6 @@
 package com.baidu.bifromq.dist.client;
 
 import com.baidu.bifromq.baserpc.client.IRPCClient;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
-import com.baidu.bifromq.dist.RPCBluePrint;
 import com.baidu.bifromq.dist.client.scheduler.DistServerCallScheduler;
 import com.baidu.bifromq.dist.client.scheduler.IDistServerCallScheduler;
 import com.baidu.bifromq.dist.client.scheduler.PubCall;
@@ -113,12 +111,12 @@ final class DistClient implements IDistClient {
     public void close() {
         // close tenant logger and drain logs before closing the dist client
         if (closed.compareAndSet(false, true)) {
-            log.info("Stopping dist client");
+            log.debug("Stopping dist client");
             log.debug("Closing request scheduler");
             reqScheduler.close();
             log.debug("Stopping rpc client");
             rpcClient.stop();
-            log.info("Dist client stopped");
+            log.debug("Dist client stopped");
         }
     }
 }

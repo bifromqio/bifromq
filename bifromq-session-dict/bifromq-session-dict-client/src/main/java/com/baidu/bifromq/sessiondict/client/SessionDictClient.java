@@ -14,7 +14,6 @@
 package com.baidu.bifromq.sessiondict.client;
 
 import com.baidu.bifromq.baserpc.client.IRPCClient;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.sessiondict.SessionRegisterKeyUtil;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetRequest;
@@ -181,12 +180,12 @@ final class SessionDictClient implements ISessionDictClient {
     @Override
     public void close() {
         if (closed.compareAndSet(false, true)) {
-            log.info("Stopping session dict client");
+            log.debug("Stopping session dict client");
             tenantSessionRegisterManagers.asMap().forEach((k, v) -> v.close());
             tenantSessionRegisterManagers.invalidateAll();
             log.debug("Stopping rpc client");
             rpcClient.stop();
-            log.info("Session dict client stopped");
+            log.debug("Session dict client stopped");
         }
     }
 }

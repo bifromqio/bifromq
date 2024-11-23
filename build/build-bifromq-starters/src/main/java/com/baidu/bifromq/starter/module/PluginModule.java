@@ -26,24 +26,23 @@ import com.baidu.bifromq.plugin.subbroker.SubBrokerManager;
 import com.baidu.bifromq.starter.config.StandaloneConfig;
 import com.google.inject.AbstractModule;
 import com.google.inject.Inject;
-import com.google.inject.Provider;
+import javax.inject.Singleton;
+import lombok.extern.slf4j.Slf4j;
 import org.pf4j.PluginManager;
 import org.slf4j.Logger;
 
+@Slf4j
 public class PluginModule extends AbstractModule {
-    private static class PluginManagerProvider implements Provider<PluginManager> {
-        private final Logger log;
+    private static class PluginManagerProvider extends SharedResourceProvider<BifroMQPluginManager> {
 
         @Inject
-        private PluginManagerProvider(Logger log) {
-            this.log = log;
+        private PluginManagerProvider(SharedResourcesHolder sharedResourcesHolder) {
+            super(sharedResourcesHolder);
         }
 
         @Override
-        public PluginManager get() {
-            PluginManager pluginMgr = new BifroMQPluginManager();
-            pluginMgr.loadPlugins();
-            pluginMgr.startPlugins();
+        public BifroMQPluginManager share() {
+            BifroMQPluginManager pluginMgr = new BifroMQPluginManager();
             pluginMgr.getPlugins().forEach(
                 plugin -> log.info("Loaded plugin: {}@{}",
                     plugin.getDescriptor().getPluginId(), plugin.getDescriptor().getVersion()));
@@ -51,7 +50,7 @@ public class PluginModule extends AbstractModule {
         }
     }
 
-    private static class AuthProviderManagerProvider implements Provider<AuthProviderManager> {
+    private static class AuthProviderManagerProvider extends SharedResourceProvider<AuthProviderManager> {
         private final StandaloneConfig config;
         private final PluginManager pluginManager;
         private final SettingProviderManager settingProviderManager;
@@ -61,7 +60,9 @@ public class PluginModule extends AbstractModule {
         private AuthProviderManagerProvider(StandaloneConfig config,
                                             PluginManager pluginManager,
                                             SettingProviderManager settingProviderManager,
-                                            EventCollectorManager eventCollectorManager) {
+                                            EventCollectorManager eventCollectorManager,
+                                            SharedResourcesHolder sharedResourcesHolder) {
+            super(sharedResourcesHolder);
             this.config = config;
             this.pluginManager = pluginManager;
             this.settingProviderManager = settingProviderManager;
@@ -69,7 +70,7 @@ public class PluginModule extends AbstractModule {
         }
 
         @Override
-        public AuthProviderManager get() {
+        public AuthProviderManager share() {
             return new AuthProviderManager(config.getAuthProviderFQN(),
                 pluginManager,
                 settingProviderManager,
@@ -77,68 +78,78 @@ public class PluginModule extends AbstractModule {
         }
     }
 
-    private static class EventCollectorManagerProvider implements Provider<EventCollectorManager> {
+    private static class EventCollectorManagerProvider extends SharedResourceProvider<EventCollectorManager> {
         private final PluginManager pluginManager;
 
         @Inject
-        private EventCollectorManagerProvider(PluginManager pluginManager) {
+        private EventCollectorManagerProvider(PluginManager pluginManager,
+                                              SharedResourcesHolder sharedResourcesHolder) {
+            super(sharedResourcesHolder);
             this.pluginManager = pluginManager;
         }
 
         @Override
-        public EventCollectorManager get() {
+        public EventCollectorManager share() {
             return new EventCollectorManager(pluginManager);
         }
     }
 
-    private static class ResourceThrottlerManagerProvider implements Provider<ResourceThrottlerManager> {
+    private static class ResourceThrottlerManagerProvider extends SharedResourceProvider<ResourceThrottlerManager> {
         private final StandaloneConfig config;
         private final PluginManager pluginManager;
 
         @Inject
-        private ResourceThrottlerManagerProvider(StandaloneConfig config, PluginManager pluginManager) {
+        private ResourceThrottlerManagerProvider(StandaloneConfig config,
+                                                 PluginManager pluginManager,
+                                                 SharedResourcesHolder sharedResourcesHolder) {
+            super(sharedResourcesHolder);
             this.config = config;
             this.pluginManager = pluginManager;
         }
 
         @Override
-        public ResourceThrottlerManager get() {
+        public ResourceThrottlerManager share() {
             return new ResourceThrottlerManager(config.getResourceThrottlerFQN(), pluginManager);
         }
     }
 
-    private static class SettingProviderManagerProvider implements Provider<SettingProviderManager> {
+    private static class SettingProviderManagerProvider extends SharedResourceProvider<SettingProviderManager> {
         private final StandaloneConfig config;
         private final PluginManager pluginManager;
 
         @Inject
-        private SettingProviderManagerProvider(StandaloneConfig config, PluginManager pluginManager) {
+        private SettingProviderManagerProvider(StandaloneConfig config,
+                                               PluginManager pluginManager,
+                                               SharedResourcesHolder sharedResourcesHolder) {
+            super(sharedResourcesHolder);
             this.config = config;
             this.pluginManager = pluginManager;
         }
 
 
         @Override
-        public SettingProviderManager get() {
+        public SettingProviderManager share() {
             return new SettingProviderManager(config.getSettingProviderFQN(), pluginManager);
         }
     }
 
-    private static class ClientBalancerManagerProvider implements Provider<ClientBalancerManager> {
+    private static class ClientBalancerManagerProvider extends SharedResourceProvider<ClientBalancerManager> {
         private final PluginManager pluginManager;
 
         @Inject
-        private ClientBalancerManagerProvider(PluginManager pluginManager) {
+        private ClientBalancerManagerProvider(PluginManager pluginManager,
+                                              SharedResourcesHolder sharedResourcesHolder) {
+            super(sharedResourcesHolder);
             this.pluginManager = pluginManager;
         }
 
         @Override
-        public ClientBalancerManager get() {
+        public ClientBalancerManager share() {
             return new ClientBalancerManager(pluginManager);
         }
     }
 
-    private static class SubBrokerManagerProvider implements Provider<ISubBrokerManager> {
+    private static class SubBrokerManagerProvider extends SharedResourceProvider<ISubBrokerManager> {
         private final PluginManager pluginManager;
         private final IMqttBrokerClient mqttBrokerClient;
         private final IInboxClient inboxClient;
@@ -146,26 +157,28 @@ public class PluginModule extends AbstractModule {
         @Inject
         private SubBrokerManagerProvider(PluginManager pluginManager,
                                          IMqttBrokerClient mqttBrokerClient,
-                                         IInboxClient inboxClient) {
+                                         IInboxClient inboxClient,
+                                         SharedResourcesHolder sharedResourcesHolder) {
+            super(sharedResourcesHolder);
             this.pluginManager = pluginManager;
             this.mqttBrokerClient = mqttBrokerClient;
             this.inboxClient = inboxClient;
         }
 
         @Override
-        public ISubBrokerManager get() {
+        public ISubBrokerManager share() {
             return new SubBrokerManager(pluginManager, mqttBrokerClient, inboxClient);
         }
     }
 
     @Override
     protected void configure() {
-        bind(PluginManager.class).toProvider(PluginManagerProvider.class).asEagerSingleton();
-        bind(ISubBrokerManager.class).toProvider(SubBrokerManagerProvider.class).asEagerSingleton();
-        bind(AuthProviderManager.class).toProvider(AuthProviderManagerProvider.class).asEagerSingleton();
-        bind(EventCollectorManager.class).toProvider(EventCollectorManagerProvider.class).asEagerSingleton();
-        bind(ResourceThrottlerManager.class).toProvider(ResourceThrottlerManagerProvider.class).asEagerSingleton();
-        bind(SettingProviderManager.class).toProvider(SettingProviderManagerProvider.class).asEagerSingleton();
-        bind(ClientBalancerManager.class).toProvider(ClientBalancerManagerProvider.class).asEagerSingleton();
+        bind(PluginManager.class).toProvider(PluginManagerProvider.class).in(Singleton.class);
+        bind(ISubBrokerManager.class).toProvider(SubBrokerManagerProvider.class).in(Singleton.class);
+        bind(AuthProviderManager.class).toProvider(AuthProviderManagerProvider.class).in(Singleton.class);
+        bind(EventCollectorManager.class).toProvider(EventCollectorManagerProvider.class).in(Singleton.class);
+        bind(ResourceThrottlerManager.class).toProvider(ResourceThrottlerManagerProvider.class).in(Singleton.class);
+        bind(SettingProviderManager.class).toProvider(SettingProviderManagerProvider.class).in(Singleton.class);
+        bind(ClientBalancerManager.class).toProvider(ClientBalancerManagerProvider.class).in(Singleton.class);
     }
 }

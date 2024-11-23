@@ -14,8 +14,8 @@
 package com.baidu.bifromq.dist.entity;
 
 
-import static com.baidu.bifromq.util.TopicUtil.unescape;
 import static com.baidu.bifromq.util.TopicConst.NUL;
+import static com.baidu.bifromq.util.TopicUtil.unescape;
 
 import com.baidu.bifromq.type.MatchInfo;
 import com.google.common.base.Strings;

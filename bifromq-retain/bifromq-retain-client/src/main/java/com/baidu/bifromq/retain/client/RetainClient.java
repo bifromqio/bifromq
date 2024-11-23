@@ -19,9 +19,7 @@ import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainedBytes;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.client.IRPCClient;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.metrics.ITenantMeter;
-import com.baidu.bifromq.retain.RPCBluePrint;
 import com.baidu.bifromq.retain.rpc.proto.ExpireAllReply;
 import com.baidu.bifromq.retain.rpc.proto.ExpireAllRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
@@ -50,10 +48,10 @@ final class RetainClient implements IRetainClient {
     @Override
     public void close() {
         if (closed.compareAndSet(false, true)) {
-            log.info("Stopping retain client");
+            log.debug("Stopping retain client");
             log.debug("Stopping rpc client");
             rpcClient.stop();
-            log.info("Retain client stopped");
+            log.debug("Retain client stopped");
         }
     }
 

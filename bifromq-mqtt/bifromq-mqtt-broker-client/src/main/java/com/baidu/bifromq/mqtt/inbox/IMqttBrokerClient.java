@@ -14,14 +14,13 @@
 package com.baidu.bifromq.mqtt.inbox;
 
 import com.baidu.bifromq.baserpc.client.IConnectable;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.type.QoS;
 import java.util.concurrent.CompletableFuture;
 
-public interface IMqttBrokerClient extends ISubBroker, IConnectable {
+public interface IMqttBrokerClient extends ISubBroker, IConnectable, AutoCloseable {
     static MqttBrokerClientBuilder newBuilder() {
         return new MqttBrokerClientBuilder();
     }
@@ -43,4 +42,6 @@ public interface IMqttBrokerClient extends ISubBroker, IConnectable {
     default int id() {
         return 0;
     }
+
+    void close();
 }

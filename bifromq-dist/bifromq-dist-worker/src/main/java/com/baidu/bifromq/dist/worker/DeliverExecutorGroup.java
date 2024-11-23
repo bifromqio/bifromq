@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static com.baidu.bifromq.util.TopicUtil.escape;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentFanOutBytes;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+import static com.baidu.bifromq.util.TopicUtil.escape;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersistentFanOutBytesPerSeconds;
 import static com.google.common.hash.Hashing.murmur3_128;
 
@@ -41,7 +41,6 @@ import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.github.benmanes.caffeine.cache.Scheduler;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;

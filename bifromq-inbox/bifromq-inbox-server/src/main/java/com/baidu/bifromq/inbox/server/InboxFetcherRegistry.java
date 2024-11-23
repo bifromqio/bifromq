@@ -17,7 +17,6 @@ import static java.util.Collections.emptyMap;
 
 import com.google.common.collect.Iterators;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

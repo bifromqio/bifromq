@@ -40,7 +40,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javax.ws.rs.GET;
@@ -50,18 +49,10 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/rules/load")
-public class GetLoadRulesHandler implements IHTTPRequestHandler {
-    private final Map<String, IBaseKVClusterMetadataManager> metadataManagers = new ConcurrentHashMap<>();
-
+public class GetLoadRulesHandler extends AbstractLoadRulesHandler implements IHTTPRequestHandler {
     protected GetLoadRulesHandler(IBaseKVMetaService metaService) {
-        metaService.clusterIds().subscribe(clusterIds -> {
-            metadataManagers.keySet().removeIf(clusterId -> !clusterIds.contains(clusterId));
-            for (String clusterId : clusterIds) {
-                metadataManagers.computeIfAbsent(clusterId, metaService::metadataManager);
-            }
-        });
+        super(metaService);
     }
-
 
     @GET
     @Operation(summary = "Get the load rules")

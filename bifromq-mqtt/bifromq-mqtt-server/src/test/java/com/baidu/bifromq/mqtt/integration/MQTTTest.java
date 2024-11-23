@@ -21,9 +21,9 @@ import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.baserpc.server.IRPCServer;
@@ -169,7 +169,7 @@ public abstract class MQTTTest {
             .rpcServerBuilder(rpcServerBuilder)
             .agentHost(agentHost)
             .metaService(metaService)
-            .storeClient(inboxStoreKVStoreClient)
+            .inboxStoreClient(inboxStoreKVStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .tickerThreads(tickerThreads)
@@ -206,7 +206,7 @@ public abstract class MQTTTest {
             .rpcServerBuilder(rpcServerBuilder)
             .agentHost(agentHost)
             .metaService(metaService)
-            .storeClient(retainStoreKVStoreClient)
+            .retainStoreClient(retainStoreKVStoreClient)
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(new KVRangeStoreOptions()
@@ -237,7 +237,7 @@ public abstract class MQTTTest {
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)
             .distClient(distClient)
-            .storeClient(distWorkerStoreClient)
+            .distWorkerClient(distWorkerStoreClient)
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(new KVRangeStoreOptions()
@@ -314,20 +314,6 @@ public abstract class MQTTTest {
         log.info("Start to tearing down");
         mqttBroker.close();
         log.info("Mqtt broker shut down");
-        distClient.close();
-        distWorkerStoreClient.close();
-        log.info("Dist client stopped");
-
-        inboxClient.close();
-        inboxStoreKVStoreClient.close();
-        log.info("Inbox client stopped");
-
-        retainClient.close();
-        retainStoreKVStoreClient.close();
-        log.info("Retain client stopped");
-
-        sessionDictClient.close();
-        log.info("Session dict client stopped");
 
         rpcServer.shutdown();
         log.info("Shared rpc server shutdown");

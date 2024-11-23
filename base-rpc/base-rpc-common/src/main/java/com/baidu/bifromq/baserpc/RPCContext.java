@@ -16,7 +16,6 @@ package com.baidu.bifromq.baserpc;
 import com.baidu.bifromq.baserpc.metrics.IRPCMeter;
 import io.grpc.Context;
 import java.util.Map;
-import java.util.UUID;
 
 public class RPCContext {
     public static final Context.Key<String> TENANT_ID_CTX_KEY = Context.key("TenantId");

@@ -13,21 +13,17 @@
 
 package com.baidu.bifromq.starter;
 
-import static com.baidu.bifromq.starter.utils.ConfigFileUtil.build;
 import static com.baidu.bifromq.starter.utils.ClusterDomainUtil.resolve;
+import static com.baidu.bifromq.starter.utils.ConfigFileUtil.build;
 import static com.baidu.bifromq.starter.utils.ConfigFileUtil.serialize;
 
-import com.baidu.bifromq.apiserver.IAPIServer;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.baseenv.MemUsage;
-import com.baidu.bifromq.baserpc.server.IRPCServer;
-import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
-import com.baidu.bifromq.mqtt.IMQTTBroker;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
-import com.baidu.bifromq.starter.metrics.netty.PooledByteBufAllocator;
 import com.baidu.bifromq.starter.config.StandaloneConfig;
 import com.baidu.bifromq.starter.config.StandaloneConfigConsolidator;
+import com.baidu.bifromq.starter.metrics.netty.PooledByteBufAllocator;
 import com.baidu.bifromq.starter.module.APIServerModule;
 import com.baidu.bifromq.starter.module.ConfigModule;
 import com.baidu.bifromq.starter.module.CoreServiceModule;
@@ -39,13 +35,14 @@ import com.baidu.bifromq.starter.module.PluginModule;
 import com.baidu.bifromq.starter.module.RPCClientSSLContextModule;
 import com.baidu.bifromq.starter.module.RPCServerBuilderModule;
 import com.baidu.bifromq.starter.module.RetainServiceModule;
+import com.baidu.bifromq.starter.module.ServiceInjectorModule;
 import com.baidu.bifromq.starter.module.SessionDictServiceModule;
+import com.baidu.bifromq.starter.module.SharedResourcesHolder;
 import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.sysprops.props.ClusterDomainResolveTimeoutSeconds;
 import com.google.common.base.Strings;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
-import com.google.inject.Inject;
 import com.google.inject.Injector;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
@@ -68,9 +65,9 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -83,13 +80,6 @@ import org.slf4j.Logger;
 
 @Slf4j
 public class StandaloneStarter {
-    private static class LoggerModule extends AbstractModule {
-        @Override
-        protected void configure() {
-            bind(Logger.class).toInstance(log);
-        }
-    }
-
     private static final Options CLI_OPTIONS = new Options()
         .addOption(Option.builder()
             .option("c")
@@ -113,47 +103,30 @@ public class StandaloneStarter {
     private final List<AutoCloseable> closeables = new LinkedList<>();
     private final StandaloneConfig config;
     private final IAgentHost agentHost;
-    private final IRPCServer rpcServer;
-    private final Optional<IAPIServer> apiServerOpt;
-    private final Optional<IMQTTBroker> mqttBrokerOpt;
-    private final GracefulShutdown gracefulShutdown;
+    private final ServiceBootstrapper.BootstrappedServices bootstrappedServices;
+    private final SharedResourcesHolder sharedResourcesHolder;
 
-    @Inject
-    public StandaloneStarter(StandaloneConfig config,
-                             IAgentHost agentHost,
-                             RPCServerBuilder rpcServerBuilder,
-                             Optional<IAPIServer> apiServerOpt,
-                             Optional<IMQTTBroker> mqttBrokerOpt,
-                             GracefulShutdown gracefulShutdown) {
+    @Builder
+    private StandaloneStarter(StandaloneConfig config,
+                              IAgentHost agentHost,
+                              ServiceBootstrapper.BootstrappedServices bootstrappedServices,
+                              SharedResourcesHolder sharedResourcesHolder) {
         this.config = config;
         this.agentHost = agentHost;
-        if (rpcServerBuilder.bindServices() > 0) {
-            rpcServer = rpcServerBuilder.build();
-        } else {
-            rpcServer = null;
-        }
-        this.apiServerOpt = apiServerOpt;
-        this.mqttBrokerOpt = mqttBrokerOpt;
-        this.gracefulShutdown = gracefulShutdown;
+        this.bootstrappedServices = bootstrappedServices;
+        this.sharedResourcesHolder = sharedResourcesHolder;
     }
 
     void start() {
         startSystemMetrics();
         join();
-        if (rpcServer != null) {
-            log.info("Start RPC server");
-            rpcServer.start();
-        }
-        mqttBrokerOpt.ifPresent(IMQTTBroker::start);
-        apiServerOpt.ifPresent(IAPIServer::start);
+        bootstrappedServices.start();
         log.info("Standalone broker started");
     }
 
     void stop() {
-        gracefulShutdown.shutdown();
-        if (rpcServer != null) {
-            rpcServer.shutdown();
-        }
+        bootstrappedServices.stop();
+        sharedResourcesHolder.close();
         closeables.forEach(closable -> {
             try {
                 closable.close();
@@ -274,23 +247,29 @@ public class StandaloneStarter {
             if (!Strings.isNullOrEmpty(config.getClusterConfig().getEnv())) {
                 Metrics.globalRegistry.config().commonTags("env", config.getClusterConfig().getEnv());
             }
-
+            Injector serviceInjector = Guice.createInjector(
+                new ConfigModule(config),
+                new RPCClientSSLContextModule(),
+                new CoreServiceModule(),
+                new RPCServerBuilderModule(),
+                new PluginModule(),
+                new ExecutorsModule());
             Injector injector = Guice.createInjector(
                 new ConfigModule(config),
-                new LoggerModule(),
-                new CoreServiceModule(),
-                new PluginModule(),
-                new RPCClientSSLContextModule(),
-                new ExecutorsModule(),
-                new RPCServerBuilderModule(),
                 new DistServiceModule(),
                 new InboxServiceModule(),
                 new RetainServiceModule(),
                 new SessionDictServiceModule(),
                 new MQTTServiceModule(),
-                new APIServerModule());
-
-            StandaloneStarter starter = injector.getInstance(StandaloneStarter.class);
+                new APIServerModule(),
+                new ServiceInjectorModule(serviceInjector));
+            injector.getBindings();
+            StandaloneStarter starter = StandaloneStarter.builder()
+                .config(config)
+                .agentHost(serviceInjector.getInstance(IAgentHost.class))
+                .bootstrappedServices(injector.getInstance(ServiceBootstrapper.class).bootstrap())
+                .sharedResourcesHolder(serviceInjector.getInstance(SharedResourcesHolder.class))
+                .build();
             starter.start();
             Thread shutdownThread = new Thread(starter::stop);
             shutdownThread.setName("shutdown");

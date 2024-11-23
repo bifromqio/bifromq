@@ -14,7 +14,6 @@
 package com.baidu.bifromq.apiserver.http;
 
 import static com.baidu.bifromq.apiserver.http.AnnotationUtil.getHTTPMethod;
-import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.apiserver.MockableTest;
@@ -41,13 +40,10 @@ public class HTTPRouteMapTest extends MockableTest {
     @Mock
     private IRetainClient retainClient;
     private ISettingProvider settingProvider = Setting::current;
-    @Mock
-    private IHTTPRequestHandlersFactory handlersFactory;
 
     @Test
     public void fallbackHandler() {
-        when(handlersFactory.build()).thenReturn(Collections.emptyList());
-        HTTPRouteMap routeMap = new HTTPRouteMap(handlersFactory);
+        HTTPRouteMap routeMap = new HTTPRouteMap(Collections.emptyList());
         FullHttpRequest httpRequest = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/fake");
         IHTTPRequestHandler handler =
             routeMap.getHandler(httpRequest);
@@ -61,8 +57,7 @@ public class HTTPRouteMapTest extends MockableTest {
     public void getHandler() {
         PubHandler pubHandler = new PubHandler(settingProvider, distClient);
         Collection<IHTTPRequestHandler> ret = Collections.singleton(pubHandler);
-        when(handlersFactory.build()).thenReturn(ret);
-        HTTPRouteMap routeMap = new HTTPRouteMap(handlersFactory);
+        HTTPRouteMap routeMap = new HTTPRouteMap(ret);
         Path route = PubHandler.class.getAnnotation(Path.class);
         FullHttpRequest httpRequest =
             new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, getHTTPMethod(PubHandler.class), route.value());

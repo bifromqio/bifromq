@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.server;
 
-public interface IInboxServer extends AutoCloseable {
+public interface IInboxServer {
     static InboxServerBuilder builder() {
         return new InboxServerBuilder();
     }

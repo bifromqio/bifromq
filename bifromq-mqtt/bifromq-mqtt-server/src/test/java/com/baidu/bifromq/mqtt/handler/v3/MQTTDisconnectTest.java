@@ -14,6 +14,17 @@
 package com.baidu.bifromq.mqtt.handler.v3;
 
 
+import static com.baidu.bifromq.plugin.eventcollector.EventType.BAD_PACKET;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.BY_CLIENT;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.BY_SERVER;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.IDLE;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_START;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_STOP;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATION;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
+import static org.testng.Assert.assertEquals;
+
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
@@ -22,22 +33,10 @@ import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.Assert;
 import org.testng.annotations.Test;
-
-import java.util.concurrent.TimeUnit;
-
-import static com.baidu.bifromq.plugin.eventcollector.EventType.BAD_PACKET;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.BY_CLIENT;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.BY_SERVER;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.IDLE;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATION;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_START;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_STOP;
-import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
-import static org.testng.Assert.assertEquals;
 
 @Slf4j
 public class MQTTDisconnectTest extends BaseMQTTTest {

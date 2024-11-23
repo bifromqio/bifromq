@@ -18,6 +18,8 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.CLIENT_CONNECTED
 import static com.baidu.bifromq.plugin.eventcollector.EventType.DISCARD;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_TOPIC;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_START;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_STOP;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.NO_PUB_PERMISSION;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATION;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PUB_ACKED;
@@ -29,8 +31,6 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS0_DIST_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS1_DIST_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DIST_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SERVER_BUSY;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_START;
-import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_STOP;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;

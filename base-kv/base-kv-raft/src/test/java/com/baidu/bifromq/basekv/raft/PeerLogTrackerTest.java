@@ -13,12 +13,12 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basekv.raft.event.SyncStateChangedEvent;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
@@ -26,14 +26,13 @@ import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import com.baidu.bifromq.basekv.raft.proto.Snapshot;
 import java.util.HashMap;
 import java.util.HashSet;
-
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.slf4j.Logger;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
 
 public class PeerLogTrackerTest {
     PeerLogTracker logTracker;

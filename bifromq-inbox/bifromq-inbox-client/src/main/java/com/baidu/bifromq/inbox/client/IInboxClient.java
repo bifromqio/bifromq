@@ -14,7 +14,6 @@
 package com.baidu.bifromq.inbox.client;
 
 import com.baidu.bifromq.baserpc.client.IConnectable;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
@@ -40,7 +39,7 @@ import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
-public interface IInboxClient extends ISubBroker, IConnectable {
+public interface IInboxClient extends ISubBroker, IConnectable, AutoCloseable {
 
     static InboxClientBuilder newBuilder() {
         return new InboxClientBuilder();
@@ -72,6 +71,8 @@ public interface IInboxClient extends ISubBroker, IConnectable {
     IInboxReader openInboxReader(String tenantId, String inboxId, long incarnation);
 
     CompletableFuture<CommitReply> commit(CommitRequest request);
+
+    void close();
 
     interface IInboxReader {
         void fetch(Consumer<Fetched> consumer);

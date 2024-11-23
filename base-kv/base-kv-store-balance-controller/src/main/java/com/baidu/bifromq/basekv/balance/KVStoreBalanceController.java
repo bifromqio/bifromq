@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.basekv.balance;
 
-import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
-import com.baidu.bifromq.basekv.metaservice.LoadRulesProposalHandler;
 import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
 import com.baidu.bifromq.basekv.balance.command.BootstrapCommand;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
@@ -24,6 +22,8 @@ import com.baidu.bifromq.basekv.balance.command.RecoveryCommand;
 import com.baidu.bifromq.basekv.balance.command.SplitCommand;
 import com.baidu.bifromq.basekv.balance.command.TransferLeadershipCommand;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
+import com.baidu.bifromq.basekv.metaservice.LoadRulesProposalHandler;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;

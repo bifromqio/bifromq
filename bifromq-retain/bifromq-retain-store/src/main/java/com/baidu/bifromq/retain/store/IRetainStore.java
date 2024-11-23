@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.retain.store;
 
-public interface IRetainStore extends AutoCloseable {
+public interface IRetainStore {
     String CLUSTER_NAME = "retain.store";
 
     static RetainStoreBuilder builder() {

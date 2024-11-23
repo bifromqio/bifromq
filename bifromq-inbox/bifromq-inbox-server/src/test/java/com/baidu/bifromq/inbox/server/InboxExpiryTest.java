@@ -13,28 +13,6 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import com.baidu.bifromq.dist.client.PubResult;
-import com.baidu.bifromq.dist.client.MatchResult;
-import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
-import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
-import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
-import com.baidu.bifromq.inbox.storage.proto.LWT;
-import com.baidu.bifromq.plugin.eventcollector.Event;
-import com.baidu.bifromq.plugin.eventcollector.EventType;
-import com.baidu.bifromq.retain.rpc.proto.RetainReply;
-import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.Message;
-import com.baidu.bifromq.type.QoS;
-import com.google.protobuf.ByteString;
-import org.mockito.ArgumentCaptor;
-import org.testng.annotations.Test;
-
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
-
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -48,6 +26,27 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
+
+import com.baidu.bifromq.dist.client.MatchResult;
+import com.baidu.bifromq.dist.client.PubResult;
+import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
+import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
+import com.baidu.bifromq.inbox.rpc.proto.GetReply;
+import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
+import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
+import com.baidu.bifromq.inbox.storage.proto.LWT;
+import com.baidu.bifromq.plugin.eventcollector.Event;
+import com.baidu.bifromq.plugin.eventcollector.EventType;
+import com.baidu.bifromq.retain.rpc.proto.RetainReply;
+import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.Message;
+import com.baidu.bifromq.type.QoS;
+import com.google.protobuf.ByteString;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
+import org.mockito.ArgumentCaptor;
+import org.testng.annotations.Test;
 
 public class InboxExpiryTest extends InboxServiceTest {
     @Test(groups = "integration")

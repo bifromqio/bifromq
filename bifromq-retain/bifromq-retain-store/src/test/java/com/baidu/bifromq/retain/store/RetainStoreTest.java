@@ -159,7 +159,7 @@ public class RetainStoreTest {
             .rpcServerBuilder(rpcServerBuilder)
             .agentHost(agentHost)
             .metaService(metaService)
-            .storeClient(storeClient)
+            .retainStoreClient(storeClient)
             .storeOptions(options)
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)

@@ -17,7 +17,6 @@ import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
-import io.netty.handler.codec.mqtt.MqttQoS;
 import java.util.concurrent.CompletableFuture;
 
 public interface IMQTTSession {

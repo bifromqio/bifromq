@@ -17,7 +17,6 @@ import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehookloader.BaseHookLoader;
 import com.baidu.bifromq.basekv.balance.KVStoreBalanceController;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
-import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.dist.worker.spi.IDistWorkerBalancerFactory;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
@@ -27,8 +26,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedTransferQueue;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -70,7 +67,7 @@ class DistWorker implements IDistWorker {
 
         storeBalanceController = new KVStoreBalanceController(
             builder.metaService.metadataManager(clusterId),
-            builder.storeClient,
+            builder.distWorkerClient,
             effectiveBalancerFactories,
             builder.balancerRetryDelay,
             builder.bgTaskExecutor);
@@ -114,7 +111,7 @@ class DistWorker implements IDistWorker {
             storeServer.start();
             storeBalanceController.start(storeServer.storeId(clusterId));
             status.compareAndSet(Status.STARTING, Status.STARTED);
-            log.info("Dist worker started");
+            log.debug("Dist worker started");
         }
     }
 
@@ -127,7 +124,7 @@ class DistWorker implements IDistWorker {
             coProcFactory.close();
             effectiveBalancerFactories.forEach(IDistWorkerBalancerFactory::close);
             MoreExecutors.shutdownAndAwaitTermination(rpcExecutor, 5, TimeUnit.SECONDS);
-            log.info("DistWorker stopped");
+            log.debug("DistWorker stopped");
             status.compareAndSet(Status.STOPPING, Status.STOPPED);
         }
     }

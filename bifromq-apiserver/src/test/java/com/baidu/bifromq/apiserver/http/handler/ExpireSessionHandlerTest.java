@@ -16,7 +16,6 @@ package com.baidu.bifromq.apiserver.http.handler;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_EXPIRY_SECONDS;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_TENANT_ID;
 import static com.baidu.bifromq.inbox.rpc.proto.ExpireAllReply.Code.ERROR;
-import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpResponseStatus.TOO_MANY_REQUESTS;
 import static org.mockito.ArgumentMatchers.any;

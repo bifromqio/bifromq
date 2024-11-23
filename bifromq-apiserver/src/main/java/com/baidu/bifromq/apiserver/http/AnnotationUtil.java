@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.apiserver.http;
 
+import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpMethod;
 import java.lang.reflect.Method;
 import javax.ws.rs.DELETE;
@@ -26,22 +27,22 @@ import javax.ws.rs.Path;
 
 public class AnnotationUtil {
     public static <T extends IHTTPRequestHandler> HttpMethod getHTTPMethod(Class<T> handlerClass) {
-        Method handleMethod = handlerClass.getMethods()[0];
-        assert handleMethod.getName().equals("handle");
-        if (handleMethod.getAnnotation(GET.class) != null) {
-            return HttpMethod.GET;
-        } else if (handleMethod.getAnnotation(PUT.class) != null) {
-            return HttpMethod.PUT;
-        } else if (handleMethod.getAnnotation(POST.class) != null) {
-            return HttpMethod.POST;
-        } else if (handleMethod.getAnnotation(DELETE.class) != null) {
-            return HttpMethod.DELETE;
-        } else if (handleMethod.getAnnotation(OPTIONS.class) != null) {
-            return HttpMethod.OPTIONS;
-        } else if (handleMethod.getAnnotation(HEAD.class) != null) {
-            return HttpMethod.HEAD;
-        } else if (handleMethod.getAnnotation(PATCH.class) != null) {
-            return HttpMethod.PATCH;
+        for (Method handleMethod : handlerClass.getMethods()) {
+            if (handleMethod.getAnnotation(GET.class) != null) {
+                return HttpMethod.GET;
+            } else if (handleMethod.getAnnotation(PUT.class) != null) {
+                return HttpMethod.PUT;
+            } else if (handleMethod.getAnnotation(POST.class) != null) {
+                return HttpMethod.POST;
+            } else if (handleMethod.getAnnotation(DELETE.class) != null) {
+                return HttpMethod.DELETE;
+            } else if (handleMethod.getAnnotation(OPTIONS.class) != null) {
+                return HttpMethod.OPTIONS;
+            } else if (handleMethod.getAnnotation(HEAD.class) != null) {
+                return HttpMethod.HEAD;
+            } else if (handleMethod.getAnnotation(PATCH.class) != null) {
+                return HttpMethod.PATCH;
+            }
         }
         return null;
     }

@@ -15,7 +15,6 @@ package com.baidu.bifromq.basekv.server;
 
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.Setter;

@@ -14,8 +14,8 @@
 package com.baidu.bifromq.basekv.raft.functest;
 
 import static org.awaitility.Awaitility.await;
-import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
@@ -31,7 +31,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
 @Slf4j

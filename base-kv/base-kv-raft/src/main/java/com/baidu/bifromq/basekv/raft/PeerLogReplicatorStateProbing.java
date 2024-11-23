@@ -15,7 +15,6 @@ package com.baidu.bifromq.basekv.raft;
 
 
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
-import lombok.extern.java.Log;
 import org.slf4j.Logger;
 
 class PeerLogReplicatorStateProbing extends PeerLogReplicatorState {

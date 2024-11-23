@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.mqtt;
 
-public interface IMQTTBroker extends AutoCloseable {
+public interface IMQTTBroker {
     static MQTTBrokerBuilder builder() {
         return new MQTTBrokerBuilder();
     }

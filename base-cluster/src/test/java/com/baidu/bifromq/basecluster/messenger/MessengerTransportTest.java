@@ -13,11 +13,11 @@
 
 package com.baidu.bifromq.basecluster.messenger;
 
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basecluster.messenger.proto.DirectMessage;
 import com.baidu.bifromq.basecluster.messenger.proto.GossipMessage;
@@ -33,11 +33,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.mockito.Mock;
 
 @Slf4j
 public class MessengerTransportTest {

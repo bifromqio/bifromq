@@ -19,15 +19,13 @@ import static org.testng.Assert.assertNull;
 import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
-import com.baidu.bifromq.basekv.localengine.IKVSpace;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import io.reactivex.rxjava3.core.Maybe;
-import org.testng.annotations.Test;
-
 import java.util.concurrent.TimeUnit;
+import org.testng.annotations.Test;
 
 public class KVRangeMetadataTest extends AbstractKVRangeTest {
     @Test

@@ -17,8 +17,8 @@ import com.baidu.bifromq.basekv.localengine.memory.InMemCPableKVEngine;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.memory.InMemWALableKVEngine;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngine;
-import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBWALableKVEngine;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngineConfigurator;
+import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBWALableKVEngine;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBWALableKVEngineConfigurator;
 
 public class KVEngineFactory {

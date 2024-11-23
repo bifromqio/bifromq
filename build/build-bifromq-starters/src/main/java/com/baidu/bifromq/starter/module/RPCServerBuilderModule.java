@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.starter.module;
 
-import static com.baidu.bifromq.starter.utils.ResourceUtil.loadFile;
 import static com.baidu.bifromq.starter.module.SSLUtil.defaultSslProvider;
 import static com.baidu.bifromq.starter.module.SSLUtil.findJdkProvider;
+import static com.baidu.bifromq.starter.utils.ResourceUtil.loadFile;
 
 import com.baidu.bifromq.baserpc.server.IRPCServer;
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
@@ -31,6 +31,7 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import javax.inject.Singleton;
 
 public class RPCServerBuilderModule extends AbstractModule {
     private static class RPCServerBuilderProvider implements Provider<RPCServerBuilder> {
@@ -76,12 +77,10 @@ public class RPCServerBuilderModule extends AbstractModule {
                 throw new RuntimeException("Fail to initialize server SSLContext", e);
             }
         }
-
-
     }
 
     @Override
     protected void configure() {
-        bind(RPCServerBuilder.class).toProvider(RPCServerBuilderProvider.class).asEagerSingleton();
+        bind(RPCServerBuilder.class).toProvider(RPCServerBuilderProvider.class).in(Singleton.class);
     }
 }

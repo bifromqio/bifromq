@@ -22,13 +22,18 @@ import org.pf4j.PluginFactory;
 import org.pf4j.PluginLoader;
 
 @Slf4j
-public class BifroMQPluginManager extends DefaultPluginManager {
+public class BifroMQPluginManager extends DefaultPluginManager implements AutoCloseable {
+    public BifroMQPluginManager() {
+        loadPlugins();
+        startPlugins();
+    }
+
     @Override
     protected PluginLoader createPluginLoader() {
         return new CompoundPluginLoader()
-                .add(new BifroMQDevelopmentPluginLoader(this), this::isDevelopment)
-                .add(new BifroMQJarPluginLoader(this), this::isNotDevelopment)
-                .add(new BifroMQDefaultPluginLoader(this), this::isNotDevelopment);
+            .add(new BifroMQDevelopmentPluginLoader(this), this::isDevelopment)
+            .add(new BifroMQJarPluginLoader(this), this::isNotDevelopment)
+            .add(new BifroMQDefaultPluginLoader(this), this::isNotDevelopment);
     }
 
     @Override
@@ -46,5 +51,11 @@ public class BifroMQPluginManager extends DefaultPluginManager {
     @Override
     protected ExtensionFactory createExtensionFactory() {
         return new BifroMQExtensionFactory(this);
+    }
+
+    @Override
+    public void close() {
+        stopPlugins();
+        unloadPlugins();
     }
 }

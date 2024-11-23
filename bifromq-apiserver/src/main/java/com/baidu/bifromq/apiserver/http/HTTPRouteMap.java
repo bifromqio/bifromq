@@ -37,8 +37,7 @@ public class HTTPRouteMap implements IHTTPRouteMap {
     private final Map<String, Map<HttpMethod, IHTTPRequestHandler>> routeMap = new HashMap<>();
 
 
-    public HTTPRouteMap(IHTTPRequestHandlersFactory handlersFactory) {
-        Collection<? extends IHTTPRequestHandler> handlers = handlersFactory.build();
+    public HTTPRouteMap(Collection<? extends IHTTPRequestHandler> handlers) {
         for (IHTTPRequestHandler handler : handlers) {
             Path route = handler.getClass().getAnnotation(Path.class);
             if (route != null) {

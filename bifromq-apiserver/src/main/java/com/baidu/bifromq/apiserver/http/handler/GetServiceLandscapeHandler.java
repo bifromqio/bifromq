@@ -37,28 +37,18 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import java.util.Base64;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/landscape/service")
-public class GetServiceLandscapeHandler implements IHTTPRequestHandler {
-    private final Map<String, IRPCServiceLandscape> landscapeMap = new ConcurrentHashMap<>();
-
+public class GetServiceLandscapeHandler extends AbstractTrafficRulesHandler implements IHTTPRequestHandler {
     public GetServiceLandscapeHandler(IRPCServiceTrafficService trafficService) {
-        trafficService.services().subscribe(serviceUniqueNames -> {
-            landscapeMap.keySet().removeIf(serviceUniqueName -> !serviceUniqueNames.contains(serviceUniqueName));
-            for (String serviceUniqueName : serviceUniqueNames) {
-                landscapeMap.computeIfAbsent(serviceUniqueName, trafficService::getServiceLandscape);
-            }
-        });
+        super(trafficService);
     }
-
 
     @GET
     @Operation(summary = "Get the server landscape information")
@@ -77,7 +67,7 @@ public class GetServiceLandscapeHandler implements IHTTPRequestHandler {
     public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
         log.trace("Handling http get service landscape request: {}", req);
         String serviceName = HeaderUtils.getHeader(Headers.HEADER_SERVICE_NAME, req, true);
-        IRPCServiceLandscape landscape = landscapeMap.get(serviceName);
+        IRPCServiceLandscape landscape = governorMap.get(serviceName);
         if (landscape == null) {
             return CompletableFuture.completedFuture(new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
                 Unpooled.copiedBuffer(("Service not found: " + serviceName).getBytes())));

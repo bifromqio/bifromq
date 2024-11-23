@@ -18,7 +18,6 @@ import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
 import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceLandscape;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,23 +38,15 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/rules/traffic")
-public class SetTrafficRulesHandler implements IHTTPRequestHandler {
-    private final Map<String, IRPCServiceTrafficGovernor> governorMap = new ConcurrentHashMap<>();
-
+public class SetTrafficRulesHandler extends AbstractTrafficRulesHandler implements IHTTPRequestHandler {
     public SetTrafficRulesHandler(IRPCServiceTrafficService trafficService) {
-        trafficService.services().subscribe(serviceUniqueNames -> {
-            governorMap.keySet().removeIf(serviceUniqueName -> !serviceUniqueNames.contains(serviceUniqueName));
-            for (String serviceUniqueName : serviceUniqueNames) {
-                governorMap.computeIfAbsent(serviceUniqueName, trafficService::getTrafficGovernor);
-            }
-        });
+        super(trafficService);
     }
 
     @PUT

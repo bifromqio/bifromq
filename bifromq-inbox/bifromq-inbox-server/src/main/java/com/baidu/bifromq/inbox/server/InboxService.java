@@ -585,7 +585,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             fetchScheduler.close();
             insertScheduler.close();
             commitScheduler.close();
-
             state.set(State.STOPPED);
         }
     }

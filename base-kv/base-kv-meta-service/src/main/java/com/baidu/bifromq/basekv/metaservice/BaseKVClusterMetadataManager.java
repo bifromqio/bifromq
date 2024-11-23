@@ -14,8 +14,8 @@
 package com.baidu.bifromq.basekv.metaservice;
 
 import static com.baidu.bifromq.basekv.metaservice.NameUtil.toLandscapeURI;
-import static com.baidu.bifromq.basekv.metaservice.NameUtil.toLoadRulesURI;
 import static com.baidu.bifromq.basekv.metaservice.NameUtil.toLoadRulesProposalURI;
+import static com.baidu.bifromq.basekv.metaservice.NameUtil.toLoadRulesURI;
 import static com.baidu.bifromq.basekv.proto.ProposalResult.ACCEPTED;
 import static com.baidu.bifromq.basekv.proto.ProposalResult.REJECTED;
 

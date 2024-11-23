@@ -16,12 +16,10 @@ package com.baidu.bifromq.starter.module;
 import static com.baidu.bifromq.starter.module.SSLUtil.buildServerSslContext;
 
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.mqtt.IMQTTBroker;
 import com.baidu.bifromq.mqtt.IMQTTBrokerBuilder;
-import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.authprovider.AuthProviderManager;
 import com.baidu.bifromq.plugin.clientbalancer.ClientBalancerManager;
 import com.baidu.bifromq.plugin.eventcollector.EventCollectorManager;
@@ -35,76 +33,18 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import com.google.inject.TypeLiteral;
-import io.netty.channel.EventLoopGroup;
-import io.netty.handler.ssl.SslContext;
 import java.util.Optional;
-import javax.inject.Named;
+import javax.inject.Singleton;
 
 public class MQTTServiceModule extends AbstractModule {
-    private static class MQTTBrokerClientProvider implements Provider<IMqttBrokerClient> {
-        private final StandaloneConfig config;
-        private final EventLoopGroup eventLoopGroup;
-        private final SslContext sslContext;
-        private final IRPCServiceTrafficService trafficService;
-
-        @Inject
-        private MQTTBrokerClientProvider(StandaloneConfig config,
-                                         @Named("rpcClientEventLoop") EventLoopGroup eventLoopGroup,
-                                         @Named("rpcClientSSLContext") Optional<SslContext> sslContext,
-                                         IRPCServiceTrafficService trafficService) {
-            this.config = config;
-            this.eventLoopGroup = eventLoopGroup;
-            this.sslContext = sslContext.orElse(null);
-            this.trafficService = trafficService;
-        }
-
-        @Override
-        public IMqttBrokerClient get() {
-            return IMqttBrokerClient.newBuilder()
-                .workerThreads(config.getMqttServiceConfig().getClient().getWorkerThreads())
-                .trafficService(trafficService)
-                .eventLoopGroup(eventLoopGroup)
-                .sslContext(sslContext)
-                .build();
-        }
-    }
-
     private static class MQTTBrokerServerProvider implements Provider<Optional<IMQTTBroker>> {
         private final StandaloneConfig config;
-        private final RPCServerBuilder rpcServerBuilder;
-        private final IDistClient distClient;
-        private final IInboxClient inboxClient;
-        private final IRetainClient retainClient;
-        private final ISessionDictClient sessionDictClient;
-        private final AuthProviderManager authProviderMgr;
-        private final ClientBalancerManager clientBalancerMgr;
-        private final EventCollectorManager eventCollectorMgr;
-        private final SettingProviderManager settingProviderMgr;
-        private final ResourceThrottlerManager resourceThrottlerMgr;
+        private final ServiceInjector injector;
 
         @Inject
-        private MQTTBrokerServerProvider(StandaloneConfig config,
-                                         RPCServerBuilder rpcServerBuilder,
-                                         IDistClient distClient,
-                                         IInboxClient inboxClient,
-                                         IRetainClient retainClient,
-                                         ISessionDictClient sessionDictClient,
-                                         AuthProviderManager authProviderMgr,
-                                         ClientBalancerManager clientBalancerMgr,
-                                         EventCollectorManager eventCollectorMgr,
-                                         SettingProviderManager settingProviderMgr,
-                                         ResourceThrottlerManager resourceThrottlerMgr) {
+        private MQTTBrokerServerProvider(StandaloneConfig config, ServiceInjector injector) {
             this.config = config;
-            this.rpcServerBuilder = rpcServerBuilder;
-            this.distClient = distClient;
-            this.inboxClient = inboxClient;
-            this.retainClient = retainClient;
-            this.sessionDictClient = sessionDictClient;
-            this.authProviderMgr = authProviderMgr;
-            this.clientBalancerMgr = clientBalancerMgr;
-            this.eventCollectorMgr = eventCollectorMgr;
-            this.settingProviderMgr = settingProviderMgr;
-            this.resourceThrottlerMgr = resourceThrottlerMgr;
+            this.injector = injector;
         }
 
         @Override
@@ -114,18 +54,18 @@ public class MQTTServiceModule extends AbstractModule {
                 return Optional.empty();
             }
             IMQTTBrokerBuilder brokerBuilder = IMQTTBroker.builder()
-                .rpcServerBuilder(rpcServerBuilder)
+                .rpcServerBuilder(injector.getInstance(RPCServerBuilder.class))
                 .mqttBossELGThreads(serverConfig.getBossELGThreads())
                 .mqttWorkerELGThreads(serverConfig.getWorkerELGThreads())
-                .authProvider(authProviderMgr)
-                .clientBalancer(clientBalancerMgr)
-                .eventCollector(eventCollectorMgr)
-                .resourceThrottler(resourceThrottlerMgr)
-                .settingProvider(settingProviderMgr)
-                .distClient(distClient)
-                .inboxClient(inboxClient)
-                .sessionDictClient(sessionDictClient)
-                .retainClient(retainClient)
+                .authProvider(injector.getInstance(AuthProviderManager.class))
+                .clientBalancer(injector.getInstance(ClientBalancerManager.class))
+                .eventCollector(injector.getInstance(EventCollectorManager.class))
+                .resourceThrottler(injector.getInstance(ResourceThrottlerManager.class))
+                .settingProvider(injector.getInstance(SettingProviderManager.class))
+                .distClient(injector.getInstance(IDistClient.class))
+                .inboxClient(injector.getInstance(IInboxClient.class))
+                .sessionDictClient(injector.getInstance(ISessionDictClient.class))
+                .retainClient(injector.getInstance(IRetainClient.class))
                 .connectTimeoutSeconds(serverConfig.getConnTimeoutSec())
                 .connectRateLimit(serverConfig.getMaxConnPerSec())
                 .disconnectRate(serverConfig.getMaxDisconnPerSec())
@@ -168,9 +108,7 @@ public class MQTTServiceModule extends AbstractModule {
 
     @Override
     protected void configure() {
-        bind(IMqttBrokerClient.class).toProvider(MQTTBrokerClientProvider.class).asEagerSingleton();
         bind(new TypeLiteral<Optional<IMQTTBroker>>() {
-        }).toProvider(MQTTBrokerServerProvider.class)
-            .asEagerSingleton();
+        }).toProvider(MQTTBrokerServerProvider.class).in(Singleton.class);
     }
 }

@@ -17,11 +17,9 @@ import static com.baidu.bifromq.dist.entity.EntityUtil.toMatchRecordKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.dist.rpc.proto.MatchReply;
 import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;

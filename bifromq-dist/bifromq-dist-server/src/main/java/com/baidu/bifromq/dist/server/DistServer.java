@@ -26,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class DistServer implements IDistServer {
-    protected final DistService distService;
+    private final DistService distService;
     private final ExecutorService rpcExecutor;
 
     DistServer(DistServerBuilder builder) {
@@ -53,8 +53,9 @@ public class DistServer implements IDistServer {
 
     @Override
     public void close() {
-        log.debug("Stop dist service");
+        log.info("Stop DistService");
         distService.stop();
         MoreExecutors.shutdownAndAwaitTermination(rpcExecutor, 5, TimeUnit.SECONDS);
+        log.info("DistService stopped");
     }
 }

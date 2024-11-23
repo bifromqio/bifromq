@@ -22,7 +22,6 @@ import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.google.protobuf.ByteString;
-import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;

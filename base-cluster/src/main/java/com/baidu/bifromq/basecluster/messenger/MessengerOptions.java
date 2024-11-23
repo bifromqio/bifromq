@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basecluster.messenger;
 
-import com.baidu.bifromq.basecluster.transport.Transport;
 import java.time.Duration;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;

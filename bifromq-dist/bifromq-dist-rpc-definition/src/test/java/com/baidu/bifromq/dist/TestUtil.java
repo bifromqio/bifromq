@@ -13,13 +13,13 @@
 
 package com.baidu.bifromq.dist;
 
-import static com.baidu.bifromq.util.TopicUtil.fastJoin;
-import static com.baidu.bifromq.util.TopicUtil.parse;
 import static com.baidu.bifromq.util.TopicConst.DELIMITER;
 import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
 import static com.baidu.bifromq.util.TopicConst.NUL;
 import static com.baidu.bifromq.util.TopicConst.SINGLE_WILDCARD;
 import static com.baidu.bifromq.util.TopicConst.SYS_PREFIX;
+import static com.baidu.bifromq.util.TopicUtil.fastJoin;
+import static com.baidu.bifromq.util.TopicUtil.parse;
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Lists.newLinkedList;
 import static java.util.Collections.singleton;
