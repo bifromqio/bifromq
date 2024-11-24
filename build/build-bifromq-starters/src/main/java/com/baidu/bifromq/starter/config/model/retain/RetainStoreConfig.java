@@ -19,6 +19,8 @@ import com.baidu.bifromq.starter.config.model.StorageEngineConfig;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
 import com.google.protobuf.Struct;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -41,6 +43,8 @@ public class RetainStoreConfig {
         .setCompactMinTombstoneRanges(2);
     @JsonSetter(nulls = Nulls.SKIP)
     private BalancerOptions balanceConfig = new BalancerOptions();
+    @JsonSetter(nulls = Nulls.SKIP)
+    private Map<String, String> attributes = new HashMap<>();
 
     public RetainStoreConfig() {
         balanceConfig.getBalancers().put("com.baidu.bifromq.retain.store.balance.ReplicaCntBalancerFactory",

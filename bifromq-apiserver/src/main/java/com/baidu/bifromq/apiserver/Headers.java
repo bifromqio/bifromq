@@ -30,6 +30,7 @@ public enum Headers {
     HEADER_EXPIRY_SECONDS("expiry_seconds"),
     HEADER_SERVER_ID("server_id"),
     HEADER_SERVICE_NAME("service_name"),
+    HEADER_STORE_NAME("store_name"),
     HEADER_BALANCER_CLASS("balancer_class");
 
     public final String header;

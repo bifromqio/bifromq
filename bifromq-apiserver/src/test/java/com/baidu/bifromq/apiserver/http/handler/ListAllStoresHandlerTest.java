@@ -27,18 +27,18 @@ import java.util.Set;
 import lombok.SneakyThrows;
 import org.testng.annotations.Test;
 
-public class ListAllServicesHandlerTest extends AbstractHTTPRequestHandlerTest<ListAllServicesHandler> {
+public class ListAllStoresHandlerTest extends AbstractHTTPRequestHandlerTest<ListAllStoreHandler> {
     @Override
-    protected Class<ListAllServicesHandler> handlerClass() {
-        return ListAllServicesHandler.class;
+    protected Class<ListAllStoreHandler> handlerClass() {
+        return ListAllStoreHandler.class;
     }
 
     @SneakyThrows
     @Test
     public void testHandle() {
-        when(trafficService.services()).thenReturn(Observable.just(Set.of("testService")));
+        when(metaService.clusterIds()).thenReturn(Observable.just(Set.of("testStore")));
 
-        ListAllServicesHandler handler = new ListAllServicesHandler(trafficService);
+        ListAllStoreHandler handler = new ListAllStoreHandler(metaService);
         handler.start();
         DefaultFullHttpRequest req = buildRequest(HttpMethod.GET);
         FullHttpResponse resp = handler.handle(111, req).join();
@@ -51,7 +51,6 @@ public class ListAllServicesHandlerTest extends AbstractHTTPRequestHandlerTest<L
         ArrayNode jsonResponse = (ArrayNode) objectMapper.readTree(responseContent);
 
         assertEquals(jsonResponse.size(), 1);
-        assertEquals(jsonResponse.get(0).asText(), "testService");
-
+        assertEquals(jsonResponse.get(0).asText(), "testStore");
     }
 }

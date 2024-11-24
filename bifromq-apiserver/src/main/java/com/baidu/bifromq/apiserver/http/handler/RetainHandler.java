@@ -53,11 +53,11 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/retain")
-public final class RetainHandler extends TenantAwareHandler {
+final class RetainHandler extends TenantAwareHandler {
     private final IRetainClient retainClient;
     private final ISettingProvider settingProvider;
 
-    public RetainHandler(ISettingProvider settingProvider, IRetainClient retainClient) {
+    RetainHandler(ISettingProvider settingProvider, IRetainClient retainClient) {
         super(settingProvider);
         this.retainClient = retainClient;
         this.settingProvider = settingProvider;
@@ -90,56 +90,52 @@ public final class RetainHandler extends TenantAwareHandler {
     public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,
                                                       @Parameter(hidden = true) String tenantId,
                                                       @Parameter(hidden = true) FullHttpRequest req) {
-        try {
-            String topic = getHeader(Headers.HEADER_TOPIC, req, true);
-            String clientType = getHeader(HEADER_CLIENT_TYPE, req, true);
-            int qos = Integer.parseInt(getHeader(HEADER_QOS, req, true));
-            int expirySeconds = Optional.ofNullable(getHeader(HEADER_EXPIRY_SECONDS, req, false)).map(Integer::parseInt)
-                .orElse(Integer.MAX_VALUE);
-            Map<String, String> clientMeta = getClientMeta(req);
-            log.trace("Handling http retain request: {}", req);
-            boolean retainEnabled = settingProvider.provide(Setting.RetainEnabled, tenantId);
-            if (!retainEnabled) {
-                return CompletableFuture.completedFuture(
-                    new DefaultFullHttpResponse(req.protocolVersion(), UNAUTHORIZED, Unpooled.EMPTY_BUFFER));
-            }
-            if (!TopicUtil.checkTopicFilter(topic, tenantId, settingProvider)) {
-                return CompletableFuture.completedFuture(
-                    new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, Unpooled.EMPTY_BUFFER));
-            }
-            if (qos < 0 || qos > 2) {
-                return CompletableFuture.completedFuture(
-                    new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, Unpooled.EMPTY_BUFFER));
-            }
-            ClientInfo clientInfo = ClientInfo.newBuilder()
-                .setTenantId(tenantId)
-                .setType(clientType)
-                .putAllMetadata(clientMeta)
-                .build();
-            return retainClient.retain(reqId,
-                    topic,
-                    QoS.AT_MOST_ONCE,
-                    ByteString.copyFrom(req.content().nioBuffer()),
-                    expirySeconds,
-                    clientInfo)
-                .thenApply(retainReply -> {
-                    switch (retainReply.getResult()) {
-                        case RETAINED, CLEARED -> {
-                            return new DefaultFullHttpResponse(req.protocolVersion(), OK,
-                                Unpooled.wrappedBuffer(retainReply.getResult().name().getBytes()));
-                        }
-                        case EXCEED_LIMIT, BACK_PRESSURE_REJECTED -> {
-                            return new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
-                                Unpooled.wrappedBuffer(retainReply.getResult().name().getBytes()));
-                        }
-                        default -> {
-                            return new DefaultFullHttpResponse(req.protocolVersion(), INTERNAL_SERVER_ERROR,
-                                Unpooled.EMPTY_BUFFER);
-                        }
-                    }
-                });
-        } catch (Throwable e) {
-            return CompletableFuture.failedFuture(e);
+        String topic = getHeader(Headers.HEADER_TOPIC, req, true);
+        String clientType = getHeader(HEADER_CLIENT_TYPE, req, true);
+        int qos = Integer.parseInt(getHeader(HEADER_QOS, req, true));
+        int expirySeconds = Optional.ofNullable(getHeader(HEADER_EXPIRY_SECONDS, req, false)).map(Integer::parseInt)
+            .orElse(Integer.MAX_VALUE);
+        Map<String, String> clientMeta = getClientMeta(req);
+        log.trace("Handling http retain request: {}", req);
+        boolean retainEnabled = settingProvider.provide(Setting.RetainEnabled, tenantId);
+        if (!retainEnabled) {
+            return CompletableFuture.completedFuture(
+                new DefaultFullHttpResponse(req.protocolVersion(), UNAUTHORIZED, Unpooled.EMPTY_BUFFER));
         }
+        if (!TopicUtil.checkTopicFilter(topic, tenantId, settingProvider)) {
+            return CompletableFuture.completedFuture(
+                new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, Unpooled.EMPTY_BUFFER));
+        }
+        if (qos < 0 || qos > 2) {
+            return CompletableFuture.completedFuture(
+                new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, Unpooled.EMPTY_BUFFER));
+        }
+        ClientInfo clientInfo = ClientInfo.newBuilder()
+            .setTenantId(tenantId)
+            .setType(clientType)
+            .putAllMetadata(clientMeta)
+            .build();
+        return retainClient.retain(reqId,
+                topic,
+                QoS.AT_MOST_ONCE,
+                ByteString.copyFrom(req.content().nioBuffer()),
+                expirySeconds,
+                clientInfo)
+            .thenApply(retainReply -> {
+                switch (retainReply.getResult()) {
+                    case RETAINED, CLEARED -> {
+                        return new DefaultFullHttpResponse(req.protocolVersion(), OK,
+                            Unpooled.wrappedBuffer(retainReply.getResult().name().getBytes()));
+                    }
+                    case EXCEED_LIMIT, BACK_PRESSURE_REJECTED -> {
+                        return new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
+                            Unpooled.wrappedBuffer(retainReply.getResult().name().getBytes()));
+                    }
+                    default -> {
+                        return new DefaultFullHttpResponse(req.protocolVersion(), INTERNAL_SERVER_ERROR,
+                            Unpooled.EMPTY_BUFFER);
+                    }
+                }
+            });
     }
 }

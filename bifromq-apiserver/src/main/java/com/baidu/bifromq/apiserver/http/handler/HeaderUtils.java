@@ -15,7 +15,6 @@ package com.baidu.bifromq.apiserver.http.handler;
 
 import static com.baidu.bifromq.apiserver.Headers.HEADER_CLIENT_META_PREFIX;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_REQ_ID;
-import static com.baidu.bifromq.apiserver.Headers.HEADER_RETAIN;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_SUB_QOS;
 
 import com.baidu.bifromq.apiserver.Headers;
@@ -61,20 +60,8 @@ public final class HeaderUtils {
     public static String getHeader(Headers header, HttpRequest req, boolean required) {
         String headerText = req.headers().get(header.header);
         if (headerText == null && required) {
-            throw new NullPointerException("header not found: " + header);
+            throw new IllegalArgumentException("header not found: " + header);
         }
         return headerText;
-    }
-
-    public static String getDelivererKey(Headers header, HttpRequest req, int subBrokerId) {
-        String delivererKey = req.headers().get(header.header);
-        if (delivererKey == null && subBrokerId != 0 && subBrokerId != 1) {
-            throw new NullPointerException("header not found: " + header);
-        }
-        return delivererKey;
-    }
-
-    public static boolean getRetain(HttpRequest req) {
-        return Boolean.valueOf(getHeader(HEADER_RETAIN, req, false));
     }
 }

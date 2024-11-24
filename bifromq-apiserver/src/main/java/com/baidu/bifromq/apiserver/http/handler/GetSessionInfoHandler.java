@@ -45,10 +45,10 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/session")
-public final class GetSessionInfoHandler extends TenantAwareHandler {
+final class GetSessionInfoHandler extends TenantAwareHandler {
     private final ISessionDictClient sessionDictClient;
 
-    public GetSessionInfoHandler(ISettingProvider settingProvider, ISessionDictClient sessionDictClient) {
+    GetSessionInfoHandler(ISettingProvider settingProvider, ISessionDictClient sessionDictClient) {
         super(settingProvider);
         this.sessionDictClient = sessionDictClient;
     }
@@ -76,32 +76,27 @@ public final class GetSessionInfoHandler extends TenantAwareHandler {
     public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,
                                                       @Parameter(hidden = true) String tenantId,
                                                       @Parameter(hidden = true) FullHttpRequest req) {
-        try {
-            String userId = getHeader(HEADER_USER_ID, req, true);
-            String clientId = getHeader(HEADER_CLIENT_ID, req, true);
-            log.trace("Handling http get session info request: {}", req);
-            return sessionDictClient.get(GetRequest.newBuilder()
-                    .setReqId(reqId)
-                    .setTenantId(tenantId)
-                    .setUserId(userId)
-                    .setClientId(clientId)
-                    .build())
-                .thenApply(reply -> switch (reply.getResult()) {
-                    // return clientInfo as json response body
-                    case OK -> {
-                        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(req.protocolVersion(), OK,
-                            Unpooled.wrappedBuffer(toJSON(reply.getOwner()).getBytes()));
-                        resp.headers().set("Content-Type", "application/json");
-                        yield resp;
-                    }
-                    case NOT_FOUND ->
-                        new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND, Unpooled.EMPTY_BUFFER);
-                    default -> new DefaultFullHttpResponse(req.protocolVersion(), INTERNAL_SERVER_ERROR,
-                        Unpooled.EMPTY_BUFFER);
-                });
-        } catch (Throwable e) {
-            return CompletableFuture.failedFuture(e);
-        }
+        String userId = getHeader(HEADER_USER_ID, req, true);
+        String clientId = getHeader(HEADER_CLIENT_ID, req, true);
+        log.trace("Handling http get session info request: {}", req);
+        return sessionDictClient.get(GetRequest.newBuilder()
+                .setReqId(reqId)
+                .setTenantId(tenantId)
+                .setUserId(userId)
+                .setClientId(clientId)
+                .build())
+            .thenApply(reply -> switch (reply.getResult()) {
+                // return clientInfo as json response body
+                case OK -> {
+                    DefaultFullHttpResponse resp = new DefaultFullHttpResponse(req.protocolVersion(), OK,
+                        Unpooled.wrappedBuffer(toJSON(reply.getOwner()).getBytes()));
+                    resp.headers().set("Content-Type", "application/json");
+                    yield resp;
+                }
+                case NOT_FOUND -> new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND, Unpooled.EMPTY_BUFFER);
+                default -> new DefaultFullHttpResponse(req.protocolVersion(), INTERNAL_SERVER_ERROR,
+                    Unpooled.EMPTY_BUFFER);
+            });
     }
 
     @SneakyThrows

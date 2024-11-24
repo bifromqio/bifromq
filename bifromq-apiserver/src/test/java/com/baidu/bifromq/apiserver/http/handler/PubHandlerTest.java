@@ -78,6 +78,8 @@ public class PubHandlerTest extends AbstractHTTPRequestHandlerTest<PubHandler> {
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
+        when(distClient.pub(anyLong(), anyString(), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(PubResult.OK));
         PubHandler handler = new PubHandler(settingProvider, distClient);
         handler.handle(reqId, tenantId, req);
         verify(distClient).pub(eq(reqId),

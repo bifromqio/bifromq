@@ -49,8 +49,8 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/rules/load")
-public class GetLoadRulesHandler extends AbstractLoadRulesHandler implements IHTTPRequestHandler {
-    protected GetLoadRulesHandler(IBaseKVMetaService metaService) {
+final class GetLoadRulesHandler extends AbstractLoadRulesHandler implements IHTTPRequestHandler {
+    GetLoadRulesHandler(IBaseKVMetaService metaService) {
         super(metaService);
     }
 
@@ -59,7 +59,7 @@ public class GetLoadRulesHandler extends AbstractLoadRulesHandler implements IHT
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER,
             description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
-        @Parameter(name = "service_name", in = ParameterIn.HEADER, required = true,
+        @Parameter(name = "store_name", in = ParameterIn.HEADER, required = true,
             description = "the service name", schema = @Schema(implementation = String.class))
     })
     @RequestBody(required = false)
@@ -68,37 +68,41 @@ public class GetLoadRulesHandler extends AbstractLoadRulesHandler implements IHT
     })
     @Override
     public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
-        log.trace("Handling http get load rules request: {}", req);
-        String serviceName = HeaderUtils.getHeader(Headers.HEADER_SERVICE_NAME, req, true);
-        IBaseKVClusterMetadataManager metadataManager = metadataManagers.get(serviceName);
-        if (metadataManager == null) {
-            return CompletableFuture.completedFuture(new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
-                Unpooled.copiedBuffer(("Service not found: " + serviceName).getBytes())));
-        }
-        return metadataManager.loadRules()
-            .timeout(1, TimeUnit.SECONDS)
-            .firstElement()
-            .toCompletionStage()
-            .toCompletableFuture()
-            .handle((loadRules, e) -> {
-                if (e != null) {
-                    if (e instanceof TimeoutException) {
-                        DefaultFullHttpResponse resp =
-                            new DefaultFullHttpResponse(req.protocolVersion(), OK,
-                                Unpooled.wrappedBuffer(toJson(emptyMap()).getBytes()));
+        try {
+            log.trace("Handling http get load rules request: {}", req);
+            String storeName = HeaderUtils.getHeader(Headers.HEADER_STORE_NAME, req, true);
+            IBaseKVClusterMetadataManager metadataManager = metadataManagers.get(storeName);
+            if (metadataManager == null) {
+                return CompletableFuture.completedFuture(new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
+                    Unpooled.copiedBuffer(("Store not found: " + storeName).getBytes())));
+            }
+            return metadataManager.loadRules()
+                .timeout(1, TimeUnit.SECONDS)
+                .firstElement()
+                .toCompletionStage()
+                .toCompletableFuture()
+                .handle((loadRules, e) -> {
+                    if (e != null) {
+                        if (e instanceof TimeoutException) {
+                            DefaultFullHttpResponse resp =
+                                new DefaultFullHttpResponse(req.protocolVersion(), OK,
+                                    Unpooled.wrappedBuffer(toJson(emptyMap()).getBytes()));
+                            resp.headers().set("Content-Type", "application/json");
+                            return resp;
+                        } else {
+                            return new DefaultFullHttpResponse(req.protocolVersion(), INTERNAL_SERVER_ERROR,
+                                Unpooled.copiedBuffer(e.getMessage().getBytes()));
+                        }
+                    } else {
+                        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(req.protocolVersion(), OK,
+                            Unpooled.wrappedBuffer(toJson(loadRules).getBytes()));
                         resp.headers().set("Content-Type", "application/json");
                         return resp;
-                    } else {
-                        return new DefaultFullHttpResponse(req.protocolVersion(), INTERNAL_SERVER_ERROR,
-                            Unpooled.copiedBuffer(e.getMessage().getBytes()));
                     }
-                } else {
-                    DefaultFullHttpResponse resp = new DefaultFullHttpResponse(req.protocolVersion(), OK,
-                        Unpooled.wrappedBuffer(toJson(loadRules).getBytes()));
-                    resp.headers().set("Content-Type", "application/json");
-                    return resp;
-                }
-            });
+                });
+        } catch (Throwable e) {
+            return CompletableFuture.failedFuture(e);
+        }
     }
 
     @SneakyThrows

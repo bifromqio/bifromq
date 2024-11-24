@@ -70,6 +70,8 @@ public class KillHandlerTest extends AbstractHTTPRequestHandlerTest<KillHandler>
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
+        when(sessionDictClient.kill(anyLong(), anyString(), anyString(), anyString(), any(), any()))
+            .thenReturn(new CompletableFuture<>());
         KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
         handler.handle(reqId, tenantId, req);
         ArgumentCaptor<ClientInfo> killerCap = ArgumentCaptor.forClass(ClientInfo.class);
@@ -98,7 +100,8 @@ public class KillHandlerTest extends AbstractHTTPRequestHandlerTest<KillHandler>
         req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
         long reqId = 123;
         String tenantId = "bifromq_dev";
-
+        when(sessionDictClient.kill(anyLong(), anyString(), anyString(), anyString(), any(), any()))
+            .thenReturn(new CompletableFuture<>());
         KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
         handler.handle(reqId, tenantId, req);
         ArgumentCaptor<ClientInfo> killerCap = ArgumentCaptor.forClass(ClientInfo.class);
@@ -128,7 +131,8 @@ public class KillHandlerTest extends AbstractHTTPRequestHandlerTest<KillHandler>
         req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
         long reqId = 123;
         String tenantId = "bifromq_dev";
-
+        when(sessionDictClient.kill(anyLong(), anyString(), anyString(), anyString(), any(), any()))
+            .thenReturn(new CompletableFuture<>());
         KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
         handler.handle(reqId, tenantId, req);
         ArgumentCaptor<ClientInfo> killerCap = ArgumentCaptor.forClass(ClientInfo.class);
@@ -155,7 +159,8 @@ public class KillHandlerTest extends AbstractHTTPRequestHandlerTest<KillHandler>
         req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
         long reqId = 123;
         String tenantId = "bifromq_dev";
-
+        when(sessionDictClient.killAll(anyLong(), anyString(), anyString(), any(), any()))
+            .thenReturn(new CompletableFuture<>());
         KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
         handler.handle(reqId, tenantId, req);
         ArgumentCaptor<ClientInfo> killerCap = ArgumentCaptor.forClass(ClientInfo.class);
@@ -176,7 +181,8 @@ public class KillHandlerTest extends AbstractHTTPRequestHandlerTest<KillHandler>
         req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
         long reqId = 123;
         String tenantId = "bifromq_dev";
-
+        when(sessionDictClient.killAll(anyLong(), anyString(), isNull(), any(), any()))
+            .thenReturn(new CompletableFuture<>());
         KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
         handler.handle(reqId, tenantId, req);
         ArgumentCaptor<ClientInfo> killerCap = ArgumentCaptor.forClass(ClientInfo.class);

@@ -45,13 +45,13 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/landscape/service")
-public class GetServiceLandscapeHandler extends AbstractTrafficRulesHandler implements IHTTPRequestHandler {
-    public GetServiceLandscapeHandler(IRPCServiceTrafficService trafficService) {
+final class GetServiceLandscapeHandler extends AbstractTrafficRulesHandler implements IHTTPRequestHandler {
+    GetServiceLandscapeHandler(IRPCServiceTrafficService trafficService) {
         super(trafficService);
     }
 
     @GET
-    @Operation(summary = "Get the server landscape information")
+    @Operation(summary = "Get the service landscape information")
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER,
             description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),

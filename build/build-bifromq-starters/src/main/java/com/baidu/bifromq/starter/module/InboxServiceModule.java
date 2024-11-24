@@ -89,7 +89,6 @@ public class InboxServiceModule extends AbstractModule {
             this.injector = injector;
         }
 
-
         @Override
         public Optional<IInboxStore> get() {
             InboxStoreConfig storeConfig = config.getInboxServiceConfig().getStore();
@@ -123,6 +122,7 @@ public class InboxServiceModule extends AbstractModule {
                         .setEnableLoadEstimation(true))
                     .setDataEngineConfigurator(buildDataEngineConf(storeConfig.getDataEngineConfig(), "inbox_data"))
                     .setWalEngineConfigurator(buildWALEngineConf(storeConfig.getWalEngineConfig(), "inbox_wal")))
+                .attributes(storeConfig.getAttributes())
                 .build());
         }
     }

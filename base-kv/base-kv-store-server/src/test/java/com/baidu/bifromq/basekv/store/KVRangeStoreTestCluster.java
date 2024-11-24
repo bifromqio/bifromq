@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basekv.store;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static org.awaitility.Awaitility.await;
 
@@ -453,7 +454,8 @@ public class KVRangeStoreTestCluster {
                 new TestCoProcFactory(),
                 queryExecutor,
                 tickerThreads,
-                bgTaskExecutor);
+                bgTaskExecutor,
+                emptyMap());
         PublishSubject<StoreMessage> storeMsgSource = PublishSubject.create();
         store.start(new IStoreMessenger() {
             @Override

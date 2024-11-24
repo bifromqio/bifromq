@@ -182,7 +182,12 @@ class BaseKVClusterMetadataManager implements IBaseKVClusterMetadataManager {
 
     @Override
     public Optional<KVRangeStoreDescriptor> getStoreDescriptor(String storeId) {
-        return Optional.ofNullable(landscapeSubject.getValue().get(toDescriptorKey(storeId)));
+        for (DescriptorKey key : landscapeSubject.getValue().keySet()) {
+            if (key.getStoreId().equals(storeId)) {
+                return Optional.of(landscapeSubject.getValue().get(key));
+            }
+        }
+        return Optional.empty();
     }
 
     @Override

@@ -15,6 +15,7 @@ package com.baidu.bifromq.basekv.store;
 
 import static com.baidu.bifromq.basekv.proto.State.StateType.Normal;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static java.util.Collections.emptyMap;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
@@ -93,7 +94,8 @@ public class KVRangeBootstrapTest extends MockableTest {
                 new TestCoProcFactory(),
                 queryExecutor,
                 tickerThreads,
-                bgTaskExecutor);
+                bgTaskExecutor,
+                emptyMap());
         IStoreMessenger messenger = new IStoreMessenger() {
             @Override
             public void send(StoreMessage message) {

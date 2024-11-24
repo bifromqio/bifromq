@@ -136,6 +136,7 @@ public class KVRangeStore implements IKVRangeStore {
     private final AsyncRunner mgmtTaskRunner;
     private final KVRangeStoreOptions opts;
     private final MetricsManager metricsManager;
+    private final Map<String, String> attributes;
     private IStoreMessenger messenger;
 
     public KVRangeStore(String clusterId,
@@ -143,7 +144,8 @@ public class KVRangeStore implements IKVRangeStore {
                         IKVRangeCoProcFactory coProcFactory,
                         @NonNull Executor queryExecutor,
                         int tickerThreads,
-                        @NonNull ScheduledExecutorService bgTaskExecutor) {
+                        @NonNull ScheduledExecutorService bgTaskExecutor,
+                        Map<String, String> attributes) {
         this.clusterId = clusterId;
         this.coProcFactory = coProcFactory;
         this.opts = opts.toBuilder().build();
@@ -171,6 +173,7 @@ public class KVRangeStore implements IKVRangeStore {
             "manager", "basekv.store", Tags.of(tags));
         this.mgmtTaskRunner = new AsyncRunner(mgmtTaskExecutor);
         this.metricsManager = new MetricsManager(clusterId, id);
+        this.attributes = attributes;
         storeStatsCollector =
             new KVRangeStoreStatsCollector(opts, Duration.ofSeconds(opts.getStatsCollectIntervalSec()),
                 this.bgTaskExecutor);
@@ -359,6 +362,7 @@ public class KVRangeStore implements IKVRangeStore {
                         .putAllStatistics(storeStats)
                         .addAllRanges(descList)
                         .setHlc(HLC.INST.get())
+                        .putAllAttributes(attributes)
                         .build());
             })
             .distinctUntilChanged();

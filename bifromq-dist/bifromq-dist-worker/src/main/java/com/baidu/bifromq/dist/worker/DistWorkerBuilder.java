@@ -55,6 +55,7 @@ public class DistWorkerBuilder implements IDistWorkerBuilder {
     Duration balancerRetryDelay = Duration.ofSeconds(5);
     Map<String, Struct> balancerFactoryConfig = new HashMap<>();
     Duration loadEstimateWindow = Duration.ofSeconds(5);
+    Map<String, String> attributes = new HashMap<>();
 
     @Override
     public IDistWorker build() {

@@ -47,10 +47,10 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/sub")
-public final class SubHandler extends TenantAwareHandler {
+final class SubHandler extends TenantAwareHandler {
     private final ISessionDictClient sessionDictClient;
 
-    public SubHandler(ISettingProvider settingProvider, ISessionDictClient sessionDictClient) {
+    SubHandler(ISettingProvider settingProvider, ISessionDictClient sessionDictClient) {
         super(settingProvider);
         this.sessionDictClient = sessionDictClient;
     }
@@ -82,35 +82,30 @@ public final class SubHandler extends TenantAwareHandler {
     public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,
                                                       @Parameter(hidden = true) String tenantId,
                                                       @Parameter(hidden = true) FullHttpRequest req) {
-        try {
-            String topicFilter = getHeader(HEADER_TOPIC_FILTER, req, true);
-            QoS subQoS = getRequiredSubQoS(req);
-            String userId = getHeader(HEADER_USER_ID, req, true);
-            String clientId = getHeader(HEADER_CLIENT_ID, req, true);
-            log.trace("Handling http sub request: {}", req);
-            return sessionDictClient.sub(SubRequest.newBuilder()
-                    .setReqId(reqId)
-                    .setTenantId(tenantId)
-                    .setUserId(userId)
-                    .setClientId(clientId)
-                    .setTopicFilter(topicFilter)
-                    .setQos(subQoS)
-                    .build())
-                .thenApply(reply -> switch (reply.getResult()) {
-                    case OK, EXISTS -> new DefaultFullHttpResponse(req.protocolVersion(), OK,
+        String topicFilter = getHeader(HEADER_TOPIC_FILTER, req, true);
+        QoS subQoS = getRequiredSubQoS(req);
+        String userId = getHeader(HEADER_USER_ID, req, true);
+        String clientId = getHeader(HEADER_CLIENT_ID, req, true);
+        log.trace("Handling http sub request: {}", req);
+        return sessionDictClient.sub(SubRequest.newBuilder()
+                .setReqId(reqId)
+                .setTenantId(tenantId)
+                .setUserId(userId)
+                .setClientId(clientId)
+                .setTopicFilter(topicFilter)
+                .setQos(subQoS)
+                .build())
+            .thenApply(reply -> switch (reply.getResult()) {
+                case OK, EXISTS -> new DefaultFullHttpResponse(req.protocolVersion(), OK,
+                    Unpooled.wrappedBuffer(reply.getResult().name().getBytes()));
+                case EXCEED_LIMIT, TOPIC_FILTER_INVALID, BACK_PRESSURE_REJECTED ->
+                    new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
                         Unpooled.wrappedBuffer(reply.getResult().name().getBytes()));
-                    case EXCEED_LIMIT, TOPIC_FILTER_INVALID, BACK_PRESSURE_REJECTED ->
-                        new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
-                            Unpooled.wrappedBuffer(reply.getResult().name().getBytes()));
-                    case NOT_AUTHORIZED ->
-                        new DefaultFullHttpResponse(req.protocolVersion(), UNAUTHORIZED, Unpooled.EMPTY_BUFFER);
-                    case NO_SESSION ->
-                        new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND, Unpooled.EMPTY_BUFFER);
-                    default -> new DefaultFullHttpResponse(req.protocolVersion(), INTERNAL_SERVER_ERROR,
-                        Unpooled.EMPTY_BUFFER);
-                });
-        } catch (Throwable e) {
-            return CompletableFuture.failedFuture(e);
-        }
+                case NOT_AUTHORIZED ->
+                    new DefaultFullHttpResponse(req.protocolVersion(), UNAUTHORIZED, Unpooled.EMPTY_BUFFER);
+                case NO_SESSION -> new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND, Unpooled.EMPTY_BUFFER);
+                default -> new DefaultFullHttpResponse(req.protocolVersion(), INTERNAL_SERVER_ERROR,
+                    Unpooled.EMPTY_BUFFER);
+            });
     }
 }

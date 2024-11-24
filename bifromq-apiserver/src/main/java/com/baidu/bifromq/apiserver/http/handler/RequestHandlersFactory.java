@@ -27,7 +27,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
-public class RequestHandlersFactory implements IHTTPRequestHandlersFactory {
+public final class RequestHandlersFactory implements IHTTPRequestHandlersFactory {
     private final Map<Class<? extends IHTTPRequestHandler>, IHTTPRequestHandler> handlers = new HashMap<>();
 
     public RequestHandlersFactory(IAgentHost agentHost,
@@ -38,6 +38,9 @@ public class RequestHandlersFactory implements IHTTPRequestHandlersFactory {
                                   IInboxClient inboxClient,
                                   IRetainClient retainClient,
                                   ISettingProvider settingProvider) {
+        register(new ListAllStoreHandler(metaService));
+        register(new GetStoreLandscapeHandler(metaService, trafficService));
+        register(new GetStoreRangesHandler(metaService));
         register(new GetLoadRulesHandler(metaService));
         register(new SetLoadRulesHandler(metaService));
 

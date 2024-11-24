@@ -48,6 +48,7 @@ public class RetainStoreBuilder implements IRetainStoreBuilder {
     Map<String, Struct> balancerFactoryConfig = new HashMap<>();
     Duration loadEstimateWindow = Duration.ofSeconds(5);
     Duration gcInterval = Duration.ofMinutes(60);
+    Map<String, String> attributes = new HashMap<>();
 
     public IRetainStore build() {
         return new RetainStore(this);

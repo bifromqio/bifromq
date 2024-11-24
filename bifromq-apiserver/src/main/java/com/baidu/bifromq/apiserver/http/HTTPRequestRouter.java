@@ -19,7 +19,6 @@ import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpHeaderValues.CLOSE;
 import static io.netty.handler.codec.http.HttpHeaderValues.KEEP_ALIVE;
-import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_0;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
@@ -38,6 +37,7 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpServerUpgradeHandler;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
+import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -70,14 +70,13 @@ public class HTTPRequestRouter extends SimpleChannelInboundHandler<FullHttpReque
     protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest req) {
         long reqId = HeaderUtils.getOptionalReqId(req);
         req.retain();
-        routeMap.getHandler(req)
-            .handle(reqId, req)
+        doHandle(reqId, req)
             .whenComplete((v, e) -> {
                 FullHttpResponse response;
                 if (e != null) {
                     ByteBuf content = ctx.alloc().buffer();
                     content.writeBytes(e.getMessage().getBytes());
-                    response = new DefaultFullHttpResponse(HTTP_1_1, INTERNAL_SERVER_ERROR, content);
+                    response = new DefaultFullHttpResponse(HTTP_1_1, toHTTPStatus(e), content);
                     response.headers().set(CONTENT_TYPE, "text/plain; charset=UTF-8");
                 } else {
                     response = v;
@@ -87,7 +86,14 @@ public class HTTPRequestRouter extends SimpleChannelInboundHandler<FullHttpReque
                 doResponse(ctx, req, response);
                 req.release();
             });
+    }
 
+    private CompletableFuture<FullHttpResponse> doHandle(long reqId, FullHttpRequest req) {
+        try {
+            return routeMap.getHandler(req).handle(reqId, req);
+        } catch (Throwable e) {
+            return CompletableFuture.failedFuture(e);
+        }
     }
 
     private void doResponse(ChannelHandlerContext ctx, FullHttpRequest req, FullHttpResponse response) {
@@ -101,6 +107,14 @@ public class HTTPRequestRouter extends SimpleChannelInboundHandler<FullHttpReque
             // Tell the client we're going to close the connection.
             response.headers().set(CONNECTION, CLOSE);
             ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+        }
+    }
+
+    private HttpResponseStatus toHTTPStatus(Throwable t) {
+        if (t instanceof IllegalArgumentException) {
+            return HttpResponseStatus.BAD_REQUEST;
+        } else {
+            return HttpResponseStatus.INTERNAL_SERVER_ERROR;
         }
     }
 }

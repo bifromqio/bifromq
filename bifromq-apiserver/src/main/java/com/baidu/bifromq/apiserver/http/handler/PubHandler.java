@@ -56,14 +56,14 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/pub")
-public final class PubHandler extends TenantAwareHandler {
+final class PubHandler extends TenantAwareHandler {
     private static final ByteBuf UNACCEPTED_TOPIC = Unpooled.wrappedBuffer("Unaccepted Topic".getBytes());
     private static final ByteBuf INVALID_QOS = Unpooled.wrappedBuffer("Invalid QoS".getBytes());
     private static final ByteBuf INVALID_EXPIRY_SECONDS = Unpooled.wrappedBuffer("Invalid expiry seconds".getBytes());
     private final IDistClient distClient;
     private final ISettingProvider settingProvider;
 
-    public PubHandler(ISettingProvider settingProvider, IDistClient distClient) {
+    PubHandler(ISettingProvider settingProvider, IDistClient distClient) {
         super(settingProvider);
         this.distClient = distClient;
         this.settingProvider = settingProvider;
@@ -97,59 +97,55 @@ public final class PubHandler extends TenantAwareHandler {
     public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,
                                                       @Parameter(hidden = true) String tenantId,
                                                       @Parameter(hidden = true) FullHttpRequest req) {
-        try {
-            String topic = getHeader(Headers.HEADER_TOPIC, req, true);
-            String clientType = getHeader(HEADER_CLIENT_TYPE, req, true);
-            int qos = Integer.parseInt(getHeader(HEADER_QOS, req, true));
-            int expirySeconds = Optional.ofNullable(getHeader(HEADER_EXPIRY_SECONDS, req, false)).map(Integer::parseInt)
-                .orElse(Integer.MAX_VALUE);
-            Map<String, String> clientMeta = getClientMeta(req);
-            log.trace("Handling http pub request: {}", req);
-            if (!TopicUtil.checkTopicFilter(topic, tenantId, settingProvider)) {
-                return CompletableFuture.completedFuture(
-                    new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN, UNACCEPTED_TOPIC));
-            }
-            if (qos < 0 || qos > 2) {
-                return CompletableFuture.completedFuture(
-                    new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, INVALID_QOS));
-            }
-            if (expirySeconds <= 0) {
-                return CompletableFuture.completedFuture(
-                    new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, INVALID_EXPIRY_SECONDS));
-            }
-            ClientInfo clientInfo = ClientInfo.newBuilder()
-                .setTenantId(tenantId)
-                .setType(clientType)
-                .putAllMetadata(clientMeta)
-                .build();
-            CompletableFuture<PubResult> distFuture = distClient.pub(reqId, topic,
-                Message.newBuilder()
-                    .setMessageId(0)
-                    .setPubQoS(QoS.forNumber(qos))
-                    .setPayload(ByteString.copyFrom(req.content().nioBuffer()))
-                    .setExpiryInterval(expirySeconds)
-                    .setTimestamp(HLC.INST.getPhysical())
-                    .build(),
-                clientInfo);
-            return distFuture
-                .thenApply(pubResult -> {
-                    switch (pubResult) {
-                        case OK, NO_MATCH -> {
-                            return new DefaultFullHttpResponse(req.protocolVersion(), OK,
-                                Unpooled.wrappedBuffer(pubResult.name().getBytes()));
-                        }
-                        case BACK_PRESSURE_REJECTED -> {
-                            return new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
-                                Unpooled.wrappedBuffer(pubResult.name().getBytes()));
-                        }
-                        default -> {
-                            return new DefaultFullHttpResponse(req.protocolVersion(), INTERNAL_SERVER_ERROR,
-                                Unpooled.EMPTY_BUFFER);
-                        }
-                    }
-                });
-        } catch (Throwable e) {
-            return CompletableFuture.failedFuture(e);
+        String topic = getHeader(Headers.HEADER_TOPIC, req, true);
+        String clientType = getHeader(HEADER_CLIENT_TYPE, req, true);
+        int qos = Integer.parseInt(getHeader(HEADER_QOS, req, true));
+        int expirySeconds = Optional.ofNullable(getHeader(HEADER_EXPIRY_SECONDS, req, false)).map(Integer::parseInt)
+            .orElse(Integer.MAX_VALUE);
+        Map<String, String> clientMeta = getClientMeta(req);
+        log.trace("Handling http pub request: {}", req);
+        if (!TopicUtil.checkTopicFilter(topic, tenantId, settingProvider)) {
+            return CompletableFuture.completedFuture(
+                new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN, UNACCEPTED_TOPIC));
         }
+        if (qos < 0 || qos > 2) {
+            return CompletableFuture.completedFuture(
+                new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, INVALID_QOS));
+        }
+        if (expirySeconds <= 0) {
+            return CompletableFuture.completedFuture(
+                new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, INVALID_EXPIRY_SECONDS));
+        }
+        ClientInfo clientInfo = ClientInfo.newBuilder()
+            .setTenantId(tenantId)
+            .setType(clientType)
+            .putAllMetadata(clientMeta)
+            .build();
+        CompletableFuture<PubResult> distFuture = distClient.pub(reqId, topic,
+            Message.newBuilder()
+                .setMessageId(0)
+                .setPubQoS(QoS.forNumber(qos))
+                .setPayload(ByteString.copyFrom(req.content().nioBuffer()))
+                .setExpiryInterval(expirySeconds)
+                .setTimestamp(HLC.INST.getPhysical())
+                .build(),
+            clientInfo);
+        return distFuture
+            .thenApply(pubResult -> {
+                switch (pubResult) {
+                    case OK, NO_MATCH -> {
+                        return new DefaultFullHttpResponse(req.protocolVersion(), OK,
+                            Unpooled.wrappedBuffer(pubResult.name().getBytes()));
+                    }
+                    case BACK_PRESSURE_REJECTED -> {
+                        return new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
+                            Unpooled.wrappedBuffer(pubResult.name().getBytes()));
+                    }
+                    default -> {
+                        return new DefaultFullHttpResponse(req.protocolVersion(), INTERNAL_SERVER_ERROR,
+                            Unpooled.EMPTY_BUFFER);
+                    }
+                }
+            });
     }
 }

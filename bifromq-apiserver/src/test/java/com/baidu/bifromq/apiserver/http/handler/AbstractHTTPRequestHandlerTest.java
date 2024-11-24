@@ -19,6 +19,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertNotNull;
 
 import com.baidu.bifromq.apiserver.MockableTest;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficGovernor;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
@@ -43,6 +44,8 @@ public abstract class AbstractHTTPRequestHandlerTest<T> extends MockableTest {
     protected IRPCServiceTrafficGovernor trafficGovernor;
     @Mock
     protected IBaseKVMetaService metaService;
+    @Mock
+    protected IBaseKVClusterMetadataManager metadataManager;
 
     protected abstract Class<T> handlerClass();
 
@@ -51,6 +54,7 @@ public abstract class AbstractHTTPRequestHandlerTest<T> extends MockableTest {
     public void setup() {
         super.setup();
         when(trafficService.getTrafficGovernor(anyString())).thenReturn(trafficGovernor);
+        when(metaService.metadataManager(anyString())).thenReturn(metadataManager);
         when(settingProvider.provide(any(), anyString())).thenAnswer(
             invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
     }

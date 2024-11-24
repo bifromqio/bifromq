@@ -33,4 +33,5 @@ message KVRangeStoreDescriptor {
   map<string, double> statistics = 2;
   repeated KVRangeDescriptor ranges = 3;
   uint64 hlc = 4;
+  map<string, string> attributes = 5;
 }

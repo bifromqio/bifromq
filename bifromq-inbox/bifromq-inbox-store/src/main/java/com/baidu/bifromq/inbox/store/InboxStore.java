@@ -121,6 +121,7 @@ class InboxStore implements IInboxStore {
             .rpcExecutor(rpcExecutor)
             .tickerThreads(builder.tickerThreads)
             .bgTaskExecutor(builder.bgTaskExecutor)
+            .attributes(builder.attributes)
             .finish()
             .build();
         start();

@@ -15,7 +15,7 @@ package com.baidu.bifromq.apiserver.http.handler;
 
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
-import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -38,16 +38,16 @@ import javax.ws.rs.Path;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@Path("/landscape/services")
-final class ListAllServicesHandler extends AbstractTrafficRulesHandler {
+@Path("/landscape/stores")
+final class ListAllStoreHandler extends AbstractLoadRulesHandler {
 
-    ListAllServicesHandler(IRPCServiceTrafficService trafficService) {
-        super(trafficService);
+    ListAllStoreHandler(IBaseKVMetaService metaService) {
+        super(metaService);
     }
 
 
     @GET
-    @Operation(summary = "List the name of sub-services in the cluster")
+    @Operation(summary = "List the name of stores in the cluster")
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER,
             description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
@@ -59,11 +59,11 @@ final class ListAllServicesHandler extends AbstractTrafficRulesHandler {
     })
     @Override
     public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
-        log.trace("Handling http get service landscape request: {}", req);
-        Set<String> serviceUniqueNames = governorMap.keySet();
+        log.trace("Handling http list store cluster name request: {}", req);
+        Set<String> storeClusterName = metadataManagers.keySet();
         DefaultFullHttpResponse
             resp = new DefaultFullHttpResponse(req.protocolVersion(), OK,
-            Unpooled.wrappedBuffer(toJSON(serviceUniqueNames).getBytes()));
+            Unpooled.wrappedBuffer(toJSON(storeClusterName).getBytes()));
         resp.headers().set("Content-Type", "application/json");
         return CompletableFuture.completedFuture(resp);
     }

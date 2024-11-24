@@ -14,6 +14,7 @@
 package com.baidu.bifromq.apiserver.http.handler;
 
 import static com.baidu.bifromq.apiserver.Headers.HEADER_SERVICE_NAME;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_STORE_NAME;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -54,7 +55,7 @@ public class GetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<GetL
     @Test
     public void noClusterFound() {
         DefaultFullHttpRequest req = buildRequest(HttpMethod.GET);
-        req.headers().set(HEADER_SERVICE_NAME.header, "fakeUserId");
+        req.headers().set(HEADER_STORE_NAME.header, "fakeUserId");
         GetLoadRulesHandler handler = new GetLoadRulesHandler(metaService);
         FullHttpResponse resp = handler.handle(123, req).join();
         assertEquals(resp.status(), HttpResponseStatus.NOT_FOUND);
@@ -64,7 +65,7 @@ public class GetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<GetL
     public void clusterChanged() {
         String clusterId = "dist.worker";
         DefaultFullHttpRequest req = buildRequest(HttpMethod.GET);
-        req.headers().set(HEADER_SERVICE_NAME.header, clusterId);
+        req.headers().set(HEADER_STORE_NAME.header, clusterId);
         when(metaService.metadataManager(eq(clusterId))).thenReturn(metadataManager);
         when(metadataManager.loadRules()).thenReturn(mockLoadRulesSubject);
 
@@ -84,13 +85,13 @@ public class GetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<GetL
 
     @Test
     public void loadRules() {
-        String clusterId = "dist.worker";
+        String storeName = "dist.worker";
         DefaultFullHttpRequest req = buildRequest(HttpMethod.GET);
         Map<String, Struct> loadRules = Map.of("balancerClass", Struct.getDefaultInstance());
-        req.headers().set(HEADER_SERVICE_NAME.header, clusterId);
-        when(metaService.metadataManager(eq(clusterId))).thenReturn(metadataManager);
+        req.headers().set(HEADER_STORE_NAME.header, storeName);
+        when(metaService.metadataManager(eq(storeName))).thenReturn(metadataManager);
         when(metadataManager.loadRules()).thenReturn(mockLoadRulesSubject);
-        mockClusterIdSubject.onNext(Set.of(clusterId));
+        mockClusterIdSubject.onNext(Set.of(storeName));
         mockLoadRulesSubject.onNext(loadRules);
         GetLoadRulesHandler handler = new GetLoadRulesHandler(metaService);
         handler.start();

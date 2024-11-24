@@ -105,6 +105,7 @@ public class RetainServiceModule extends AbstractModule {
                         .setCompactWALThreshold(storeConfig.getCompactWALThreshold()))
                     .setDataEngineConfigurator(buildDataEngineConf(storeConfig.getDataEngineConfig(), "retain_data"))
                     .setWalEngineConfigurator(buildWALEngineConf(storeConfig.getWalEngineConfig(), "retain_wal")))
+                .attributes(storeConfig.getAttributes())
                 .build());
         }
     }

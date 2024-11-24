@@ -46,9 +46,9 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/rules/group")
-public class SetServerGroupTagsHandler extends AbstractTrafficRulesHandler implements IHTTPRequestHandler {
+final class SetServerGroupTagsHandler extends AbstractTrafficRulesHandler implements IHTTPRequestHandler {
 
-    public SetServerGroupTagsHandler(IRPCServiceTrafficService trafficService) {
+    SetServerGroupTagsHandler(IRPCServiceTrafficService trafficService) {
         super(trafficService);
     }
 
@@ -60,7 +60,7 @@ public class SetServerGroupTagsHandler extends AbstractTrafficRulesHandler imple
         @Parameter(name = "service_name", in = ParameterIn.HEADER, required = true,
             description = "the service name", schema = @Schema(implementation = String.class)),
         @Parameter(name = "server_id", in = ParameterIn.HEADER, required = true,
-            description = "the id of server", schema = @Schema(implementation = String.class)),
+            description = "the service server id", schema = @Schema(implementation = String.class)),
     })
     @RequestBody(required = true)
     @ApiResponses(value = {

@@ -42,10 +42,10 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/cluster")
-public class GetClusterHandler implements IHTTPRequestHandler {
+final class GetClusterHandler implements IHTTPRequestHandler {
     private final IAgentHost agentHost;
 
-    public GetClusterHandler(IAgentHost agentHost) {
+    GetClusterHandler(IAgentHost agentHost) {
         this.agentHost = agentHost;
     }
 
@@ -59,20 +59,16 @@ public class GetClusterHandler implements IHTTPRequestHandler {
     @ApiResponses(value = {@ApiResponse(responseCode = "200", description = "Success")})
     @Override
     public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
-        try {
-            log.trace("Handling http get cluster request: {}", req);
-            return agentHost.membership().first(Set.of(agentHost.local()))
-                .toCompletionStage()
-                .toCompletableFuture()
-                .thenApply(nodes -> {
-                    DefaultFullHttpResponse resp = new DefaultFullHttpResponse(req.protocolVersion(), OK,
-                        Unpooled.wrappedBuffer(toJSON(nodes).getBytes()));
-                    resp.headers().set("Content-Type", "application/json");
-                    return resp;
-                });
-        } catch (Throwable e) {
-            return CompletableFuture.failedFuture(e);
-        }
+        log.trace("Handling http get cluster request: {}", req);
+        return agentHost.membership().first(Set.of(agentHost.local()))
+            .toCompletionStage()
+            .toCompletableFuture()
+            .thenApply(nodes -> {
+                DefaultFullHttpResponse resp = new DefaultFullHttpResponse(req.protocolVersion(), OK,
+                    Unpooled.wrappedBuffer(toJSON(nodes).getBytes()));
+                resp.headers().set("Content-Type", "application/json");
+                return resp;
+            });
     }
 
     private String toJSON(Set<HostEndpoint> nodes) {

@@ -13,11 +13,9 @@
 
 package com.baidu.bifromq.apiserver.http;
 
-import static com.baidu.bifromq.apiserver.http.AnnotationUtil.getHTTPMethod;
 import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.apiserver.MockableTest;
-import com.baidu.bifromq.apiserver.http.handler.PubHandler;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
@@ -28,9 +26,7 @@ import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
-import java.util.Collection;
 import java.util.Collections;
-import javax.ws.rs.Path;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
 
@@ -51,17 +47,5 @@ public class HTTPRouteMapTest extends MockableTest {
         assertEquals(response.protocolVersion(), httpRequest.protocolVersion());
         assertEquals(response.status(), HttpResponseStatus.BAD_REQUEST);
         assertEquals(response.content().readableBytes(), 0);
-    }
-
-    @Test
-    public void getHandler() {
-        PubHandler pubHandler = new PubHandler(settingProvider, distClient);
-        Collection<IHTTPRequestHandler> ret = Collections.singleton(pubHandler);
-        HTTPRouteMap routeMap = new HTTPRouteMap(ret);
-        Path route = PubHandler.class.getAnnotation(Path.class);
-        FullHttpRequest httpRequest =
-            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, getHTTPMethod(PubHandler.class), route.value());
-        IHTTPRequestHandler handler = routeMap.getHandler(httpRequest);
-        assertEquals(handler, pubHandler);
     }
 }

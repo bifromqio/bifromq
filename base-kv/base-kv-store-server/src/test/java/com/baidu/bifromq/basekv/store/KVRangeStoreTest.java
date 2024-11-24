@@ -19,6 +19,7 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.EMPTY_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.combine;
 import static com.google.protobuf.ByteString.copyFromUtf8;
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
@@ -109,7 +110,8 @@ public class KVRangeStoreTest extends MockableTest {
                 new TestCoProcFactory(),
                 queryExecutor,
                 tickerThreads,
-                bgTaskExecutor);
+                bgTaskExecutor,
+                emptyMap());
         IStoreMessenger messenger = new IStoreMessenger() {
             @Override
             public void send(StoreMessage message) {

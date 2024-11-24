@@ -31,10 +31,10 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpUtil;
 import java.util.concurrent.CompletableFuture;
 
-public abstract class TenantAwareHandler implements IHTTPRequestHandler {
+abstract class TenantAwareHandler implements IHTTPRequestHandler {
     private final ISettingProvider settingProvider;
 
-    public TenantAwareHandler(ISettingProvider settingProvider) {
+    protected TenantAwareHandler(ISettingProvider settingProvider) {
         this.settingProvider = settingProvider;
     }
 

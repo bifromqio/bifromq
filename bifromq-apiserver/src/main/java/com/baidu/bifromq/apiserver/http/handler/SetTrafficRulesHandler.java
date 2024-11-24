@@ -44,8 +44,8 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/rules/traffic")
-public class SetTrafficRulesHandler extends AbstractTrafficRulesHandler implements IHTTPRequestHandler {
-    public SetTrafficRulesHandler(IRPCServiceTrafficService trafficService) {
+final class SetTrafficRulesHandler extends AbstractTrafficRulesHandler implements IHTTPRequestHandler {
+    SetTrafficRulesHandler(IRPCServiceTrafficService trafficService) {
         super(trafficService);
     }
 

@@ -25,6 +25,7 @@ abstract class AbstractLoadRulesHandler implements IHTTPRequestHandler {
     private final CompositeDisposable disposable = new CompositeDisposable();
     protected final Map<String, IBaseKVClusterMetadataManager> metadataManagers = new ConcurrentHashMap<>();
 
+
     protected AbstractLoadRulesHandler(IBaseKVMetaService metaService) {
         this.metaService = metaService;
     }

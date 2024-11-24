@@ -16,6 +16,8 @@ package com.baidu.bifromq.basekv.server;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import lombok.Setter;
@@ -33,6 +35,7 @@ public class BaseKVStoreServiceBuilder {
     Executor rpcExecutor;
     int tickerThreads;
     ScheduledExecutorService bgTaskExecutor;
+    Map<String, String> attributes = new HashMap<>();
 
     BaseKVStoreServiceBuilder(String clusterId, BaseKVStoreServerBuilder serverBuilder) {
         this.clusterId = clusterId;

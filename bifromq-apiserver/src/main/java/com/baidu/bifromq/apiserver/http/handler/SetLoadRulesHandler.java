@@ -48,8 +48,8 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/rules/load")
-public class SetLoadRulesHandler extends AbstractLoadRulesHandler implements IHTTPRequestHandler {
-    protected SetLoadRulesHandler(IBaseKVMetaService metaService) {
+final class SetLoadRulesHandler extends AbstractLoadRulesHandler implements IHTTPRequestHandler {
+    SetLoadRulesHandler(IBaseKVMetaService metaService) {
         super(metaService);
     }
 
@@ -58,8 +58,8 @@ public class SetLoadRulesHandler extends AbstractLoadRulesHandler implements IHT
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER,
             description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
-        @Parameter(name = "service_name", in = ParameterIn.HEADER, required = true,
-            description = "the service name", schema = @Schema(implementation = String.class)),
+        @Parameter(name = "store_name", in = ParameterIn.HEADER, required = true,
+            description = "the store name", schema = @Schema(implementation = String.class)),
         @Parameter(name = "balancer_class", in = ParameterIn.HEADER, required = true,
             description = "the balancer class FQN", schema = @Schema(implementation = String.class))
     })
@@ -70,12 +70,12 @@ public class SetLoadRulesHandler extends AbstractLoadRulesHandler implements IHT
     @Override
     public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
         log.trace("Handling http set load rules request: {}", req);
-        String clusterId = HeaderUtils.getHeader(Headers.HEADER_SERVICE_NAME, req, true);
+        String storeName = HeaderUtils.getHeader(Headers.HEADER_STORE_NAME, req, true);
         String balancerClass = HeaderUtils.getHeader(Headers.HEADER_BALANCER_CLASS, req, true);
-        IBaseKVClusterMetadataManager metadataManager = metadataManagers.get(clusterId);
+        IBaseKVClusterMetadataManager metadataManager = metadataManagers.get(storeName);
         if (metadataManager == null) {
             return CompletableFuture.completedFuture(new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
-                Unpooled.copiedBuffer((clusterId + " not found").getBytes())));
+                Unpooled.copiedBuffer(("Store not found: " + storeName).getBytes())));
         }
         try {
             Struct loadRules = fromJson(req.content().toString(io.netty.util.CharsetUtil.UTF_8));

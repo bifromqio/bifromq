@@ -53,7 +53,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/kill")
-public final class KillHandler extends TenantAwareHandler {
+final class KillHandler extends TenantAwareHandler {
     private static final int MAX_SERVER_REFERENCE_LENGTH = 65535;
     private static final String SERVER_REDIRECT_VALUE_NO = "no";
     private static final String SERVER_REDIRECT_VALUE_MOVE = "move";
@@ -66,7 +66,7 @@ public final class KillHandler extends TenantAwareHandler {
         Unpooled.wrappedBuffer("Server reference exceeds 65535 bytes".getBytes());
     private final ISessionDictClient sessionDictClient;
 
-    public KillHandler(ISettingProvider settingProvider, ISessionDictClient sessionDictClient) {
+    KillHandler(ISettingProvider settingProvider, ISessionDictClient sessionDictClient) {
         super(settingProvider);
         this.sessionDictClient = sessionDictClient;
     }
@@ -105,44 +105,40 @@ public final class KillHandler extends TenantAwareHandler {
     public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,
                                                       @Parameter(hidden = true) String tenantId,
                                                       @Parameter(hidden = true) FullHttpRequest req) {
-        try {
-            String userId = getHeader(HEADER_USER_ID, req, false);
-            String clientId = getHeader(HEADER_CLIENT_ID, req, false);
-            String serverRedirect = getHeader(HEADER_SERVER_REDIRECT, req, false);
-            String serverReference = getHeader(HEADER_SERVER_REFERENCE, req, false);
-            String clientType = getHeader(HEADER_CLIENT_TYPE, req, true);
-            Map<String, String> clientMeta = getClientMeta(req);
-            if (serverRedirect != null && !SERVER_REDIRECT_VALUES.contains(serverRedirect)) {
-                return CompletableFuture.completedFuture(
-                    new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, INVALID_SERVER_REDIRECT));
-            }
-            if (serverReference != null && serverReference.length() > MAX_SERVER_REFERENCE_LENGTH) {
-                return CompletableFuture.completedFuture(
-                    new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, TOO_LONG_SERVER_REFERENCE));
-            }
+        String userId = getHeader(HEADER_USER_ID, req, false);
+        String clientId = getHeader(HEADER_CLIENT_ID, req, false);
+        String serverRedirect = getHeader(HEADER_SERVER_REDIRECT, req, false);
+        String serverReference = getHeader(HEADER_SERVER_REFERENCE, req, false);
+        String clientType = getHeader(HEADER_CLIENT_TYPE, req, true);
+        Map<String, String> clientMeta = getClientMeta(req);
+        if (serverRedirect != null && !SERVER_REDIRECT_VALUES.contains(serverRedirect)) {
+            return CompletableFuture.completedFuture(
+                new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, INVALID_SERVER_REDIRECT));
+        }
+        if (serverReference != null && serverReference.length() > MAX_SERVER_REFERENCE_LENGTH) {
+            return CompletableFuture.completedFuture(
+                new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, TOO_LONG_SERVER_REFERENCE));
+        }
 
-            ServerRedirection serverRedirection = buildServerRedirection(serverRedirect, serverReference);
-            log.trace("Handling http kill request: {}", req);
-            if (Strings.isNullOrEmpty(userId) || Strings.isNullOrEmpty(clientId)) {
-                return sessionDictClient.killAll(reqId, tenantId, userId, ClientInfo.newBuilder()
-                        .setTenantId(tenantId)
-                        .setType(clientType)
-                        .putAllMetadata(clientMeta)
-                        .build(), serverRedirection)
-                    .thenApply(
-                        v -> new DefaultFullHttpResponse(req.protocolVersion(), v.getResult() == KillAllReply.Result.OK
-                            ? OK : NOT_FOUND, Unpooled.EMPTY_BUFFER));
-            }
-            return sessionDictClient.kill(reqId, tenantId, userId, clientId, ClientInfo.newBuilder()
+        ServerRedirection serverRedirection = buildServerRedirection(serverRedirect, serverReference);
+        log.trace("Handling http kill request: {}", req);
+        if (Strings.isNullOrEmpty(userId) || Strings.isNullOrEmpty(clientId)) {
+            return sessionDictClient.killAll(reqId, tenantId, userId, ClientInfo.newBuilder()
                     .setTenantId(tenantId)
                     .setType(clientType)
                     .putAllMetadata(clientMeta)
                     .build(), serverRedirection)
-                .thenApply(v -> new DefaultFullHttpResponse(req.protocolVersion(), v.getResult() == KillReply.Result.OK
-                    ? OK : NOT_FOUND, Unpooled.EMPTY_BUFFER));
-        } catch (Throwable e) {
-            return CompletableFuture.failedFuture(e);
+                .thenApply(
+                    v -> new DefaultFullHttpResponse(req.protocolVersion(), v.getResult() == KillAllReply.Result.OK
+                        ? OK : NOT_FOUND, Unpooled.EMPTY_BUFFER));
         }
+        return sessionDictClient.kill(reqId, tenantId, userId, clientId, ClientInfo.newBuilder()
+                .setTenantId(tenantId)
+                .setType(clientType)
+                .putAllMetadata(clientMeta)
+                .build(), serverRedirection)
+            .thenApply(v -> new DefaultFullHttpResponse(req.protocolVersion(), v.getResult() == KillReply.Result.OK
+                ? OK : NOT_FOUND, Unpooled.EMPTY_BUFFER));
     }
 
     private ServerRedirection buildServerRedirection(String serverRedirect, String serverReference) {

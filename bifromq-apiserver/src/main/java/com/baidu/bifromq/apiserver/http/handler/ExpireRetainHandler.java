@@ -42,10 +42,10 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/retain")
-public final class ExpireRetainHandler extends TenantAwareHandler {
+final class ExpireRetainHandler extends TenantAwareHandler {
     private final IRetainClient retainClient;
 
-    public ExpireRetainHandler(ISettingProvider settingProvider, IRetainClient retainClient) {
+    ExpireRetainHandler(ISettingProvider settingProvider, IRetainClient retainClient) {
         super(settingProvider);
         this.retainClient = retainClient;
     }
@@ -69,21 +69,17 @@ public final class ExpireRetainHandler extends TenantAwareHandler {
     public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,
                                                       @Parameter(hidden = true) String tenantId,
                                                       @Parameter(hidden = true) FullHttpRequest req) {
-        try {
-            int expirySeconds = Integer.parseInt(getHeader(HEADER_EXPIRY_SECONDS, req, true));
-            log.trace("Handling http expire retain request: {}", req);
-            ExpireAllRequest.Builder reqBuilder = ExpireAllRequest.newBuilder()
-                .setReqId(reqId)
-                .setExpirySeconds(expirySeconds)
-                .setNow(HLC.INST.getPhysical());
-            if (tenantId != null) {
-                reqBuilder.setTenantId(tenantId);
-            }
-            return retainClient.expireAll(reqBuilder.build())
-                .thenApply(r -> new DefaultFullHttpResponse(req.protocolVersion(),
-                    r.getResult() == ExpireAllReply.Result.OK ? OK : TOO_MANY_REQUESTS, Unpooled.EMPTY_BUFFER));
-        } catch (Throwable e) {
-            return CompletableFuture.failedFuture(e);
+        int expirySeconds = Integer.parseInt(getHeader(HEADER_EXPIRY_SECONDS, req, true));
+        log.trace("Handling http expire retain request: {}", req);
+        ExpireAllRequest.Builder reqBuilder = ExpireAllRequest.newBuilder()
+            .setReqId(reqId)
+            .setExpirySeconds(expirySeconds)
+            .setNow(HLC.INST.getPhysical());
+        if (tenantId != null) {
+            reqBuilder.setTenantId(tenantId);
         }
+        return retainClient.expireAll(reqBuilder.build())
+            .thenApply(r -> new DefaultFullHttpResponse(req.protocolVersion(),
+                r.getResult() == ExpireAllReply.Result.OK ? OK : TOO_MANY_REQUESTS, Unpooled.EMPTY_BUFFER));
     }
 }

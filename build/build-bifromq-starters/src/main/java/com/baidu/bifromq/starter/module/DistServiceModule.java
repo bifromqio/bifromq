@@ -115,6 +115,7 @@ public class DistServiceModule extends AbstractModule {
                 .balancerFactoryConfig(workerConfig.getBalanceConfig().getBalancers())
                 .subBrokerManager(injector.getInstance(ISubBrokerManager.class))
                 .loadEstimateWindow(Duration.ofSeconds(DistWorkerLoadEstimationWindowSeconds.INSTANCE.get()))
+                .attributes(workerConfig.getAttributes())
                 .build());
         }
     }

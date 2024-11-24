@@ -17,11 +17,12 @@ import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
 import com.baidu.bifromq.apiserver.Headers;
-import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceLandscape;
-import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
+import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
+import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
+import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -34,63 +35,62 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import java.util.Map;
+import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@Path("/rules/traffic")
-final class GetTrafficRulesHandler extends AbstractTrafficRulesHandler implements IHTTPRequestHandler {
-    GetTrafficRulesHandler(IRPCServiceTrafficService trafficService) {
-        super(trafficService);
+@Path("/landscape/store/ranges")
+class GetStoreRangesHandler extends AbstractLoadRulesHandler {
+    GetStoreRangesHandler(IBaseKVMetaService metaService) {
+        super(metaService);
     }
 
     @GET
-    @Operation(summary = "Get the traffic rules")
+    @Operation(summary = "Get the store ranges information")
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER,
             description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
-        @Parameter(name = "service_name", in = ParameterIn.HEADER, required = true,
-            description = "the service name", schema = @Schema(implementation = String.class))
+        @Parameter(name = "store_name", in = ParameterIn.HEADER, required = true,
+            description = "the store name", schema = @Schema(implementation = String.class)),
+        @Parameter(name = "server_id", in = ParameterIn.HEADER, required = true,
+            description = "the store server id", schema = @Schema(implementation = String.class))
     })
+
     @RequestBody(required = false)
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Success"),
     })
     @Override
     public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
-        log.trace("Handling http get traffic rules request: {}", req);
-        String serviceName = HeaderUtils.getHeader(Headers.HEADER_SERVICE_NAME, req, true);
-        IRPCServiceLandscape landscape = governorMap.get(serviceName);
-        if (landscape == null) {
+        log.trace("Handling http get store ranges request: {}", req);
+        String storeName = HeaderUtils.getHeader(Headers.HEADER_STORE_NAME, req, true);
+        IBaseKVClusterMetadataManager metadataManager = metadataManagers.get(storeName);
+        if (metadataManager == null) {
             return CompletableFuture.completedFuture(new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
-                Unpooled.copiedBuffer(("Service not found: " + serviceName).getBytes())));
+                Unpooled.copiedBuffer(("Store not found: " + storeName).getBytes())));
         }
-        return landscape.trafficRules()
-            .firstElement()
-            .toCompletionStage()
-            .toCompletableFuture()
-            .thenApply(trafficDirective -> {
-                DefaultFullHttpResponse
-                    resp = new DefaultFullHttpResponse(req.protocolVersion(), OK,
-                    Unpooled.wrappedBuffer(toJSON(trafficDirective).getBytes()));
-                resp.headers().set("Content-Type", "application/json");
-                return resp;
-            });
+        String serverId = HeaderUtils.getHeader(Headers.HEADER_SERVER_ID, req, true);
+        Optional<KVRangeStoreDescriptor> storeDescriptor = metadataManager.getStoreDescriptor(serverId);
+        if (storeDescriptor.isEmpty()) {
+            return CompletableFuture.completedFuture(new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
+                Unpooled.copiedBuffer(("Server not found: " + serverId).getBytes())));
+        }
+
+        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(req.protocolVersion(), OK,
+            Unpooled.wrappedBuffer(toJSON(storeDescriptor.get().getRangesList()).getBytes()));
+        resp.headers().set("Content-Type", "application/json");
+        return CompletableFuture.completedFuture(resp);
     }
 
-    private String toJSON(Map<String, Map<String, Integer>> trafficDirective) {
+    private String toJSON(List<KVRangeDescriptor> rangeDescriptors) {
         ObjectMapper mapper = new ObjectMapper();
-        ObjectNode rootObject = mapper.createObjectNode();
-        for (String tenantIdPrefix : trafficDirective.keySet()) {
-            Map<String, Integer> groupWeights = trafficDirective.get(tenantIdPrefix);
-            ObjectNode groupWeightsObject = mapper.createObjectNode();
-            for (String group : groupWeights.keySet()) {
-                groupWeightsObject.put(group, groupWeights.get(group));
-            }
-            rootObject.set(tenantIdPrefix, groupWeightsObject);
+        ArrayNode rootObject = mapper.createArrayNode();
+        for (KVRangeDescriptor rangeDescriptor : rangeDescriptors) {
+            rootObject.add(JSONUtils.toJSON(rangeDescriptor, mapper));
         }
         return rootObject.toString();
     }

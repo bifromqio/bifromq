@@ -54,6 +54,7 @@ public class InboxStoreBuilder implements IInboxStoreBuilder {
     Map<String, Struct> balancerFactoryConfig = new HashMap<>();
     Duration loadEstimateWindow = Duration.ofSeconds(5);
     Duration gcInterval = Duration.ofMinutes(5);
+    Map<String, String> attributes = new HashMap<>();
 
     @Override
     public IInboxStore build() {

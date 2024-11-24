@@ -68,7 +68,8 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
             builder.coProcFactory,
             builder.queryExecutor,
             builder.tickerThreads,
-            builder.bgTaskExecutor);
+            builder.bgTaskExecutor,
+            builder.attributes);
         this.clusterId = builder.clusterId;
         this.agentHost = builder.agentHost;
         log = SiftLogger.getLogger(BaseKVStoreService.class, "clusterId", clusterId, "storeId", kvRangeStore.id());
