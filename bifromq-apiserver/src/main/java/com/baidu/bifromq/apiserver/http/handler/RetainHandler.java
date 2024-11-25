@@ -82,9 +82,16 @@ final class RetainHandler extends TenantAwareHandler {
         @Parameter(name = "client_meta_*", in = ParameterIn.HEADER,
             description = "the metadata header about caller client, must be started with client_meta_"),
     })
-    @RequestBody(required = true, description = "Message payload will be treated as binary", content = @Content(mediaType = "application/octet-stream"))
+    @RequestBody(required = true,
+        description = "Message payload will be treated as binary",
+        content = @Content(mediaType = "application/octet-stream"))
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Success"),
+        @ApiResponse(responseCode = "200", description = "Success",
+            content = @Content(schema = @Schema(implementation = String.class))),
+        @ApiResponse(responseCode = "400", description = "Invalid QoS or expiry seconds",
+            content = @Content(schema = @Schema(implementation = String.class))),
+        @ApiResponse(responseCode = "403", description = "Unaccepted Topic",
+            content = @Content(schema = @Schema(implementation = String.class))),
     })
     @Override
     public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,

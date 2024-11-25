@@ -29,6 +29,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -50,15 +51,18 @@ final class GetClusterHandler implements IHTTPRequestHandler {
     }
 
     @GET
-    @Operation(summary = "Get cluster member nodes known from current node")
-
+    @Operation(summary = "Get cluster membership known from current node")
     @Parameters({
-        @Parameter(name = "req_id", in = ParameterIn.HEADER,
-            description = "optional caller provided request id", schema = @Schema(implementation = Long.class))})
+        @Parameter(name = "req_id", in = ParameterIn.HEADER, description = "optional caller provided request id",
+            schema = @Schema(implementation = Long.class))})
     @RequestBody(required = false)
-    @ApiResponses(value = {@ApiResponse(responseCode = "200", description = "Success")})
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Success",
+            content = @Content(mediaType = "application/json")),
+    })
     @Override
-    public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
+    public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,
+                                                      @Parameter(hidden = true) FullHttpRequest req) {
         log.trace("Handling http get cluster request: {}", req);
         return agentHost.membership().first(Set.of(agentHost.local()))
             .toCompletionStage()

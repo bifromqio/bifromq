@@ -26,7 +26,6 @@ import com.baidu.bifromq.retain.store.IRetainStore;
 import com.baidu.bifromq.sessiondict.server.ISessionDictServer;
 import com.baidu.bifromq.starter.module.ServiceInjector;
 import com.google.inject.Inject;
-import com.google.inject.Injector;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 
@@ -141,7 +140,7 @@ class ServiceBootstrapper {
 
         void start() {
             if (rpcServer != null) {
-                log.info("Stop RPC server");
+                log.info("Start RPC server");
                 rpcServer.start();
             }
             apiServerOpt.ifPresent(IAPIServer::start);

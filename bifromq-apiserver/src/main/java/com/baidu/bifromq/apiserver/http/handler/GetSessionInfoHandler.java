@@ -33,6 +33,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -69,8 +70,11 @@ final class GetSessionInfoHandler extends TenantAwareHandler {
     })
     @RequestBody(required = false)
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Success"),
-        @ApiResponse(responseCode = "404", description = "No session found for the given user and client id"),
+        @ApiResponse(responseCode = "200",
+            description = "Success",
+            content = @Content(mediaType = "application/json")),
+        @ApiResponse(responseCode = "404", description = "No session found for the given user and client id",
+            content = @Content(schema = @Schema(implementation = String.class))),
     })
     @Override
     public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,

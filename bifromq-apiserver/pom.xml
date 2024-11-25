@@ -110,7 +110,7 @@
                 <artifactId>swagger-maven-plugin</artifactId>
                 <version>${swagger.version}</version>
                 <configuration>
-                    <outputPath>${project.parent.basedir}/target/site/swagger</outputPath>
+                    <outputPath>${project.build.directory}/swagger</outputPath>
                     <outputFileName>BifroMQ-API</outputFileName>
                     <outputFormat>YAML</outputFormat>
                     <resourcePackages>
@@ -123,6 +123,30 @@
                         <goals>
                             <goal>resolve</goal>
                         </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <configuration>
+                    <outputDirectory>${project.parent.basedir}/target/site/swagger</outputDirectory>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>filter-swagger-resources</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>resources</goal>
+                        </goals>
+                        <configuration>
+                            <resources>
+                                <resource>
+                                    <directory>${project.build.directory}/swagger</directory>
+                                    <filtering>true</filtering>
+                                </resource>
+                            </resources>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

@@ -143,7 +143,7 @@ public class APIServer implements IAPIServer {
                 }
                 log.info("API server started");
                 state.set(State.STARTED);
-            } catch (InterruptedException e) {
+            } catch (Throwable e) {
                 state.set(State.STARTING_FAILED);
                 throw new IllegalStateException(e);
             }

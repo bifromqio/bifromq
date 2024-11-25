@@ -33,6 +33,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -62,14 +63,17 @@ final class SetServerGroupTagsHandler extends AbstractTrafficRulesHandler implem
         @Parameter(name = "server_id", in = ParameterIn.HEADER, required = true,
             description = "the service server id", schema = @Schema(implementation = String.class)),
     })
-    @RequestBody(required = true)
+    @RequestBody(required = true, content = @Content(
+        mediaType = "application/json",
+        schema = @Schema(implementation = String[].class)))
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Success"),
         @ApiResponse(responseCode = "400", description = "Bad Request"),
-        @ApiResponse(responseCode = "404", description = "Server not found"),
+        @ApiResponse(responseCode = "404", description = "Service or server not found"),
     })
     @Override
-    public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
+    public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,
+                                                      @Parameter(hidden = true) FullHttpRequest req) {
         String serverId = getHeader(HEADER_SERVER_ID, req, true);
         String serviceName = HeaderUtils.getHeader(Headers.HEADER_SERVICE_NAME, req, true);
         IRPCServiceTrafficGovernor governor = governorMap.get(serviceName);

@@ -54,7 +54,8 @@ final class ExpireRetainHandler extends TenantAwareHandler {
     @Operation(summary = "Expire all retain messages using given expiry time")
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER,
-            description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
+            description = "optional caller provided request id",
+            schema = @Schema(implementation = Long.class)),
         @Parameter(name = "tenant_id", in = ParameterIn.HEADER, required = true,
             description = "the tenant id", schema = @Schema(implementation = String.class)),
         @Parameter(name = "expiry_seconds", in = ParameterIn.HEADER, required = true,
@@ -63,7 +64,7 @@ final class ExpireRetainHandler extends TenantAwareHandler {
     })
     @RequestBody(required = false)
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Success"),
+        @ApiResponse(responseCode = "200", description = "Success")
     })
     @Override
     public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,

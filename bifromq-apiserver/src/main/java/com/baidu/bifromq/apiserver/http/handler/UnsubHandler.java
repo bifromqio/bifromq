@@ -73,7 +73,6 @@ final class UnsubHandler extends TenantAwareHandler {
         @ApiResponse(responseCode = "401", description = "Unauthorized to remove subscription of the given topic filter"),
         @ApiResponse(responseCode = "404", description = "No session found for the given user and client id"),
     })
-
     @Override
     public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,
                                                       @Parameter(hidden = true) String tenantId,

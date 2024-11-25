@@ -15,6 +15,7 @@ package com.baidu.bifromq.apiserver.http.handler;
 
 import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
@@ -27,10 +28,12 @@ import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -57,13 +60,16 @@ final class UnsetTrafficRulesHandler extends AbstractTrafficRulesHandler impleme
         @Parameter(name = "service_name", in = ParameterIn.HEADER, required = true,
             description = "the service name", schema = @Schema(implementation = String.class)),
     })
-    @RequestBody(required = false)
+    @RequestBody(content = @Content(mediaType = "application/json", schema = @Schema(implementation = String[].class)))
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Success"),
         @ApiResponse(responseCode = "400", description = "Bad Request"),
     })
     @Override
-    public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
+    @Hidden
+    // This method is hidden now, it will be refactored in the future using json-patch
+    public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,
+                                                      @Parameter(hidden = true) FullHttpRequest req) {
         String serviceName = HeaderUtils.getHeader(Headers.HEADER_SERVICE_NAME, req, true);
         IRPCServiceTrafficGovernor governor = governorMap.get(serviceName);
         if (governor == null) {
@@ -74,8 +80,7 @@ final class UnsetTrafficRulesHandler extends AbstractTrafficRulesHandler impleme
         Set<String> trafficRules = new HashSet<>();
         try {
             ObjectMapper objectMapper = new ObjectMapper();
-            ArrayNode tdObject =
-                (ArrayNode) objectMapper.readTree(req.content().toString(io.netty.util.CharsetUtil.UTF_8));
+            ArrayNode tdObject = (ArrayNode) objectMapper.readTree(req.content().toString(UTF_8));
             tdObject.forEach(node -> trafficRules.add(node.asText()));
         } catch (Exception e) {
             return CompletableFuture.completedFuture(

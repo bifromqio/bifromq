@@ -63,7 +63,7 @@ final class ExpireSessionHandler extends TenantAwareHandler {
     })
     @RequestBody(required = false)
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Success"),
+        @ApiResponse(responseCode = "200", description = "Success")
     })
     @Override
     public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,

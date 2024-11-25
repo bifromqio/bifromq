@@ -31,6 +31,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -57,13 +58,14 @@ final class SetTrafficRulesHandler extends AbstractTrafficRulesHandler implement
         @Parameter(name = "service_name", in = ParameterIn.HEADER, required = true,
             description = "the service name", schema = @Schema(implementation = String.class)),
     })
-    @RequestBody(required = false)
+    @RequestBody(content = @Content(mediaType = "application/json"))
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Success"),
         @ApiResponse(responseCode = "400", description = "Bad Request"),
     })
     @Override
-    public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
+    public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,
+                                                      @Parameter(hidden = true) FullHttpRequest req) {
         String serviceName = HeaderUtils.getHeader(Headers.HEADER_SERVICE_NAME, req, true);
         IRPCServiceTrafficGovernor governor = governorMap.get(serviceName);
         if (governor == null) {

@@ -34,6 +34,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -82,17 +83,24 @@ class GetStoreLandscapeHandler extends AbstractLoadRulesHandler {
     @Operation(summary = "Get the store landscape information")
     @Parameters({
         @Parameter(name = "req_id", in = ParameterIn.HEADER,
-            description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
+            description = "optional caller provided request id",
+            schema = @Schema(implementation = Long.class)),
         @Parameter(name = "store_name", in = ParameterIn.HEADER, required = true,
-            description = "the store name", schema = @Schema(implementation = String.class))
+            description = "the store name",
+            schema = @Schema(implementation = String.class))
     })
-
     @RequestBody(required = false)
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Success"),
+        @ApiResponse(responseCode = "200",
+            description = "Success",
+            content = @Content(mediaType = "application/json")),
+        @ApiResponse(responseCode = "404",
+            description = "Service not found",
+            content = @Content(schema = @Schema(implementation = String.class))),
     })
     @Override
-    public CompletableFuture<FullHttpResponse> handle(long reqId, FullHttpRequest req) {
+    public CompletableFuture<FullHttpResponse> handle(@Parameter(hidden = true) long reqId,
+                                                      @Parameter(hidden = true) FullHttpRequest req) {
         log.trace("Handling http get service landscape request: {}", req);
         String storeName = HeaderUtils.getHeader(Headers.HEADER_STORE_NAME, req, true);
         IBaseKVClusterMetadataManager metadataManager = metadataManagers.get(storeName);
