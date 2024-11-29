@@ -270,13 +270,14 @@ public class StandaloneStarter {
                 .bootstrappedServices(injector.getInstance(ServiceBootstrapper.class).bootstrap())
                 .sharedResourcesHolder(serviceInjector.getInstance(SharedResourcesHolder.class))
                 .build();
-            starter.start();
             Thread shutdownThread = new Thread(starter::stop);
             shutdownThread.setName("shutdown");
             Runtime.getRuntime().addShutdownHook(shutdownThread);
+
+            starter.start();
         } catch (Throwable e) {
             log.error("Failed to start BifroMQ", e);
-            System.out.println(e.getMessage());
+            System.exit(-1);
             formatter.printHelp("CMD", CLI_OPTIONS);
         }
     }

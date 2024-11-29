@@ -15,30 +15,35 @@
 
 if [ $# -lt 1 ];
 then
-  echo "USAGE: $0 servicename"
+  echo "USAGE: $0 service_name"
   exit 1
 fi
 
 NAME=$1
-
+BASE_DIR=$(cd "$(dirname "$0")" && pwd)/..
+PID_FILE="$BASE_DIR/bin/pid"
 SIGNAL=${SIGNAL:-TERM}
 
-PIDS=$(ps -ef | grep $NAME | grep java | grep -v grep | awk '{print $2}')
-
-if [ -z "$PIDS" ]; then
-  echo "No $NAME to stop"
+if [ ! -f "$PID_FILE" ]; then
+  echo "No PID file found for $NAME. Process might not be running."
   exit 1
-else
-  echo "Find $NAME process $PIDS, and stopping it"
-  kill -s $SIGNAL $PIDS
 fi
 
+PIDS=$(cat "$PID_FILE")
+
+if [ -z "$PIDS" ] || ! ps -p "$PIDS" > /dev/null 2>&1; then
+  echo "No running process found for $NAME with PID $PIDS."
+  rm -f "$PID_FILE"
+  exit 1
+fi
+
+echo "Find $NAME process $PIDS, and stopping it..."
+kill -s $SIGNAL "$PIDS"
+
 ret=1
-for i in {1..300}
-do
-    ps -ef | grep $NAME | grep java | grep -v grep >/dev/null 2>&1
-    if [ $? -ne 0 ]; then
-        echo "$NAME process $PIDS was stopped"
+for i in {1..300}; do
+    if ! ps -p "$PIDS" > /dev/null 2>&1; then
+        echo "$NAME process $PIDS was stopped."
         ret=0
         break
     fi
@@ -46,6 +51,9 @@ do
 done
 
 if [ $ret -eq 1 ]; then
-    echo "Wait process stop timeout: $NAME does not stop for more than 300s!"
+    echo "Timeout: $NAME process $PIDS did not stop within 300 seconds!"
+else
+    rm -f "$PID_FILE"
 fi
+
 exit $ret

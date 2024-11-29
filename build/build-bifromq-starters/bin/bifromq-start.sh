@@ -44,6 +44,7 @@ BASE_DIR=$(
   pwd
 )/..
 
+BIN_DIR="$BASE_DIR/bin"
 CONF_DIR="$BASE_DIR/conf"
 CONF_FILE="$CONF_DIR/$FILE_NAME"
 PLUGIN_DIR="$BASE_DIR/plugins"
@@ -63,8 +64,23 @@ if [ "x$DATA_DIR" = "x" ]; then
 fi
 mkdir -p "$DATA_DIR"
 
+PID_FILE="$BIN_DIR/pid"
+
 pid() {
-  echo "$(ps -ef | grep $NAME | grep java | grep -v grep | awk '{print $2}')"
+  if [ -f "$PID_FILE" ]; then
+    cat "$PID_FILE"
+  else
+    echo ""
+  fi
+}
+
+is_pid_running() {
+  local pid=$1
+  if [ -n "$pid" ] && ps -p "$pid" > /dev/null 2>&1; then
+    return 0
+  else
+    return 1
+  fi
 }
 
 total_memory() {
@@ -84,9 +100,10 @@ memory_in_mb() {
   echo $(($1 / 1024 / 1024))
 }
 
-if [ -n "$(pid)" ]; then
-  echo "$NAME already started: $(pid)"
-  exit 1
+existing_pid=$(pid)
+if is_pid_running "$existing_pid"; then
+  echo "$NAME is already running with PID $existing_pid"
+  exit 0
 fi
 
 # get java version
@@ -141,12 +158,12 @@ eval JVM_GC=("$JVM_GC_OPTS")
 # Memory options
 if [ -z "$JVM_HEAP_OPTS" ]; then
   MEMORY_FRACTION=70 # Percentage of total memory to use
-  HEAP_MEMORY=$(($MEMORY /100 * $MEMORY_FRACTION))
+  HEAP_MEMORY=$(($MEMORY / 100 * $MEMORY_FRACTION))
   MIN_HEAP_MEMORY=$(($HEAP_MEMORY / 2))
 
   # Calculate max direct memory based on total memory
   MAX_DIRECT_MEMORY_FRACTION=20 # Percentage of total memory to use for max direct memory
-  MAX_DIRECT_MEMORY=$(($MEMORY /100 * $MAX_DIRECT_MEMORY_FRACTION))
+  MAX_DIRECT_MEMORY=$(($MEMORY / 100 * $MAX_DIRECT_MEMORY_FRACTION))
 
   META_SPACE_MEMORY=128m
   MAX_META_SPACE_MEMORY=500m
@@ -159,20 +176,14 @@ EXTRA_JVM_OPTS="$EXTRA_JVM_OPTS -Dio.netty.tryReflectionSetAccessible=true -Dio.
 
 # Set Debug options if enabled
 if [ "x$JVM_DEBUG" = "xtrue" ]; then
-
-  # Use default ports
   DEFAULT_JAVA_DEBUG_PORT="8008"
-
   if [ -z "$JAVA_DEBUG_PORT" ]; then
     JAVA_DEBUG_PORT="$DEFAULT_JAVA_DEBUG_PORT"
   fi
-
-  # Use the defaults if JAVA_DEBUG_OPTS was not set
   DEFAULT_JAVA_DEBUG_OPTS="-Djava.net.preferIPv4Stack=true -agentlib:jdwp=transport=dt_socket,server=y,suspend=${DEBUG_SUSPEND_FLAG:-n},address=*:$JAVA_DEBUG_PORT"
   if [ -z "$JAVA_DEBUG_OPTS" ]; then
     JAVA_DEBUG_OPTS="$DEFAULT_JAVA_DEBUG_OPTS"
   fi
-
   echo "Enabling Java debug options: $JAVA_DEBUG_OPTS"
   EXTRA_JVM_OPTS="$JAVA_DEBUG_OPTS $EXTRA_JVM_OPTS"
 fi
@@ -198,6 +209,7 @@ else
     -Dlogback.configurationFile="$LOG_CONF_FILE" \
     -Dpf4j.pluginsDir="$PLUGIN_DIR" \
     $NAME -c "$CONF_FILE" >"${LOG_DIR}/stdout.log" 2>&1 </dev/null &
-  PIDS=$(pid)
+  PIDS=$!
+  echo "$PIDS" > "$PID_FILE"
   echo "$NAME process started: $PIDS"
 fi
