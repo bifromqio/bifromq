@@ -21,9 +21,11 @@ import static com.baidu.bifromq.basecluster.memberlist.Fixtures.LOCAL_STORE_ID;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_ADDR_1;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.REMOTE_HOST_1_ENDPOINT;
 import static com.baidu.bifromq.basecluster.memberlist.Fixtures.ZOMBIE_ENDPOINT;
+import static java.util.Collections.emptyIterator;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -43,9 +45,11 @@ import com.baidu.bifromq.basecluster.messenger.IMessenger;
 import com.baidu.bifromq.basecluster.messenger.MessageEnvelope;
 import com.baidu.bifromq.basecluster.proto.ClusterMessage;
 import com.baidu.bifromq.basecrdt.core.api.CausalCRDTType;
+import com.baidu.bifromq.basecrdt.core.api.IMVReg;
 import com.baidu.bifromq.basecrdt.core.api.IORMap;
 import com.baidu.bifromq.basecrdt.core.api.ORMapOperation;
 import com.baidu.bifromq.basecrdt.store.ICRDTStore;
+import com.google.common.collect.Iterators;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Scheduler;
@@ -74,6 +78,8 @@ public class HostMemberListTest {
     @Mock
     private IORMap hostListCRDT;
     @Mock
+    private IMVReg hostMemberOnCRDT;
+    @Mock
     private IHostAddressResolver addressResolver;
     private Scheduler scheduler = Schedulers.from(MoreExecutors.directExecutor());
     private PublishSubject<Long> inflationSubject = PublishSubject.create();
@@ -99,6 +105,8 @@ public class HostMemberListTest {
 
     @Test
     public void init() {
+        when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
         HostMember local = memberList.local();
@@ -117,6 +125,8 @@ public class HostMemberListTest {
     public void host() {
         try (MockedConstruction<Agent> mockAgent = mockConstruction(Agent.class)) {
             String agentId = "agentId";
+            when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+            when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
             IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
                 messenger, scheduler, store, addressResolver);
             HostMember local = memberList.local();
@@ -137,6 +147,8 @@ public class HostMemberListTest {
     public void stopHosting() {
         try (MockedConstruction<Agent> mockAgent = mockConstruction(Agent.class)) {
             String agentId = "agentId";
+            when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+            when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
             IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
                 messenger, scheduler, store, addressResolver);
             HostMember local = memberList.local();
@@ -155,6 +167,8 @@ public class HostMemberListTest {
 
     @Test
     public void isZombie() {
+        when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
         assertFalse(memberList.isZombie(memberList.local().getEndpoint()));
@@ -167,6 +181,8 @@ public class HostMemberListTest {
 
     @Test
     public void handleJoin() {
+        when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
         messageSubject.onNext(joinMsg(HostMember.newBuilder()
@@ -182,8 +198,15 @@ public class HostMemberListTest {
 
     @Test
     public void handleJoinAndClearZombie() {
+        when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
+
+        when(hostMemberOnCRDT.read()).thenReturn(Iterators.forArray(HostMember.newBuilder()
+            .setEndpoint(REMOTE_HOST_1_ENDPOINT)
+            .build().toByteString()));
+
         messageSubject.onNext(joinMsg(HostMember.newBuilder()
             .setEndpoint(REMOTE_HOST_1_ENDPOINT)
             .setIncarnation(1)
@@ -203,6 +226,8 @@ public class HostMemberListTest {
 
     @Test
     public void handleJoinFromHealing() {
+        when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
         when(addressResolver.resolve(REMOTE_HOST_1_ENDPOINT)).thenReturn(REMOTE_ADDR_1);
@@ -227,6 +252,8 @@ public class HostMemberListTest {
 
     @Test
     public void handleJoinFromDuplicatedHealing() {
+        when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
         when(addressResolver.resolve(REMOTE_HOST_1_ENDPOINT)).thenReturn(REMOTE_ADDR_1);
@@ -257,8 +284,14 @@ public class HostMemberListTest {
 
     @Test
     public void handleFailAndClearZombie() {
+        when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
+        when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+        when(hostMemberOnCRDT.read()).thenReturn(Iterators.forArray(HostMember.newBuilder()
+            .setEndpoint(ZOMBIE_ENDPOINT)
+            .build().toByteString()));
         messageSubject.onNext(failMsg(ZOMBIE_ENDPOINT, 1));
 
         ArgumentCaptor<ORMapOperation> opCap = ArgumentCaptor.forClass(ORMapOperation.class);
@@ -275,12 +308,22 @@ public class HostMemberListTest {
 
     @Test
     public void handleFailAndDrop() {
+        when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
+        when(hostMemberOnCRDT.read()).thenReturn(Iterators.forArray(HostMember.newBuilder()
+            .setEndpoint(REMOTE_HOST_1_ENDPOINT)
+            .build().toByteString()));
+
         messageSubject.onNext(joinMsg(HostMember.newBuilder()
             .setEndpoint(REMOTE_HOST_1_ENDPOINT)
             .setIncarnation(1)
             .build()));
+
+        when(hostMemberOnCRDT.read()).thenReturn(Iterators.forArray(HostMember.newBuilder()
+            .setEndpoint(REMOTE_HOST_1_ENDPOINT)
+            .build().toByteString()));
         messageSubject.onNext(failMsg(REMOTE_HOST_1_ENDPOINT, 1));
 
         ArgumentCaptor<ORMapOperation> opCap = ArgumentCaptor.forClass(ORMapOperation.class);
@@ -291,6 +334,8 @@ public class HostMemberListTest {
 
     @Test
     public void handleFailAndRenew() {
+        when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
         assertEquals(memberList.members().blockingFirst().get(LOCAL_ENDPOINT).intValue(), 0);
@@ -312,6 +357,9 @@ public class HostMemberListTest {
 
     @Test
     public void handleQuitZombie() {
+        when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
+
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
         messageSubject.onNext(quitMsg(ZOMBIE_ENDPOINT, 1));
@@ -323,8 +371,15 @@ public class HostMemberListTest {
 
     @Test
     public void handleQuitNotExistMember() {
+        when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
+
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
+        when(hostMemberOnCRDT.read()).thenReturn(Iterators.forArray(HostMember.newBuilder()
+            .setEndpoint(REMOTE_HOST_1_ENDPOINT)
+            .build().toByteString()));
+
         messageSubject.onNext(quitMsg(REMOTE_HOST_1_ENDPOINT, 1));
         // nothing will happen
         verify(hostListCRDT, times(1)).execute(any(ORMapOperation.ORMapRemove.class));
@@ -333,7 +388,27 @@ public class HostMemberListTest {
     }
 
     @Test
+    public void handleQuitNotExistMemberOnCRDT() {
+        when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
+
+        IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
+            messenger, scheduler, store, addressResolver);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
+
+        messageSubject.onNext(quitMsg(REMOTE_HOST_1_ENDPOINT, 1));
+        // nothing will happen
+        verify(hostListCRDT, never()).execute(any(ORMapOperation.ORMapRemove.class));
+        verify(store, times(1)).join(
+            argThat(r -> r.getUri().equals(AGENT_HOST_MAP_URI) && r.getId().equals(LOCAL_STORE_ID)), any());
+    }
+
+
+    @Test
     public void handleQuitSelf() {
+        when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
+
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
         messageSubject.onNext(quitMsg(LOCAL_ENDPOINT, 0));
@@ -345,12 +420,21 @@ public class HostMemberListTest {
 
     @Test
     public void handleQuitAndDrop() {
+        when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
+
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
+
         messageSubject.onNext(joinMsg(HostMember.newBuilder()
             .setEndpoint(REMOTE_HOST_1_ENDPOINT)
             .setIncarnation(0)
             .build()));
+
+        when(hostMemberOnCRDT.read()).thenReturn(Iterators.forArray(HostMember.newBuilder()
+            .setEndpoint(REMOTE_HOST_1_ENDPOINT)
+            .build().toByteString()));
         messageSubject.onNext(quitMsg(REMOTE_HOST_1_ENDPOINT, 0));
         // nothing will happen
         ArgumentCaptor<ORMapOperation> opCap = ArgumentCaptor.forClass(ORMapOperation.class);
@@ -363,6 +447,8 @@ public class HostMemberListTest {
 
     @Test
     public void handleDoubt() {
+        when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
         messageSubject.onNext(doubtMsg(LOCAL_ENDPOINT, 0));
@@ -379,6 +465,8 @@ public class HostMemberListTest {
 
     @Test
     public void handleDoubtAndIgnore() {
+        when(hostListCRDT.getMVReg(any())).thenReturn(hostMemberOnCRDT);
+        when(hostMemberOnCRDT.read()).thenReturn(emptyIterator());
         IHostMemberList memberList = new HostMemberList(LOCAL_ADDR.getHostName(), LOCAL_ADDR.getPort(),
             messenger, scheduler, store, addressResolver);
         messageSubject.onNext(doubtMsg(REMOTE_HOST_1_ENDPOINT, 0));

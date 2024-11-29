@@ -133,8 +133,12 @@ public class HostMemberList implements IHostMemberList {
             boolean joined = addMember(member);
             if (joined) {
                 // add it into crdt
-                hostListCRDT.execute(ORMapOperation.update(member.getEndpoint().toByteString())
-                    .with(MVRegOperation.write(member.toByteString())));
+                log.debug("Member[{}] joins the cluster: local={}", member, local);
+                Optional<HostMember> memberInCRDT = getHostMember(hostListCRDT, member.getEndpoint());
+                if (memberInCRDT.isEmpty() || memberInCRDT.get().getIncarnation() < member.getIncarnation()) {
+                    hostListCRDT.execute(ORMapOperation.update(member.getEndpoint().toByteString())
+                        .with(MVRegOperation.write(member.toByteString())));
+                }
                 // update crdt landscape
                 store.join(hostListCRDT.id(), currentMembers().keySet().stream()
                     .map(AbstractMessageLite::toByteString)
@@ -147,8 +151,11 @@ public class HostMemberList implements IHostMemberList {
     private void drop(HostEndpoint memberEndpoint, int incarnation) {
         synchronized (this) {
             boolean removed = removeMember(memberEndpoint, incarnation);
-            // remove it from crdt if any
-            hostListCRDT.execute(ORMapOperation.remove(memberEndpoint.toByteString()).of(mvreg));
+            Optional<HostMember> memberInCRDT = getHostMember(hostListCRDT, memberEndpoint);
+            if (memberInCRDT.isPresent()) {
+                // remove it from crdt if any
+                hostListCRDT.execute(ORMapOperation.remove(memberEndpoint.toByteString()).of(mvreg));
+            }
             if (removed) {
                 // update crdt landscape
                 store.join(hostListCRDT.id(), currentMembers().keySet().stream()
@@ -160,9 +167,9 @@ public class HostMemberList implements IHostMemberList {
 
     @Override
     public boolean isZombie(HostEndpoint endpoint) {
-        return !endpoint.getId().equals(local.getEndpoint().getId()) &&
-            endpoint.getAddress().equals(local.getEndpoint().getAddress()) &&
-            endpoint.getPort() == local.getEndpoint().getPort();
+        return !endpoint.getId().equals(local.getEndpoint().getId())
+            && endpoint.getAddress().equals(local.getEndpoint().getAddress())
+            && endpoint.getPort() == local.getEndpoint().getPort();
     }
 
     private InetSocketAddress getMemberAddress(HostEndpoint endpoint) {
@@ -362,6 +369,7 @@ public class HostMemberList implements IHostMemberList {
 
     private void handleQuit(Quit quit) {
         HostEndpoint quitEndpoint = quit.getEndpoint();
+        log.debug("Member[{}] quits the cluster", quitEndpoint);
         if (!quitEndpoint.equals(local.getEndpoint()) && !isZombie(quitEndpoint)) {
             drop(quitEndpoint, quit.getIncarnation());
         }

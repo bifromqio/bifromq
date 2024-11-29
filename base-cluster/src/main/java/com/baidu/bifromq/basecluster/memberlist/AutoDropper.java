@@ -364,7 +364,7 @@ public class AutoDropper {
             // never stop suspecting a zombie member
             return;
         }
-        stopSuspectIfNeeded(joinMember.getEndpoint(), joinMember.getIncarnation());
+        stopSuspectIfNeeded(joinMember.getEndpoint(), joinMember.getIncarnation(), true);
     }
 
     private void handleEndorse(Endorse endorse) {
@@ -373,22 +373,27 @@ public class AutoDropper {
             // never stop suspecting a zombie member
             return;
         }
-        stopSuspectIfNeeded(endpoint, endorse.getIncarnation());
+        stopSuspectIfNeeded(endpoint, endorse.getIncarnation(), true);
     }
 
     private void handleQuit(Quit quit) {
-        stopSuspectIfNeeded(quit.getEndpoint(), quit.getIncarnation());
+        stopSuspectIfNeeded(quit.getEndpoint(), quit.getIncarnation(), false);
     }
 
     private void handleFail(Fail fail) {
-        stopSuspectIfNeeded(fail.getEndpoint(), fail.getIncarnation());
+        stopSuspectIfNeeded(fail.getEndpoint(), fail.getIncarnation(), false);
     }
 
-    private void stopSuspectIfNeeded(HostEndpoint endpoint, int incarnation) {
+    private void stopSuspectIfNeeded(HostEndpoint endpoint, int incarnation, boolean isAlive) {
         Suspicion suspicion = suspicions.get(endpoint);
         if (suspicion != null && suspicion.incarnation <= incarnation) {
-            log.debug("Suspected member[{},{}] is alive, stop suspecting it: local={}",
-                endpoint, incarnation, memberList.local().getEndpoint());
+            if (isAlive) {
+                log.debug("Suspected member[{},{}] is alive, stop suspecting it: local={}",
+                    endpoint, incarnation, memberList.local().getEndpoint());
+            } else {
+                log.debug("Suspected member[{},{}] is dead, stop suspecting it: local={}",
+                    endpoint, incarnation, memberList.local().getEndpoint());
+            }
             suspicions.remove(endpoint, suspicion);
             suspicion.task.dispose();
         }
