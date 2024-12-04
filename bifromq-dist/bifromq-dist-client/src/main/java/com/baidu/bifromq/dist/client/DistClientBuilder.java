@@ -24,16 +24,18 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 
+/**
+ * The builder for building Dist Client.
+ */
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 @Accessors(fluent = true)
 @Setter
-public final class DistClientBuilder implements IDistClientBuilder {
+public final class DistClientBuilder {
     IRPCServiceTrafficService trafficService;
     EventLoopGroup eventLoopGroup;
     SslContext sslContext;
     int workerThreads = 0;
 
-    @Override
     public IDistClient build() {
         return new DistClient(IRPCClient.newBuilder()
             .bluePrint(RPCBluePrint.INSTANCE)

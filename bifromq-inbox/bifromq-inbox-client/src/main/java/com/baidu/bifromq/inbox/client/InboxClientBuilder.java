@@ -23,10 +23,13 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 
+/**
+ * The builder for building Inbox Client.
+ */
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 @Accessors(fluent = true)
 @Setter
-public final class InboxClientBuilder implements IInboxClientBuilder {
+public final class InboxClientBuilder {
     IRPCServiceTrafficService trafficService;
     EventLoopGroup eventLoopGroup;
     SslContext sslContext;

@@ -28,12 +28,12 @@ import lombok.Setter;
 import lombok.experimental.Accessors;
 
 /**
- * The builder for building dist server.
+ * The builder for building Dist Server.
  */
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 @Accessors(fluent = true)
 @Setter
-public class DistServerBuilder implements IDistServerBuilder {
+public class DistServerBuilder {
     RPCServerBuilder rpcServerBuilder;
     IBaseKVStoreClient distWorkerClient;
     ISettingProvider settingProvider;
@@ -42,7 +42,6 @@ public class DistServerBuilder implements IDistServerBuilder {
     Set<String> defaultGroupTags = new HashSet<>();
     int workerThreads = 0;
 
-    @Override
     public IDistServer build() {
         Preconditions.checkNotNull(rpcServerBuilder, "RPC Server Builder is null");
         return new DistServer(this);

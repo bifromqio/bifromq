@@ -23,16 +23,18 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 
+/**
+ * The builder for building Session Dict Client.
+ */
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 @Accessors(fluent = true)
 @Setter
-public final class SessionDictClientBuilder implements ISessionDictClientBuilder {
+public final class SessionDictClientBuilder {
     private IRPCServiceTrafficService trafficService;
     private EventLoopGroup eventLoopGroup;
     private SslContext sslContext;
     private int workerThreads;
 
-    @Override
     public ISessionDictClient build() {
         return new SessionDictClient(IRPCClient.newBuilder()
             .bluePrint(RPCBluePrint.INSTANCE)

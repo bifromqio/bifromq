@@ -34,7 +34,7 @@ import lombok.experimental.Accessors;
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 @Accessors(fluent = true)
 @Setter
-public class RetainStoreBuilder implements IRetainStoreBuilder {
+public class RetainStoreBuilder {
     String clusterId = IRetainStore.CLUSTER_NAME;
     RPCServerBuilder rpcServerBuilder;
     IAgentHost agentHost;

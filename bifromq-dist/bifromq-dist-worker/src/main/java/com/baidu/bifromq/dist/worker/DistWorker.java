@@ -43,7 +43,7 @@ class DistWorker implements IDistWorker {
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final KVStoreBalanceController storeBalanceController;
     private final List<IDistWorkerBalancerFactory> effectiveBalancerFactories = new LinkedList<>();
-    protected final DistWorkerCoProcFactory coProcFactory;
+    private final DistWorkerCoProcFactory coProcFactory;
 
     public DistWorker(DistWorkerBuilder builder) {
         this.clusterId = builder.clusterId;

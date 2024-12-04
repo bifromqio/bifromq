@@ -28,12 +28,12 @@ import lombok.Setter;
 import lombok.experimental.Accessors;
 
 /**
- * The builder for building retain server.
+ * The builder for building Retain Server.
  */
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 @Accessors(fluent = true)
 @Setter
-public class RetainServerBuilder implements IRetainServerBuilder {
+public class RetainServerBuilder {
     RPCServerBuilder rpcServerBuilder;
     ISettingProvider settingProvider;
     ISubBrokerManager subBrokerManager;
@@ -42,7 +42,6 @@ public class RetainServerBuilder implements IRetainServerBuilder {
     Set<String> defaultGroupTags = new HashSet<>();
     int workerThreads = 0;
 
-    @Override
     public IRetainServer build() {
         Preconditions.checkNotNull(rpcServerBuilder, "RPC Server Builder is null");
         return new RetainServer(this);

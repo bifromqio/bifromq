@@ -33,12 +33,12 @@ import lombok.Setter;
 import lombok.experimental.Accessors;
 
 /**
- * The builder for building dist worker.
+ * The builder for building Dist Worker.
  */
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 @Accessors(fluent = true)
 @Setter
-public class DistWorkerBuilder implements IDistWorkerBuilder {
+public class DistWorkerBuilder {
     String clusterId = IDistWorker.CLUSTER_NAME;
     RPCServerBuilder rpcServerBuilder;
     IAgentHost agentHost;
@@ -57,7 +57,6 @@ public class DistWorkerBuilder implements IDistWorkerBuilder {
     Duration loadEstimateWindow = Duration.ofSeconds(5);
     Map<String, String> attributes = new HashMap<>();
 
-    @Override
     public IDistWorker build() {
         return new DistWorker(this);
     }

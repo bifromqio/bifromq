@@ -32,12 +32,12 @@ import lombok.Setter;
 import lombok.experimental.Accessors;
 
 /**
- * The builder for building inbox store.
+ * The builder for building Inbox Store.
  */
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 @Accessors(fluent = true)
 @Setter
-public class InboxStoreBuilder implements IInboxStoreBuilder {
+public class InboxStoreBuilder {
     String clusterId = IInboxStore.CLUSTER_NAME;
     RPCServerBuilder rpcServerBuilder;
     IAgentHost agentHost;
@@ -56,7 +56,6 @@ public class InboxStoreBuilder implements IInboxStoreBuilder {
     Duration gcInterval = Duration.ofMinutes(5);
     Map<String, String> attributes = new HashMap<>();
 
-    @Override
     public IInboxStore build() {
         return new InboxStore(this);
     }

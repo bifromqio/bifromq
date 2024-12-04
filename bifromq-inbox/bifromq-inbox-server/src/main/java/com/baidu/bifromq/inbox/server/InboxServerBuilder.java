@@ -32,12 +32,12 @@ import lombok.Setter;
 import lombok.experimental.Accessors;
 
 /**
- * The builder for building inbox server.
+ * The builder for building Inbox Server.
  */
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 @Accessors(fluent = true)
 @Setter
-public class InboxServerBuilder implements IInboxServerBuilder {
+public class InboxServerBuilder {
     RPCServerBuilder rpcServerBuilder;
     IEventCollector eventCollector;
     IResourceThrottler resourceThrottler;

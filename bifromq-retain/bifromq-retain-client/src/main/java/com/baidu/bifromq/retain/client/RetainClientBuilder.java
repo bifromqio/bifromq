@@ -23,10 +23,13 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 
+/**
+ * The builder for building Retain Client.
+ */
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 @Accessors(fluent = true)
 @Setter
-public final class RetainClientBuilder implements IRetainClientBuilder {
+public final class RetainClientBuilder {
     IRPCServiceTrafficService trafficService;
     EventLoopGroup eventLoopGroup;
     SslContext sslContext;

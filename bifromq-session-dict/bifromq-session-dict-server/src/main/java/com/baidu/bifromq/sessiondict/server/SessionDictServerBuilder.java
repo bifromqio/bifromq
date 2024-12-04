@@ -25,17 +25,19 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 
+/**
+ * The builder for building Session Dict Server.
+ */
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 @Accessors(fluent = true)
 @Setter
-public class SessionDictServerBuilder implements ISessionDictServerBuilder {
+public class SessionDictServerBuilder {
     RPCServerBuilder rpcServerBuilder;
     IMqttBrokerClient mqttBrokerClient;
     Map<String, String> attributes = new HashMap<>();
     Set<String> defaultGroupTags = new HashSet<>();
     int workerThreads;
 
-    @Override
     public ISessionDictServer build() {
         Preconditions.checkNotNull(rpcServerBuilder, "RPC Server Builder is null");
         return new SessionDictServer(this);
