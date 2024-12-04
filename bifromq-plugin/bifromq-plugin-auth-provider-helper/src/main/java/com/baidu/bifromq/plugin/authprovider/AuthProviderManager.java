@@ -204,11 +204,19 @@ public class AuthProviderManager implements IAuthProvider, AutoCloseable {
             return delegate.checkPermission(client, action)
                 .thenApply(v -> {
                     start.stop(metricMgr.checkCallTimer);
+                    if (v.getTypeCase() == CheckResult.TypeCase.ERROR
+                        && (boolean) settingProvider.provide(ByPassPermCheckError, client.getTenantId())) {
+                        eventCollector.report(
+                            getLocal(AccessControlError.class).clientInfo(client).cause(v.getError().getReason()));
+                        return CheckResult.newBuilder()
+                            .setGranted(Granted.getDefaultInstance())
+                            .build();
+                    }
                     return v;
                 })
                 .exceptionally(e -> {
                     metricMgr.checkCallErrorCounter.increment();
-                    eventCollector.report(getLocal(AccessControlError.class).clientInfo(client).cause(e));
+                    eventCollector.report(getLocal(AccessControlError.class).clientInfo(client).cause(e.getMessage()));
                     boolean byPass = settingProvider.provide(ByPassPermCheckError, client.getTenantId());
                     if (byPass) {
                         return CheckResult.newBuilder()
@@ -225,7 +233,7 @@ public class AuthProviderManager implements IAuthProvider, AutoCloseable {
                 });
         } catch (Throwable e) {
             metricMgr.checkCallErrorCounter.increment();
-            eventCollector.report(getLocal(AccessControlError.class).clientInfo(client).cause(e));
+            eventCollector.report(getLocal(AccessControlError.class).clientInfo(client).cause(e.getMessage()));
             boolean byPass = settingProvider.provide(ByPassPermCheckError, client.getTenantId());
             if (byPass) {
                 return CompletableFuture.completedFuture(CheckResult.newBuilder()

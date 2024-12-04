@@ -25,7 +25,7 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true, chain = true)
 @ToString(callSuper = true)
 public final class AccessControlError extends ClientEvent<AccessControlError> {
-    private Throwable cause;
+    private String cause;
 
     @Override
     public EventType type() {

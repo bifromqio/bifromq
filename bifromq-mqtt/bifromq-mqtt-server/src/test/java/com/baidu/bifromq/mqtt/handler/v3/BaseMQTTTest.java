@@ -31,6 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
@@ -75,6 +76,7 @@ import com.baidu.bifromq.plugin.authprovider.type.Denied;
 import com.baidu.bifromq.plugin.authprovider.type.Granted;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.plugin.authprovider.type.Reject;
 import com.baidu.bifromq.plugin.clientbalancer.IClientBalancer;
@@ -246,6 +248,10 @@ public abstract class BaseMQTTTest {
                     .setUserId(userId)
                     .putAllAttrs(attrsMap)
                     .build())
+                .build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
                 .build()));
     }
 

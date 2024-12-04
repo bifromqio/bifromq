@@ -25,6 +25,7 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
+import com.baidu.bifromq.plugin.authprovider.type.Error;
 import com.baidu.bifromq.plugin.authprovider.type.Failed;
 import com.baidu.bifromq.plugin.authprovider.type.Granted;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
@@ -352,7 +353,7 @@ public class AuthProviderManagerTest {
         ArgumentCaptor<AccessControlError> eventArgumentCaptor = ArgumentCaptor.forClass(AccessControlError.class);
         verify(eventCollector).report(eventArgumentCaptor.capture());
         assertEquals(eventArgumentCaptor.getValue().type(), EventType.ACCESS_CONTROL_ERROR);
-        assertTrue(eventArgumentCaptor.getValue().cause().getMessage().contains("Intend Error"));
+        assertTrue(eventArgumentCaptor.getValue().cause().contains("Intend Error"));
 
         assertEquals(meterRegistry.find(CALL_TIMER).tag(TAG_METHOD, "AuthProvider/check").timer().count(),
             0);
@@ -376,5 +377,25 @@ public class AuthProviderManagerTest {
             0);
         assertEquals(meterRegistry.find(CALL_FAIL_COUNTER).tag(TAG_METHOD, "AuthProvider/check").counter().count(),
             1);
+    }
+
+    @Test
+    public void byPassCheckResultError() {
+        when(settingProvider.provide(ByPassPermCheckError, clientInfo.getTenantId())).thenReturn(true);
+        manager =
+            new AuthProviderManager(mockProvider.getClass().getName(), pluginManager, settingProvider, eventCollector);
+        when(mockProvider.checkPermission(any(ClientInfo.class), any(MQTTAction.class)))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setError(Error.newBuilder().build())
+                .build()));
+        assertTrue(manager.checkPermission(clientInfo, mockActionInfo).join().hasGranted());
+        ArgumentCaptor<AccessControlError> eventArgumentCaptor = ArgumentCaptor.forClass(AccessControlError.class);
+        verify(eventCollector).report(eventArgumentCaptor.capture());
+        assertEquals(eventArgumentCaptor.getValue().type(), EventType.ACCESS_CONTROL_ERROR);
+
+        assertEquals(meterRegistry.find(CALL_TIMER).tag(TAG_METHOD, "AuthProvider/check").timer().count(),
+            1);
+        assertEquals(meterRegistry.find(CALL_FAIL_COUNTER).tag(TAG_METHOD, "AuthProvider/check").counter().count(),
+            0);
     }
 }

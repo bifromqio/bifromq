@@ -20,6 +20,7 @@ import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toUserProperti
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
+import com.baidu.bifromq.plugin.authprovider.type.ConnAction;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthData;
@@ -39,7 +40,6 @@ import io.netty.handler.codec.mqtt.MqttReasonCodeAndPropertiesVariableHeader;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.security.cert.X509Certificate;
-import java.util.Base64;
 import java.util.Optional;
 import lombok.SneakyThrows;
 
@@ -53,7 +53,7 @@ public class AuthUtil {
         }
         X509Certificate cert = ChannelAttrs.clientCertificate(channel);
         if (cert != null) {
-            authData.setCert(unsafeWrap(Base64.getEncoder().encode(cert.getEncoded())));
+            authData.setCert(unsafeWrap(cert.getEncoded()));
         }
         if (msg.variableHeader().hasUserName()) {
             authData.setUsername(msg.payload().userName());
@@ -82,7 +82,7 @@ public class AuthUtil {
         MQTT5AuthData.Builder authData = MQTT5AuthData.newBuilder();
         X509Certificate cert = ChannelAttrs.clientCertificate(channel);
         if (cert != null) {
-            authData.setCert(unsafeWrap(Base64.getEncoder().encode(cert.getEncoded())));
+            authData.setCert(unsafeWrap(cert.getEncoded()));
         }
         if (msg.variableHeader().hasUserName()) {
             authData.setUsername(msg.payload().userName());
@@ -129,6 +129,14 @@ public class AuthUtil {
         authBuilder.setUserProps(toUserProperties(authProps));
         return MQTT5ExtendedAuthData.newBuilder()
             .setAuth(authBuilder.build())
+            .build();
+    }
+
+    public static MQTTAction buildConnAction(UserProperties userProps) {
+        return MQTTAction.newBuilder()
+            .setConn(ConnAction.newBuilder()
+                .setUserProps(userProps)
+                .build())
             .build();
     }
 

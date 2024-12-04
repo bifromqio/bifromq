@@ -27,11 +27,16 @@ message UnsubAction {
   commontype.UserProperties userProps = 2;
 }
 
+message ConnAction {
+  commontype.UserProperties userProps = 1;
+}
+
 message MQTTAction {
   oneof Type{
     PubAction pub = 1;
     SubAction sub = 2;
     UnsubAction unsub = 3;
+    ConnAction conn = 4;
   }
 }
 

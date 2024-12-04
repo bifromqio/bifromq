@@ -41,9 +41,12 @@ import com.baidu.bifromq.mqtt.MockableTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
+import com.baidu.bifromq.plugin.authprovider.type.Granted;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
 import com.baidu.bifromq.plugin.authprovider.type.Success;
 import com.baidu.bifromq.plugin.clientbalancer.IClientBalancer;
 import com.baidu.bifromq.plugin.clientbalancer.Redirection;
@@ -54,6 +57,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Redir
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.type.ClientInfo;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.bifromq.plugin.resourcethrottler.TenantResourceType;
 import com.google.protobuf.ByteString;
@@ -256,6 +260,10 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
             .thenReturn(CompletableFuture.completedFuture(MQTT5AuthResult.newBuilder()
                 .setSuccess(Success.newBuilder().setTenantId("tenantId").build())
                 .build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
         channel.writeInbound(connMsg);
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
@@ -279,6 +287,10 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         when(authProvider.auth(any(MQTT5AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT5AuthResult.newBuilder()
                 .setSuccess(Success.newBuilder().setTenantId("tenantId").build())
+                .build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
                 .build()));
         channel.writeInbound(connMsg);
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
@@ -304,6 +316,10 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
             .thenReturn(CompletableFuture.completedFuture(MQTT5AuthResult.newBuilder()
                 .setSuccess(Success.newBuilder().setTenantId("tenantId").build())
                 .build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
         channel.writeInbound(connMsg);
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
@@ -326,6 +342,10 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         when(authProvider.auth(any(MQTT5AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT5AuthResult.newBuilder()
                 .setSuccess(Success.newBuilder().setTenantId("tenantId").build())
+                .build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
                 .build()));
         when(clientBalancer.needRedirect(any())).thenReturn(
             Optional.of(new Redirection(true, Optional.of("server1"))));
@@ -351,6 +371,10 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         when(authProvider.auth(any(MQTT5AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT5AuthResult.newBuilder()
                 .setSuccess(Success.newBuilder().setTenantId("tenantId").build())
+                .build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
                 .build()));
         when(clientBalancer.needRedirect(any())).thenReturn(
             Optional.of(new Redirection(false, Optional.empty())));

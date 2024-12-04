@@ -129,6 +129,13 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
             cancellableTasks.track(authenticate(connMsg))
                 .thenComposeAsync(okOrGoAway -> {
                     if (okOrGoAway.goAway != null) {
+                        return CompletableFuture.completedFuture(okOrGoAway);
+                    }
+                    // check conn permission
+                    return checkConnectPermission(connMsg, okOrGoAway.clientInfo);
+                }, ctx.executor())
+                .thenComposeAsync(okOrGoAway -> {
+                    if (okOrGoAway.goAway != null) {
                         handleGoAway(okOrGoAway.goAway);
                         return CompletableFuture.completedFuture(null);
                     } else {
@@ -311,6 +318,9 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
     protected abstract GoAway sanityCheck(MqttConnectMessage message);
 
     protected abstract CompletableFuture<AuthResult> authenticate(MqttConnectMessage message);
+
+    protected abstract CompletableFuture<AuthResult> checkConnectPermission(MqttConnectMessage message,
+                                                                            ClientInfo clientInfo);
 
     protected abstract void handleMqttMessage(MqttMessage message);
 

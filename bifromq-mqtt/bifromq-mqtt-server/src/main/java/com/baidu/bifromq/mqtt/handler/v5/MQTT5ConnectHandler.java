@@ -23,8 +23,10 @@ import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.isUTF8Payload;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.maximumPacketSize;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.requestProblemInformation;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.requestResponseInformation;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toUserProperties;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toWillMessage;
 import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.topicAliasMaximum;
+import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildConnAction;
 import static com.baidu.bifromq.mqtt.utils.MQTT5MessageSizer.MIN_CONTROL_PACKET_SIZE;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
@@ -72,6 +74,7 @@ import com.baidu.bifromq.plugin.authprovider.type.Continue;
 import com.baidu.bifromq.plugin.authprovider.type.Failed;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
 import com.baidu.bifromq.plugin.authprovider.type.Success;
 import com.baidu.bifromq.plugin.clientbalancer.IClientBalancer;
 import com.baidu.bifromq.plugin.clientbalancer.Redirection;
@@ -166,8 +169,8 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 .build(),
                 getLocal(MalformedClientIdentifier.class).peerAddress(clientAddress));
         }
-        if (connMsg.variableHeader().hasUserName() &&
-            !UTF8Util.isWellFormed(connMsg.payload().userName(), SANITY_CHECK)) {
+        if (connMsg.variableHeader().hasUserName()
+            && !UTF8Util.isWellFormed(connMsg.payload().userName(), SANITY_CHECK)) {
             return new GoAway(MqttMessageBuilders
                 .connAck()
                 .properties(MQTT5MessageBuilders.connAckProperties()
@@ -177,8 +180,8 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 .build(),
                 getLocal(MalformedUserName.class).peerAddress(clientAddress));
         }
-        if (authMethod(connMsg.variableHeader().properties()).isEmpty() &&
-            authData(connMsg.variableHeader().properties()).isPresent()) {
+        if (authMethod(connMsg.variableHeader().properties()).isEmpty()
+            && authData(connMsg.variableHeader().properties()).isPresent()) {
             return new GoAway(MqttMessageBuilders
                 .connAck()
                 .properties(MQTT5MessageBuilders.connAckProperties()
@@ -289,6 +292,45 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
         }
     }
 
+    @Override
+    protected CompletableFuture<AuthResult> checkConnectPermission(MqttConnectMessage message, ClientInfo clientInfo) {
+        MQTTAction connAction = buildConnAction(toUserProperties(message.variableHeader().properties()));
+        return authProvider.checkPermission(clientInfo, connAction)
+            .thenApply(checkResult -> {
+                switch (checkResult.getTypeCase()) {
+                    case GRANTED -> {
+                        return AuthResult.ok(clientInfo);
+                    }
+                    case DENIED -> {
+                        return goAway(MqttMessageBuilders
+                                .connAck()
+                                .properties(MQTT5MessageBuilders.connAckProperties()
+                                    .reasonString("Not authorized")
+                                    .build())
+                                .returnCode(CONNECTION_REFUSED_NOT_AUTHORIZED_5)
+                                .build(),
+                            getLocal(NotAuthorizedClient.class)
+                                .tenantId(clientInfo.getTenantId())
+                                .userId(clientInfo.getMetadataOrDefault(MQTT_USER_ID_KEY, ""))
+                                .clientId(connMsg.payload().clientIdentifier())
+                                .peerAddress(ChannelAttrs.socketAddress(ctx.channel())));
+                    }
+                    default -> {
+                        return goAway(MqttMessageBuilders
+                                .connAck()
+                                .properties(MQTT5MessageBuilders.connAckProperties()
+                                    .reasonString("Failed to check connect permission")
+                                    .build())
+                                .returnCode(CONNECTION_REFUSED_UNSPECIFIED_ERROR)
+                                .build(),
+                            getLocal(AuthError.class)
+                                .cause("Failed to check connect permission")
+                                .peerAddress(ChannelAttrs.socketAddress(ctx.channel())));
+                    }
+                }
+            });
+    }
+
     private void extendedAuth(MQTT5ExtendedAuthData authData) {
         this.isAuthing = true;
         authProvider.extendedAuth(authData)
@@ -390,8 +432,8 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                     .peerAddress(ChannelAttrs.socketAddress(ctx.channel()))));
                 case DISCONNECT -> handleGoAway(GoAway.now(getLocal(EnhancedAuthAbortByClient.class)));
                 default -> handleGoAway(GoAway.now(getLocal(ProtocolError.class)
-                    .statement("Unexpected control packet during enhanced auth: " +
-                        message.fixedHeader().messageType())
+                    .statement("Unexpected control packet during enhanced auth: "
+                        + message.fixedHeader().messageType())
                     .peerAddress(ChannelAttrs.socketAddress(ctx.channel()))));
             }
         } else {
@@ -416,8 +458,8 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 }
                 case DISCONNECT -> handleGoAway(GoAway.now(getLocal(EnhancedAuthAbortByClient.class)));
                 default -> handleGoAway(GoAway.now(getLocal(ProtocolError.class)
-                    .statement("Unexpected control packet during enhanced auth: " +
-                        message.fixedHeader().messageType())
+                    .statement("Unexpected control packet during enhanced auth: "
+                        + message.fixedHeader().messageType())
                     .peerAddress(ChannelAttrs.socketAddress(ctx.channel()))));
             }
         }
@@ -543,9 +585,9 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                         .statement("Will QoS not supported")
                         .clientInfo(clientInfo));
             }
-            if (settings.payloadFormatValidationEnabled &&
-                isUTF8Payload(connMsg.payload().willProperties()) &&
-                !UTF8Util.isValidUTF8Payload(connMsg.payload().willMessageInBytes())) {
+            if (settings.payloadFormatValidationEnabled
+                && isUTF8Payload(connMsg.payload().willProperties())
+                && !UTF8Util.isValidUTF8Payload(connMsg.payload().willMessageInBytes())) {
                 return new GoAway(MqttMessageBuilders
                     .connAck()
                     .properties(MQTT5MessageBuilders.connAckProperties()
@@ -701,8 +743,8 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
         connPropsBuilder.maximumPacketSize(settings.maxPacketSize);
         connPropsBuilder.topicAliasMaximum(settings.maxTopicAlias);
         connPropsBuilder.receiveMaximum(settings.receiveMaximum);
-        if (requestResponseInformation(connMsg.variableHeader().properties()) &&
-            clientInfo.containsMetadata(MQTT_RESPONSE_INFO)) {
+        if (requestResponseInformation(connMsg.variableHeader().properties())
+            && clientInfo.containsMetadata(MQTT_RESPONSE_INFO)) {
             // include response information only when client requested it
             connPropsBuilder.responseInformation(clientInfo.getMetadataOrDefault(MQTT_RESPONSE_INFO, ""));
         }

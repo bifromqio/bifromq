@@ -22,6 +22,8 @@ import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.mqtt.integration.MQTTTest;
 import com.baidu.bifromq.mqtt.integration.v3.client.MqttTestClient;
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
+import com.baidu.bifromq.plugin.authprovider.type.Granted;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
@@ -42,6 +44,10 @@ public class MQTTDisconnectTest extends MQTTTest {
                     .setTenantId(tenantId)
                     .setUserId("testUser")
                     .build()).build()));
+        when(authProvider.checkPermission(any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
 
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setCleanSession(true);
@@ -67,6 +73,10 @@ public class MQTTDisconnectTest extends MQTTTest {
                     .setTenantId(tenantId)
                     .setUserId("testUser")
                     .build()).build()));
+        when(authProvider.checkPermission(any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
 
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setCleanSession(true);

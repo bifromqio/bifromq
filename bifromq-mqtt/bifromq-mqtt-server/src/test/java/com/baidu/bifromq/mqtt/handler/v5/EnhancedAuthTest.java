@@ -15,6 +15,7 @@ package com.baidu.bifromq.mqtt.handler.v5;
 
 import static com.baidu.bifromq.mqtt.handler.condition.ORCondition.or;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
@@ -33,16 +34,20 @@ import com.baidu.bifromq.mqtt.service.ILocalSessionRegistry;
 import com.baidu.bifromq.mqtt.service.LocalSessionRegistry;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.authprovider.type.Continue;
 import com.baidu.bifromq.plugin.authprovider.type.Failed;
+import com.baidu.bifromq.plugin.authprovider.type.Granted;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
 import com.baidu.bifromq.plugin.authprovider.type.Success;
 import com.baidu.bifromq.plugin.clientbalancer.IClientBalancer;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
+import com.baidu.bifromq.type.ClientInfo;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.protobuf.ByteString;
@@ -179,6 +184,10 @@ public class EnhancedAuthTest extends MockableTest {
                 MQTT5ExtendedAuthResult.newBuilder()
                     .setSuccess(Success.newBuilder().build())
                     .build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
         channel.writeInbound(connect);
         MqttConnAckMessage connAckMessage = channel.readOutbound();
         assertEquals(connAckMessage.variableHeader().connectReturnCode(), MqttConnectReturnCode.CONNECTION_ACCEPTED);
@@ -219,6 +228,10 @@ public class EnhancedAuthTest extends MockableTest {
                 MQTT5ExtendedAuthResult.newBuilder()
                     .setSuccess(Success.newBuilder().setTenantId("tenant").setUserId("user").build())
                     .build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
         channel.writeInbound(MqttMessageBuilders.auth()
             .reasonCode(MQTT5AuthReasonCode.Continue.value())
             .properties(MQTT5MessageUtils.mqttProps()
@@ -338,6 +351,10 @@ public class EnhancedAuthTest extends MockableTest {
                 MQTT5ExtendedAuthResult.newBuilder()
                     .setSuccess(Success.newBuilder().build())
                     .build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
         channel.writeInbound(connect);
         MqttConnAckMessage connAckMessage = channel.readOutbound();
         assertEquals(connAckMessage.variableHeader().connectReturnCode(), MqttConnectReturnCode.CONNECTION_ACCEPTED);

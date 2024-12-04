@@ -17,6 +17,7 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -27,8 +28,11 @@ import com.baidu.bifromq.mqtt.MockableTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
+import com.baidu.bifromq.plugin.authprovider.type.Granted;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
+import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.plugin.clientbalancer.IClientBalancer;
 import com.baidu.bifromq.plugin.clientbalancer.Redirection;
@@ -37,6 +41,7 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Redirect;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.type.ClientInfo;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
@@ -114,6 +119,10 @@ public class MQTT3ConnectHandlerTest extends MockableTest {
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder().setTenantId("tenantId").build())
                 .build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
         when(clientBalancer.needRedirect(any())).thenReturn(
             Optional.of(new Redirection(true, Optional.of("server1"))));
         channel.writeInbound(connMsg);
@@ -136,6 +145,10 @@ public class MQTT3ConnectHandlerTest extends MockableTest {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder().setTenantId("tenantId").build())
+                .build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
                 .build()));
         when(clientBalancer.needRedirect(any())).thenReturn(
             Optional.of(new Redirection(false, Optional.empty())));

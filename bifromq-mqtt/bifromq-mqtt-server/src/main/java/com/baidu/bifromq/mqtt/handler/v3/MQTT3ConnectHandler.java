@@ -17,6 +17,7 @@ import static com.baidu.bifromq.metrics.TenantMetric.MqttAuthFailureCount;
 import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.goAway;
 import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.ok;
 import static com.baidu.bifromq.mqtt.handler.condition.ORCondition.or;
+import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildConnAction;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
@@ -66,6 +67,7 @@ import com.baidu.bifromq.sysprops.props.MaxMqtt3ClientIdLength;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
+import com.baidu.bifromq.type.UserProperties;
 import com.baidu.bifromq.util.TopicUtil;
 import com.baidu.bifromq.util.UTF8Util;
 import com.bifromq.plugin.resourcethrottler.TenantResourceType;
@@ -124,12 +126,12 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                 .build(),
                 getLocal(IdentifierRejected.class).peerAddress(clientAddress));
         }
-        if (message.variableHeader().hasUserName() &&
-            !UTF8Util.isWellFormed(message.payload().userName(), SANITY_CHECK)) {
+        if (message.variableHeader().hasUserName()
+            && !UTF8Util.isWellFormed(message.payload().userName(), SANITY_CHECK)) {
             return new GoAway(getLocal(MalformedUserName.class).peerAddress(clientAddress));
         }
-        if (message.variableHeader().isWillFlag() &&
-            !UTF8Util.isWellFormed(message.payload().willTopic(), SANITY_CHECK)) {
+        if (message.variableHeader().isWillFlag()
+            && !UTF8Util.isWellFormed(message.payload().willTopic(), SANITY_CHECK)) {
             return new GoAway(getLocal(MalformedWillTopic.class).peerAddress(clientAddress));
         }
         return null;
@@ -214,6 +216,38 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                     }
                 }
             }, ctx.executor());
+    }
+
+    @Override
+    protected CompletableFuture<AuthResult> checkConnectPermission(MqttConnectMessage message, ClientInfo clientInfo) {
+        return authProvider.checkPermission(clientInfo, buildConnAction(UserProperties.getDefaultInstance()))
+            .thenApply(checkResult -> {
+                switch (checkResult.getTypeCase()) {
+                    case GRANTED -> {
+                        return AuthResult.ok(clientInfo);
+                    }
+                    case DENIED -> {
+                        return goAway(MqttMessageBuilders
+                                .connAck()
+                                .returnCode(CONNECTION_REFUSED_NOT_AUTHORIZED)
+                                .build(),
+                            getLocal(NotAuthorizedClient.class)
+                                .tenantId(clientInfo.getTenantId())
+                                .userId(clientInfo.getMetadataOrDefault(MQTT_USER_ID_KEY, ""))
+                                .clientId(clientInfo.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""))
+                                .peerAddress(ChannelAttrs.socketAddress(ctx.channel())));
+                    }
+                    default -> {
+                        return goAway(MqttMessageBuilders
+                                .connAck()
+                                .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
+                                .build(),
+                            getLocal(AuthError.class)
+                                .cause("Failed to check connect permission")
+                                .peerAddress(ChannelAttrs.socketAddress(ctx.channel())));
+                    }
+                }
+            });
     }
 
     @Override
