@@ -263,7 +263,6 @@ public class StandaloneStarter {
                 new MQTTServiceModule(),
                 new APIServerModule(),
                 new ServiceInjectorModule(serviceInjector));
-            injector.getBindings();
             StandaloneStarter starter = StandaloneStarter.builder()
                 .config(config)
                 .agentHost(serviceInjector.getInstance(IAgentHost.class))
@@ -277,8 +276,8 @@ public class StandaloneStarter {
             starter.start();
         } catch (Throwable e) {
             log.error("Failed to start BifroMQ", e);
-            System.exit(-1);
             formatter.printHelp("CMD", CLI_OPTIONS);
+            System.exit(-1);
         }
     }
 }
