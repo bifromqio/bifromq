@@ -715,8 +715,8 @@ public class MQTT5MessageBuilders {
         public MqttMessage build() {
             MqttFixedHeader fixedHeader =
                 new MqttFixedHeader(MqttMessageType.DISCONNECT, false, MqttQoS.AT_MOST_ONCE, false, 0);
+            MQTT5MessageUtils.MqttPropertiesBuilder propsBuilder = MQTT5MessageUtils.mqttProps();
             if (!Strings.isNullOrEmpty(reasonString) || userProps != null || !Strings.isNullOrEmpty(serverReference)) {
-                MQTT5MessageUtils.MqttPropertiesBuilder propsBuilder = MQTT5MessageUtils.mqttProps();
                 if (!Strings.isNullOrEmpty(reasonString)) {
                     propsBuilder.addReasonString(reasonString);
                 }
@@ -726,12 +726,16 @@ public class MQTT5MessageBuilders {
                 if (userProps != null) {
                     propsBuilder.addUserProperties(userProps);
                 }
-                MqttReasonCodeAndPropertiesVariableHeader variableHeader =
-                    new MqttReasonCodeAndPropertiesVariableHeader(reasonCode.value(), propsBuilder.build());
-                return new MqttMessage(fixedHeader, variableHeader);
             }
-            return new MqttMessage(fixedHeader);
-
+            MqttProperties mqttProperties = propsBuilder.build();
+            if (reasonCode == MQTT5DisconnectReasonCode.Normal && mqttProperties.isEmpty()) {
+                // The Reason Code and Property Length can be omitted if the Reason Code is 0x00 (Normal disconnection)
+                // and there are no Properties
+                return new MqttMessage(fixedHeader);
+            }
+            MqttReasonCodeAndPropertiesVariableHeader variableHeader =
+                new MqttReasonCodeAndPropertiesVariableHeader(reasonCode.value(), mqttProperties);
+            return new MqttMessage(fixedHeader, variableHeader);
         }
     }
 

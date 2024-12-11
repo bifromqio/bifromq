@@ -237,8 +237,21 @@ public class MQTT5MessageSizerTest extends MockableTest {
             .reasonCode(MQTT5DisconnectReasonCode.Normal)
             .build();
         verifySize(message);
-    }
 
+        message = MQTT5MessageBuilders.disconnect()
+            .reasonCode(MQTT5DisconnectReasonCode.Normal)
+            .reasonString("disconnected")
+            .build();
+        verifySize(message);
+
+        message = MQTT5MessageBuilders.disconnect()
+            .reasonCode(MQTT5DisconnectReasonCode.PacketTooLarge)
+            .reasonString("packet toolarge")
+            .userProps(UserProperties.newBuilder()
+                .addUserProperties(StringPair.newBuilder().setKey("key").setValue("val").build()).build())
+            .build();
+        verifySize(message);
+    }
 
     private void verifySize(MqttMessage message) {
         IMQTTMessageSizer.MqttMessageSize calcSize = sizer.sizeOf(message);
