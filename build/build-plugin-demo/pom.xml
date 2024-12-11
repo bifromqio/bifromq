@@ -121,6 +121,9 @@
                         <goals>
                             <goal>single</goal>
                         </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/pluginDir</outputDirectory>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

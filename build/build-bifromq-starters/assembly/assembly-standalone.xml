@@ -19,7 +19,7 @@
     </formats>
     <files>
         <file>
-            <source>../build-plugin-demo/target/demo-plugin-${project.parent.version}.jar</source>
+            <source>../build-plugin-demo/target/pluginDir/demo-plugin-${project.parent.version}.jar</source>
             <outputDirectory>plugins</outputDirectory>
         </file>
     </files>
