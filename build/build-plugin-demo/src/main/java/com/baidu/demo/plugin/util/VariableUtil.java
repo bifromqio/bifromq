@@ -1,5 +1,8 @@
 package com.baidu.demo.plugin.util;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class VariableUtil {
     private static final String PLUGIN_PROMETHEUS_PORT = "PLUGIN_PROMETHEUS_PORT";
     private static final String PLUGIN_PROMETHEUS_CONTEXT = "PLUGIN_PROMETHEUS_CONTEXT";
@@ -15,6 +18,7 @@ public class VariableUtil {
         try {
             return Integer.parseUnsignedInt(prometheusPort);
         } catch (Throwable e) {
+            log.error("Parse prometheus port: {} error, use default port", prometheusPort, e);
             return DEFAULT_PORT;
         }
     }
