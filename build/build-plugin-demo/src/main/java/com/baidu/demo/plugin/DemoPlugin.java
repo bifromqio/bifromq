@@ -28,13 +28,15 @@ import java.net.InetSocketAddress;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
+import static com.baidu.demo.plugin.util.VariableUtil.getContext;
+import static com.baidu.demo.plugin.util.VariableUtil.getPort;
+
 @Slf4j
 public class DemoPlugin extends BifroMQPlugin<DemoPluginContext> {
-    private static final String PLUGIN_PROMETHEUS_PORT = "plugin.prometheus.port";
-    private static final String PLUGIN_PROMETHEUS_CONTEXT = "plugin.prometheus.context";
     private final PrometheusMeterRegistry registry;
     private final HttpServer prometheusExportServer;
     private final Thread serverThread;
+    private final int exportPort;
 
     /**
      * Constructor to be used by plugin manager for plugin instantiation. Your plugins have to provide constructor with
@@ -44,6 +46,7 @@ public class DemoPlugin extends BifroMQPlugin<DemoPluginContext> {
      */
     public DemoPlugin(BifroMQPluginDescriptor context) {
         super(context);
+        exportPort = getPort();
         registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
         registry.config().meterFilter(new MeterFilter() {
             @Override
@@ -68,8 +71,8 @@ public class DemoPlugin extends BifroMQPlugin<DemoPluginContext> {
         });
         Metrics.addRegistry(registry);
         try {
-            prometheusExportServer = HttpServer.create(new InetSocketAddress(port()), 0);
-            prometheusExportServer.createContext(contextPath(), httpExchange -> {
+            prometheusExportServer = HttpServer.create(new InetSocketAddress(exportPort), 0);
+            prometheusExportServer.createContext(getContext(), httpExchange -> {
                 String response = registry.scrape();
                 httpExchange.sendResponseHeaders(200, response.getBytes().length);
                 try (OutputStream os = httpExchange.getResponseBody()) {
@@ -85,30 +88,13 @@ public class DemoPlugin extends BifroMQPlugin<DemoPluginContext> {
     @Override
     protected void doStart() {
         serverThread.start();
-        log.debug("Prometheus exporter started");
+        log.info("Prometheus exporter started on port {}", exportPort);
     }
 
     @Override
     protected void doStop() {
         prometheusExportServer.stop(0);
         Metrics.removeRegistry(registry);
-        log.debug("Prometheus exporter stopped");
-    }
-
-    private int port() {
-        String prometheusPort = System.getProperty(PLUGIN_PROMETHEUS_PORT, "9090");
-        try {
-            return Integer.parseUnsignedInt(prometheusPort);
-        } catch (Throwable e) {
-            return 9090;
-        }
-    }
-
-    private String contextPath() {
-        String ctx = System.getProperty(PLUGIN_PROMETHEUS_CONTEXT, "/metrics");
-        if (ctx.startsWith("/")) {
-            return ctx;
-        }
-        return "/" + ctx;
+        log.info("Prometheus exporter stopped");
     }
 }
