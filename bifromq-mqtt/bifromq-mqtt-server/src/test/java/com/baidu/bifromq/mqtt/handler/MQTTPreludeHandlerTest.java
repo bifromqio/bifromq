@@ -276,6 +276,7 @@ public class MQTTPreludeHandlerTest extends MockableTest {
         when(authProvider.auth(any(MQTT5AuthData.class))).thenReturn(new CompletableFuture<>());
         embeddedChannel.writeInbound(MqttMessageBuilders.connect()
             .protocolVersion(MqttVersion.MQTT_5)
+            .cleanSession(true)
             .clientId("")
             .build());
         embeddedChannel.advanceTimeBy(3, TimeUnit.SECONDS);

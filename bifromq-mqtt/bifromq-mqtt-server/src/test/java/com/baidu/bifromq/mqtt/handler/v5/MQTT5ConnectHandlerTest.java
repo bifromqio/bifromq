@@ -128,9 +128,9 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
     }
 
     @Test
-    public void sanityCheck_cleanStart_emptyClientId() {
+    public void sanityCheck_cleanStart_false_emptyClientId() {
         MqttConnectMessage connMsg = MqttMessageBuilders.connect()
-            .cleanSession(true)
+            .cleanSession(false)
             .clientId("")
             .protocolVersion(MqttVersion.MQTT_5)
             .build();

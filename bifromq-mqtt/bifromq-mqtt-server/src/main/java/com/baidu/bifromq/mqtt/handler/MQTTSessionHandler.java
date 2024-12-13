@@ -397,13 +397,10 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     public final void channelRead(ChannelHandlerContext ctx, Object msg) {
         assert msg instanceof MqttMessage;
         MqttMessage mqttMessage = (MqttMessage) msg;
-        log.trace("Received {}", mqttMessage);
         if (mqttMessage.decoderResult().isSuccess()) {
             tenantMeter.recordSummary(MqttIngressBytes, sizer.sizeByHeader(mqttMessage.fixedHeader()));
             lastActiveAtNanos = sessionCtx.nanoTime();
-            if (log.isTraceEnabled()) {
-                log.trace("Received mqtt message:{}", mqttMessage);
-            }
+            log.trace("Received mqtt message:{}", mqttMessage);
             switch (mqttMessage.fixedHeader().messageType()) {
                 case CONNECT ->
                     handleProtocolResponse(helper().respondDuplicateConnect((MqttConnectMessage) mqttMessage));
@@ -424,6 +421,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 default -> handleOther(mqttMessage);
             }
         } else {
+            log.debug("Received bad mqtt message: {}", mqttMessage);
             handleProtocolResponse(helper().respondDecodeError(mqttMessage));
         }
     }

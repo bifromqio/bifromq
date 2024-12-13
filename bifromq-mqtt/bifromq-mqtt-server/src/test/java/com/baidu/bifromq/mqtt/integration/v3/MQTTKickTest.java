@@ -33,6 +33,39 @@ import org.testng.annotations.Test;
 public class MQTTKickTest extends MQTTTest {
 
     @Test(groups = "integration")
+    public void emptyClientIdNoKick() {
+        String deviceKey = "testDevice";
+        String clientId = "";
+
+        when(authProvider.auth(any(MQTT3AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTenantId(tenantId)
+                    .setUserId(deviceKey)
+                    .build())
+                .build()));
+
+        MqttConnectOptions connOpts = new MqttConnectOptions();
+        connOpts.setMqttVersion(4);
+        connOpts.setCleanSession(true);
+        connOpts.setUserName(tenantId + "/" + deviceKey);
+
+        MqttTestClient client1 = new MqttTestClient(BROKER_URI, clientId);
+        client1.connect(connOpts);
+        assertTrue(client1.isConnected());
+
+        MqttTestClient client2 = new MqttTestClient(BROKER_URI, clientId);
+        client2.connect(connOpts);
+        assertTrue(client2.isConnected());
+        assertTrue(client1.isConnected());
+
+        client1.disconnect();
+        client2.disconnect();
+        client1.close();
+        client2.close();
+    }
+
+    @Test(groups = "integration")
     public void testKick() {
         String deviceKey = "testDevice";
         String clientId = "testClient1";
@@ -65,6 +98,5 @@ public class MQTTKickTest extends MQTTTest {
         client2.disconnect();
         client1.close();
         client2.close();
-
     }
 }

@@ -59,7 +59,7 @@ public class MqttTestClient {
     }
 
     @SneakyThrows
-    public void connect(MqttConnectionOptions options) {
+    public IMqttToken connect(MqttConnectionOptions options) {
         client.setCallback(new MqttCallback() {
 
             @Override
@@ -100,7 +100,7 @@ public class MqttTestClient {
                 messageSubject.onNext(new MqttMsg(topic, message));
             }
         });
-        client.connect(options);
+        return client.connectWithResult(options);
     }
 
     @SneakyThrows

@@ -90,6 +90,7 @@ import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.util.TopicUtil;
 import com.baidu.bifromq.util.UTF8Util;
 import com.bifromq.plugin.resourcethrottler.TenantResourceType;
+import com.google.common.base.Strings;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
@@ -148,7 +149,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 .build(),
                 getLocal(MalformedClientIdentifier.class).peerAddress(clientAddress));
         }
-        if (connMsg.variableHeader().isCleanSession() && requestClientId.isEmpty()) {
+        if (!connMsg.variableHeader().isCleanSession() && requestClientId.isEmpty()) {
             return new GoAway(MqttMessageBuilders
                 .connAck()
                 .properties(MQTT5MessageBuilders.connAckProperties()
@@ -352,13 +353,17 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
     }
 
     private ClientInfo buildClientInfo(InetSocketAddress clientAddress, Success success) {
+        String clientId = connMsg.payload().clientIdentifier();
+        if (Strings.isNullOrEmpty(clientId)) {
+            clientId = ctx.channel().id().asLongText();
+        }
         ClientInfo.Builder clientInfoBuilder = ClientInfo.newBuilder()
             .setTenantId(success.getTenantId())
             .setType(MQTT_TYPE_VALUE)
             .putAllMetadata(success.getAttrsMap()) // custom attrs
             .putMetadata(MQTT_PROTOCOL_VER_KEY, MQTT_PROTOCOL_VER_5_VALUE)
             .putMetadata(MQTT_USER_ID_KEY, success.getUserId())
-            .putMetadata(MQTT_CLIENT_ID_KEY, connMsg.payload().clientIdentifier())
+            .putMetadata(MQTT_CLIENT_ID_KEY, clientId)
             .putMetadata(MQTT_CHANNEL_ID_KEY, ctx.channel().id().asLongText())
             .putMetadata(MQTT_CLIENT_ADDRESS_KEY,
                 Optional.ofNullable(clientAddress).map(InetSocketAddress::toString).orElse(""))
@@ -647,8 +652,11 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
         }
         MqttProperties.IntegerProperty intProp = (MqttProperties.IntegerProperty) connMsg.variableHeader().properties()
             .getProperty(SESSION_EXPIRY_INTERVAL.value());
-        if (intProp == null || intProp.value() != sessionExpiryInterval) {
+        if (intProp != null && intProp.value() != sessionExpiryInterval) {
             connPropsBuilder.sessionExpiryInterval(sessionExpiryInterval);
+        }
+        if (Strings.isNullOrEmpty(connMsg.payload().clientIdentifier())) {
+            connPropsBuilder.assignedClientId(clientInfo.getMetadataOrDefault(MQTT_CLIENT_ID_KEY, ""));
         }
         if (!settings.retainEnabled) {
             connPropsBuilder.retainAvailable(false);

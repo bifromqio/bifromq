@@ -139,14 +139,18 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                 switch (authResult.getTypeCase()) {
                     case OK -> {
                         Ok ok = authResult.getOk();
+                        String requestClientId = message.payload().clientIdentifier();
+                        if (requestClientId.isEmpty()) {
+                            requestClientId = ctx.channel().id().asLongText();
+                        }
                         return ok(ClientInfo.newBuilder()
                             .setTenantId(ok.getTenantId())
                             .setType(MQTT_TYPE_VALUE)
                             .putAllMetadata(ok.getAttrsMap()) // custom attrs
-                            .putMetadata(MQTT_PROTOCOL_VER_KEY, message.variableHeader().version() == 3 ?
-                                MQTT_PROTOCOL_VER_3_1_VALUE : MQTT_PROTOCOL_VER_3_1_1_VALUE)
+                            .putMetadata(MQTT_PROTOCOL_VER_KEY, message.variableHeader().version() == 3
+                                ? MQTT_PROTOCOL_VER_3_1_VALUE : MQTT_PROTOCOL_VER_3_1_1_VALUE)
                             .putMetadata(MQTT_USER_ID_KEY, ok.getUserId())
-                            .putMetadata(MQTT_CLIENT_ID_KEY, message.payload().clientIdentifier())
+                            .putMetadata(MQTT_CLIENT_ID_KEY, requestClientId)
                             .putMetadata(MQTT_CHANNEL_ID_KEY, ctx.channel().id().asLongText())
                             .putMetadata(MQTT_CLIENT_ADDRESS_KEY,
                                 Optional.ofNullable(clientAddress)
