@@ -18,8 +18,10 @@ description:
   version. Please try to reproduce the issue with the latest version)
 - Detailed deployment configuration **without custom plugins**
 - Hardware specifications, OS and Networking setup
-- Any publicly available test tools or programs used to reproduce the issue
-- Step-by-step instructions to replicate the problem
+- Any publicly available test tools or commands (e.g., `eMQTT-Bench`, `Mosquitto_pub/sub`, `HiveMQ mqtt cli`) 
+  used to reproduce the issue
+- OR source code of a custom reproduction program. The source code must be complete, directly compilable, and 
+  executable. Issues with incomplete reproduction source code will not be accepted.
 
 OR
 
@@ -48,8 +50,8 @@ external [contributor](https://github.com/bifromqio/bifromq/blob/main/CLA.md) to
 - 使用的 BifroMQ 版本（注意：除非特别声明，BifroMQ 团队仅对最新的主要版本提供支持。请尝试使用最新版本复现该问题）
 - 详细的不包含**自定义插件**的部署配置
 - 硬件规格和操作系统环境，网络环境
-- 用于复现问题的公开可用的测试工具或程序
-- 逐步复现问题的操作说明
+- 用于复现问题的公开可用测试工具命令（如：`eMQTT-Bench`, `Mosquitto_pub/sub`, `HiveMQ mqtt cli`)
+- 或自定义复现程序源码。源码必须完整、可直接编译并运行，不接受复现程序源码不完整的Issue
 
 或者
 
