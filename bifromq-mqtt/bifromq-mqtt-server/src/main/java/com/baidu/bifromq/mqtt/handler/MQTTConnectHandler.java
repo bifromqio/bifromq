@@ -118,6 +118,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
     @Override
     public final void channelRead(ChannelHandlerContext ctx, Object msg) {
         MqttMessage mqttMessage = (MqttMessage) msg;
+        log.trace("Received {}", mqttMessage);
         if (mqttMessage.fixedHeader().messageType() == MqttMessageType.CONNECT) {
             MqttConnectMessage connMsg = (MqttConnectMessage) msg;
             GoAway goAway = sanityCheck(connMsg);

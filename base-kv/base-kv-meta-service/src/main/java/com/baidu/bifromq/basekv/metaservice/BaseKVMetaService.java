@@ -15,12 +15,14 @@ package com.baidu.bifromq.basekv.metaservice;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
+import lombok.extern.slf4j.Slf4j;
+
 import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class BaseKVMetaService implements IBaseKVMetaService {
@@ -43,7 +45,8 @@ class BaseKVMetaService implements IBaseKVMetaService {
                 .filter(NameUtil::isLandscapeURI)
                 .map(NameUtil::parseClusterId)
                 .collect(Collectors.toSet()))
-            .distinctUntilChanged();
+            .distinctUntilChanged()
+            .observeOn(Schedulers.single());
     }
 
     @Override
