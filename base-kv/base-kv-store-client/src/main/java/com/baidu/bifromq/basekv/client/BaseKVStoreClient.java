@@ -29,7 +29,6 @@ import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getTra
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.toLeaderRanges;
 import static java.util.Collections.emptyMap;
-import static java.util.Collections.emptyNavigableMap;
 
 import com.baidu.bifromq.basecrdt.core.api.IORMap;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
@@ -57,6 +56,7 @@ import com.baidu.bifromq.basekv.store.proto.RecoverRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipReply;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipRequest;
+import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.basekv.utils.DescriptorUtil;
 import com.baidu.bifromq.basekv.utils.KeySpaceDAG;
 import com.baidu.bifromq.baserpc.BluePrint;
@@ -79,6 +79,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.TreeMap;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -111,7 +112,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     private final Subject<Map<String, String>> storeToServerSubject = BehaviorSubject.createDefault(Maps.newHashMap());
     private final Observable<ClusterInfo> clusterInfoObservable;
     private final BehaviorSubject<NavigableMap<Boundary, KVRangeSetting>> effectiveRouterSubject =
-        BehaviorSubject.createDefault(emptyNavigableMap());
+        BehaviorSubject.createDefault(new TreeMap<>(BoundaryUtil::compare));
 
     // key: serverId, val: storeId
     private volatile Map<String, String> serverToStoreMap = Maps.newHashMap();
