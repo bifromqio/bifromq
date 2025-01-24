@@ -41,7 +41,6 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.ssl.SslContext;
 import java.net.InetSocketAddress;
 import java.util.Collection;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
@@ -54,20 +53,16 @@ public class APIServer implements IAPIServer {
 
     private final String host;
     private final int port;
-    private final int tlsPort;
     private final EventLoopGroup bossGroup;
     private final EventLoopGroup workerGroup;
     private final ServerBootstrap serverBootstrap;
-    private final ServerBootstrap tlsServerBootstrap;
     private final Collection<IHTTPRequestHandler> handlers;
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private Channel serverChannel;
-    private Channel tlsServerChannel;
 
     @Builder
     private APIServer(String host,
                       int port,
-                      int tlsPort,
                       int maxContentLength,
                       int workerThreads,
                       SslContext sslContext,
@@ -80,10 +75,8 @@ public class APIServer implements IAPIServer {
                       IRetainClient retainClient,
                       ISettingProvider settingProvider) {
         Preconditions.checkArgument(port >= 0);
-        Preconditions.checkArgument(tlsPort >= 0);
         this.host = host;
         this.port = port;
-        this.tlsPort = tlsPort;
         this.bossGroup = NettyUtil.createEventLoopGroup(1,
             EnvProvider.INSTANCE.newThreadFactory("api-server-boss-elg"));
         this.workerGroup = NettyUtil.createEventLoopGroup(workerThreads,
@@ -98,13 +91,12 @@ public class APIServer implements IAPIServer {
             settingProvider);
         this.handlers = handlersFactory.build();
         IHTTPRouteMap routeMap = new HTTPRouteMap(handlers);
-        this.serverBootstrap =
-            buildServerChannel(new NonTLSServerInitializer(routeMap, settingProvider, maxContentLength));
         if (sslContext != null) {
-            this.tlsServerBootstrap = buildServerChannel(
+            this.serverBootstrap = buildServerChannel(
                 new TLSServerInitializer(sslContext, routeMap, settingProvider, maxContentLength));
         } else {
-            this.tlsServerBootstrap = null;
+            this.serverBootstrap =
+                buildServerChannel(new NonTLSServerInitializer(routeMap, settingProvider, maxContentLength));
         }
     }
 
@@ -121,15 +113,6 @@ public class APIServer implements IAPIServer {
     }
 
     @Override
-    public Optional<Integer> listeningTlsPort() {
-        checkStarted();
-        if (tlsServerChannel != null) {
-            return Optional.of(((InetSocketAddress) tlsServerChannel.localAddress()).getPort());
-        }
-        return Optional.empty();
-    }
-
-    @Override
     public void start() {
         if (state.compareAndSet(State.INIT, State.STARTING)) {
             try {
@@ -137,10 +120,6 @@ public class APIServer implements IAPIServer {
                 log.info("Starting API server");
                 this.serverChannel = serverBootstrap.bind(host, port).sync().channel();
                 log.debug("Accepting API request at {}", serverChannel.localAddress());
-                if (tlsServerBootstrap != null) {
-                    this.tlsServerChannel = tlsServerBootstrap.bind(host, tlsPort).sync().channel();
-                    log.debug("Accepting API request at {}", tlsServerChannel.localAddress());
-                }
                 log.info("API server started");
                 state.set(State.STARTED);
             } catch (Throwable e) {
@@ -155,9 +134,6 @@ public class APIServer implements IAPIServer {
         if (state.compareAndSet(State.STARTED, State.STOPPING)) {
             log.info("Stopping API server");
             serverChannel.close().syncUninterruptibly();
-            if (tlsServerChannel != null) {
-                serverChannel.close().syncUninterruptibly();
-            }
             bossGroup.shutdownGracefully();
             workerGroup.shutdownGracefully();
             handlers.forEach(IHTTPRequestHandler::close);

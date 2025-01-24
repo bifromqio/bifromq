@@ -81,7 +81,6 @@ public class APIServerTest extends MockableTest {
         apiServer = APIServer.builder()
             .host(host)
             .port(0)
-            .tlsPort(0)
             .maxContentLength(1024 * 1024)
             .agentHost(agentHost)
             .trafficService(trafficService)

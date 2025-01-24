@@ -125,13 +125,13 @@ public class StandaloneConfigConsolidator {
             apiServerConfig.setHost(resolveHost(config));
         }
         // fill self-signed certificate for ssl connection
-        if (apiServerConfig.getHttpsListenerConfig().isEnable()
-            && apiServerConfig.getHttpsListenerConfig().getSslConfig() == null) {
+        if (apiServerConfig.isEnableSSL()
+            && apiServerConfig.getSslConfig() == null) {
             try {
-                apiServerConfig.getHttpsListenerConfig().setSslConfig(genSelfSignedServerCert());
+                apiServerConfig.setSslConfig(genSelfSignedServerCert());
             } catch (Throwable e) {
                 log.warn("Unable to generate self-signed certificate, Https API listener is be disabled", e);
-                apiServerConfig.getHttpsListenerConfig().setEnable(false);
+                apiServerConfig.setEnableSSL(false);
             }
         }
     }

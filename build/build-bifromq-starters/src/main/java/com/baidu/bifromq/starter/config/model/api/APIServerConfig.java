@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.starter.config.model.api;
 
-import com.baidu.bifromq.starter.config.model.api.listener.HttpsListenerConfig;
+import com.baidu.bifromq.starter.config.model.ServerSSLContextConfig;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
 import lombok.Getter;
@@ -27,6 +27,7 @@ public class APIServerConfig {
     private int httpPort = 8091; // the listening port for http api
     private int maxContentLength = 256 * 1024;
     private int workerThreads = 2;
+    private boolean enableSSL = false;
     @JsonSetter(nulls = Nulls.SKIP)
-    private HttpsListenerConfig httpsListenerConfig = new HttpsListenerConfig();
+    private ServerSSLContextConfig sslConfig;
 }

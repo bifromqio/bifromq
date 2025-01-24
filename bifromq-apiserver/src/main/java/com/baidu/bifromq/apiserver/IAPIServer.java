@@ -20,8 +20,6 @@ public interface IAPIServer {
 
     int listeningPort();
 
-    Optional<Integer> listeningTlsPort();
-
     void start();
 
     void close();

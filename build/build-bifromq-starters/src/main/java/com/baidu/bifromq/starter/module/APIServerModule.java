@@ -55,13 +55,12 @@ public class APIServerModule extends AbstractModule {
 
             String apiHost = Strings.isNullOrEmpty(serverConfig.getHost()) ? "0.0.0.0" : serverConfig.getHost();
             SslContext sslContext = null;
-            if (serverConfig.getHttpsListenerConfig().isEnable()) {
-                sslContext = buildServerSslContext(serverConfig.getHttpsListenerConfig().getSslConfig());
+            if (serverConfig.isEnableSSL()) {
+                sslContext = buildServerSslContext(serverConfig.getSslConfig());
             }
             return Optional.of(APIServer.builder()
                 .host(apiHost)
                 .port(serverConfig.getHttpPort())
-                .tlsPort(serverConfig.getHttpsListenerConfig().getPort())
                 .maxContentLength(serverConfig.getMaxContentLength())
                 .workerThreads(serverConfig.getWorkerThreads())
                 .sslContext(sslContext)
