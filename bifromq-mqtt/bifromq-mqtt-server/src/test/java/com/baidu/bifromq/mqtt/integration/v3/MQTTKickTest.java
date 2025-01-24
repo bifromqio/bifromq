@@ -47,6 +47,10 @@ public class MQTTKickTest extends MQTTTest {
                     .build())
                 .build()));
 
+        when(authProvider.checkPermission(any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                CheckResult.newBuilder().setGranted(Granted.newBuilder().build()).build()));
+
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setMqttVersion(4);
         connOpts.setCleanSession(true);

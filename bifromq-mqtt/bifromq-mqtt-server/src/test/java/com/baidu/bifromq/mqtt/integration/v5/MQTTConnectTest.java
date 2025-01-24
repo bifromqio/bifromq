@@ -14,11 +14,15 @@
 package com.baidu.bifromq.mqtt.integration.v5;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertFalse;
 
 import com.baidu.bifromq.mqtt.integration.MQTTTest;
 import com.baidu.bifromq.mqtt.integration.v5.client.MqttTestClient;
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
+import com.baidu.bifromq.plugin.authprovider.type.ConnAction;
+import com.baidu.bifromq.plugin.authprovider.type.Granted;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.Success;
@@ -40,6 +44,9 @@ public class MQTTConnectTest extends MQTTTest {
                     .setTenantId("tenant")
                     .setUserId("testUser")
                     .build()).build()));
+        when(authProvider.checkPermission(any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                CheckResult.newBuilder().setGranted(Granted.newBuilder().build()).build()));
 
         MqttConnectionOptions connOpts = new MqttConnectionOptions();
         connOpts.setCleanStart(true);
