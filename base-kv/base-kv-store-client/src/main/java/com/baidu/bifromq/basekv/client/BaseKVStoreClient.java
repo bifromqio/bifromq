@@ -55,6 +55,7 @@ import com.baidu.bifromq.basekv.store.proto.RecoverRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipReply;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipRequest;
+import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.basekv.utils.DescriptorUtil;
 import com.baidu.bifromq.basekv.utils.KeySpaceDAG;
 import com.baidu.bifromq.baserpc.BluePrint;
@@ -76,6 +77,7 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.IntStream;
@@ -106,7 +108,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     private final Subject<Map<String, String>> storeToServerSubject = BehaviorSubject.createDefault(Maps.newHashMap());
     private final Observable<ClusterInfo> clusterInfoObservable;
     private final BehaviorSubject<NavigableMap<Boundary, KVRangeSetting>> effectiveRouterSubject =
-        BehaviorSubject.createDefault(emptyNavigableMap());
+        BehaviorSubject.createDefault(new TreeMap<>(BoundaryUtil::compare));
 
     // key: serverId, val: storeId
     private volatile Map<String, String> serverToStoreMap = Maps.newHashMap();
