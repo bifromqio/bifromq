@@ -190,6 +190,11 @@ public class TrafficDirectiveLoadBalancer extends LoadBalancer {
                 public IServerGroupRouter get(String tenantId) {
                     return tenantRouter.get(tenantId);
                 }
+
+                @Override
+                public String toString() {
+                    return allServers.toString();
+                }
             });
         }
         balancingStateUpdateScheduled.set(false);

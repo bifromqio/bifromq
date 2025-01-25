@@ -123,20 +123,18 @@ abstract class ManagedBiDiStream<InT, OutT> {
     abstract void onReceive(OutT out);
 
     private void onServerSelectorChanged(IServerSelector newServerSelector) {
+        log.debug("Stream@{} server selector changed: method={}, balanceMode={},state={}\n{}",
+            this.hashCode(), methodDescriptor.getBareMethodName(), balanceMode, state.get(), newServerSelector);
         switch (balanceMode) {
             case DDBalanced -> {
-                boolean available = newServerSelector.exists(targetServerId);
                 this.serverSelector = newServerSelector;
-                if (available) {
-                    switch (state.get()) {
-                        // target the server if it is available
-                        case Init, StreamDisconnect, NoServerAvailable -> scheduleRetargetNow();
-                        default -> {
-                            // Normal, PendingRetarget, Retargeting do nothing
-                        }
+                switch (state.get()) {
+                    // target the server if it is available
+                    case Init, StreamDisconnect, NoServerAvailable -> scheduleRetargetNow();
+                    default -> {
+                        // Normal, PendingRetarget, Retargeting do nothing
                     }
                 }
-                // do not close the stream proactively in DD mode, and let the server close it
             }
             case WCHBalanced -> {
                 IServerGroupRouter router = newServerSelector.get(tenantId);

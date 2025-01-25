@@ -54,4 +54,9 @@ class DummyServerSelector implements IServerSelector {
             }
         };
     }
+
+    @Override
+    public String toString() {
+        return "DummyServerSelector";
+    }
 }
