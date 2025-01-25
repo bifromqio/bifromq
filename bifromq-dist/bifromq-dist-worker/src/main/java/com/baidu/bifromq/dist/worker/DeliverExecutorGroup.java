@@ -154,6 +154,7 @@ class DeliverExecutorGroup implements IDeliverExecutorGroup {
 
     @Override
     public void invalidate(String tenantId, String topicFilter) {
+        log.debug("Invalidate ordered shared matching: tenantId={}, topicFilter={}", tenantId, topicFilter);
         orderedSharedMatching.invalidate(new OrderedSharedMatchingKey(tenantId, escape(topicFilter)));
     }
 
@@ -173,14 +174,21 @@ class DeliverExecutorGroup implements IDeliverExecutorGroup {
                         ClientInfo sender = publisherPack.getPublisher();
                         NormalMatching matchedInbox = orderedSharedMatching
                             .get(new OrderedSharedMatchingKey(groupMatching.tenantId, groupMatching.escapedTopicFilter))
-                            .get(sender, k -> {
+                            .get(sender, senderInfo -> {
                                 RendezvousHash<ClientInfo, NormalMatching> hash =
                                     new RendezvousHash<>(murmur3_128(),
                                         (from, into) -> into.putInt(from.hashCode()),
                                         (from, into) -> into.putBytes(from.scopedInboxId.getBytes()),
                                         Comparator.comparing(a -> a.scopedInboxId));
                                 groupMatching.receiverList.forEach(hash::add);
-                                return hash.get(k);
+                                NormalMatching matchRecord = hash.get(senderInfo);
+                                log.debug(
+                                    "Ordered shared matching: sender={}: topicFilter={}, receiverId={}, subBroker={}",
+                                    senderInfo,
+                                    matchRecord.originalTopicFilter(),
+                                    matchRecord.matchInfo.getReceiverId(),
+                                    matchRecord.subBrokerId);
+                                return matchRecord;
                             });
                         // ordered share sub
                         orderedRoutes.computeIfAbsent(matchedInbox, k -> TopicMessagePack.newBuilder())

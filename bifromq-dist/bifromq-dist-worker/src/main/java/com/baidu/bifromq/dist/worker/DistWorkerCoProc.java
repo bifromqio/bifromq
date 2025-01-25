@@ -150,10 +150,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         }
         RWCoProcOutput output = RWCoProcOutput.newBuilder().setDistService(outputBuilder.build()).build();
         return () -> {
-            switch (coProcInput.getTypeCase()) {
-                case BATCHMATCH -> routeCache.refresh(updatedMatches);
-                case BATCHUNMATCH -> routeCache.refresh(updatedMatches);
-            }
+            routeCache.refresh(updatedMatches);
             updatedMatches.forEach((tenantId, topicFilters) ->
                 topicFilters.forEach(topicFilter -> deliverExecutorGroup.invalidate(tenantId, topicFilter)));
             afterMutate.get().run();

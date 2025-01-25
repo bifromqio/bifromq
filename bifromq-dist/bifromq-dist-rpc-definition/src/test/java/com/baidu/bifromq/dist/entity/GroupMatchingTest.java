@@ -25,24 +25,42 @@ import org.testng.annotations.Test;
 public class GroupMatchingTest {
 
     @Test
+    public void groupMatch() {
+        matchInfo("$share/group1/home/sensor/temperature");
+        matchInfo("$oshare/group1/home/sensor/temperature");
+    }
+
+    private void matchInfo(String topicFilter) {
+        String tenantId = "tenant1";
+
+        ByteString key = EntityUtil.toGroupMatchRecordKey(tenantId, topicFilter);
+        GroupMatchRecord matchRecord =
+            GroupMatchRecord.newBuilder().addQReceiverId(toQInboxId(1, "inbox1", "deliverer1")).build();
+
+        GroupMatching matching = (GroupMatching) EntityUtil.parseMatchRecord(key, matchRecord.toByteString());
+
+        for (NormalMatching normalMatching : matching.receiverList) {
+            assertEquals(normalMatching.matchInfo.getTopicFilter(), topicFilter);
+        }
+    }
+
+    @Test
     public void addAllReceivers() {
         String tenantId = "tenant1";
         String topicFilter = "$oshare/group1/home/sensor/temperature";
 
         ByteString key = EntityUtil.toGroupMatchRecordKey(tenantId, topicFilter);
-        GroupMatchRecord matchRecord = GroupMatchRecord.newBuilder()
-            .addQReceiverId(toQInboxId(1, "inbox1", "deliverer1"))
-            .build();
+        GroupMatchRecord matchRecord =
+            GroupMatchRecord.newBuilder().addQReceiverId(toQInboxId(1, "inbox1", "deliverer1")).build();
 
         GroupMatching matching = (GroupMatching) EntityUtil.parseMatchRecord(key, matchRecord.toByteString());
 
-        Set<String> receiverIds =
-            Set.of(toQInboxId(1, "inbox2", "deliverer2"), toQInboxId(1, "inbox3", "deliverer3"));
+        Set<String> receiverIds = Set.of(toQInboxId(1, "inbox2", "deliverer2"), toQInboxId(1, "inbox3", "deliverer3"));
 
         matching.addAll(receiverIds);
 
-        assertEquals(3, matching.receiverIds.size());
-        assertEquals(3, matching.receiverList.size());
+        assertEquals(matching.receiverIds.size(), 3);
+        assertEquals(matching.receiverList.size(), 3);
     }
 
     @Test
@@ -51,21 +69,19 @@ public class GroupMatchingTest {
         String topicFilter = "$oshare/group1/home/sensor/temperature";
 
         ByteString key = EntityUtil.toGroupMatchRecordKey(tenantId, topicFilter);
-        GroupMatchRecord matchRecord = GroupMatchRecord.newBuilder()
-            .addQReceiverId(toQInboxId(1, "inbox1", "deliverer1"))
-            .addQReceiverId(toQInboxId(1, "inbox2", "deliverer2"))
-            .addQReceiverId(toQInboxId(1, "inbox3", "deliverer3"))
-            .build();
+        GroupMatchRecord matchRecord =
+            GroupMatchRecord.newBuilder().addQReceiverId(toQInboxId(1, "inbox1", "deliverer1"))
+                .addQReceiverId(toQInboxId(1, "inbox2", "deliverer2"))
+                .addQReceiverId(toQInboxId(1, "inbox3", "deliverer3")).build();
 
         GroupMatching matching = (GroupMatching) EntityUtil.parseMatchRecord(key, matchRecord.toByteString());
 
-        Set<String> receiverIds =
-            Set.of(toQInboxId(1, "inbox2", "deliverer2"), toQInboxId(1, "inbox3", "deliverer3"));
+        Set<String> receiverIds = Set.of(toQInboxId(1, "inbox2", "deliverer2"), toQInboxId(1, "inbox3", "deliverer3"));
 
         matching.removeAll(receiverIds);
 
-        assertEquals(1, matching.receiverIds.size());
-        assertEquals(1, matching.receiverList.size());
-        assertEquals("inbox1", matching.receiverList.get(0).matchInfo.getReceiverId());
+        assertEquals(matching.receiverIds.size(), 1);
+        assertEquals(matching.receiverList.size(), 1);
+        assertEquals(matching.receiverList.get(0).matchInfo.getReceiverId(), "inbox1");
     }
 }

@@ -25,8 +25,6 @@ import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import com.baidu.bifromq.mqtt.inbox.util.DelivererKeyUtil;
-import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
-import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.type.QoS;
 import com.google.common.base.Preconditions;
@@ -46,7 +44,9 @@ final class MqttBrokerClient implements IMqttBrokerClient {
 
     public IDeliverer open(String delivererKey) {
         Preconditions.checkState(!hasStopped.get());
-        return new DeliveryPipeline(delivererKey);
+        IRPCClient.IRequestPipeline<WriteRequest, WriteReply> ppln = rpcClient.createRequestPipeline("",
+            DelivererKeyUtil.parseServerId(delivererKey), "", emptyMap(), OnlineInboxBrokerGrpc.getWriteMethod());
+        return new DeliveryPipeline(ppln);
     }
 
     @Override
@@ -103,30 +103,5 @@ final class MqttBrokerClient implements IMqttBrokerClient {
                     .setResult(UnsubReply.Result.ERROR)
                     .build();
             });
-    }
-
-    private class DeliveryPipeline implements IDeliverer {
-        private final IRPCClient.IRequestPipeline<WriteRequest, WriteReply> ppln;
-
-        DeliveryPipeline(String delivererKey) {
-            ppln = rpcClient.createRequestPipeline("", DelivererKeyUtil.parseServerId(delivererKey), "",
-                emptyMap(), OnlineInboxBrokerGrpc.getWriteMethod());
-        }
-
-        @Override
-        public CompletableFuture<DeliveryReply> deliver(DeliveryRequest request) {
-            Preconditions.checkState(!hasStopped.get());
-            long reqId = System.nanoTime();
-            return ppln.invoke(WriteRequest.newBuilder()
-                    .setReqId(reqId)
-                    .setRequest(request)
-                    .build())
-                .thenApply(WriteReply::getReply);
-        }
-
-        @Override
-        public void close() {
-            ppln.close();
-        }
     }
 }

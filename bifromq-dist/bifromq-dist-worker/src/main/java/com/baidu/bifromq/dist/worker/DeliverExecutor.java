@@ -111,6 +111,7 @@ public class DeliverExecutor {
                     case NO_SUB, NO_RECEIVER -> {
                         // unsub as side effect
                         MatchInfo matchInfo = matched.matchInfo;
+                        log.debug("No sub or receiver found, unsub {}", matchInfo);
                         distClient.removeTopicMatch(System.nanoTime(),
                             matched.tenantId,
                             matchInfo.getTopicFilter(),
