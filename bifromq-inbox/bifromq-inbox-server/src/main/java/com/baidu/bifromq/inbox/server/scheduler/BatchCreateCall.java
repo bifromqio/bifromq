@@ -32,7 +32,7 @@ import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
 
-public class BatchCreateCall extends BatchMutationCall<CreateRequest, CreateReply> {
+class BatchCreateCall extends BatchMutationCall<CreateRequest, CreateReply> {
 
     protected BatchCreateCall(KVRangeId rangeId, IBaseKVStoreClient distWorkerClient, Duration pipelineExpiryTime) {
         super(rangeId, distWorkerClient, pipelineExpiryTime);

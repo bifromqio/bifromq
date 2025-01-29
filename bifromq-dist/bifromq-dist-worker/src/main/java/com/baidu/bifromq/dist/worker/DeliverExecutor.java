@@ -129,6 +129,7 @@ public class DeliverExecutor {
                         .delivererKey(delivererKey)
                         .subInfo(sub)
                         .messages(msgPack));
+                    default -> log.error("Unknown delivery result: {}", result);
                 }
             }
         });

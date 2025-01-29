@@ -15,6 +15,7 @@ package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.anySet;
 import static org.mockito.Mockito.eq;
@@ -44,8 +45,12 @@ import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistPack;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
+import com.baidu.bifromq.dist.rpc.proto.GCReply;
+import com.baidu.bifromq.dist.rpc.proto.GCRequest;
+import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;
 import com.baidu.bifromq.dist.rpc.proto.TenantOption;
 import com.baidu.bifromq.dist.worker.cache.ISubscriptionCache;
+import com.baidu.bifromq.plugin.subbroker.CheckRequest;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
@@ -60,6 +65,7 @@ public class DistWorkerCoProcTest {
     private ISubscriptionCache routeCache;
     private ITenantsState tenantsState;
     private IDeliverExecutorGroup deliverExecutorGroup;
+    private ISubscriptionCleaner subscriptionChecker;
     private Supplier<IKVCloseableReader> readerProvider;
     private IKVCloseableReader reader;
     private IKVWriter writer;
@@ -72,6 +78,7 @@ public class DistWorkerCoProcTest {
         routeCache = mock(ISubscriptionCache.class);
         tenantsState = mock(ITenantsState.class);
         deliverExecutorGroup = mock(IDeliverExecutorGroup.class);
+        subscriptionChecker = mock(ISubscriptionCleaner.class);
         readerProvider = mock(Supplier.class);
         reader = mock(IKVCloseableReader.class);
         iterator = mock(IKVIterator.class);
@@ -81,8 +88,8 @@ public class DistWorkerCoProcTest {
         when(reader.boundary()).thenReturn(FULL_BOUNDARY);
         when(reader.iterator()).thenReturn(iterator);
         when(iterator.isValid()).thenReturn(false);
-        distWorkerCoProc =
-            new DistWorkerCoProc(rangeId, readerProvider, routeCache, tenantsState, deliverExecutorGroup);
+        distWorkerCoProc = new DistWorkerCoProc(
+            rangeId, readerProvider, routeCache, tenantsState, deliverExecutorGroup, subscriptionChecker);
     }
 
     @Test
@@ -186,6 +193,69 @@ public class DistWorkerCoProcTest {
         // Check the result output
         BatchDistReply reply = result.getDistService().getBatchDist();
         assertEquals(789, reply.getReqId());
+    }
+
+    @Test
+    public void testGC() {
+        String tenant1 = "tenant1";
+        String tenant2 = "tenant2";
+        String topic1 = "topic1";
+        String topic2 = "topic2";
+        String scopedInbox1 = EntityUtil.toQInboxId(1, "inbox1", "deliverer1");
+        String scopedInbox2 = EntityUtil.toQInboxId(2, "inbox2", "deliverer2");
+
+        ByteString normalMatchKey1 = EntityUtil.toNormalMatchRecordKey(tenant1, topic1, scopedInbox1);
+        ByteString normalMatchKey2 = EntityUtil.toNormalMatchRecordKey(tenant2, topic2, scopedInbox2);
+
+        String sharedTopic = "$share/group/topic3";
+        ByteString groupMatchKey = EntityUtil.toGroupMatchRecordKey(tenant1, sharedTopic);
+        GroupMatchRecord groupMatchRecord = GroupMatchRecord.newBuilder()
+            .addQReceiverId(scopedInbox1)
+            .addQReceiverId(scopedInbox2)
+            .build();
+
+        when(iterator.isValid()).thenReturn(true, true, true, false);
+        when(iterator.key()).thenReturn(normalMatchKey1, groupMatchKey, normalMatchKey2);
+        when(iterator.value()).thenReturn(
+            ByteString.EMPTY,
+            groupMatchRecord.toByteString(),
+            ByteString.EMPTY
+        );
+
+        when(routeCache.isCached(eq(tenant1), eq(topic1))).thenReturn(false);
+        when(routeCache.isCached(eq(tenant1), eq(EntityUtil.parseTopicFilter(groupMatchKey.toStringUtf8()))))
+            .thenReturn(false);
+        when(routeCache.isCached(eq(tenant2), eq(topic2))).thenReturn(false);
+
+        when(subscriptionChecker.sweep(anyInt(), any(CheckRequest.class)))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
+        ROCoProcInput roCoProcInput = ROCoProcInput.newBuilder()
+            .setDistService(DistServiceROCoProcInput.newBuilder()
+                .setGc(GCRequest.newBuilder().setReqId(999).build())
+                .build())
+            .build();
+
+        CompletableFuture<ROCoProcOutput> resultFuture = distWorkerCoProc.query(roCoProcInput, reader);
+        ROCoProcOutput result = resultFuture.join();
+
+        GCReply reply = result.getDistService().getGc();
+        assertEquals(reply.getReqId(), 999);
+
+        verify(subscriptionChecker, times(1)).sweep(
+            eq(1),
+            argThat(req -> req.getTenantId().equals(tenant1) && req.getMatchInfoCount() == 2)
+        );
+        verify(subscriptionChecker, times(1)).sweep(
+            eq(2),
+            argThat(req -> req.getTenantId().equals(tenant2) && req.getMatchInfoCount() == 1
+                && req.getMatchInfoList().get(0).getTopicFilter().equals(topic2))
+        );
+        verify(subscriptionChecker, times(1)).sweep(
+            eq(2),
+            argThat(req -> req.getTenantId().equals(tenant1) && req.getMatchInfoCount() == 1
+                && req.getMatchInfoList().get(0).getTopicFilter().equals(sharedTopic))
+        );
     }
 
     @Test

@@ -21,7 +21,13 @@ public class DelivererKeyUtil {
 
     public static String toDelivererKey(String tenantId, String inboxId, String serverId) {
         assert !serverId.contains(DELIMITER) : "serverId SHOULD NOT contain '" + DELIMITER + "'";
-        return serverId + DELIMITER + tenantId + groupIdx(inboxId);
+        return serverId + DELIMITER + tenantId + DELIMITER + groupIdx(inboxId);
+    }
+
+    public static String parseTenantId(String delivererKey) {
+        int firstIdx = delivererKey.indexOf(DELIMITER);
+        int secondIdx = delivererKey.lastIndexOf(DELIMITER);
+        return delivererKey.substring(firstIdx + 1, secondIdx);
     }
 
     public static String parseServerId(String delivererKey) {

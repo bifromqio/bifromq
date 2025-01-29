@@ -27,7 +27,7 @@ import java.time.Duration;
 import java.util.Iterator;
 import java.util.Queue;
 
-public class BatchFetchCall extends BatchQueryCall<IInboxFetchScheduler.InboxFetch, Fetched> {
+class BatchFetchCall extends BatchQueryCall<IInboxFetchScheduler.InboxFetch, Fetched> {
     protected BatchFetchCall(KVRangeId rangeId,
                              IBaseKVStoreClient storeClient,
                              Duration pipelineExpiryTime) {

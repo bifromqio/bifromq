@@ -153,8 +153,8 @@ class DeliverExecutorGroup implements IDeliverExecutorGroup {
     }
 
     @Override
-    public void invalidate(String tenantId, String topicFilter) {
-        log.debug("Invalidate ordered shared matching: tenantId={}, topicFilter={}", tenantId, topicFilter);
+    public void refreshOrderedShareSubRoutes(String tenantId, String topicFilter) {
+        log.debug("Refresh ordered shared sub routes: tenantId={}, sharedTopicFilter={}", tenantId, topicFilter);
         orderedSharedMatching.invalidate(new OrderedSharedMatchingKey(tenantId, escape(topicFilter)));
     }
 

@@ -31,7 +31,7 @@ import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
 
-public class BatchTouchCall extends BatchMutationCall<TouchRequest, TouchReply> {
+class BatchTouchCall extends BatchMutationCall<TouchRequest, TouchReply> {
     protected BatchTouchCall(KVRangeId rangeId,
                              IBaseKVStoreClient distWorkerClient,
                              Duration pipelineExpiryTime) {

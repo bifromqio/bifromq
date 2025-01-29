@@ -50,6 +50,7 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     private final IEventCollector eventCollector;
     private final IResourceThrottler resourceThrottler;
     private final IMessageDeliverer deliverer;
+    private final ISubscriptionCleaner subscriptionChecker;
     private final ExecutorService matchExecutor;
     private final Duration loadEstWindow;
     private final int fanoutSplitThreshold = DistWorkerFanOutSplitThreshold.INSTANCE.get();
@@ -64,6 +65,7 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
         this.resourceThrottler = resourceThrottler;
         this.loadEstWindow = loadEstimateWindow;
         deliverer = new MessageDeliverer(subBrokerManager);
+        subscriptionChecker = new SubscriptionCleaner(subBrokerManager, distClient);
 
         matchExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ForkJoinPool(DistMatchParallelism.INSTANCE.get(), new ForkJoinPool.ForkJoinWorkerThreadFactory() {
@@ -95,10 +97,11 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
         ISubscriptionCache routeCache = new SubscriptionCache(id, rangeReaderProvider, matchExecutor);
         ITenantsState tenantsState = new TenantsState(rangeReaderProvider.get(),
             "clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id));
-        IDeliverExecutorGroup executorGroup =
-            new DeliverExecutorGroup(deliverer, eventCollector, resourceThrottler, distClient,
-                DistFanOutParallelism.INSTANCE.get());
-        return new DistWorkerCoProc(id, rangeReaderProvider, routeCache, tenantsState, executorGroup);
+
+        IDeliverExecutorGroup deliverExecutorGroup = new DeliverExecutorGroup(
+            deliverer, eventCollector, resourceThrottler, distClient, DistFanOutParallelism.INSTANCE.get());
+        return new DistWorkerCoProc(
+            id, rangeReaderProvider, routeCache, tenantsState, deliverExecutorGroup, subscriptionChecker);
     }
 
     public void close() {

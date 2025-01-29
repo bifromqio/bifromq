@@ -32,7 +32,7 @@ import java.util.Queue;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class BatchGetCall extends BatchQueryCall<GetRequest, GetReply> {
+class BatchGetCall extends BatchQueryCall<GetRequest, GetReply> {
     protected BatchGetCall(KVRangeId rangeId,
                            IBaseKVStoreClient storeClient,
                            Duration pipelineExpiryTime) {

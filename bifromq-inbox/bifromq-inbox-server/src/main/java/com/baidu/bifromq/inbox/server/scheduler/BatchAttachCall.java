@@ -32,7 +32,7 @@ import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
 
-public class BatchAttachCall extends BatchMutationCall<AttachRequest, AttachReply> {
+class BatchAttachCall extends BatchMutationCall<AttachRequest, AttachReply> {
 
     protected BatchAttachCall(KVRangeId rangeId,
                               IBaseKVStoreClient distWorkerClient,

@@ -55,6 +55,7 @@ import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxAttachScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.IInboxCheckSubScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxCommitScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxCreateScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxDeleteScheduler;
@@ -78,6 +79,8 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.MsgReta
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.MsgRetainedError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.RetainMsgCleared;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.plugin.subbroker.CheckReply;
+import com.baidu.bifromq.plugin.subbroker.CheckRequest;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.type.ClientInfo;
@@ -111,6 +114,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final InboxFetcherRegistry registry = new InboxFetcherRegistry();
     private final IInboxFetchScheduler fetchScheduler;
     private final IInboxGetScheduler getScheduler;
+    private final IInboxCheckSubScheduler checkSubScheduler;
     private final IInboxInsertScheduler insertScheduler;
     private final IInboxCommitScheduler commitScheduler;
     private final IInboxTouchScheduler touchScheduler;
@@ -132,6 +136,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                  IRetainClient retainClient,
                  IBaseKVStoreClient inboxStoreClient,
                  IInboxGetScheduler getScheduler,
+                 IInboxCheckSubScheduler checkSubScheduler,
                  IInboxFetchScheduler fetchScheduler,
                  IInboxInsertScheduler insertScheduler,
                  IInboxCommitScheduler commitScheduler,
@@ -149,6 +154,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         this.distClient = distClient;
         this.retainClient = retainClient;
         this.getScheduler = getScheduler;
+        this.checkSubScheduler = checkSubScheduler;
         this.fetchScheduler = fetchScheduler;
         this.insertScheduler = insertScheduler;
         this.commitScheduler = commitScheduler;
@@ -167,14 +173,13 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     public void get(GetRequest request, StreamObserver<GetReply> responseObserver) {
         log.trace("Handling get {}", request);
         response(tenantId -> getScheduler.schedule(request)
-                .exceptionally(e -> {
-                    log.debug("Failed to get inbox", e);
-                    return GetReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setCode(GetReply.Code.ERROR)
-                        .build();
-                })
-            , responseObserver);
+            .exceptionally(e -> {
+                log.debug("Failed to get inbox", e);
+                return GetReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(GetReply.Code.ERROR)
+                    .build();
+            }), responseObserver);
     }
 
     @Override
@@ -479,8 +484,8 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         return CompletableFuture.allOf(detachTasks.toArray(CompletableFuture[]::new))
                             .thenApply(v -> detachTasks.stream().map(CompletableFuture::join).toList())
                             .handle((detachReplies, e) -> {
-                                if (e != null ||
-                                    detachReplies.stream().anyMatch(r -> r.getCode() != DetachReply.Code.OK)) {
+                                if (e != null
+                                    || detachReplies.stream().anyMatch(r -> r.getCode() != DetachReply.Code.OK)) {
                                     return ExpireReply.newBuilder()
                                         .setReqId(request.getReqId())
                                         .setCode(ExpireReply.Code.ERROR)
@@ -516,8 +521,8 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             inboxGCProc.gc(request.getReqId(), request.getTenantId(), request.getExpirySeconds(), request.getNow())
                 .thenApply(result -> ExpireAllReply.newBuilder()
                     .setReqId(request.getReqId())
-                    .setCode(result == IInboxStoreGCProcessor.Result.OK ?
-                        ExpireAllReply.Code.OK : ExpireAllReply.Code.ERROR)
+                    .setCode(result == IInboxStoreGCProcessor.Result.OK
+                        ? ExpireAllReply.Code.OK : ExpireAllReply.Code.ERROR)
                     .build())
                 .exceptionally(e -> {
                     log.debug("Failed to expire all", e);
@@ -526,6 +531,29 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         .setCode(ExpireAllReply.Code.ERROR)
                         .build();
                 }), responseObserver);
+    }
+
+    @Override
+    public void checkSubscriptions(CheckRequest request, StreamObserver<CheckReply> responseObserver) {
+        response(tenantId -> {
+            List<CompletableFuture<CheckReply.Code>> futures = request.getMatchInfoList().stream()
+                .map(matchInfo -> checkSubScheduler.schedule(
+                    new IInboxCheckSubScheduler.CheckMatchInfo(request.getTenantId(), matchInfo)))
+                .toList();
+            return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
+                .thenApply(v -> futures.stream().map(CompletableFuture::join).toList())
+                .thenApply(codes -> CheckReply.newBuilder()
+                    .addAllCode(codes)
+                    .build())
+                .exceptionally(e -> {
+                    log.debug("Failed to check subscriptions", e);
+                    return CheckReply.newBuilder()
+                        .addAllCode(request.getMatchInfoList().stream()
+                            .map(i -> CheckReply.Code.ERROR)
+                            .toList())
+                        .build();
+                });
+        }, responseObserver);
     }
 
     @Override
@@ -671,6 +699,9 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                         .size(lwt.getMessage().getPayload().size())
                                         .reason("Internal Error")
                                         .clientInfo(client));
+                                    default -> {
+                                        // never happen
+                                    }
                                 }
                                 return v;
                             });
@@ -725,6 +756,9 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                             Duration.ofSeconds(expireSeconds - lwt.getDelaySeconds()),
                                             new ExpireSessionTask(scopedInbox, version, 0, client, null));
                                     }
+                                }
+                                default -> {
+                                    // do nothing
                                 }
                             }
                         }

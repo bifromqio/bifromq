@@ -22,5 +22,5 @@ public interface IDeliverExecutorGroup {
 
     void submit(String tenantId, Set<Matching> routes, TopicMessagePack msgPack);
 
-    void invalidate(String tenantId, String topicFilter);
+    void refreshOrderedShareSubRoutes(String tenantId, String topicFilter);
 }

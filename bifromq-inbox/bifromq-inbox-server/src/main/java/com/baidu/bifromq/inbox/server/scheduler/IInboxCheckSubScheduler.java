@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
+ * Copyright (c) 2023. The BifroMQ Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -11,16 +11,14 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.session;
+package com.baidu.bifromq.inbox.server.scheduler;
 
+import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
+import com.baidu.bifromq.plugin.subbroker.CheckReply;
 import com.baidu.bifromq.type.MatchInfo;
-import com.baidu.bifromq.type.TopicMessagePack;
-import java.util.List;
 
-public interface IMQTTTransientSession extends IMQTTSession {
-    String NAME = "MQTTTransientSession";
-
-    boolean publish(MatchInfo matchInfo, List<TopicMessagePack> messagePack);
-
-    boolean isSubscribing(String topicFilter);
+public interface IInboxCheckSubScheduler
+    extends IBatchCallScheduler<IInboxCheckSubScheduler.CheckMatchInfo, CheckReply.Code> {
+    record CheckMatchInfo(String tenantId, MatchInfo matchInfo) {
+    }
 }

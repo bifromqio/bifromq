@@ -243,6 +243,11 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     }
 
     @Override
+    public boolean isSubscribing(String topicFilter) {
+        return topicFilters.containsKey(topicFilter);
+    }
+
+    @Override
     public boolean publish(MatchInfo matchInfo, List<TopicMessagePack> topicMsgPacks) {
         String topicFilter = matchInfo.getTopicFilter();
         TopicFilterOption option = topicFilters.get(topicFilter);

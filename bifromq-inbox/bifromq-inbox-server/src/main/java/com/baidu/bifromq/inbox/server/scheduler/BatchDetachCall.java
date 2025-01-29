@@ -32,7 +32,7 @@ import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
 
-public class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
+class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
 
     protected BatchDetachCall(KVRangeId rangeId,
                               IBaseKVStoreClient distWorkerClient,

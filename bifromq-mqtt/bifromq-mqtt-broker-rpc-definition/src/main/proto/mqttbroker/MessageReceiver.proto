@@ -12,6 +12,7 @@ service OnlineInboxBroker {
   rpc write (stream WriteRequest) returns (stream WriteReply);
   rpc sub(SubRequest) returns (SubReply);
   rpc unsub(UnsubRequest) returns (UnsubReply);
+  rpc checkSubscriptions(subbroker.CheckRequest) returns (subbroker.CheckReply);
 }
 
 message WriteRequest {

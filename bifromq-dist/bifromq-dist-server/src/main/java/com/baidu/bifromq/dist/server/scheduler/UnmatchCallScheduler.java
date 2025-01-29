@@ -44,7 +44,7 @@ public class UnmatchCallScheduler extends MutationCallScheduler<UnmatchRequest, 
                                                                                        long tolerableLatencyNanos,
                                                                                        long burstLatencyNanos,
                                                                                        MutationCallBatcherKey range) {
-        return new UnsubCallBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, storeClient);
+        return new UnmatchCallBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, storeClient);
     }
 
     protected ByteString rangeKey(UnmatchRequest call) {

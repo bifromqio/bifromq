@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
+ * Copyright (c) 2025. The BifroMQ Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -11,16 +11,14 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.mqtt.session;
+package com.baidu.bifromq.dist.worker;
 
-import com.baidu.bifromq.type.MatchInfo;
-import com.baidu.bifromq.type.TopicMessagePack;
-import java.util.List;
+import com.baidu.bifromq.plugin.subbroker.CheckRequest;
+import java.util.concurrent.CompletableFuture;
 
-public interface IMQTTTransientSession extends IMQTTSession {
-    String NAME = "MQTTTransientSession";
-
-    boolean publish(MatchInfo matchInfo, List<TopicMessagePack> messagePack);
-
-    boolean isSubscribing(String topicFilter);
+/**
+ * Subscription checker is responsible for checking the subscriptions.
+ */
+public interface ISubscriptionCleaner {
+    CompletableFuture<Void> sweep(int subBrokerId, CheckRequest request);
 }

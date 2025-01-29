@@ -20,12 +20,21 @@ import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
+import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
 import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
+import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
+import com.baidu.bifromq.plugin.subbroker.DeliveryResults;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
+import com.baidu.bifromq.type.MatchInfo;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 class InboxDeliverPipeline implements IDeliverer {
     private final IRPCClient.IRequestPipeline<SendRequest, SendReply> ppln;
 
@@ -42,7 +51,27 @@ class InboxDeliverPipeline implements IDeliverer {
                 .setReqId(reqId)
                 .setRequest(request)
                 .build())
-            .thenApply(SendReply::getReply);
+            .thenApply(SendReply::getReply)
+            .exceptionally(e -> {
+                log.debug("Failed to deliver request: {}", request, e);
+                DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder();
+                Set<MatchInfo> allMatchInfos = new HashSet<>();
+                for (String tenantId : request.getPackageMap().keySet()) {
+                    DeliveryResults.Builder resultsBuilder = DeliveryResults.newBuilder();
+                    DeliveryPackage deliveryPackage = request.getPackageMap().get(tenantId);
+                    for (DeliveryPack pack : deliveryPackage.getPackList()) {
+                        allMatchInfos.addAll(pack.getMatchInfoList());
+                    }
+                    for (MatchInfo matchInfo : allMatchInfos) {
+                        resultsBuilder.addResult(DeliveryResult.newBuilder()
+                            .setMatchInfo(matchInfo)
+                            .setCode(DeliveryResult.Code.ERROR)
+                            .build());
+                    }
+                    replyBuilder.putResult(tenantId, resultsBuilder.build());
+                }
+                return replyBuilder.build();
+            });
     }
 
     @Override

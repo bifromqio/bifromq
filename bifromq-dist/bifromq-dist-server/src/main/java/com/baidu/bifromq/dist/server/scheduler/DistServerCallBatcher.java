@@ -19,13 +19,11 @@ import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 
 class DistServerCallBatcher
     extends Batcher<DistServerCall, Map<String, Optional<Integer>>, DistServerCallBatcherKey> {
     private final ISettingProvider settingProvider;
     private final IBaseKVStoreClient distWorkerClient;
-    private final String orderKey = UUID.randomUUID().toString();
 
     protected DistServerCallBatcher(DistServerCallBatcherKey batcherKey,
                                     String name,

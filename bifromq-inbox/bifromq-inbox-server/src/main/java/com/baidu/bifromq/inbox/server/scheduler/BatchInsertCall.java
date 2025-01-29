@@ -31,7 +31,7 @@ import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
 
-public class BatchInsertCall extends BatchMutationCall<InboxSubMessagePack, BatchInsertReply.Result> {
+class BatchInsertCall extends BatchMutationCall<InboxSubMessagePack, BatchInsertReply.Result> {
     protected BatchInsertCall(KVRangeId rangeId, IBaseKVStoreClient storeClient, Duration pipelineExpiryTime) {
         super(rangeId, storeClient, pipelineExpiryTime);
     }

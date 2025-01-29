@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.plugin.subbroker;
 
+import java.util.concurrent.CompletableFuture;
 import org.pf4j.ExtensionPoint;
 
 /**
@@ -25,6 +26,14 @@ public interface ISubBroker extends ExtensionPoint {
      * @return the statically assigned id for the downstream sub broker system
      */
     int id();
+
+    /**
+     * Check if the subscriptions exists.
+     *
+     * @param request subscriptions check request
+     * @return a future of check results
+     */
+    CompletableFuture<CheckReply> check(CheckRequest request);
 
     /**
      * Open deliverer instance for delivering messages to the containing inboxes. It's guaranteed to have singleton

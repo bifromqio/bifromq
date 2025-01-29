@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.inbox.server;
 
+import static com.baidu.bifromq.inbox.records.ScopedInbox.distInboxId;
+import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -25,6 +27,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
@@ -34,8 +37,11 @@ import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.plugin.subbroker.CheckReply;
+import com.baidu.bifromq.plugin.subbroker.CheckRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import java.util.concurrent.CompletableFuture;
 import org.testng.annotations.Test;
 
@@ -108,7 +114,7 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
     @Test(groups = "integration")
     public void unsubOK() {
         clearInvocations(distClient);
-        long now = System.nanoTime();
+        long now = HLC.INST.getPhysical();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
@@ -160,6 +166,16 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
             .build()).join();
         assertEquals(unsubReply2.getReqId(), reqId);
         assertEquals(unsubReply2.getCode(), UnsubReply.Code.OK);
+
+        CheckReply checkReply = inboxClient.check(CheckRequest.newBuilder()
+            .setTenantId(tenantId)
+            .setDelivererKey(getDelivererKey(inboxId, distInboxId(inboxId, incarnation)))
+            .addMatchInfo(MatchInfo.newBuilder()
+                .setReceiverId(distInboxId(inboxId, incarnation))
+                .setTopicFilter(topicFilter)
+                .build())
+            .build()).join();
+        assertEquals(checkReply.getCode(0), CheckReply.Code.NO_SUB);
         verify(distClient, times(1))
             .removeTopicMatch(anyLong(), eq(tenantId), eq(topicFilter), anyString(), anyString(), anyInt());
     }

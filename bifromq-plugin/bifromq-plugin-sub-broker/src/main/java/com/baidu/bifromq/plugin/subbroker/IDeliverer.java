@@ -15,7 +15,11 @@ package com.baidu.bifromq.plugin.subbroker;
 
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Deliverer is responsible for delivering messages to the subscribers.
+ */
 public interface IDeliverer {
+
     /**
      * Deliver a pack of messages into the subscriber inboxes.
      *

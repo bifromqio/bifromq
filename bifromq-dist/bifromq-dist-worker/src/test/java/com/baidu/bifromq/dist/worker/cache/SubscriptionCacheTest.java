@@ -23,6 +23,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertTrue;
 
@@ -82,6 +83,25 @@ public class SubscriptionCacheTest {
         Set<Matching> resultSet = cache.get(tenantId, topic).join();
         assertEquals(mockMatchings, resultSet);
         verify(tenantRouteCacheMock).getMatch(eq(topic), any(Boundary.class));
+    }
+
+    @Test
+    public void isCached() {
+        String tenantId = "tenant1";
+        String topic = "home/sensor/temperature";
+        assertFalse(cache.isCached(tenantId, topic));
+
+        Set<Matching> mockMatchings = new HashSet<>();
+        when(tenantRouteCacheMock.getMatch(eq(topic), any(Boundary.class))).thenReturn(
+            CompletableFuture.completedFuture(mockMatchings));
+        when(tenantRouteCacheFactoryMock.create(eq(tenantId))).thenReturn(tenantRouteCacheMock);
+        // load cache
+        cache.get(tenantId, topic).join();
+
+        assertFalse(cache.isCached(tenantId, topic));
+
+        when(tenantRouteCacheMock.isCached(eq(topic))).thenReturn(true);
+        assertTrue(cache.isCached(tenantId, topic));
     }
 
     @Test

@@ -30,7 +30,7 @@ import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
 
-public class BatchDeleteCall extends BatchMutationCall<BatchDeleteRequest.Params, BatchDeleteReply.Result> {
+class BatchDeleteCall extends BatchMutationCall<BatchDeleteRequest.Params, BatchDeleteReply.Result> {
 
     protected BatchDeleteCall(KVRangeId rangeId,
                               IBaseKVStoreClient distWorkerClient,

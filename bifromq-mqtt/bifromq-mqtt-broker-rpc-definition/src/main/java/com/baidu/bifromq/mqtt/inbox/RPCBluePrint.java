@@ -22,5 +22,6 @@ public class RPCBluePrint {
         .methodSemantic(OnlineInboxBrokerGrpc.getWriteMethod(), BluePrint.DDPipelineUnaryMethod.getInstance())
         .methodSemantic(OnlineInboxBrokerGrpc.getSubMethod(), BluePrint.DDUnaryMethod.getInstance())
         .methodSemantic(OnlineInboxBrokerGrpc.getUnsubMethod(), BluePrint.DDUnaryMethod.getInstance())
+        .methodSemantic(OnlineInboxBrokerGrpc.getCheckSubscriptionsMethod(), BluePrint.DDUnaryMethod.getInstance())
         .build();
 }

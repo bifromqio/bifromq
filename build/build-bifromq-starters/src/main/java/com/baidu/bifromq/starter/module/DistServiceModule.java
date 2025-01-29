@@ -111,6 +111,8 @@ public class DistServiceModule extends AbstractModule {
                         .getDataEngineConfig(), "dist_data"))
                     .setWalEngineConfigurator(buildWALEngineConf(workerConfig
                         .getWalEngineConfig(), "dist_wal")))
+                .gcInterval(
+                    Duration.ofSeconds(workerConfig.getGcIntervalSeconds()))
                 .balancerRetryDelay(Duration.ofMillis(workerConfig.getBalanceConfig().getRetryDelayInMS()))
                 .balancerFactoryConfig(workerConfig.getBalanceConfig().getBalancers())
                 .subBrokerManager(injector.getInstance(ISubBrokerManager.class))

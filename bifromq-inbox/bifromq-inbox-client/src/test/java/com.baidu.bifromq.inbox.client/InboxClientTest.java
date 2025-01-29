@@ -42,7 +42,10 @@ import com.baidu.bifromq.inbox.rpc.proto.TouchReply;
 import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
+import com.baidu.bifromq.plugin.subbroker.CheckReply;
+import com.baidu.bifromq.plugin.subbroker.CheckRequest;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.MatchInfo;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.mockito.Mock;
@@ -68,6 +71,27 @@ public class InboxClientTest {
     @SneakyThrows
     public void tearDown() {
         closeable.close();
+    }
+
+    @Test
+    public void checkSubscriptionRPCException() {
+        CheckRequest checkRequest = CheckRequest.newBuilder()
+            .setTenantId("TenantId")
+            .setDelivererKey("DelivererKey")
+            .addMatchInfo(MatchInfo.newBuilder().build())
+            .build();
+
+        when(rpcClient.invoke(anyString(), isNull(), any(), any()))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Mocked")));
+
+        CheckReply reply = inboxClient.check(checkRequest).join();
+
+        verify(rpcClient).invoke(eq(checkRequest.getTenantId()), isNull(), eq(checkRequest), any());
+
+        assertEquals(reply.getCodeCount(), checkRequest.getMatchInfoCount());
+        for (int i = 0; i < reply.getCodeCount(); i++) {
+            assertEquals(reply.getCode(i), CheckReply.Code.ERROR);
+        }
     }
 
     @Test

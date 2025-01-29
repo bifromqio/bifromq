@@ -16,7 +16,9 @@ package com.baidu.bifromq.dist.worker;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehookloader.BaseHookLoader;
 import com.baidu.bifromq.basekv.balance.KVStoreBalanceController;
+import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
+import com.baidu.bifromq.baserpc.client.IConnectable;
 import com.baidu.bifromq.dist.worker.spi.IDistWorkerBalancerFactory;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
@@ -26,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedTransferQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -39,11 +43,15 @@ class DistWorker implements IDistWorker {
 
     private final String clusterId;
     private final ExecutorService rpcExecutor;
-    private final IBaseKVStoreServer storeServer;
+    private final IBaseKVStoreClient distWorkerClient;
+    private final IBaseKVStoreServer distWorkerServer;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final KVStoreBalanceController storeBalanceController;
     private final List<IDistWorkerBalancerFactory> effectiveBalancerFactories = new LinkedList<>();
     private final DistWorkerCoProcFactory coProcFactory;
+    private final boolean jobExecutorOwner;
+    private final ScheduledExecutorService jobScheduler;
+    private final DistWorkerCleaner cleaner;
 
     public DistWorker(DistWorkerBuilder builder) {
         this.clusterId = builder.clusterId;
@@ -71,6 +79,14 @@ class DistWorker implements IDistWorker {
             effectiveBalancerFactories,
             builder.balancerRetryDelay,
             builder.bgTaskExecutor);
+        jobExecutorOwner = builder.bgTaskExecutor == null;
+        if (jobExecutorOwner) {
+            String threadName = String.format("dist-worker[%s]-job-executor", builder.clusterId);
+            jobScheduler = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+                new ScheduledThreadPoolExecutor(1, EnvProvider.INSTANCE.newThreadFactory(threadName)), threadName);
+        } else {
+            jobScheduler = builder.bgTaskExecutor;
+        }
 
         if (builder.workerThreads == 0) {
             rpcExecutor = MoreExecutors.newDirectExecutorService();
@@ -81,8 +97,9 @@ class DistWorker implements IDistWorker {
                     TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
                     EnvProvider.INSTANCE.newThreadFactory("dist-worker-executor")), "dist-worker-executor");
         }
+        distWorkerClient = builder.distWorkerClient;
 
-        storeServer = IBaseKVStoreServer.builder()
+        distWorkerServer = IBaseKVStoreServer.builder()
             // attach to rpc server
             .rpcServerBuilder(builder.rpcServerBuilder)
             .metaService(builder.metaService)
@@ -98,20 +115,29 @@ class DistWorker implements IDistWorker {
             .attributes(builder.attributes)
             .finish()
             .build();
+        cleaner = new DistWorkerCleaner(distWorkerClient, builder.gcInterval, jobScheduler);
         start();
     }
 
 
     public String id() {
-        return storeServer.storeId(clusterId);
+        return distWorkerServer.storeId(clusterId);
     }
 
     private void start() {
         if (status.compareAndSet(Status.INIT, Status.STARTING)) {
             log.info("Starting dist worker");
-            storeServer.start();
-            storeBalanceController.start(storeServer.storeId(clusterId));
+            distWorkerServer.start();
+            String storeId = distWorkerServer.storeId(clusterId);
+            storeBalanceController.start(storeId);
             status.compareAndSet(Status.STARTING, Status.STARTED);
+            distWorkerClient
+                .connState()
+                // observe the first READY state
+                .filter(connState -> connState == IConnectable.ConnState.READY)
+                .takeUntil(connState -> connState == IConnectable.ConnState.READY)
+                .doOnComplete(() -> cleaner.start(storeId))
+                .subscribe();
             log.debug("Dist worker started");
         }
     }
@@ -119,12 +145,17 @@ class DistWorker implements IDistWorker {
     public void close() {
         if (status.compareAndSet(Status.STARTED, Status.STOPPING)) {
             log.info("Stopping DistWorker");
+            cleaner.stop().join();
             storeBalanceController.stop();
-            storeServer.stop();
+            distWorkerServer.stop();
             log.debug("Stopping CoProcFactory");
             coProcFactory.close();
             effectiveBalancerFactories.forEach(IDistWorkerBalancerFactory::close);
             MoreExecutors.shutdownAndAwaitTermination(rpcExecutor, 5, TimeUnit.SECONDS);
+            if (jobExecutorOwner) {
+                log.debug("Shutting down job executor");
+                MoreExecutors.shutdownAndAwaitTermination(jobScheduler, 5, TimeUnit.SECONDS);
+            }
             log.debug("DistWorker stopped");
             status.compareAndSet(Status.STOPPING, Status.STOPPED);
         }

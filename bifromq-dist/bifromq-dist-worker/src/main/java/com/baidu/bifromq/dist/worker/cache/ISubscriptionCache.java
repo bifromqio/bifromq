@@ -22,6 +22,8 @@ import java.util.concurrent.CompletableFuture;
 public interface ISubscriptionCache {
     CompletableFuture<Set<Matching>> get(String tenantId, String topic);
 
+    boolean isCached(String tenantId, String topicFilter);
+
     void refresh(Map<String, Set<String>> topicFiltersByTenant);
 
     void reset(Boundary boundary);

@@ -35,6 +35,27 @@ message BatchGetReply{
   repeated Result result = 1;
 }
 
+message BatchCheckSubRequest{
+  message Params{
+    string tenantId = 1;
+    string inboxId = 2;
+    uint64 incarnation = 3;
+    string topicFilter = 4;
+  }
+  repeated Params params = 1;
+  uint64 now = 2;
+}
+
+message BatchCheckSubReply{
+  enum Code{
+    OK = 0;
+    NO_INBOX = 1;
+    NO_MATCH = 2;
+    ERROR = 3;
+  }
+  repeated Code code = 1;
+}
+
 message BatchCreateRequest{
   message Params {
     string inboxId = 1;
@@ -191,7 +212,6 @@ message BatchUnsubRequest{
     uint64 now = 6;
   }
   repeated Params params = 1;
-  uint64 now = 2;
 }
 
 message BatchUnsubReply{
@@ -346,6 +366,7 @@ message InboxServiceROCoProcInput{
     BatchGetRequest batchGet = 2;
     BatchFetchRequest batchFetch = 3;
     GCRequest gc = 4;
+    BatchCheckSubRequest batchCheckSub = 5;
   }
 }
 
@@ -355,5 +376,6 @@ message InboxServiceROCoProcOutput{
     BatchGetReply batchGet = 2;
     BatchFetchReply batchFetch = 3;
     GCReply gc = 4;
+    BatchCheckSubReply batchCheckSub = 5;
   }
 }

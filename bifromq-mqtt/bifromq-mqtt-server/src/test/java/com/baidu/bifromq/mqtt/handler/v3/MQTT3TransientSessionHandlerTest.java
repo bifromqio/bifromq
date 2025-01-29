@@ -222,6 +222,9 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         verifySubAck(subAckMessage, qos);
         verifyEvent(MQTT_SESSION_START, SUB_ACKED);
         shouldCleanSubs = true;
+        boolean isSub =
+            transientSessionHandler.isSubscribing(subMessage.payload().topicSubscriptions().get(0).topicFilter());
+        assertTrue(isSub);
     }
 
     @Test

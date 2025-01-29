@@ -32,6 +32,7 @@ public class DistWorkerConfig {
     // 0 means use calling thread
     private int tickerThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 20);
     private int compactWALThreshold = 2500;
+    private int gcIntervalSeconds = 86400; // every 24 hours
     @JsonSetter(nulls = Nulls.SKIP)
     private StorageEngineConfig dataEngineConfig = new RocksDBEngineConfig();
     @JsonSetter(nulls = Nulls.SKIP)

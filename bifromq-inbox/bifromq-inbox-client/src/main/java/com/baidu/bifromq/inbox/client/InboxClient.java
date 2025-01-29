@@ -37,7 +37,10 @@ import com.baidu.bifromq.inbox.rpc.proto.TouchReply;
 import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
+import com.baidu.bifromq.plugin.subbroker.CheckReply;
+import com.baidu.bifromq.plugin.subbroker.CheckRequest;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
+import com.baidu.bifromq.type.MatchInfo;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.base.Preconditions;
@@ -59,6 +62,19 @@ final class InboxClient implements IInboxClient {
             .weakValues()
             .executor(MoreExecutors.directExecutor())
             .build(key -> new InboxFetchPipeline(key.tenantId, key.delivererKey, rpcClient));
+    }
+
+    @Override
+    public CompletableFuture<CheckReply> check(CheckRequest request) {
+        return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getCheckSubscriptionsMethod())
+            .exceptionally(e -> {
+                log.debug("Failed to check subscription", e);
+                CheckReply.Builder replyBuilder = CheckReply.newBuilder();
+                for (MatchInfo matchInfo : request.getMatchInfoList()) {
+                    replyBuilder.addCode(CheckReply.Code.ERROR);
+                }
+                return replyBuilder.build();
+            });
     }
 
     @Override

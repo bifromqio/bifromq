@@ -23,6 +23,9 @@ import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import com.baidu.bifromq.mqtt.session.IMQTTSession;
+import com.baidu.bifromq.plugin.subbroker.CheckReply;
+import com.baidu.bifromq.plugin.subbroker.CheckRequest;
+import com.baidu.bifromq.type.MatchInfo;
 import io.grpc.stub.StreamObserver;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
@@ -80,5 +83,18 @@ final class LocalSessionBrokerService extends OnlineInboxBrokerGrpc.OnlineInboxB
                     .build());
             }
         }, responseObserver);
+    }
+
+    @Override
+    public void checkSubscriptions(CheckRequest request, StreamObserver<CheckReply> responseObserver) {
+        response(ignore -> {
+            CheckReply.Builder replyBuilder = CheckReply.newBuilder();
+            for (MatchInfo matchInfo : request.getMatchInfoList()) {
+                CheckReply.Code code = localDistService.checkMatchInfo(request.getTenantId(), matchInfo);
+                replyBuilder.addCode(code);
+            }
+            return CompletableFuture.completedFuture(replyBuilder.build());
+        }, responseObserver);
+
     }
 }

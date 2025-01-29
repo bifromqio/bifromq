@@ -22,6 +22,8 @@ import java.util.concurrent.CompletableFuture;
  * Cache for matched routes for given tenant.
  */
 public interface ITenantRouteCache {
+    boolean isCached(String topicFilter);
+
     void refresh(Set<String> topicFilters);
 
     CompletableFuture<Set<Matching>> getMatch(String topic, Boundary currentTenantRange);

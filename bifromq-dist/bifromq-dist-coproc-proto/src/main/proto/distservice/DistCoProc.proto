@@ -61,6 +61,19 @@ message BatchDistReply {
   map<string, TopicFanout> result = 2;
 }
 
+message GCRequest {
+  uint64 reqId = 1;
+}
+
+message GCReply {
+  enum Result{
+    OK = 0;
+    ERROR = 1;
+  }
+  uint64 reqId = 1;
+  Result result = 2;
+}
+
 message DistServiceRWCoProcInput{
   oneof type{
     BatchMatchRequest batchMatch = 1;
@@ -78,12 +91,14 @@ message DistServiceRWCoProcOutput{
 message DistServiceROCoProcInput{
   oneof Input{
     BatchDistRequest batchDist = 1;
+    GCRequest gc = 2;
   }
 }
 
 message DistServiceROCoProcOutput{
   oneof Output{
     BatchDistReply batchDist = 1;
+    GCReply gc = 2;
   }
 }
 

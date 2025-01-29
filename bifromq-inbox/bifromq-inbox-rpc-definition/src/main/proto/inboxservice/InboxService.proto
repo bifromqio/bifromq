@@ -26,6 +26,7 @@ service InboxService {
 
   rpc expire (ExpireRequest) returns (ExpireReply);
   rpc expireAll (ExpireAllRequest) returns (ExpireAllReply);
+  rpc checkSubscriptions(subbroker.CheckRequest) returns (subbroker.CheckReply);
 }
 
 message GetRequest {

@@ -43,6 +43,8 @@ import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchCheckSubReply;
+import com.baidu.bifromq.inbox.storage.proto.BatchCheckSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateReply;
@@ -145,6 +147,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 case BATCHGET -> outputBuilder.setBatchGet(batchGet(coProcInput.getBatchGet(), reader));
                 case BATCHFETCH -> outputBuilder.setBatchFetch(batchFetch(coProcInput.getBatchFetch(), reader));
                 case GC -> outputBuilder.setGc(gcScan(coProcInput.getGc(), reader));
+                case BATCHCHECKSUB -> outputBuilder.setBatchCheckSub(
+                    batchCheckSub(coProcInput.getBatchCheckSub(), reader));
             }
             return CompletableFuture.completedFuture(ROCoProcOutput.newBuilder()
                 .setInboxService(outputBuilder.build())
@@ -248,6 +252,29 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 }
             }
             replyBuilder.addResult(resultBuilder.build());
+        }
+        return replyBuilder.build();
+    }
+
+    private BatchCheckSubReply batchCheckSub(BatchCheckSubRequest request, IKVReader reader) {
+        BatchCheckSubReply.Builder replyBuilder = BatchCheckSubReply.newBuilder();
+        for (BatchCheckSubRequest.Params params : request.getParamsList()) {
+            Optional<InboxMetadata> metadataOpt =
+                tenantStates.get(params.getTenantId(), params.getInboxId(), params.getIncarnation());
+            if (metadataOpt.isEmpty()) {
+                replyBuilder.addCode(BatchCheckSubReply.Code.NO_INBOX);
+                continue;
+            }
+            if (hasExpired(metadataOpt.get(), request.getNow())) {
+                replyBuilder.addCode(BatchCheckSubReply.Code.NO_INBOX);
+                continue;
+            }
+            InboxMetadata metadata = metadataOpt.get();
+            if (metadata.getTopicFiltersMap().containsKey(params.getTopicFilter())) {
+                replyBuilder.addCode(BatchCheckSubReply.Code.OK);
+            } else {
+                replyBuilder.addCode(BatchCheckSubReply.Code.NO_MATCH);
+            }
         }
         return replyBuilder.build();
     }
@@ -585,7 +612,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 replyBuilder.addCode(BatchUnsubReply.Code.NO_SUB);
             }
             metadata = metadataBuilder
-                .setLastActiveTime(request.getNow())
+                .setLastActiveTime(params.getNow())
                 .build();
             ByteString metadataKey = inboxKeyPrefix(params.getTenantId(), params.getInboxId(), params.getIncarnation());
             write.put(metadataKey, metadata.toByteString());

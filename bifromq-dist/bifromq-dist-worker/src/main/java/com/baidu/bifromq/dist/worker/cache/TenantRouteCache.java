@@ -108,6 +108,11 @@ class TenantRouteCache implements ITenantRouteCache {
     }
 
     @Override
+    public boolean isCached(String topicFilter) {
+        return !index.match(topicFilter).isEmpty();
+    }
+
+    @Override
     public void refresh(Set<String> topicFilters) {
         topicFilters.forEach(topicFilter -> {
             for (RouteCacheKey cacheKey : index.match(topicFilter)) {

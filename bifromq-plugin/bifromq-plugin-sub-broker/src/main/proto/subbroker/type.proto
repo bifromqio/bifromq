@@ -17,7 +17,7 @@ message DeliveryPackage{
 }
 
 message DeliveryRequest{
-  map<string, DeliveryPackage> package = 3;
+  map<string, DeliveryPackage> package = 3; // key: tenantId
 }
 
 message DeliveryResult{
@@ -36,5 +36,36 @@ message DeliveryResults{
 }
 
 message DeliveryReply{
-  map<string, DeliveryResults> result = 2;
+  map<string, DeliveryResults> result = 2; // key: tenantId
+}
+
+message MatchInfos{
+  repeated commontype.MatchInfo matchInfo = 1;
+}
+
+message MatchInfoCheckResults{
+  enum Code{
+    OK = 0;
+    NO_SUB = 1;
+    NO_RECEIVER = 2;
+    ERROR = 3;
+  }
+  repeated commontype.MatchInfo matchInfo = 1;
+  repeated Code code = 2;
+}
+
+message CheckRequest{
+  string tenantId = 1;
+  string delivererKey = 2;
+  repeated commontype.MatchInfo matchInfo = 3;
+}
+
+message CheckReply{
+  enum Code{
+    OK = 0;
+    NO_SUB = 1;
+    NO_RECEIVER = 2;
+    ERROR = 3;
+  }
+  repeated Code code = 1;
 }

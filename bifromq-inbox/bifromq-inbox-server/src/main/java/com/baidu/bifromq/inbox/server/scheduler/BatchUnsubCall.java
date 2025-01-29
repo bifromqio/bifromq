@@ -31,7 +31,7 @@ import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
 
-public class BatchUnsubCall extends BatchMutationCall<UnsubRequest, UnsubReply> {
+class BatchUnsubCall extends BatchMutationCall<UnsubRequest, UnsubReply> {
     protected BatchUnsubCall(KVRangeId rangeId,
                              IBaseKVStoreClient distWorkerClient,
                              Duration pipelineExpiryTime) {

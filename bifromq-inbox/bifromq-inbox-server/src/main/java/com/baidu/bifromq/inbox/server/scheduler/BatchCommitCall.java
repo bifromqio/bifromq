@@ -31,7 +31,7 @@ import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
 
-public class BatchCommitCall extends BatchMutationCall<CommitRequest, CommitReply> {
+class BatchCommitCall extends BatchMutationCall<CommitRequest, CommitReply> {
     protected BatchCommitCall(KVRangeId rangeId,
                               IBaseKVStoreClient storeClient,
                               Duration pipelineExpiryTime) {

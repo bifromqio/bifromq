@@ -16,6 +16,7 @@ package com.baidu.bifromq.inbox.server;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.inbox.RPCBluePrint;
 import com.baidu.bifromq.inbox.server.scheduler.InboxAttachScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.InboxCheckSubScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxCommitScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxCreateScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxDeleteScheduler;
@@ -51,6 +52,7 @@ class InboxServer implements IInboxServer {
             .retainClient(builder.retainClient)
             .inboxStoreClient(builder.inboxStoreClient)
             .getScheduler(new InboxGetScheduler(builder.inboxStoreClient))
+            .checkSubScheduler(new InboxCheckSubScheduler(builder.inboxStoreClient))
             .fetchScheduler(new InboxFetchScheduler(builder.inboxStoreClient))
             .insertScheduler(new InboxInsertScheduler(builder.inboxStoreClient))
             .commitScheduler(new InboxCommitScheduler(builder.inboxStoreClient))

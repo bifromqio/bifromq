@@ -33,7 +33,7 @@ import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
+class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
     protected BatchSubCall(KVRangeId rangeId,
                            IBaseKVStoreClient distWorkerClient,
                            Duration pipelineExpiryTime) {

@@ -120,6 +120,15 @@ public class SubscriptionCache implements ISubscriptionCache {
     }
 
     @Override
+    public boolean isCached(String tenantId, String topicFilter) {
+        ITenantRouteCache cache = tenantCache.getIfPresent(noRefreshExpiry(tenantId));
+        if (cache != null) {
+            return cache.isCached(topicFilter);
+        }
+        return false;
+    }
+
+    @Override
     public void refresh(Map<String, Set<String>> topicFiltersByTenant) {
         topicFiltersByTenant.forEach((tenantId, topicFilters) -> {
             ITenantRouteCache cache = tenantCache.getIfPresent(noRefreshExpiry(tenantId));

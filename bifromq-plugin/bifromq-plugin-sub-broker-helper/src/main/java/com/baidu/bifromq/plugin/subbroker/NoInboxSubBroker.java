@@ -32,6 +32,15 @@ class NoInboxSubBroker implements ISubBroker {
     }
 
     @Override
+    public CompletableFuture<CheckReply> check(CheckRequest request) {
+        CheckReply.Builder replyBuilder = CheckReply.newBuilder();
+        for (MatchInfo matchInfo : request.getMatchInfoList()) {
+            replyBuilder.addCode(CheckReply.Code.NO_RECEIVER);
+        }
+        return CompletableFuture.completedFuture(replyBuilder.build());
+    }
+
+    @Override
     public IDeliverer open(String delivererKey) {
         return new IDeliverer() {
             @Override

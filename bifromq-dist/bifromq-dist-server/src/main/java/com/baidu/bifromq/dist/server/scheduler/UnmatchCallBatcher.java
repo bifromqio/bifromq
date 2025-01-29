@@ -21,12 +21,12 @@ import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
 import java.time.Duration;
 
-class UnsubCallBatcher extends MutationCallBatcher<UnmatchRequest, UnmatchReply> {
-    UnsubCallBatcher(String name,
-                     long tolerableLatencyNanos,
-                     long burstLatencyNanos,
-                     MutationCallBatcherKey batcherKey,
-                     IBaseKVStoreClient distWorkerClient) {
+class UnmatchCallBatcher extends MutationCallBatcher<UnmatchRequest, UnmatchReply> {
+    UnmatchCallBatcher(String name,
+                       long tolerableLatencyNanos,
+                       long burstLatencyNanos,
+                       MutationCallBatcherKey batcherKey,
+                       IBaseKVStoreClient distWorkerClient) {
         super(name, tolerableLatencyNanos, burstLatencyNanos, batcherKey, distWorkerClient);
     }
 

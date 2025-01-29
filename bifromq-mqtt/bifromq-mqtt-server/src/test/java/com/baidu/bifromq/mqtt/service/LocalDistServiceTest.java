@@ -33,6 +33,7 @@ import static org.testng.Assert.assertTrue;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.mqtt.MockableTest;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
+import com.baidu.bifromq.plugin.subbroker.CheckReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
 import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
@@ -78,6 +79,83 @@ public class LocalDistServiceTest extends MockableTest {
     }
 
     @Test
+    public void checkMatchInfoForSharedSub() {
+        String topicFilter = "$share/group/topicFilter";
+        String tenantId = "tenantId";
+        String channelId = "channelId";
+
+        CheckReply.Code code = localDistService.checkMatchInfo(tenantId,
+            MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId(ILocalDistService.globalize(channelId))
+                .build());
+        assertEquals(code, CheckReply.Code.NO_RECEIVER);
+
+        IMQTTTransientSession session = mock(IMQTTTransientSession.class);
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        when(session.clientInfo()).thenReturn(clientInfo);
+        when(session.channelId()).thenReturn(channelId);
+        when(session.isSubscribing(topicFilter)).thenReturn(true);
+        when(localSessionRegistry.get(channelId)).thenReturn(session);
+        long reqId = System.nanoTime();
+        localDistService.match(reqId, topicFilter, session);
+        code = localDistService.checkMatchInfo(tenantId,
+            MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId(ILocalDistService.globalize(channelId))
+                .build());
+        assertEquals(code, CheckReply.Code.OK);
+    }
+
+    @Test
+    public void checkMatchInfoForNonSharedSub() {
+        String tenantId = "tenantId";
+        String topicFilter = "topicFilter";
+        String channelId = "channelId";
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        IMQTTTransientSession session = mock(IMQTTTransientSession.class);
+        when(session.clientInfo()).thenReturn(clientInfo);
+        when(session.channelId()).thenReturn(channelId);
+
+        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.empty());
+        CheckReply.Code code = localDistService.checkMatchInfo(tenantId, MatchInfo.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setReceiverId(ILocalDistService.localize(channelId))
+            .build());
+        assertEquals(code, CheckReply.Code.NO_RECEIVER);
+
+        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.of(new CompletableFuture<>()));
+        code = localDistService.checkMatchInfo(tenantId, MatchInfo.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setReceiverId(ILocalDistService.localize(channelId))
+            .build());
+        assertEquals(code, CheckReply.Code.OK);
+
+        ILocalTopicRouter.ILocalRoutes localRoutes = mock(ILocalTopicRouter.ILocalRoutes.class);
+        when(localRoutes.localReceiverId()).thenReturn("fakeReceiver");
+        when(localTopicRouter.getTopicRoutes(anyString(), any()))
+            .thenReturn(Optional.of(CompletableFuture.completedFuture(localRoutes)));
+        code = localDistService.checkMatchInfo(tenantId, MatchInfo.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setReceiverId(ILocalDistService.localize(channelId))
+            .build());
+        assertEquals(code, CheckReply.Code.NO_RECEIVER);
+
+        localRoutes = mock(ILocalTopicRouter.ILocalRoutes.class);
+        when(localRoutes.localReceiverId()).thenReturn(ILocalDistService.localize(channelId));
+        when(localTopicRouter.getTopicRoutes(anyString(), any()))
+            .thenReturn(Optional.of(CompletableFuture.completedFuture(localRoutes)));
+        code = localDistService.checkMatchInfo(tenantId, MatchInfo.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setReceiverId(ILocalDistService.localize(channelId))
+            .build());
+        assertEquals(code, CheckReply.Code.NO_RECEIVER);
+
+        when(localRoutes.routeList()).thenReturn(Set.of(channelId));
+        code = localDistService.checkMatchInfo(tenantId, MatchInfo.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setReceiverId(ILocalDistService.localize(channelId))
+            .build());
+        assertEquals(code, CheckReply.Code.OK);
+    }
+
+    @Test
     public void matchSharedSubTopicFilter() {
         String topicFilter = "$share/group/topicFilter";
         for (int i = 0; i < 100; i++) {
@@ -106,11 +184,17 @@ public class LocalDistServiceTest extends MockableTest {
             ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
             when(session.clientInfo()).thenReturn(clientInfo);
             when(session.channelId()).thenReturn(channelId);
+            when(session.isSubscribing(topicFilter)).thenReturn(false);
+            when(localSessionRegistry.get(channelId)).thenReturn(session);
             long reqId = System.nanoTime();
             localDistService.unmatch(reqId, topicFilter, session);
             verify(distClient).removeTopicMatch(eq(reqId), eq(tenantId), eq(topicFilter),
                 eq(ILocalDistService.globalize(channelId)),
                 eq(toDelivererKey(tenantId, ILocalDistService.globalize(channelId), serverId)), eq(0));
+            CheckReply.Code code = localDistService.checkMatchInfo(tenantId,
+                MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId(ILocalDistService.globalize(channelId))
+                    .build());
+            assertEquals(code, CheckReply.Code.NO_SUB);
             reset(distClient);
         }
     }
@@ -145,8 +229,8 @@ public class LocalDistServiceTest extends MockableTest {
     @Test
     public void sharedSubMatchingAndDist() {
         // Setup the local distribution service
-        LocalDistService localDistService = new LocalDistService(
-            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
 
         // Define the shared subscription topic filter
         String topicFilter = "$share/group/sensor/data";
@@ -168,20 +252,14 @@ public class LocalDistServiceTest extends MockableTest {
         }
 
         // Prepare delivery request and distribute messages
-        MatchInfo matchInfo = MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
-            .setReceiverId(ILocalDistService.globalize("channelId0"))
-            .build();
-        DeliveryPack pack = DeliveryPack.newBuilder()
-            .setMessagePack(TopicMessagePack.newBuilder().build())
-            .addMatchInfo(matchInfo)
-            .build();
-        DeliveryPackage deliveryPackage = DeliveryPackage.newBuilder()
-            .addPack(pack)
-            .build();
-        DeliveryRequest request = DeliveryRequest.newBuilder()
-            .putPackage(tenantId, deliveryPackage)
-            .build();
+        MatchInfo matchInfo =
+            MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId(ILocalDistService.globalize("channelId0"))
+                .build();
+        DeliveryPack pack =
+            DeliveryPack.newBuilder().setMessagePack(TopicMessagePack.newBuilder().build()).addMatchInfo(matchInfo)
+                .build();
+        DeliveryPackage deliveryPackage = DeliveryPackage.newBuilder().addPack(pack).build();
+        DeliveryRequest request = DeliveryRequest.newBuilder().putPackage(tenantId, deliveryPackage).build();
 
         // Call the distribution method and get the reply
         CompletableFuture<DeliveryReply> futureReply = localDistService.dist(request);
@@ -202,16 +280,10 @@ public class LocalDistServiceTest extends MockableTest {
         String topic = "testTopic";
         String topicFilter = "testTopic/#";
         String channelId = "channel0";
-        MatchInfo matchInfo = MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
-            .setReceiverId("receiverId")
-            .build();
+        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId("receiverId").build();
         TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
         DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
-            .addPack(DeliveryPack.newBuilder()
-                .setMessagePack(topicMessagePack)
-                .addMatchInfo(matchInfo)
-                .build())
+            .addPack(DeliveryPack.newBuilder().setMessagePack(topicMessagePack).addMatchInfo(matchInfo).build())
             .build();
         DeliveryRequest request = DeliveryRequest.newBuilder().putPackage(tenantId, deliveryPack).build();
 
@@ -223,11 +295,11 @@ public class LocalDistServiceTest extends MockableTest {
         ILocalTopicRouter.ILocalRoutes localRoutes = mock(ILocalTopicRouter.ILocalRoutes.class);
         when(localRoutes.localReceiverId()).thenReturn("receiverId");
         when(localRoutes.routeList()).thenReturn(Set.of(channelId));
-        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.of(
-            CompletableFuture.completedFuture(localRoutes)));
+        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(
+            Optional.of(CompletableFuture.completedFuture(localRoutes)));
 
-        LocalDistService localDistService = new LocalDistService(
-            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
 
         CompletableFuture<DeliveryReply> future = localDistService.dist(request);
         DeliveryReply reply = future.join();
@@ -248,16 +320,10 @@ public class LocalDistServiceTest extends MockableTest {
         String topic = "testTopic";
         String topicFilter = "testTopic/#";
         String channelId = "channel0";
-        MatchInfo matchInfo = MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
-            .setReceiverId("receiverIdA")
-            .build();
+        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId("receiverIdA").build();
         TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
         DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
-            .addPack(DeliveryPack.newBuilder()
-                .setMessagePack(topicMessagePack)
-                .addMatchInfo(matchInfo)
-                .build())
+            .addPack(DeliveryPack.newBuilder().setMessagePack(topicMessagePack).addMatchInfo(matchInfo).build())
             .build();
         DeliveryRequest request = DeliveryRequest.newBuilder().putPackage(tenantId, deliveryPack).build();
 
@@ -269,11 +335,11 @@ public class LocalDistServiceTest extends MockableTest {
         ILocalTopicRouter.ILocalRoutes localRoutes = mock(ILocalTopicRouter.ILocalRoutes.class);
         when(localRoutes.localReceiverId()).thenReturn("receiverIdB");
         when(localRoutes.routeList()).thenReturn(Set.of(channelId));
-        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.of(
-            CompletableFuture.completedFuture(localRoutes)));
+        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(
+            Optional.of(CompletableFuture.completedFuture(localRoutes)));
 
-        LocalDistService localDistService = new LocalDistService(
-            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
 
         CompletableFuture<DeliveryReply> future = localDistService.dist(request);
         DeliveryReply reply = future.join();
@@ -289,16 +355,10 @@ public class LocalDistServiceTest extends MockableTest {
         String topic = "testTopic";
         String topicFilter = "testTopic/#";
         String channelId = "channel0";
-        MatchInfo matchInfo = MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
-            .setReceiverId("receiverId")
-            .build();
+        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId("receiverId").build();
         TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
         DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
-            .addPack(DeliveryPack.newBuilder()
-                .setMessagePack(topicMessagePack)
-                .addMatchInfo(matchInfo)
-                .build())
+            .addPack(DeliveryPack.newBuilder().setMessagePack(topicMessagePack).addMatchInfo(matchInfo).build())
             .build();
         DeliveryRequest request = DeliveryRequest.newBuilder().putPackage(tenantId, deliveryPack).build();
 
@@ -309,8 +369,8 @@ public class LocalDistServiceTest extends MockableTest {
 
         when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.empty());
 
-        LocalDistService localDistService = new LocalDistService(
-            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
 
         CompletableFuture<DeliveryReply> future = localDistService.dist(request);
         DeliveryReply reply = future.join();
@@ -326,16 +386,10 @@ public class LocalDistServiceTest extends MockableTest {
         String topic = "testTopic";
         String topicFilter = "testTopic/#";
         String channelId = "channel0";
-        MatchInfo matchInfo = MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
-            .setReceiverId("receiverId")
-            .build();
+        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId("receiverId").build();
         TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
         DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
-            .addPack(DeliveryPack.newBuilder()
-                .setMessagePack(topicMessagePack)
-                .addMatchInfo(matchInfo)
-                .build())
+            .addPack(DeliveryPack.newBuilder().setMessagePack(topicMessagePack).addMatchInfo(matchInfo).build())
             .build();
         DeliveryRequest request = DeliveryRequest.newBuilder().putPackage(tenantId, deliveryPack).build();
 
@@ -346,8 +400,8 @@ public class LocalDistServiceTest extends MockableTest {
 
         when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.of(new CompletableFuture<>()));
 
-        LocalDistService localDistService = new LocalDistService(
-            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
 
         CompletableFuture<DeliveryReply> future = localDistService.dist(request);
         DeliveryReply reply = future.join();
@@ -363,16 +417,10 @@ public class LocalDistServiceTest extends MockableTest {
         String topic = "testTopic";
         String topicFilter = "testTopic/#";
         String channelId = "channel0";
-        MatchInfo matchInfo = MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
-            .setReceiverId("receiverId")
-            .build();
+        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId("receiverId").build();
         TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
         DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
-            .addPack(DeliveryPack.newBuilder()
-                .setMessagePack(topicMessagePack)
-                .addMatchInfo(matchInfo)
-                .build())
+            .addPack(DeliveryPack.newBuilder().setMessagePack(topicMessagePack).addMatchInfo(matchInfo).build())
             .build();
         DeliveryRequest request = DeliveryRequest.newBuilder().putPackage(tenantId, deliveryPack).build();
 
@@ -384,8 +432,8 @@ public class LocalDistServiceTest extends MockableTest {
         when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(
             Optional.of(CompletableFuture.failedFuture(new RuntimeException("Route resolve exception"))));
 
-        LocalDistService localDistService = new LocalDistService(
-            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
 
         CompletableFuture<DeliveryReply> future = localDistService.dist(request);
         DeliveryReply reply = future.join();
@@ -402,16 +450,10 @@ public class LocalDistServiceTest extends MockableTest {
         String topicFilter = "testTopic/#";
         String channelId1 = "channel0";
         String channelId2 = "channel1";
-        MatchInfo matchInfo = MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
-            .setReceiverId("receiverId")
-            .build();
+        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId("receiverId").build();
         TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
         DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
-            .addPack(DeliveryPack.newBuilder()
-                .setMessagePack(topicMessagePack)
-                .addMatchInfo(matchInfo)
-                .build())
+            .addPack(DeliveryPack.newBuilder().setMessagePack(topicMessagePack).addMatchInfo(matchInfo).build())
             .build();
         DeliveryRequest request = DeliveryRequest.newBuilder().putPackage(tenantId, deliveryPack).build();
 
@@ -433,11 +475,11 @@ public class LocalDistServiceTest extends MockableTest {
             add(channelId1);
             add(channelId2);
         }});
-        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.of(
-            CompletableFuture.completedFuture(localRoutes)));
+        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(
+            Optional.of(CompletableFuture.completedFuture(localRoutes)));
 
-        LocalDistService localDistService = new LocalDistService(
-            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
 
         CompletableFuture<DeliveryReply> future = localDistService.dist(request);
         DeliveryReply reply = future.join();
@@ -459,20 +501,12 @@ public class LocalDistServiceTest extends MockableTest {
         String topicFilter = "testTopic/#";
         String channelId1 = "channel0";
         String channelId2 = "channel1";
-        MatchInfo matchInfo = MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
-            .setReceiverId("receiverId")
-            .build();
-        DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
-            .addPack(DeliveryPack.newBuilder()
-                .setMessagePack(TopicMessagePack.newBuilder().setTopic(topic1).build())
-                .addMatchInfo(matchInfo)
-                .build())
-            .addPack(DeliveryPack.newBuilder()
-                .setMessagePack(TopicMessagePack.newBuilder().setTopic(topic2).build())
-                .addMatchInfo(matchInfo)
-                .build())
-            .build();
+        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId("receiverId").build();
+        DeliveryPackage deliveryPack = DeliveryPackage.newBuilder().addPack(
+            DeliveryPack.newBuilder().setMessagePack(TopicMessagePack.newBuilder().setTopic(topic1).build())
+                .addMatchInfo(matchInfo).build()).addPack(
+            DeliveryPack.newBuilder().setMessagePack(TopicMessagePack.newBuilder().setTopic(topic2).build())
+                .addMatchInfo(matchInfo).build()).build();
         DeliveryRequest request = DeliveryRequest.newBuilder().putPackage(tenantId, deliveryPack).build();
 
         when(resourceThrottler.hasResource(eq(tenantId), eq(TotalTransientFanOutBytesPerSeconds))).thenReturn(false);
@@ -493,11 +527,11 @@ public class LocalDistServiceTest extends MockableTest {
             add(channelId1);
             add(channelId2);
         }});
-        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.of(
-            CompletableFuture.completedFuture(localRoutes)));
+        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(
+            Optional.of(CompletableFuture.completedFuture(localRoutes)));
 
-        LocalDistService localDistService = new LocalDistService(
-            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
 
         CompletableFuture<DeliveryReply> future = localDistService.dist(request);
         DeliveryReply reply = future.join();
@@ -517,16 +551,10 @@ public class LocalDistServiceTest extends MockableTest {
         String topic = "testTopic";
         String topicFilter = "testTopic/#";
         String channelId = "channel0";
-        MatchInfo matchInfo = MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
-            .setReceiverId("receiverId")
-            .build();
+        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId("receiverId").build();
         TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
         DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
-            .addPack(DeliveryPack.newBuilder()
-                .setMessagePack(topicMessagePack)
-                .addMatchInfo(matchInfo)
-                .build())
+            .addPack(DeliveryPack.newBuilder().setMessagePack(topicMessagePack).addMatchInfo(matchInfo).build())
             .build();
         DeliveryRequest request = DeliveryRequest.newBuilder().putPackage(tenantId, deliveryPack).build();
 
@@ -538,11 +566,11 @@ public class LocalDistServiceTest extends MockableTest {
         ILocalTopicRouter.ILocalRoutes localRoutes = mock(ILocalTopicRouter.ILocalRoutes.class);
         when(localRoutes.localReceiverId()).thenReturn("receiverId");
         when(localRoutes.routeList()).thenReturn(Set.of(channelId));
-        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.of(
-            CompletableFuture.completedFuture(localRoutes)));
+        when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(
+            Optional.of(CompletableFuture.completedFuture(localRoutes)));
 
-        LocalDistService localDistService = new LocalDistService(
-            serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
+        LocalDistService localDistService =
+            new LocalDistService(serverId, localSessionRegistry, localTopicRouter, distClient, resourceThrottler);
 
         CompletableFuture<DeliveryReply> future = localDistService.dist(request);
         DeliveryReply reply = future.join();

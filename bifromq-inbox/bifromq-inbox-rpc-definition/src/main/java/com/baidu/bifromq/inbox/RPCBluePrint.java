@@ -26,6 +26,7 @@ import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
+import com.baidu.bifromq.plugin.subbroker.CheckRequest;
 
 public class RPCBluePrint {
     public static final BluePrint INSTANCE = BluePrint.builder()
@@ -34,6 +35,8 @@ public class RPCBluePrint {
         // broker client rpc
         .methodSemantic(InboxServiceGrpc.getReceiveMethod(), BluePrint.WCHPipelineUnaryMethod.getInstance())
         .methodSemantic(InboxServiceGrpc.getFetchMethod(), BluePrint.WCHStreamingMethod.getInstance())
+        .methodSemantic(InboxServiceGrpc.getCheckSubscriptionsMethod(), BluePrint.WCHUnaryMethod.<CheckRequest>builder()
+            .keyHashFunc(CheckRequest::getDelivererKey).build())
         // both broker and reader client rpc
         .methodSemantic(InboxServiceGrpc.getGetMethod(), BluePrint.WCHUnaryMethod.<GetRequest>builder()
             .keyHashFunc(request -> getDelivererKey(request.getTenantId(), request.getInboxId())).build())

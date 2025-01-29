@@ -24,6 +24,7 @@ import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.session.IMQTTSession;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
+import com.baidu.bifromq.plugin.subbroker.CheckReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
 import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
@@ -206,5 +207,42 @@ public class LocalDistService implements ILocalDistService {
             replyBuilder.putResult(tenantId, resultsBuilder.build());
         }
         return CompletableFuture.completedFuture(replyBuilder.build());
+    }
+
+    @Override
+    public CheckReply.Code checkMatchInfo(String tenantId, MatchInfo matchInfo) {
+        if (ILocalDistService.isGlobal(matchInfo.getReceiverId())) {
+            IMQTTSession session =
+                sessionRegistry.get(ILocalDistService.parseReceiverId(matchInfo.getReceiverId()));
+            if (session == null) {
+                return CheckReply.Code.NO_RECEIVER;
+            }
+            if (session instanceof IMQTTTransientSession transientSession) {
+                return transientSession.isSubscribing(matchInfo.getTopicFilter())
+                    ? CheckReply.Code.OK : CheckReply.Code.NO_SUB;
+            } else {
+                // should not be here
+                return CheckReply.Code.ERROR;
+            }
+        } else {
+            Optional<CompletableFuture<? extends ILocalTopicRouter.ILocalRoutes>> routesFutureOpt =
+                localTopicRouter.getTopicRoutes(tenantId, matchInfo);
+            if (routesFutureOpt.isEmpty()) {
+                return CheckReply.Code.NO_RECEIVER;
+            }
+            CompletableFuture<? extends ILocalTopicRouter.ILocalRoutes> routesFuture =
+                routesFutureOpt.get();
+            if (!routesFuture.isDone() || routesFuture.isCompletedExceptionally()) {
+                return CheckReply.Code.OK;
+            }
+            ILocalTopicRouter.ILocalRoutes localRoutes = routesFuture.join();
+            if (!localRoutes.localReceiverId().equals(matchInfo.getReceiverId())) {
+                return CheckReply.Code.NO_RECEIVER;
+            }
+            if (localRoutes.routeList().isEmpty()) {
+                return CheckReply.Code.NO_RECEIVER;
+            }
+            return CheckReply.Code.OK;
+        }
     }
 }

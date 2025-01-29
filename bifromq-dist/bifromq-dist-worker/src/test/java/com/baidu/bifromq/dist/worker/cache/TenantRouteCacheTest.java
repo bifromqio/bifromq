@@ -19,6 +19,7 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertTrue;
 
@@ -68,6 +69,16 @@ public class TenantRouteCacheTest extends MeterTest {
         Set<Matching> cachedMatchings = cache.getMatch(topic, FULL_BOUNDARY).join();
         assertNotNull(cachedMatchings);
         assertTrue(cachedMatchings.contains(normalMatching));
+    }
+
+    @Test
+    public void isCached() {
+        String topic = "home/sensor/temperature";
+        Matching normalMatching = mock(Matching.class);
+        when(mockMatcher.matchAll(eq(Set.of(topic)))).thenReturn(Map.of(topic, Set.of(normalMatching)));
+        cache.getMatch(topic, FULL_BOUNDARY).join();
+
+        assertTrue(cache.isCached(topic));
     }
 
     @Test

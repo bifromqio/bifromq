@@ -25,8 +25,12 @@ import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResults;
 import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.type.MatchInfo;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 class DeliveryPipeline implements IDeliverer {
     private final IRPCClient.IRequestPipeline<WriteRequest, WriteReply> ppln;
 
@@ -43,6 +47,7 @@ class DeliveryPipeline implements IDeliverer {
                 .build())
             .thenApply(WriteReply::getReply)
             .exceptionally(e -> {
+                log.debug("Failed to deliver request: {}", request, e);
                 DeliveryResult.Code finalCode = DeliveryResult.Code.ERROR;
                 if (e instanceof ServiceUnavailableException
                     || e.getCause() instanceof ServiceUnavailableException) {
@@ -50,16 +55,18 @@ class DeliveryPipeline implements IDeliverer {
                     finalCode = DeliveryResult.Code.NO_RECEIVER;
                 }
                 DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder();
+                Set<MatchInfo> allMatchInfos = new HashSet<>();
                 for (String tenantId : request.getPackageMap().keySet()) {
                     DeliveryResults.Builder resultsBuilder = DeliveryResults.newBuilder();
                     DeliveryPackage deliveryPackage = request.getPackageMap().get(tenantId);
                     for (DeliveryPack pack : deliveryPackage.getPackList()) {
-                        for (MatchInfo matchInfo : pack.getMatchInfoList()) {
-                            resultsBuilder.addResult(DeliveryResult.newBuilder()
-                                .setMatchInfo(matchInfo)
-                                .setCode(finalCode)
-                                .build());
-                        }
+                        allMatchInfos.addAll(pack.getMatchInfoList());
+                    }
+                    for (MatchInfo matchInfo : allMatchInfos) {
+                        resultsBuilder.addResult(DeliveryResult.newBuilder()
+                            .setMatchInfo(matchInfo)
+                            .setCode(finalCode)
+                            .build());
                     }
                     replyBuilder.putResult(tenantId, resultsBuilder.build());
                 }

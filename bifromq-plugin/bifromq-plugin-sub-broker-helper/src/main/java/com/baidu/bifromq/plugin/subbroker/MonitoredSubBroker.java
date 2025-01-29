@@ -24,14 +24,14 @@ import lombok.extern.slf4j.Slf4j;
 final class MonitoredSubBroker implements ISubBroker {
     private final AtomicBoolean hasStopped = new AtomicBoolean();
     private final ISubBroker delegate;
-    private final Timer hasInboxCallTimer;
+    private final Timer checkSubCallTimer;
     private final Timer deliverCallTimer;
 
     MonitoredSubBroker(ISubBroker delegate) {
         this.delegate = delegate;
-        hasInboxCallTimer = Timer.builder("ib.call.time")
+        checkSubCallTimer = Timer.builder("ib.call.time")
             .tag("type", delegate.getClass().getName())
-            .tag("call", "hasInbox")
+            .tag("call", "checkSub")
             .register(Metrics.globalRegistry);
         deliverCallTimer = Timer.builder("ib.call.time")
             .tag("type", delegate.getClass().getName())
@@ -45,6 +45,17 @@ final class MonitoredSubBroker implements ISubBroker {
     }
 
     @Override
+    public CompletableFuture<CheckReply> check(CheckRequest request) {
+        try {
+            Timer.Sample start = Timer.start();
+            return delegate.check(request)
+                .whenComplete((v, e) -> start.stop(checkSubCallTimer));
+        } catch (Throwable e) {
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+
+    @Override
     public IDeliverer open(String delivererKey) {
         Preconditions.checkState(!hasStopped.get());
         return new MonitoredDeliverer(delivererKey);
@@ -54,7 +65,7 @@ final class MonitoredSubBroker implements ISubBroker {
     public void close() {
         if (hasStopped.compareAndSet(false, true)) {
             delegate.close();
-            Metrics.globalRegistry.remove(hasInboxCallTimer);
+            Metrics.globalRegistry.remove(checkSubCallTimer);
             Metrics.globalRegistry.remove(deliverCallTimer);
         }
     }
