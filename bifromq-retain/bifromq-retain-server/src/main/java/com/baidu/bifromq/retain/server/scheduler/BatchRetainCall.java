@@ -34,9 +34,9 @@ import lombok.extern.slf4j.Slf4j;
 public class BatchRetainCall extends BatchMutationCall<RetainRequest, RetainReply> {
 
     protected BatchRetainCall(KVRangeId rangeId,
-                              IBaseKVStoreClient distWorkerClient,
+                              IBaseKVStoreClient baseKVStoreClient,
                               Duration pipelineExpiryTime) {
-        super(rangeId, distWorkerClient, pipelineExpiryTime);
+        super(rangeId, baseKVStoreClient, pipelineExpiryTime);
     }
 
     @Override

@@ -39,6 +39,7 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
+import com.google.protobuf.ByteString;
 import io.grpc.Context;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.Timer;
@@ -68,6 +69,8 @@ public class RetainServiceTest {
     private IMatchCallScheduler matchCallScheduler;
     @Mock
     private IRetainCallScheduler retainCallScheduler;
+    @Mock
+    private IRetainCallScheduler deleteCallScheduler;
     @Mock
     StreamObserver<RetainReply> retainResponseObserver;
     @Mock
@@ -103,7 +106,8 @@ public class RetainServiceTest {
             .withValue(RPCContext.TENANT_ID_CTX_KEY, tenantId)
             .attach();
         closeable = MockitoAnnotations.openMocks(this);
-        service = new RetainService(gcProcessor, messageDeliverer, matchCallScheduler, retainCallScheduler);
+        service = new RetainService(gcProcessor, messageDeliverer,
+                matchCallScheduler, retainCallScheduler, deleteCallScheduler);
     }
 
     @AfterMethod
@@ -113,11 +117,24 @@ public class RetainServiceTest {
     }
 
     @Test
+    public void testDeleteWithException() {
+        when(deleteCallScheduler.schedule(any())).thenReturn(
+                CompletableFuture.failedFuture(new RuntimeException("Mocked")));
+        long reqId = 1;
+        service.retain(RetainRequest.newBuilder().setReqId(reqId).build(), retainResponseObserver);
+        verify(retainResponseObserver)
+                .onNext(argThat(r -> r.getReqId() == reqId && r.getResult() == RetainReply.Result.ERROR));
+    }
+
+    @Test
     public void testPutRetainWithException() {
         when(retainCallScheduler.schedule(any())).thenReturn(
             CompletableFuture.failedFuture(new RuntimeException("Mocked")));
         long reqId = 1;
-        service.retain(RetainRequest.newBuilder().setReqId(reqId).build(), retainResponseObserver);
+        service.retain(RetainRequest.newBuilder().setReqId(reqId)
+                .setMessage(Message.newBuilder().setPayload(ByteString.copyFromUtf8("mock"))
+                        .build())
+                .build(), retainResponseObserver);
         verify(retainResponseObserver)
             .onNext(argThat(r -> r.getReqId() == reqId && r.getResult() == RetainReply.Result.ERROR));
     }

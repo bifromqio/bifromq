@@ -37,8 +37,12 @@ import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import io.grpc.stub.StreamObserver;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
+
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -47,35 +51,45 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
     private final IMessageDeliverer messageDeliverer;
     private final IMatchCallScheduler matchCallScheduler;
     private final IRetainCallScheduler retainCallScheduler;
+    private final IRetainCallScheduler deleteCallScheduler;
 
     RetainService(IRetainStoreGCProcessor gcProcessor,
                   IMessageDeliverer messageDeliverer,
                   IMatchCallScheduler matchCallScheduler,
-                  IRetainCallScheduler retainCallScheduler) {
+                  IRetainCallScheduler retainCallScheduler,
+                  IRetainCallScheduler deleteCallScheduler) {
         this.gcProcessor = gcProcessor;
         this.messageDeliverer = messageDeliverer;
         this.matchCallScheduler = matchCallScheduler;
         this.retainCallScheduler = retainCallScheduler;
+        this.deleteCallScheduler = deleteCallScheduler;
     }
 
     @Override
     public void retain(RetainRequest request, StreamObserver<RetainReply> responseObserver) {
         log.trace("Handling retain request:\n{}", request);
-        response((tenantId, metadata) -> retainCallScheduler.schedule(request)
-            .exceptionally(e -> {
+        response((tenantId, metadata) -> {
+            CompletionStage<RetainReply> completionStage;
+            if (request.getMessage().getPayload().isEmpty()) {
+                completionStage = deleteCallScheduler.schedule(request);
+            }else {
+                completionStage = retainCallScheduler.schedule(request);
+            }
+            return completionStage.exceptionally(e -> {
                 if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
                     return RetainReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setResult(RetainReply.Result.BACK_PRESSURE_REJECTED)
-                        .build();
+                            .setReqId(request.getReqId())
+                            .setResult(RetainReply.Result.BACK_PRESSURE_REJECTED)
+                            .build();
                 }
                 log.debug("Retain failed", e);
                 return RetainReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setResult(RetainReply.Result.ERROR)
-                    .build();
+                        .setReqId(request.getReqId())
+                        .setResult(RetainReply.Result.ERROR)
+                        .build();
 
-            }), responseObserver);
+            });
+        }, responseObserver);
     }
 
     @Override
