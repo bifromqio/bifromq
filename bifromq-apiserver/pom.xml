@@ -119,7 +119,7 @@
                 </configuration>
                 <executions>
                     <execution>
-                        <phase>generate-resources</phase>
+                        <phase>prepare-package</phase>
                         <goals>
                             <goal>resolve</goal>
                         </goals>
@@ -129,21 +129,19 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-resources-plugin</artifactId>
-                <configuration>
-                    <outputDirectory>${project.parent.basedir}/target/site/swagger</outputDirectory>
-                </configuration>
                 <executions>
                     <execution>
                         <id>filter-swagger-resources</id>
-                        <phase>generate-resources</phase>
+                        <phase>package</phase>
                         <goals>
                             <goal>resources</goal>
                         </goals>
                         <configuration>
+                            <outputDirectory>${build.output.dir}/site/swagger</outputDirectory>
                             <resources>
                                 <resource>
                                     <directory>${project.build.directory}/swagger</directory>
-                                    <filtering>true</filtering>
+                                    <filtering>true</filtering> <!-- filter placeholder -->
                                 </resource>
                             </resources>
                         </configuration>

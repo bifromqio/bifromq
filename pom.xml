@@ -142,6 +142,7 @@
         <release.version>${project.version}</release.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.build.timestamp.format>yyyy-MM-dd HH:mm:ssZ</maven.build.timestamp.format>
+        <build.output.dir>${maven.multiModuleProjectDirectory}/target/output</build.output.dir>
     </properties>
 
     <dependencyManagement>
@@ -1002,7 +1003,8 @@
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
                             <suiteXmlFiles>
-                                <suiteXmlFile>${session.executionRootDirectory}/testsuites/UnitTests.xml</suiteXmlFile>
+                                <suiteXmlFile>${maven.multiModuleProjectDirectory}/testsuites/UnitTests.xml
+                                </suiteXmlFile>
                             </suiteXmlFiles>
                         </configuration>
                     </plugin>
@@ -1022,8 +1024,9 @@
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
                             <suiteXmlFiles>
-                                <suiteXmlFile>${session.executionRootDirectory}/testsuites/UnitTests.xml</suiteXmlFile>
-                                <suiteXmlFile>${session.executionRootDirectory}/testsuites/IntegrationTests.xml
+                                <suiteXmlFile>${maven.multiModuleProjectDirectory}/testsuites/UnitTests.xml
+                                </suiteXmlFile>
+                                <suiteXmlFile>${maven.multiModuleProjectDirectory}/testsuites/IntegrationTests.xml
                                 </suiteXmlFile>
                             </suiteXmlFiles>
                         </configuration>

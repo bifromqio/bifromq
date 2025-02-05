@@ -47,7 +47,7 @@ jobs:
         run: |
           rm -rf output
           mkdir output
-          cp build/build-bifromq-starters/target/bifromq-* output
+          cp target/output/bifromq-* output
           cp Dockerfile output
       - name: Upload build package
         uses: actions/upload-artifact@v4

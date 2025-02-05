@@ -167,6 +167,7 @@
                     </execution>
                 </executions>
                 <configuration>
+                    <outputDirectory>${build.output.dir}</outputDirectory>
                     <descriptors>
                         <descriptor>assembly/assembly-standalone.xml</descriptor>
                         <descriptor>assembly/assembly-standalone-windows.xml</descriptor>
