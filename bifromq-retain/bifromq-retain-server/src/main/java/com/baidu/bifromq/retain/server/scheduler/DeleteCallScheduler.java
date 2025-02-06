@@ -34,7 +34,7 @@ public class DeleteCallScheduler extends MutationCallScheduler<RetainRequest, Re
     private final IBaseKVStoreClient retainStoreClient;
 
     public DeleteCallScheduler(IBaseKVStoreClient retainStoreClient) {
-        super("retain_server_retain_batcher", retainStoreClient,
+        super("retain_server_delete_batcher", retainStoreClient,
                 Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
                 Duration.ofMillis(DataPlaneBurstLatencyMillis.INSTANCE.get()));
         this.retainStoreClient = retainStoreClient;

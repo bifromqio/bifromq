@@ -181,5 +181,7 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
         matchCallScheduler.close();
         log.debug("Stop retain call scheduler");
         retainCallScheduler.close();
+        log.debug("Stop delete call scheduler");
+        deleteCallScheduler.close();
     }
 }
