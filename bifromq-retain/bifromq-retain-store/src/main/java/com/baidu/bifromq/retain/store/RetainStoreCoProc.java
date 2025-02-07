@@ -110,7 +110,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
         switch (coProcInput.getTypeCase()) {
             case BATCHRETAIN -> {
                 BatchRetainReply.Builder replyBuilder = BatchRetainReply.newBuilder();
-                afterMutate.set(batchRetain(coProcInput.getBatchRetain(), replyBuilder, reader, writer));
+                afterMutate.set(batchRetain(coProcInput.getBatchRetain(), replyBuilder, writer));
                 outputBuilder.setBatchRetain(replyBuilder);
             }
             case GC -> {
@@ -186,7 +186,6 @@ class RetainStoreCoProc implements IKVRangeCoProc {
 
     private Runnable batchRetain(BatchRetainRequest request,
                                  BatchRetainReply.Builder replyBuilder,
-                                 IKVReader reader,
                                  IKVWriter writer) {
         replyBuilder.setReqId(request.getReqId());
         Map<String, Map<String, Message>> addTopics = new HashMap<>();
