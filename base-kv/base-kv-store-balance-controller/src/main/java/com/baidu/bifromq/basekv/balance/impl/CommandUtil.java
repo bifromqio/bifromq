@@ -92,7 +92,7 @@ public class CommandUtil {
                 return null;
             }
             if (expectedRange.equals(currentRange)) {
-                if (!expectedClusterConfig.equals(currentClusterConfig)) {
+                if (!isSame(expectedClusterConfig, currentClusterConfig)) {
                     // generate config change
                     return ChangeConfigCommand.builder()
                         .toStore(currentLeaderRange.storeId())
@@ -123,7 +123,7 @@ public class CommandUtil {
                     || !nextCurrentRangeClusterConfig.getNextLearnersList().isEmpty()) {
                     // abort generation if there is running config change process in mergee range
                     return null;
-                } else if (expectedClusterConfig.equals(nextCurrentRangeClusterConfig)) {
+                } else if (isSame(expectedClusterConfig, nextCurrentRangeClusterConfig)) {
                     return MergeCommand.builder()
                         .toStore(currentLeaderRange.storeId())
                         .kvRangeId(currentLeaderRange.descriptor().getId())
@@ -142,5 +142,19 @@ public class CommandUtil {
             }
         }
         return null;
+    }
+
+    /**
+     * Check if two ClusterConfigs are the same.
+     *
+     * @param config1 the first ClusterConfig
+     * @param config2 the second ClusterConfig
+     * @return true if the two ClusterConfigs are the same, otherwise false
+     */
+    public static boolean isSame(ClusterConfig config1, ClusterConfig config2) {
+        return Sets.newHashSet(config1.getVotersList()).equals(Sets.newHashSet(config2.getVotersList()))
+            && Sets.newHashSet(config1.getLearnersList()).equals(Sets.newHashSet(config2.getLearnersList()))
+            && Sets.newHashSet(config1.getNextVotersList()).equals(Sets.newHashSet(config2.getNextVotersList()))
+            && Sets.newHashSet(config1.getNextLearnersList()).equals(Sets.newHashSet(config2.getNextLearnersList()));
     }
 }

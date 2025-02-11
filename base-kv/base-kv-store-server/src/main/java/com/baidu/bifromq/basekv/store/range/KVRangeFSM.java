@@ -27,7 +27,7 @@ import static com.baidu.bifromq.basekv.store.range.KVRangeFSM.Lifecycle.Destroyi
 import static com.baidu.bifromq.basekv.store.range.KVRangeFSM.Lifecycle.Init;
 import static com.baidu.bifromq.basekv.store.range.KVRangeFSM.Lifecycle.Open;
 import static com.baidu.bifromq.basekv.store.util.ExecutorServiceUtil.awaitShutdown;
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.EMPTY_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.NULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.canCombine;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.combine;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isSplittable;
@@ -1337,7 +1337,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                     assert state.getType() == WaitingForMerge
                         && state.hasTaskId()
                         && taskId.equals(state.getTaskId());
-                    rangeWriter.boundary(EMPTY_BOUNDARY)
+                    rangeWriter.boundary(NULL_BOUNDARY)
                         .bumpVer(true)
                         .state(State.newBuilder()
                             .setType(Merged)
@@ -1345,8 +1345,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                             .build());
                     onDone.complete(() -> {
                         // reset hinter when boundary changed
-                        splitHinters.forEach(hinter -> hinter.reset(EMPTY_BOUNDARY));
-                        coProc.reset(EMPTY_BOUNDARY);
+                        splitHinters.forEach(hinter -> hinter.reset(NULL_BOUNDARY));
+                        coProc.reset(NULL_BOUNDARY);
                     });
                 } else {
                     Map<String, Boolean> waitingList = Maps.newHashMap(state.getWaitingListMap());

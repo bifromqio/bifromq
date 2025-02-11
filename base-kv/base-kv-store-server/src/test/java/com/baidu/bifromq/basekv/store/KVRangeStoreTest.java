@@ -15,7 +15,7 @@ package com.baidu.bifromq.basekv.store;
 
 import static com.baidu.bifromq.basekv.proto.State.StateType.Merged;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Normal;
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.EMPTY_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.NULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.combine;
 import static com.google.protobuf.ByteString.copyFromUtf8;
@@ -495,7 +495,7 @@ public class KVRangeStoreTest extends MockableTest {
                             .setVer(0)
                             .setLastAppliedIndex(0)
                             .setState(State.newBuilder().setType(Normal).build())
-                            .setBoundary(EMPTY_BOUNDARY)
+                            .setBoundary(NULL_BOUNDARY)
                             .build().toByteString())
                         .build())
                     .build())

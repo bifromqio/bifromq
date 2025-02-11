@@ -15,6 +15,7 @@ package com.baidu.bifromq.dist.worker.cache;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compare;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isNULLRange;
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKeyPrefix;
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordPrefixWithEscapedTopicFilter;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
@@ -57,6 +58,7 @@ class TenantRouteMatcher implements ITenantRouteMatcher {
             topicTrieBuilder.addTopic(TopicUtil.parse(topic, false), topic);
             matchedRoutes.put(topic, new HashSet<>());
         });
+
         TopicFilterIterator<String> expansionSetItr = new TopicFilterIterator<>(topicTrieBuilder.build());
 
         Map<String, Set<String>> matchedTopicFilters = new HashMap<>();
@@ -65,11 +67,12 @@ class TenantRouteMatcher implements ITenantRouteMatcher {
         IKVReader rangeReader = kvReaderSupplier.get();
         rangeReader.refresh();
 
-        Boundary tenantBoundary = intersect(Boundary.newBuilder()
-            .setStartKey(matchRecordKeyPrefix(tenantId))
-            .setEndKey(tenantUpperBound(tenantId))
-            .build(), rangeReader.boundary());
-
+        Boundary tenantBoundary = intersect(
+            Boundary.newBuilder().setStartKey(matchRecordKeyPrefix(tenantId)).setEndKey(tenantUpperBound(tenantId))
+                .build(), rangeReader.boundary());
+        if (isNULLRange(tenantBoundary)) {
+            return matchedRoutes;
+        }
         IKVIterator itr = rangeReader.iterator();
         // track seek
         itr.seek(tenantBoundary.getStartKey());

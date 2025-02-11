@@ -15,7 +15,7 @@ package com.baidu.bifromq.basekv.client;
 
 import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
 import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.EMPTY_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.NULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
@@ -210,7 +210,7 @@ public class KVRangeRouterUtilTest {
         assertEquals(result5.get(2).boundary, range3.getBoundary());
         assertEquals(result5.get(3).boundary, range4.getBoundary());
 
-        List<KVRangeSetting> result6 = findByBoundary(EMPTY_BOUNDARY, router);
+        List<KVRangeSetting> result6 = findByBoundary(NULL_BOUNDARY, router);
         assertEquals(result6.size(), 1);
         assertEquals(result6.get(0).boundary, range1.getBoundary());
     }

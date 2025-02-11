@@ -20,20 +20,137 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.UnsafeByteOperations;
 import java.util.Iterator;
 import java.util.NavigableSet;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
+/**
+ * Utility class for Boundary calculation.
+ *
+ * <p>
+ * Boundary represents a range in a key space defined over byte strings. Boundaries are based on the lexicographical
+ * (unsigned) order of byte strings and are used to partition the key space.
+ * </p>
+ *
+ * <p>
+ * There are four forms of boundaries:
+ * </p>
+ * <ul>
+ *   <li>
+ *     <b>Left Open</b>: Represented as <code>(null, endKey]</code>. In this case the
+ *     <code>startKey</code> is <code>null</code> (denoting negative infinity) and the boundary
+ *     includes the <code>endKey</code> (which must be non-null).
+ *   </li>
+ *   <li>
+ *     <b>Right Open</b>: Represented as <code>[startKey, null)</code>. Here the
+ *     <code>startKey</code> is non-null and the <code>endKey</code> is <code>null</code>
+ *     (denoting positive infinity). The boundary includes the <code>startKey</code> but excludes the end.
+ *   </li>
+ *   <li>
+ *     <b>Full Open</b>: Represented as <code>(null, null)</code>, meaning that both ends are unbounded,
+ *     thus covering the entire key space.
+ *   </li>
+ *   <li>
+ *     <b>Left Closed, Right Open</b>: Represented as <code>[startKey, endKey)</code>. In this case,
+ *     both <code>startKey</code> and <code>endKey</code> are non-null, the boundary includes the
+ *     <code>startKey</code> but excludes the <code>endKey</code>.
+ *   </li>
+ * </ul>
+ *
+ * <p>
+ * In all legal boundary definitions, the condition <code>startKey &lt; endKey</code> must be met
+ * (using unsigned lexicographical comparison). A boundary where <code>startKey != null</code> and
+ * <code>startKey.equals(endKey)</code> is considered illegal.
+ * </p>
+ *
+ * <p>
+ * The special value <code>null</code> is used to denote an open (unbounded) end:
+ * </p>
+ * <ul>
+ *   <li>
+ *     When used as a <code>startKey</code>, <code>null</code> denotes negative infinity; that is,
+ *     <code>null</code> is considered less than any actual byte string (including the empty byte string).
+ *   </li>
+ *   <li>
+ *     When used as an <code>endKey</code>, <code>null</code> denotes positive infinity; that is,
+ *     <code>null</code> is considered greater than any actual byte string.
+ *   </li>
+ * </ul>
+ *
+ * <p>
+ * With this convention, a full open boundary <code>(null, null)</code> logically represents an interval where
+ * <code>null &lt; anyByteString &lt; null</code> (with the first <code>null</code> as the lower bound and the second as the upper bound).
+ * </p>
+ *
+ * <p>
+ * A special boundary, termed <b>NULL_BOUNDARY</b>, is defined as <code>(null, EMPTY]</code>, where <code>EMPTY</code>
+ * denotes the empty byte string. According to the ordering, <code>null &lt; EMPTY</code>, but since the empty byte
+ * string is considered smaller than any non-empty byte string, <b>NULL_BOUNDARY</b> does not contain any non-empty
+ * byte strings.
+ * </p>
+ *
+ * <p>
+ * Moreover, <b>NULL_BOUNDARY</b> is defined to overlap with any other boundary – in other words, in terms of
+ * set intersection (the mathematical notion of overlapping), <b>NULL_BOUNDARY</b> can be considered as an empty set
+ * that is treated as overlapping with every boundary.
+ * </p>
+ *
+ * <p>
+ * Note: Methods such as {@link #isOverlap(Boundary, Boundary)} and {@link #intersect(Boundary, Boundary)}
+ * assume that the provided boundaries are legal.
+ * </p>
+ *
+ * @see #isOverlap(Boundary, Boundary)
+ * @see #intersect(Boundary, Boundary)
+ */
 public class BoundaryUtil {
     public static final ByteString MIN_KEY = ByteString.EMPTY;
-    public static final Boundary EMPTY_BOUNDARY = Boundary.newBuilder().setEndKey(MIN_KEY).build();
+    public static final Boundary NULL_BOUNDARY = Boundary.newBuilder().setEndKey(MIN_KEY).build();
     public static final Boundary FULL_BOUNDARY = Boundary.getDefaultInstance();
 
+    /**
+     * Compare two byte arrays lexicographically.
+     *
+     * @param a byte array a
+     * @param b byte array b
+     * @return -1 if a < b, 0 if a == b, 1 if a > b
+     */
+    public static int compare(byte[] a, byte[] b) {
+        return compare(unsafeWrap(a), unsafeWrap(b));
+    }
+
+    public static int compare(ByteString a, ByteString b) {
+        return ByteString.unsignedLexicographicalComparator().compare(a, b);
+    }
+
+    /**
+     * The comparison is based on the start key and end key of the boundaries, using following rules.
+     * <pre>
+     * b1 <  b2: b1.startKey < b2.endKey || b1.startKey == b2.startKey && b1.endKey < b2.endKey
+     * b1 == b2: b1.startKey == b2.startKey && b1.endKey == b2.endKey
+     * b1 >  b2: b1.startKey > b2.startKey || b1.startKey == b2.startKey && b1.endKey > b2.endKey
+     * </pre>
+     *
+     * @param b1 left boundary operand
+     * @param b2 right boundary operand
+     * @return -1 if b1 < b2, 0 if b1 == b2, 1 if b1 > b2
+     */
     public static int compare(Boundary b1, Boundary b2) {
         int startComparison = compareStartKey(startKey(b1), startKey(b2));
         return startComparison != 0 ? startComparison : compareEndKeys(endKey(b1), endKey(b2));
     }
 
+    /**
+     * Compare keys if any of the key is a startKey of a boundary, using following rules.
+     * <pre>
+     * key1 <  key2: (key1 == null && key2 != null) || (key1 != null && key2 != null && key1 < key2)
+     * key1 == key2:  key1 == key2
+     * key1 >  key2: (key != null && key2 == null)  || (key1 != null && key2 != null && key1 > key2)
+     * </pre>
+     *
+     * @param key1 left key operand
+     * @param key2 right key operand
+     * @return -1 if key1 < key2, 0 if key1 == key2, 1 if key1 > key2
+     */
     public static int compareStartKey(ByteString key1, ByteString key2) {
         if (key1 == null && key2 == null) {
             return 0;
@@ -47,6 +164,18 @@ public class BoundaryUtil {
         return compare(key1, key2);
     }
 
+    /**
+     * Compare keys if any of the key is a endKey of a boundary, using following rules.
+     * <pre>
+     * key1 < key2: (key1 != null && key2 == null) || (key1 != null && key2 != null && key1 < key2)
+     * key1 == key2: key1 == key2
+     * key1 > key2: (key1 == null && key2 != null) || (key1 != null && key2 != null && key1 > key2)
+     * </pre>
+     *
+     * @param key1 the left key operand
+     * @param key2 the right key operand
+     * @return -1 if key1 < key2, 0 if key1 == key2, 1 if key1 > key2
+     */
     public static int compareEndKeys(ByteString key1, ByteString key2) {
         if (key1 == null && key2 == null) {
             return 0;
@@ -60,73 +189,126 @@ public class BoundaryUtil {
         return compare(key1, key2);
     }
 
-    public static boolean isValid(ByteString start, ByteString end) {
-        if (start == null || end == null) {
+    /**
+     * Create a boundary with start key and end key.
+     *
+     * @param start start key if null means open start
+     * @param end   end key if null means open end
+     * @return boundary
+     */
+    public static Boundary toBoundary(ByteString start, ByteString end) {
+        Boundary.Builder builder = Boundary.newBuilder();
+        if (start != null) {
+            builder.setStartKey(start);
+        }
+        if (end != null) {
+            builder.setEndKey(end);
+        }
+        return builder.build();
+    }
+
+    /**
+     * Check if the startKey and endKey of a boundary is valid.
+     *
+     * @param startKey startKey
+     * @param endKey   endKey
+     * @return true if startKey <= endKey
+     */
+    public static boolean isValid(ByteString startKey, ByteString endKey) {
+        if (startKey == null || endKey == null) {
             return true;
         }
-        return compare(start, end) <= 0;
+        return compare(startKey, endKey) < 0;
     }
 
     public static boolean isValid(Boundary boundary) {
         return isValid(startKey(boundary), endKey(boundary));
     }
 
-    public static boolean inRange(ByteString key, ByteString start, ByteString end) {
-        assert isValid(start, end);
-        if (start == null && end == null) {
-            return true;
+    /**
+     * Check if key is in range of startKey and endKey of a valid boundary.
+     *
+     * @param key      key
+     * @param startKey startKey
+     * @param endKey   endKey
+     * @return true if key is in range of startKey and endKey
+     */
+    public static boolean inRange(ByteString key, ByteString startKey, ByteString endKey) {
+        assert isValid(startKey, endKey);
+        if (startKey != null) {
+            if (compare(key, startKey) < 0) {
+                return false;
+            }
         }
-        if (end == null) {
-            // right open range
-            return compare(start, key) <= 0;
+        if (endKey != null) {
+            if (compare(key, endKey) >= 0) {
+                return false;
+            }
         }
-        if (start == null) {
-            return compare(key, end) < 0;
-        }
-        return compare(start, key) <= 0 && compare(key, end) < 0;
+        return true;
     }
 
+    /**
+     * Check if key is in range of boundary.
+     *
+     * @param key      key
+     * @param boundary boundary
+     * @return true if key is in range of boundary
+     */
     public static boolean inRange(ByteString key, Boundary boundary) {
         return inRange(key, startKey(boundary), endKey(boundary));
     }
 
+    /**
+     * Check if boundary1 is in range of boundary2.
+     *
+     * @param boundary1 boundary1
+     * @param boundary2 boundary2
+     * @return true if boundary1 is in range of boundary2
+     */
     public static boolean inRange(Boundary boundary1, Boundary boundary2) {
         return inRange(startKey(boundary1), endKey(boundary1), startKey(boundary2), endKey(boundary2));
     }
 
-    public static boolean inRange(ByteString start1,
-                                  ByteString end1,
-                                  ByteString start2,
-                                  ByteString end2) {
-        assert isValid(start1, end1) && isValid(start2, end2);
+    /**
+     * Check if boundary1 is in range of boundary2.
+     *
+     * @param startKey1 startKey of boundary1
+     * @param endKey1   endKey of boundary1
+     * @param startKey2 startKey of boundary2
+     * @param endKey2   endKey of boundary2
+     * @return true if boundary1 is in range of boundary2
+     */
+    public static boolean inRange(ByteString startKey1, ByteString endKey1, ByteString startKey2, ByteString endKey2) {
+        assert isValid(startKey1, endKey1) && isValid(startKey2, endKey2);
 
-        if (start2 == null && end2 == null) {
+        if (startKey2 == null && endKey2 == null) {
             // open-ended range
             return true;
         }
-        if (start2 != null && end2 == null) {
+        if (startKey2 != null && endKey2 == null) {
             // right open-ended
-            if (start1 == null) {
-                return ByteString.EMPTY.equals(end1);
+            if (startKey1 == null) {
+                return MIN_KEY.equals(endKey1);
             }
             // start2 <= start1
-            return compare(start1, start2) >= 0;
+            return compare(startKey1, startKey2) >= 0;
         }
-        if (start2 == null) {
+        if (startKey2 == null) {
             // left open-ended
-            if (end1 == null) {
+            if (endKey1 == null) {
                 return false;
             }
             // end1 <= end2
-            return compare(end1, end2) <= 0;
+            return compare(endKey1, endKey2) <= 0;
         }
         // range2 is closed ended
-        if (start1 == null && end1 == null) {
+        if (startKey1 == null && endKey1 == null) {
             return false;
-        } else if (start1 == null) {
-            return ByteString.EMPTY.equals(end1);
+        } else if (startKey1 == null) {
+            return ByteString.EMPTY.equals(endKey1);
         } else {
-            return compare(start2, start1) <= 0 && compare(end1, end2) <= 0;
+            return compare(startKey2, startKey1) <= 0 && compare(endKey1, endKey2) <= 0;
         }
     }
 
@@ -134,6 +316,12 @@ public class BoundaryUtil {
         return UnsafeByteOperations.unsafeWrap(upperBoundInternal(key.toByteArray()));
     }
 
+    /**
+     * Get the least upper bound of a key.
+     *
+     * @param key key
+     * @return least upper bound of the key
+     */
     public static byte[] upperBound(byte[] key) {
         byte[] upperBound = new byte[key.length];
         System.arraycopy(key, 0, upperBound, 0, key.length);
@@ -152,14 +340,6 @@ public class BoundaryUtil {
         return upperBound;
     }
 
-    public static int compare(byte[] a, byte[] b) {
-        return compare(unsafeWrap(a), unsafeWrap(b));
-    }
-
-    public static int compare(ByteString a, ByteString b) {
-        return ByteString.unsignedLexicographicalComparator().compare(a, b);
-    }
-
     public static ByteString startKey(Boundary boundary) {
         return boundary.hasStartKey() ? boundary.getStartKey() : null;
     }
@@ -176,69 +356,38 @@ public class BoundaryUtil {
         return boundary.hasEndKey() ? boundary.getEndKey().toByteArray() : null;
     }
 
-    public static Optional<ByteString> greaterLowerBound(Boundary boundary1, Boundary boundary2) {
-        if (!boundary1.hasStartKey() && !boundary2.hasStartKey()) {
-            return Optional.empty();
-        }
-        if (!boundary1.hasStartKey()) {
-            return Optional.of(boundary2.getStartKey());
-        }
-        if (!boundary2.hasStartKey()) {
-            return Optional.of(boundary1.getStartKey());
-        }
-        return Optional.of(compare(boundary1.getStartKey(),
-            boundary2.getStartKey()) < 0 ? boundary2.getStartKey() : boundary1.getStartKey());
+    private static ByteString minStartKey(ByteString a, ByteString b) {
+        return (compareStartKey(a, b) < 0) ? a : b;
     }
 
-    public static Optional<ByteString> leastUpperBound(Boundary boundary1, Boundary boundary2) {
-        if (!boundary1.hasEndKey() && !boundary2.hasEndKey()) {
-            return Optional.empty();
-        }
-        if (!boundary1.hasEndKey()) {
-            return Optional.of(boundary2.getEndKey());
-        }
-        if (!boundary2.hasEndKey()) {
-            return Optional.of(boundary1.getEndKey());
-        }
-        return Optional.of(compare(boundary1.getEndKey(), boundary2.getEndKey()) < 0 ?
-            boundary1.getEndKey() : boundary2.getEndKey());
+    private static ByteString maxStartKey(ByteString a, ByteString b) {
+        return (compareStartKey(a, b) >= 0) ? a : b;
     }
 
+    private static ByteString minEndKey(ByteString a, ByteString b) {
+        return (compareEndKeys(a, b) <= 0) ? a : b;
+    }
+
+    private static ByteString maxEndKey(ByteString a, ByteString b) {
+        return (compareEndKeys(a, b) >= 0) ? a : b;
+    }
+
+    /**
+     * Check if two boundaries overlap.
+     *
+     * @param boundary1 boundary1
+     * @param boundary2 boundary2
+     * @return true if two boundaries overlap
+     */
     public static boolean isOverlap(Boundary boundary1, Boundary boundary2) {
-        if (boundary1.equals(EMPTY_BOUNDARY) || boundary2.equals(EMPTY_BOUNDARY)) {
-            return false;
-        }
-        if (!boundary1.hasEndKey() && !boundary2.hasEndKey()) {
+        assert isValid(boundary1);
+        assert isValid(boundary2);
+        if (isNULLRange(boundary1) || isNULLRange(boundary2)) {
             return true;
-        } else if (!boundary1.hasEndKey()) {
-            return compare(boundary1.getStartKey(), boundary2.getEndKey()) < 0;
-        } else if (!boundary2.hasEndKey()) {
-            return compare(boundary2.getStartKey(), boundary1.getEndKey()) < 0;
         }
-        return !(compare(boundary1.getEndKey(), boundary2.getStartKey()) <= 0
-            || compare(boundary2.getEndKey(), boundary1.getStartKey()) <= 0);
-    }
-
-    public static boolean isOverlap(Set<Boundary> boundaries) {
-        if (boundaries.isEmpty() || boundaries.size() == 1) {
-            return false;
-        }
-        NavigableSet<Boundary> sorted = new TreeSet<>(BoundaryUtil::compare);
-        sorted.addAll(boundaries);
-        return isOverlap(sorted);
-    }
-
-    public static boolean isOverlap(NavigableSet<Boundary> sorted) {
-        Iterator<Boundary> iterator = sorted.iterator();
-        Boundary prev = iterator.next();
-        while (iterator.hasNext()) {
-            Boundary next = iterator.next();
-            if (isOverlap(prev, next)) {
-                return true;
-            }
-            prev = next;
-        }
-        return false;
+        ByteString maxStartKey = maxStartKey(startKey(boundary1), startKey(boundary2));
+        ByteString minEndKey = minEndKey(endKey(boundary1), endKey(boundary2));
+        return (maxStartKey == null || minEndKey == null) || compare(maxStartKey, minEndKey) < 0;
     }
 
     public static boolean isValidSplitSet(Set<Boundary> boundaries) {
@@ -280,26 +429,26 @@ public class BoundaryUtil {
     }
 
     public static Boundary intersect(Boundary boundary1, Boundary boundary2) {
-        if (isOverlap(boundary1, boundary2)) {
-            Optional<ByteString> lowerBound = greaterLowerBound(boundary1, boundary2);
-            Optional<ByteString> upperBound = leastUpperBound(boundary1, boundary2);
-            Boundary.Builder rangeBuilder = Boundary.newBuilder();
-            lowerBound.ifPresent(rangeBuilder::setStartKey);
-            upperBound.ifPresent(rangeBuilder::setEndKey);
-            return rangeBuilder.build();
+        assert isValid(boundary1);
+        assert isValid(boundary2);
+        ByteString maxStartKey = maxStartKey(startKey(boundary1), startKey(boundary2));
+        ByteString minEndKey = minEndKey(endKey(boundary1), endKey(boundary2));
+        if (maxStartKey != null && minEndKey != null && compare(maxStartKey, minEndKey) >= 0) {
+            return NULL_BOUNDARY;
         }
-        return EMPTY_BOUNDARY;
+        return toBoundary(maxStartKey, minEndKey);
     }
 
     public static boolean canCombine(Boundary boundary1, Boundary boundary2) {
-        return isEmptyRange(boundary1) ||
-            isEmptyRange(boundary2) ||
-            (isStartOpen(boundary1) && boundary1.getEndKey().equals(boundary2.getStartKey())) ||
-            (isStartOpen(boundary2)) && boundary2.getEndKey().equals(boundary1.getStartKey()) ||
-            (isEndOpen(boundary1) && boundary1.getStartKey().equals(boundary2.getEndKey())) ||
-            (isEndOpen(boundary2) && boundary1.getEndKey().equals(boundary2.getStartKey())) ||
-            (isClose(boundary1) && isClose(boundary2) && (boundary1.getStartKey().equals(boundary2.getEndKey()) ||
-                boundary1.getEndKey().equals(boundary2.getStartKey())));
+        assert isValid(boundary1);
+        assert isValid(boundary2);
+        if (isNULLRange(boundary1) || isNULLRange(boundary2)) {
+            // null boundary can combine with any boundary
+            return true;
+        }
+        ByteString maxStartKey = maxStartKey(startKey(boundary1), startKey(boundary2));
+        ByteString minEndKey = minEndKey(endKey(boundary1), endKey(boundary2));
+        return maxStartKey != null && minEndKey != null && compare(maxStartKey, minEndKey) == 0;
     }
 
     public static Boundary combine(Boundary... boundaries) {
@@ -311,21 +460,35 @@ public class BoundaryUtil {
         return range;
     }
 
+    /**
+     * Check if the boundary can be split into two adjacent non-empty boundaries using provided splitKey.
+     *
+     * @param boundary boundary to be checked
+     * @param splitKey split key
+     * @return true if the range is splittable by the split key
+     */
     public static boolean isSplittable(Boundary boundary, ByteString splitKey) {
-        if (compare(MIN_KEY, splitKey) >= 0 || !inRange(splitKey, boundary)) {
+        assert isValid(boundary);
+        assert splitKey != null;
+        // null boundary is not splittable
+        if (isNULLRange(boundary)) {
             return false;
         }
-        return !splitKey.equals(boundary.getStartKey()) ||
-            splitKey.equals(boundary.getStartKey()) && !upperBound(splitKey).equals(boundary.getEndKey());
+        if (splitKey.equals(MIN_KEY)) {
+            return false;
+        }
+        return compareStartKey(startKey(boundary), splitKey) < 0 && compareEndKeys(splitKey, endKey(boundary)) < 0;
     }
 
+    /**
+     * Split a splittable boundary.
+     *
+     * @param boundary boundary to be split
+     * @param splitKey split key
+     * @return two boundaries after split
+     */
     public static Boundary[] split(Boundary boundary, ByteString splitKey) {
         assert isSplittable(boundary, splitKey);
-        if (boundary.getStartKey().equals(splitKey)) {
-            Boundary left = boundary.toBuilder().setEndKey(upperBound(splitKey)).build();
-            Boundary right = boundary.toBuilder().setStartKey(upperBound(splitKey)).build();
-            return new Boundary[] {left, right};
-        }
         Boundary left = boundary.toBuilder().setEndKey(splitKey).build();
         Boundary right = boundary.toBuilder().setStartKey(splitKey).build();
         return new Boundary[] {left, right};
@@ -333,58 +496,28 @@ public class BoundaryUtil {
 
     private static Boundary combine2Range(Boundary boundary1, Boundary boundary2) {
         assert canCombine(boundary1, boundary2);
-        if (isEmptyRange(boundary1)) {
+        if (isNULLRange(boundary1)) {
             return boundary2;
         }
-        if (isEmptyRange(boundary2)) {
+        if (isNULLRange(boundary2)) {
             return boundary1;
         }
-        if (isStartOpen(boundary1)) {
-            if (boundary2.hasEndKey()) {
-                return Boundary.newBuilder().setEndKey(boundary2.getEndKey()).build();
-            } else {
-                return FULL_BOUNDARY;
-            }
-        }
-        if (isStartOpen(boundary2)) {
-            if (boundary1.hasEndKey()) {
-                return Boundary.newBuilder().setEndKey(boundary1.getEndKey()).build();
-            } else {
-                return FULL_BOUNDARY;
-            }
-        }
-        if (isEndOpen(boundary1)) {
-            return Boundary.newBuilder().setStartKey(boundary2.getStartKey()).build();
-        }
-        if (isEndOpen(boundary2)) {
-            return Boundary.newBuilder().setStartKey(boundary1.getStartKey()).build();
-        }
-        if (boundary1.getStartKey().equals(boundary2.getEndKey())) {
-            return Boundary.newBuilder()
-                .setStartKey(boundary2.getStartKey())
-                .setEndKey(boundary1.getEndKey())
-                .build();
-        } else {
-            return Boundary.newBuilder()
-                .setStartKey(boundary1.getStartKey())
-                .setEndKey(boundary2.getEndKey())
-                .build();
-        }
+        ByteString minStartKey = minStartKey(startKey(boundary1), startKey(boundary2));
+        ByteString maxEndKey = maxEndKey(endKey(boundary1), endKey(boundary2));
+        return toBoundary(minStartKey, maxEndKey);
     }
 
-    public static boolean isEmptyRange(Boundary boundary) {
-        return boundary.equals(EMPTY_BOUNDARY);
+    /**
+     * Check if the range is NULL. NULL defined as (null, Empty].
+     *
+     * @param boundary boundary to be checked.
+     * @return true if the range is NULL.
+     */
+    public static boolean isNULLRange(Boundary boundary) {
+        return NULL_BOUNDARY.equals(boundary);
     }
 
-    public static boolean isStartOpen(Boundary boundary) {
-        return !boundary.hasStartKey();
-    }
-
-    public static boolean isEndOpen(Boundary boundary) {
-        return !boundary.hasEndKey();
-    }
-
-    public static boolean isClose(Boundary boundary) {
-        return boundary.hasStartKey() && boundary.hasEndKey();
+    public static boolean isNonEmptyRange(Boundary boundary) {
+        return isValid(boundary) && !isNULLRange(boundary);
     }
 }

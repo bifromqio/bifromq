@@ -14,6 +14,7 @@
 package com.baidu.bifromq.retain.store;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isNULLRange;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainNumGauge;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainSpaceGauge;
@@ -32,10 +33,16 @@ public class TenantRetainedSet {
     public TenantRetainedSet(String tenantId, IKVReader reader, String... tags) {
         this.tenantId = tenantId;
         this.tags = tags;
-        ITenantMeter.gauging(tenantId, MqttRetainSpaceGauge, () -> reader.size(intersect(Boundary.newBuilder()
-            .setStartKey(tenantNS(tenantId))
-            .setEndKey(upperBound(tenantNS(tenantId)))
-            .build(), reader.boundary())), tags);
+        ITenantMeter.gauging(tenantId, MqttRetainSpaceGauge, () -> {
+            Boundary tenantBoundary = intersect(Boundary.newBuilder()
+                .setStartKey(tenantNS(tenantId))
+                .setEndKey(upperBound(tenantNS(tenantId)))
+                .build(), reader.boundary());
+            if (isNULLRange(tenantBoundary)) {
+                return 0L;
+            }
+            return reader.size(tenantBoundary);
+        }, tags);
         ITenantMeter.gauging(tenantId, MqttRetainNumGauge, topicCount::get, tags);
     }
 

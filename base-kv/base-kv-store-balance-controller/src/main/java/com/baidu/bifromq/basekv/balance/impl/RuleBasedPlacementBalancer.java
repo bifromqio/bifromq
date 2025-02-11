@@ -14,7 +14,6 @@
 package com.baidu.bifromq.basekv.balance.impl;
 
 import static com.baidu.bifromq.basekv.balance.impl.CommandUtil.diffBy;
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.EMPTY_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.toLeaderRanges;
 
@@ -159,7 +158,7 @@ public abstract class RuleBasedPlacementBalancer extends StoreBalancer {
 
     private boolean verify(Map<Boundary, ClusterConfig> rangeLayout, Set<KVRangeStoreDescriptor> landscape) {
         // 1. check boundary non overlap and form a complete landscape
-        if (rangeLayout.keySet().stream().anyMatch(boundary -> boundary.equals(EMPTY_BOUNDARY))) {
+        if (rangeLayout.keySet().stream().anyMatch(b -> !BoundaryUtil.isNonEmptyRange(b))) {
             log.error("Balancer[{}] generated empty boundary in range layout: {}",
                 this.getClass().getSimpleName(), rangeLayout);
             return false;

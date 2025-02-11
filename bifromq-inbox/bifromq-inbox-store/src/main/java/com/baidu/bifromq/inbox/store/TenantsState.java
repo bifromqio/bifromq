@@ -14,6 +14,7 @@
 package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isNULLRange;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
 
@@ -110,6 +111,9 @@ class TenantsState {
                     .setStartKey(startKey)
                     .setEndKey(endKey)
                     .build());
+                if (isNULLRange(tenantBoundary)) {
+                    return 0;
+                }
                 return reader.size(tenantBoundary);
             } catch (Exception e) {
                 log.error("Failed to get used space for tenant:{}", tenantId, e);

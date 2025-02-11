@@ -113,6 +113,30 @@ public class CommandUtilTest {
 
 
     @Test
+    public void noDiff() {
+        NavigableMap<Boundary, ClusterConfig> expected = new TreeMap<>(BoundaryUtil::compare);
+        expected.put(boundary(null, "a"), ClusterConfig.newBuilder().addVoters("voter1").build());
+        expected.put(boundary("a", null), ClusterConfig.newBuilder().addVoters("voter1").build());
+
+        NavigableMap<Boundary, KeySpaceDAG.LeaderRange> current = new TreeMap<>(BoundaryUtil::compare);
+        KVRangeId id = KVRangeIdUtil.generate();
+        KVRangeId id1 = KVRangeIdUtil.generate();
+        current.put(boundary(null, "a"), new KeySpaceDAG.LeaderRange("voter1", KVRangeDescriptor
+            .newBuilder()
+            .setId(id)
+            .setVer(1L)
+            .setConfig(ClusterConfig.newBuilder().setCorrelateId("c1").addVoters("voter1").build())
+            .build()));
+        current.put(boundary("a", null), new KeySpaceDAG.LeaderRange("voter1", KVRangeDescriptor
+            .newBuilder()
+            .setId(id1)
+            .setConfig(ClusterConfig.newBuilder().setCorrelateId("c1").addVoters("voter1").build())
+            .build()));
+        assertNull(diffBy(expected, current));
+    }
+
+
+    @Test
     public void diffByNull() {
         NavigableMap<Boundary, ClusterConfig> expected = new TreeMap<>(BoundaryUtil::compare);
         expected.put(boundary(null, "a"),

@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.basekv.utils;
 
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.EMPTY_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.MIN_KEY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.NULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.inRange;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isSplittable;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.split;
@@ -39,11 +39,12 @@ public class BoundaryUtilTest {
         assertTrue(BoundaryUtil.isValid(null, null));
         assertTrue(BoundaryUtil.isValid(null, ByteString.EMPTY));
         assertTrue(BoundaryUtil.isValid(ByteString.EMPTY, null));
-        assertTrue(BoundaryUtil.isValid(ByteString.EMPTY, ByteString.EMPTY));
+        assertFalse(BoundaryUtil.isValid(ByteString.EMPTY, ByteString.EMPTY));
 
         assertTrue(BoundaryUtil.isValid(ByteString.EMPTY, copyFromUtf8("a")));
 
         assertFalse(BoundaryUtil.isValid(copyFromUtf8("a"), ByteString.EMPTY));
+        assertFalse(BoundaryUtil.isValid(copyFromUtf8("a"), copyFromUtf8("a")));
         assertFalse(BoundaryUtil.isValid(copyFromUtf8("b"), copyFromUtf8("a")));
     }
 
@@ -53,6 +54,8 @@ public class BoundaryUtilTest {
         assertFalse(inRange(copyFromUtf8("1"), range));
         assertTrue(inRange(copyFromUtf8("a"), range));
         assertFalse(inRange(copyFromUtf8("z"), range));
+
+        assertTrue(inRange(MIN_KEY, null, null));
 
         assertTrue(inRange(copyFromUtf8("a"), null, null));
 
@@ -97,6 +100,8 @@ public class BoundaryUtilTest {
 
         assertFalse(inRange(copyFromUtf8("a"), copyFromUtf8("c"), copyFromUtf8("b"), copyFromUtf8("d")));
 
+        assertFalse(inRange(copyFromUtf8("b"), copyFromUtf8("d"), copyFromUtf8("a"), copyFromUtf8("c")));
+
         Boundary a_e = boundary("a", "e");
         Boundary b_d = boundary("b", "d");
 
@@ -104,45 +109,28 @@ public class BoundaryUtilTest {
         assertTrue(inRange(b_d, a_e));
         assertTrue(inRange(a_e, a_e));
 
-        assertTrue(inRange(EMPTY_BOUNDARY, a_e));
-        assertFalse(inRange(a_e, EMPTY_BOUNDARY));
+        assertTrue(inRange(NULL_BOUNDARY, a_e));
+        assertFalse(inRange(a_e, NULL_BOUNDARY));
 
-        assertTrue(inRange(EMPTY_BOUNDARY, FULL_BOUNDARY));
-        assertFalse(inRange(FULL_BOUNDARY, EMPTY_BOUNDARY));
+        assertTrue(inRange(NULL_BOUNDARY, FULL_BOUNDARY));
+        assertFalse(inRange(FULL_BOUNDARY, NULL_BOUNDARY));
 
         assertTrue(inRange(a_e, FULL_BOUNDARY));
         assertFalse(inRange(FULL_BOUNDARY, a_e));
 
         assertTrue(inRange(FULL_BOUNDARY, FULL_BOUNDARY));
-        assertTrue(inRange(EMPTY_BOUNDARY, EMPTY_BOUNDARY));
+        assertTrue(inRange(NULL_BOUNDARY, NULL_BOUNDARY));
     }
 
     @Test
     public void findUpperBound() {
+        assertEquals(BoundaryUtil.upperBound(EMPTY), EMPTY);
         assertEquals(ByteString.copyFrom(new byte[] {1, 2, 4}),
             BoundaryUtil.upperBound(ByteString.copyFrom(new byte[] {1, 2, 3})));
         assertEquals(ByteString.copyFrom(new byte[] {1, 3, (byte) 0xFF}),
             BoundaryUtil.upperBound(ByteString.copyFrom(new byte[] {1, 2, (byte) 0xFF})));
         assertEquals(ByteString.copyFrom(new byte[] {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF}),
             BoundaryUtil.upperBound(ByteString.copyFrom(new byte[] {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF})));
-    }
-
-    @Test
-    public void leastUpperBound() {
-        assertFalse(BoundaryUtil.leastUpperBound(FULL_BOUNDARY, FULL_BOUNDARY).isPresent());
-        assertEquals(BoundaryUtil.leastUpperBound(FULL_BOUNDARY, EMPTY_BOUNDARY).get(), EMPTY);
-        assertEquals(BoundaryUtil.leastUpperBound(FULL_BOUNDARY, boundary("a", "b")).get(), copyFromUtf8("b"));
-        assertEquals(BoundaryUtil.leastUpperBound(boundary("a", "b"), boundary("a", "b")).get(), copyFromUtf8("b"));
-        assertEquals(BoundaryUtil.leastUpperBound(boundary("a", "b"), boundary("a", "b1")).get(), copyFromUtf8("b"));
-    }
-
-    @Test
-    public void greaterLowerBound() {
-        assertFalse(BoundaryUtil.greaterLowerBound(FULL_BOUNDARY, FULL_BOUNDARY).isPresent());
-        assertFalse(BoundaryUtil.greaterLowerBound(FULL_BOUNDARY, EMPTY_BOUNDARY).isPresent());
-        assertEquals(BoundaryUtil.greaterLowerBound(boundary("a", "b"), FULL_BOUNDARY).get(), copyFromUtf8("a"));
-        assertEquals(BoundaryUtil.greaterLowerBound(boundary("a", "b"), boundary("a", "a")).get(), copyFromUtf8("a"));
-        assertEquals(BoundaryUtil.greaterLowerBound(boundary("a", "b"), boundary("a1", "a")).get(), copyFromUtf8("a1"));
     }
 
     @Test
@@ -163,17 +151,16 @@ public class BoundaryUtilTest {
         assertTrue(BoundaryUtil.isOverlap(a_b, a_e));
         assertTrue(BoundaryUtil.isOverlap(b_f, a_e));
         assertTrue(BoundaryUtil.isOverlap(a_e, b_f));
-        assertTrue(BoundaryUtil.isOverlap(Set.of(a_b, a_e, b_f, f_)));
-        assertFalse(BoundaryUtil.isOverlap(EMPTY_BOUNDARY, EMPTY_BOUNDARY));
-        assertFalse(BoundaryUtil.isOverlap(EMPTY_BOUNDARY, FULL_BOUNDARY));
-        assertFalse(BoundaryUtil.isOverlap(FULL_BOUNDARY, EMPTY_BOUNDARY));
-        assertFalse(BoundaryUtil.isOverlap(a_e, EMPTY_BOUNDARY));
-        assertFalse(BoundaryUtil.isOverlap(EMPTY_BOUNDARY, a_e));
-        assertFalse(BoundaryUtil.isOverlap(_a, EMPTY_BOUNDARY));
-        assertFalse(BoundaryUtil.isOverlap(EMPTY_BOUNDARY, _a));
-        assertFalse(BoundaryUtil.isOverlap(f_, EMPTY_BOUNDARY));
-        assertFalse(BoundaryUtil.isOverlap(EMPTY_BOUNDARY, f_));
-        assertFalse(BoundaryUtil.isOverlap(Set.of(_a, a_b, b_f, f_)));
+        // null boundary is overlapped by any boundary
+        assertTrue(BoundaryUtil.isOverlap(NULL_BOUNDARY, NULL_BOUNDARY));
+        assertTrue(BoundaryUtil.isOverlap(NULL_BOUNDARY, FULL_BOUNDARY));
+        assertTrue(BoundaryUtil.isOverlap(FULL_BOUNDARY, NULL_BOUNDARY));
+        assertTrue(BoundaryUtil.isOverlap(a_e, NULL_BOUNDARY));
+        assertTrue(BoundaryUtil.isOverlap(NULL_BOUNDARY, a_e));
+        assertTrue(BoundaryUtil.isOverlap(_a, NULL_BOUNDARY));
+        assertTrue(BoundaryUtil.isOverlap(NULL_BOUNDARY, _a));
+        assertTrue(BoundaryUtil.isOverlap(f_, NULL_BOUNDARY));
+        assertTrue(BoundaryUtil.isOverlap(NULL_BOUNDARY, f_));
     }
 
     @Test
@@ -184,15 +171,13 @@ public class BoundaryUtilTest {
         Boundary c_d = boundary("c", "d");
         Boundary d_e = boundary("d", "e");
         Boundary e_ = boundary("e", null);
-        Boundary fullBoundary = FULL_BOUNDARY;
-        Boundary emptyBoundary = EMPTY_BOUNDARY;
 
         // Valid split set with contiguous boundaries
         Set<Boundary> validSplitSet = Set.of(_a, a_b, b_c, c_d, d_e, e_);
         assertTrue(BoundaryUtil.isValidSplitSet(validSplitSet));
 
         // Single boundary that is FULL_BOUNDARY
-        Set<Boundary> singleFullBoundary = Set.of(fullBoundary);
+        Set<Boundary> singleFullBoundary = Set.of(FULL_BOUNDARY);
         assertTrue(BoundaryUtil.isValidSplitSet(singleFullBoundary));
 
         // Empty boundary set
@@ -200,7 +185,7 @@ public class BoundaryUtilTest {
         assertFalse(BoundaryUtil.isValidSplitSet(emptySet));
 
         // Empty and Full boundary set
-        Set<Boundary> emptyAndFull = Set.of(EMPTY_BOUNDARY, FULL_BOUNDARY);
+        Set<Boundary> emptyAndFull = Set.of(NULL_BOUNDARY, FULL_BOUNDARY);
         assertTrue(BoundaryUtil.isValidSplitSet(emptyAndFull));
 
         // Single boundary that is not FULL_BOUNDARY
@@ -235,12 +220,12 @@ public class BoundaryUtilTest {
         assertEquals(BoundaryUtil.intersect(f_g, f_), boundary("f", "g"));
         assertEquals(BoundaryUtil.intersect(_a, FULL_BOUNDARY), _a);
         assertEquals(BoundaryUtil.intersect(f_, FULL_BOUNDARY), f_);
-        assertEquals(BoundaryUtil.intersect(_a, EMPTY_BOUNDARY), EMPTY_BOUNDARY);
-        assertEquals(BoundaryUtil.intersect(f_, EMPTY_BOUNDARY), EMPTY_BOUNDARY);
-        assertEquals(BoundaryUtil.intersect(_a, a_e), EMPTY_BOUNDARY);
-        assertEquals(BoundaryUtil.intersect(b_f, f_g), EMPTY_BOUNDARY);
-        assertEquals(BoundaryUtil.intersect(EMPTY_BOUNDARY, FULL_BOUNDARY), EMPTY_BOUNDARY);
-        assertEquals(BoundaryUtil.intersect(EMPTY_BOUNDARY, EMPTY_BOUNDARY), EMPTY_BOUNDARY);
+        assertEquals(BoundaryUtil.intersect(_a, NULL_BOUNDARY), NULL_BOUNDARY);
+        assertEquals(BoundaryUtil.intersect(f_, NULL_BOUNDARY), NULL_BOUNDARY);
+        assertEquals(BoundaryUtil.intersect(_a, a_e), NULL_BOUNDARY);
+        assertEquals(BoundaryUtil.intersect(b_f, f_g), NULL_BOUNDARY);
+        assertEquals(BoundaryUtil.intersect(NULL_BOUNDARY, FULL_BOUNDARY), NULL_BOUNDARY);
+        assertEquals(BoundaryUtil.intersect(NULL_BOUNDARY, NULL_BOUNDARY), NULL_BOUNDARY);
         assertEquals(BoundaryUtil.intersect(FULL_BOUNDARY, FULL_BOUNDARY), FULL_BOUNDARY);
     }
 
@@ -280,7 +265,7 @@ public class BoundaryUtilTest {
         Boundary e_ = Boundary.newBuilder().setStartKey(copyFromUtf8("e")).build();
 
         assertFalse(BoundaryUtil.canCombine(a_b, a_b));
-        assertTrue(BoundaryUtil.canCombine(EMPTY_BOUNDARY, EMPTY_BOUNDARY));
+        assertTrue(BoundaryUtil.canCombine(NULL_BOUNDARY, NULL_BOUNDARY));
 
         assertTrue(BoundaryUtil.canCombine(a_b, b_c));
         assertTrue(BoundaryUtil.canCombine(b_c, a_b));
@@ -288,8 +273,8 @@ public class BoundaryUtilTest {
         assertFalse(BoundaryUtil.canCombine(a_b, d_e));
         assertFalse(BoundaryUtil.canCombine(d_e, a_b));
 
-        assertTrue(BoundaryUtil.canCombine(a_b, EMPTY_BOUNDARY));
-        assertTrue(BoundaryUtil.canCombine(EMPTY_BOUNDARY, a_b));
+        assertTrue(BoundaryUtil.canCombine(a_b, NULL_BOUNDARY));
+        assertTrue(BoundaryUtil.canCombine(NULL_BOUNDARY, a_b));
 
         assertTrue(BoundaryUtil.canCombine(_a, a_b));
         assertTrue(BoundaryUtil.canCombine(a_b, _a));
@@ -303,8 +288,8 @@ public class BoundaryUtilTest {
         assertFalse(BoundaryUtil.canCombine(_a, e_));
         assertFalse(BoundaryUtil.canCombine(e_, _a));
 
-        assertTrue(BoundaryUtil.canCombine(a_, EMPTY_BOUNDARY));
-        assertTrue(BoundaryUtil.canCombine(EMPTY_BOUNDARY, a_));
+        assertTrue(BoundaryUtil.canCombine(a_, NULL_BOUNDARY));
+        assertTrue(BoundaryUtil.canCombine(NULL_BOUNDARY, a_));
     }
 
     @Test
@@ -320,13 +305,13 @@ public class BoundaryUtilTest {
         Boundary a_ = boundary("a", null);
         Boundary e_ = boundary("e", null);
 
-        assertEquals(EMPTY_BOUNDARY, BoundaryUtil.combine(EMPTY_BOUNDARY, EMPTY_BOUNDARY));
+        assertEquals(NULL_BOUNDARY, BoundaryUtil.combine(NULL_BOUNDARY, NULL_BOUNDARY));
 
         assertEquals(a_c, BoundaryUtil.combine(a_b, b_c));
         assertEquals(a_c, BoundaryUtil.combine(b_c, a_b));
 
-        assertEquals(a_b, BoundaryUtil.combine(a_b, EMPTY_BOUNDARY));
-        assertEquals(a_b, BoundaryUtil.combine(EMPTY_BOUNDARY, a_b));
+        assertEquals(a_b, BoundaryUtil.combine(a_b, NULL_BOUNDARY));
+        assertEquals(a_b, BoundaryUtil.combine(NULL_BOUNDARY, a_b));
 
         assertEquals(_b, BoundaryUtil.combine(_a, a_b));
         assertEquals(_b, BoundaryUtil.combine(a_b, _a));
@@ -337,8 +322,8 @@ public class BoundaryUtilTest {
         assertEquals(FULL_BOUNDARY, BoundaryUtil.combine(_a, a_));
         assertEquals(FULL_BOUNDARY, BoundaryUtil.combine(a_, _a));
 
-        assertEquals(a_, BoundaryUtil.combine(a_, EMPTY_BOUNDARY));
-        assertEquals(a_, BoundaryUtil.combine(EMPTY_BOUNDARY, a_));
+        assertEquals(a_, BoundaryUtil.combine(a_, NULL_BOUNDARY));
+        assertEquals(a_, BoundaryUtil.combine(NULL_BOUNDARY, a_));
 
         assertEquals(_c, BoundaryUtil.combine(_a, a_b, b_c));
         assertEquals(_c, BoundaryUtil.combine(a_b, _a, b_c));
@@ -349,8 +334,10 @@ public class BoundaryUtilTest {
     public void isSplittableTest() {
         assertFalse(isSplittable(boundary(null, null), MIN_KEY));
         assertTrue(isSplittable(boundary(null, null), copyFromUtf8("a")));
-        assertTrue(isSplittable(boundary("a", null), copyFromUtf8("a")));
+        assertFalse(isSplittable(boundary("a", null), copyFromUtf8("a")));
         assertFalse(isSplittable(boundary("a", "b"), copyFromUtf8("a")));
+        assertTrue(isSplittable(boundary("a", "b"), copyFromUtf8("aa")));
+        assertFalse(isSplittable(boundary("a", "b"), copyFromUtf8("b")));
         assertTrue(isSplittable(boundary(null, "b"), copyFromUtf8("a")));
         assertFalse(isSplittable(boundary(null, "a"), copyFromUtf8("a")));
     }
@@ -361,9 +348,9 @@ public class BoundaryUtilTest {
         assertEquals(boundaries[0], boundary(null, "a"));
         assertEquals(boundaries[1], boundary("a", null));
 
-        boundaries = split(boundary("a", null), copyFromUtf8("a"));
-        assertEquals(boundaries[0], boundary("a", "b"));
-        assertEquals(boundaries[1], boundary("b", null));
+        boundaries = split(boundary("a", "b"), copyFromUtf8("aa"));
+        assertEquals(boundaries[0], boundary("a", "aa"));
+        assertEquals(boundaries[1], boundary("aa", "b"));
 
         boundaries = split(boundary(null, "b"), copyFromUtf8("a"));
         assertEquals(boundaries[0], boundary(null, "a"));
@@ -514,13 +501,8 @@ public class BoundaryUtilTest {
     }
 
     private Boundary boundary(String startKey, String endKey) {
-        Boundary.Builder builder = Boundary.newBuilder();
-        if (startKey != null) {
-            builder.setStartKey(copyFromUtf8(startKey));
-        }
-        if (endKey != null) {
-            builder.setEndKey(copyFromUtf8(endKey));
-        }
-        return builder.build();
+        return BoundaryUtil.toBoundary(
+            startKey != null ? copyFromUtf8(startKey) : null,
+            endKey != null ? copyFromUtf8(endKey) : null);
     }
 }

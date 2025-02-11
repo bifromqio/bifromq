@@ -14,7 +14,7 @@
 package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isEmptyRange;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isNULLRange;
 import static com.baidu.bifromq.dist.entity.EntityUtil.getType;
 import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKeyPrefix;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
@@ -362,7 +362,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 .setStartKey(matchRecordKeyPrefix(tenantId))
                 .setEndKey(tenantUpperBound(tenantId))
                 .build(), boundary);
-            if (isEmptyRange(tenantBoundary)) {
+            if (isNULLRange(tenantBoundary)) {
                 continue;
             }
             for (TopicMessagePack topicMsgPack : distPack.getMsgPackList()) {

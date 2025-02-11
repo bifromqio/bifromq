@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.basekv.utils;
 
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.MIN_KEY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.NULL_BOUNDARY;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
@@ -112,6 +114,108 @@ public class KeySpaceDAGTest {
         assertEquals(result.get(boundary3).descriptor().getId().getId(), 3L);
         assertEquals(result.get(boundary4).descriptor().getId().getId(), 4L);
         assertEquals(result.get(boundary5).descriptor().getId().getId(), 5L);
+    }
+
+    @Test
+    public void filterOutEmptyRangeFromEffectiveRoute() {
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> rangeDescriptorsByStoreId;
+        rangeDescriptorsByStoreId = new HashMap<>();
+
+        // Create KVRangeDescriptors that cover the entire key space
+        KVRangeDescriptor range1 = KVRangeDescriptor.newBuilder()
+            .setId(KVRangeId.newBuilder().setId(1).setEpoch(1).build())
+            .setBoundary(Boundary.newBuilder()
+                .setEndKey(ByteString.copyFromUtf8("a")) // (null, "a")
+                .build())
+            .build();
+
+        KVRangeDescriptor range2 = KVRangeDescriptor.newBuilder()
+            .setId(KVRangeId.newBuilder().setId(2).setEpoch(1).build())
+            .setBoundary(Boundary.newBuilder()
+                .setStartKey(ByteString.copyFromUtf8("a")) // ["a", "b")
+                .setEndKey(ByteString.copyFromUtf8("b"))
+                .build())
+            .build();
+
+        KVRangeDescriptor range3 = KVRangeDescriptor.newBuilder()
+            .setId(KVRangeId.newBuilder().setId(3).setEpoch(1).build())
+            .setBoundary(Boundary.newBuilder()
+                .setStartKey(ByteString.copyFromUtf8("b")) // ["b", "c")
+                .setEndKey(ByteString.copyFromUtf8("c"))
+                .build())
+            .build();
+
+        KVRangeDescriptor range4 = KVRangeDescriptor.newBuilder()
+            .setId(KVRangeId.newBuilder().setId(4).setEpoch(1).build())
+            .setBoundary(Boundary.newBuilder()
+                .setStartKey(ByteString.copyFromUtf8("c")) // ["c", "d")
+                .setEndKey(ByteString.copyFromUtf8("d"))
+                .build())
+            .build();
+
+        KVRangeDescriptor range5 = KVRangeDescriptor.newBuilder()
+            .setId(KVRangeId.newBuilder().setId(5).setEpoch(1).build())
+            .setBoundary(Boundary.newBuilder()
+                .setStartKey(ByteString.copyFromUtf8("d")) // ["d", null)
+                .build())
+            .build();
+
+        KVRangeDescriptor range00 = KVRangeDescriptor.newBuilder()
+            .setId(KVRangeId.newBuilder().setId(-1).setEpoch(1).build())
+            .setBoundary(NULL_BOUNDARY)
+            .build();
+        KVRangeDescriptor range01 = KVRangeDescriptor.newBuilder()
+            .setId(KVRangeId.newBuilder().setId(-2).setEpoch(1).build())
+            .setBoundary(Boundary.newBuilder()
+                .setStartKey(MIN_KEY)
+                .build())
+            .build();
+
+
+        Map<KVRangeId, KVRangeDescriptor> store1 = new HashMap<>() {{
+            put(range00.getId(), range00);
+            put(range01.getId(), range01);
+            put(range1.getId(), range1);
+            put(range2.getId(), range2);
+            put(range3.getId(), range3);
+            put(range4.getId(), range4);
+            put(range5.getId(), range5);
+        }};
+
+        rangeDescriptorsByStoreId.put("store1", store1);
+
+        KeySpaceDAG dag = new KeySpaceDAG(rangeDescriptorsByStoreId);
+
+        NavigableMap<Boundary, KeySpaceDAG.LeaderRange> result = dag.getEffectiveFullCoveredRoute();
+
+        // Verify the route contains the expected KVRangeDescriptors with the correct boundaries
+        assertEquals(result.size(), 5);
+
+        Boundary boundary1 = Boundary.newBuilder()
+            .setEndKey(ByteString.copyFromUtf8("a")) // (null, "a")
+            .build();
+        Boundary boundary2 = Boundary.newBuilder()
+            .setStartKey(ByteString.copyFromUtf8("a"))
+            .setEndKey(ByteString.copyFromUtf8("b")) // ["a", "b")
+            .build();
+        Boundary boundary3 = Boundary.newBuilder()
+            .setStartKey(ByteString.copyFromUtf8("b"))
+            .setEndKey(ByteString.copyFromUtf8("c")) // ["b", "c")
+            .build();
+        Boundary boundary4 = Boundary.newBuilder()
+            .setStartKey(ByteString.copyFromUtf8("c"))
+            .setEndKey(ByteString.copyFromUtf8("d")) // ["c", "d")
+            .build();
+        Boundary boundary5 = Boundary.newBuilder()
+            .setStartKey(ByteString.copyFromUtf8("d")) // ["d", null)
+            .build();
+
+        assertEquals(result.get(boundary1).descriptor().getId().getId(), 1L);
+        assertEquals(result.get(boundary2).descriptor().getId().getId(), 2L);
+        assertEquals(result.get(boundary3).descriptor().getId().getId(), 3L);
+        assertEquals(result.get(boundary4).descriptor().getId().getId(), 4L);
+        assertEquals(result.get(boundary5).descriptor().getId().getId(), 5L);
+
     }
 
     @Test

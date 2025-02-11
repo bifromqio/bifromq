@@ -14,6 +14,7 @@
 package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isNULLRange;
 import static com.baidu.bifromq.dist.entity.EntityUtil.tenantPrefix;
 import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
 
@@ -113,10 +114,14 @@ class TenantsState implements ITenantsState {
     private Supplier<Number> getSpaceUsageProvider(String tenantId) {
         return () -> {
             try {
-                return reader.size(intersect(boundary, Boundary.newBuilder()
+                Boundary tenantSection = intersect(boundary, Boundary.newBuilder()
                     .setStartKey(tenantPrefix(tenantId))
                     .setEndKey(tenantUpperBound(tenantId))
-                    .build()));
+                    .build());
+                if (isNULLRange(tenantSection)) {
+                    return 0;
+                }
+                return reader.size(tenantSection);
             } catch (Exception e) {
                 log.error("Unexpected error", e);
                 return 0;

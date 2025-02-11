@@ -147,8 +147,8 @@ public class SubscriptionCacheTest {
             CompletableFuture.completedFuture(mockMatchings));
         cache.get(tenantId, topic);
 
-        Boundary boundary = Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("start"))
-            .setEndKey(ByteString.copyFromUtf8("end")).build();
+        Boundary boundary = Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("a"))
+            .setEndKey(ByteString.copyFromUtf8("z")).build();
         cache.reset(boundary);
 
         CompletableFuture<Set<Matching>> result = cache.get("tenant1", "home/sensor/temperature");

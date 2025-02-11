@@ -129,6 +129,10 @@ public class KeySpaceDAG {
 
             // Define the boundary of this edge (from current node to next node)
             Boundary boundary = createBoundary(currentNode, nextNode);
+            if (BoundaryUtil.isNULLRange(boundary)) {
+                // do not consider NULL range as a valid route
+                continue;
+            }
 
             // Add this edge to the current path
             currentPath.put(boundary, new LeaderRange(bestEdgeKey.storeId(), bestDescriptor));
