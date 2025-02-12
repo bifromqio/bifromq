@@ -20,7 +20,6 @@ import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersi
 import static com.google.common.hash.Hashing.murmur3_128;
 
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
-import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.GroupMatching;
 import com.baidu.bifromq.dist.entity.Matching;
 import com.baidu.bifromq.dist.entity.NormalMatching;
@@ -63,7 +62,6 @@ class DeliverExecutorGroup implements IDeliverExecutorGroup {
     DeliverExecutorGroup(IMessageDeliverer deliverer,
                          IEventCollector eventCollector,
                          IResourceThrottler resourceThrottler,
-                         IDistClient distClient,
                          int groupSize) {
         int expirySec = DistTopicMatchExpirySeconds.INSTANCE.get();
         this.eventCollector = eventCollector;
@@ -82,7 +80,7 @@ class DeliverExecutorGroup implements IDeliverExecutorGroup {
                 .build());
         fanoutExecutors = new DeliverExecutor[groupSize];
         for (int i = 0; i < groupSize; i++) {
-            fanoutExecutors[i] = new DeliverExecutor(i, deliverer, eventCollector, distClient);
+            fanoutExecutors[i] = new DeliverExecutor(i, deliverer, eventCollector);
         }
     }
 

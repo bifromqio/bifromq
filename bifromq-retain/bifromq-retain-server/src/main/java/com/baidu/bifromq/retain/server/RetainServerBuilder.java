@@ -15,6 +15,7 @@ package com.baidu.bifromq.retain.server;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
+import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.google.common.base.Preconditions;
@@ -37,6 +38,7 @@ public class RetainServerBuilder {
     RPCServerBuilder rpcServerBuilder;
     ISettingProvider settingProvider;
     ISubBrokerManager subBrokerManager;
+    IDistClient distClient;
     IBaseKVStoreClient retainStoreClient;
     Map<String, String> attributes = new HashMap<>();
     Set<String> defaultGroupTags = new HashSet<>();

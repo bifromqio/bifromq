@@ -38,7 +38,7 @@ class RetainServer implements IRetainServer {
     RetainServer(RetainServerBuilder builder) {
         this.retainService = new RetainService(
             new RetainStoreGCProcessor(builder.retainStoreClient, null),
-            new MessageDeliverer(builder.subBrokerManager),
+            new MessageDeliverer(builder.subBrokerManager, builder.distClient),
             new MatchCallScheduler(builder.retainStoreClient, builder.settingProvider),
             new RetainCallScheduler(builder.retainStoreClient),
             new DeleteCallScheduler(builder.retainStoreClient));

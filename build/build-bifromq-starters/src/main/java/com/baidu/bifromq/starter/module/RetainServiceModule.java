@@ -22,6 +22,7 @@ import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.store.option.KVRangeOptions;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
+import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.settingprovider.SettingProviderManager;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.retain.server.IRetainServer;
@@ -60,6 +61,7 @@ public class RetainServiceModule extends AbstractModule {
             }
             return Optional.of(IRetainServer.builder()
                 .rpcServerBuilder(injector.getInstance(RPCServerBuilder.class))
+                .distClient(injector.getInstance(IDistClient.class))
                 .retainStoreClient(
                     injector.getInstance(Key.get(IBaseKVStoreClient.class, Names.named("retainStoreClient"))))
                 .settingProvider(injector.getInstance(SettingProviderManager.class))

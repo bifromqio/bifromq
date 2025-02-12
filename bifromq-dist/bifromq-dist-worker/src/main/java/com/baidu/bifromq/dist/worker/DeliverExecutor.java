@@ -18,7 +18,6 @@ import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLo
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.deliverer.DeliveryCall;
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
-import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.entity.NormalMatching;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverError;
@@ -39,18 +38,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class DeliverExecutor {
     private final IEventCollector eventCollector;
-    private final IDistClient distClient;
     private final IMessageDeliverer deliverer;
     private final ExecutorService executor;
     private final ConcurrentLinkedQueue<SendTask> tasks = new ConcurrentLinkedQueue<>();
     private final AtomicBoolean sending = new AtomicBoolean();
 
-    public DeliverExecutor(int id,
-                           IMessageDeliverer deliverer,
-                           IEventCollector eventCollector,
-                           IDistClient distClient) {
+    public DeliverExecutor(int id, IMessageDeliverer deliverer, IEventCollector eventCollector) {
         this.eventCollector = eventCollector;
-        this.distClient = distClient;
         this.deliverer = deliverer;
         executor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
@@ -108,22 +102,11 @@ public class DeliverExecutor {
                         .delivererKey(delivererKey)
                         .subInfo(sub)
                         .messages(msgPack));
-                    case NO_SUB, NO_RECEIVER -> {
-                        // unsub as side effect
-                        MatchInfo matchInfo = matched.matchInfo;
-                        log.debug("No sub or receiver found, unsub {}", matchInfo);
-                        distClient.removeTopicMatch(System.nanoTime(),
-                            matched.tenantId,
-                            matchInfo.getTopicFilter(),
-                            matchInfo.getReceiverId(),
-                            delivererKey,
-                            subBrokerId);
-                        eventCollector.report(getLocal(DeliverNoInbox.class)
-                            .brokerId(subBrokerId)
-                            .delivererKey(delivererKey)
-                            .subInfo(sub)
-                            .messages(msgPack));
-                    }
+                    case NO_SUB, NO_RECEIVER -> eventCollector.report(getLocal(DeliverNoInbox.class)
+                        .brokerId(subBrokerId)
+                        .delivererKey(delivererKey)
+                        .subInfo(sub)
+                        .messages(msgPack));
                     case ERROR -> eventCollector.report(getLocal(DeliverError.class)
                         .brokerId(subBrokerId)
                         .delivererKey(delivererKey)

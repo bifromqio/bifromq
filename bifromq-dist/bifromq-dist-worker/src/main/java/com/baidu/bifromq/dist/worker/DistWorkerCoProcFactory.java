@@ -46,7 +46,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
-    private final IDistClient distClient;
     private final IEventCollector eventCollector;
     private final IResourceThrottler resourceThrottler;
     private final IMessageDeliverer deliverer;
@@ -60,11 +59,10 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
                                    IResourceThrottler resourceThrottler,
                                    ISubBrokerManager subBrokerManager,
                                    Duration loadEstimateWindow) {
-        this.distClient = distClient;
         this.eventCollector = eventCollector;
         this.resourceThrottler = resourceThrottler;
         this.loadEstWindow = loadEstimateWindow;
-        deliverer = new MessageDeliverer(subBrokerManager);
+        deliverer = new MessageDeliverer(subBrokerManager, distClient);
         subscriptionChecker = new SubscriptionCleaner(subBrokerManager, distClient);
 
         matchExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
@@ -99,7 +97,7 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
             "clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id));
 
         IDeliverExecutorGroup deliverExecutorGroup = new DeliverExecutorGroup(
-            deliverer, eventCollector, resourceThrottler, distClient, DistFanOutParallelism.INSTANCE.get());
+            deliverer, eventCollector, resourceThrottler, DistFanOutParallelism.INSTANCE.get());
         return new DistWorkerCoProc(
             id, rangeReaderProvider, routeCache, tenantsState, deliverExecutorGroup, subscriptionChecker);
     }

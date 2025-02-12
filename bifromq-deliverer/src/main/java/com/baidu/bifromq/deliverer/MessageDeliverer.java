@@ -13,43 +13,27 @@
 
 package com.baidu.bifromq.deliverer;
 
-import static com.baidu.bifromq.plugin.subbroker.TypeUtil.toMap;
-
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.basescheduler.ICallTask;
-import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
-import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
-import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
+import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
-import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
 import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
-import com.baidu.bifromq.type.MatchInfo;
 import java.time.Duration;
-import java.util.ArrayDeque;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Queue;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryResult.Code, DelivererKey>
     implements IMessageDeliverer {
+    private final IDistClient distClient;
     private final ISubBrokerManager subBrokerManager;
 
-    public MessageDeliverer(ISubBrokerManager subBrokerManager) {
-        super("dist_worker_deliver_batcher",
-            Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
+    public MessageDeliverer(ISubBrokerManager subBrokerManager, IDistClient distClient) {
+        super("dist_worker_deliver_batcher", Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
             Duration.ofMillis(DataPlaneBurstLatencyMillis.INSTANCE.get()));
+        this.distClient = distClient;
         this.subBrokerManager = subBrokerManager;
     }
 
@@ -58,7 +42,12 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryR
                                                                                   long tolerableLatencyNanos,
                                                                                   long burstLatencyNanos,
                                                                                   DelivererKey delivererKey) {
-        return new DeliveryCallBatcher(delivererKey, name, tolerableLatencyNanos, burstLatencyNanos);
+        return new DeliveryCallBatcher(distClient,
+            subBrokerManager,
+            delivererKey,
+            name,
+            tolerableLatencyNanos,
+            burstLatencyNanos);
     }
 
     @Override
@@ -66,88 +55,4 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryR
         return Optional.of(request.delivererKey);
     }
 
-    private class DeliveryCallBatcher extends Batcher<DeliveryCall, DeliveryResult.Code, DelivererKey> {
-        private final IDeliverer deliverer;
-
-        private class DeliveryBatchCall implements IBatchCall<DeliveryCall, DeliveryResult.Code, DelivererKey> {
-            private final Queue<ICallTask<DeliveryCall, DeliveryResult.Code, DelivererKey>> tasks =
-                new ArrayDeque<>(128);
-            private Map<String, Map<MessagePackWrapper, Set<MatchInfo>>> batch = new HashMap<>(128);
-
-            @Override
-            public void reset() {
-                batch = new HashMap<>(128);
-            }
-
-            @Override
-            public void add(ICallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> callTask) {
-                batch.computeIfAbsent(callTask.call().tenantId, k -> new LinkedHashMap<>(128))
-                    .computeIfAbsent(callTask.call().msgPackWrapper, k -> new HashSet<>())
-                    .add(callTask.call().matchInfo);
-                tasks.add(callTask);
-            }
-
-            @Override
-            public CompletableFuture<Void> execute() {
-                DeliveryRequest.Builder requestBuilder = DeliveryRequest.newBuilder();
-                batch.forEach((tenantId, pack) -> {
-                    DeliveryPackage.Builder packageBuilder = DeliveryPackage.newBuilder();
-                    pack.forEach((msgPackWrapper, matchInfos) ->
-                        packageBuilder.addPack(DeliveryPack.newBuilder()
-                            .setMessagePack(msgPackWrapper.messagePack)
-                            .addAllMatchInfo(matchInfos)
-                            .build()));
-                    requestBuilder.putPackage(tenantId, packageBuilder.build());
-                });
-
-                return deliverer.deliver(requestBuilder.build())
-                    .handle((reply, e) -> {
-                        if (e != null) {
-                            ICallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> task;
-                            while ((task = tasks.poll()) != null) {
-                                task.resultPromise().completeExceptionally(e);
-                            }
-                        } else {
-                            ICallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> task;
-                            Map<String, Map<MatchInfo, DeliveryResult.Code>> resultMap =
-                                toMap(reply.getResultMap());
-                            while ((task = tasks.poll()) != null) {
-                                DeliveryResult.Code result = resultMap
-                                    .getOrDefault(task.call().tenantId, Collections.emptyMap())
-                                    .get(task.call().matchInfo);
-                                if (result != null) {
-                                    task.resultPromise().complete(result);
-                                } else {
-                                    log.warn("[{}]No deliver result: tenantId={}, route={}, batcherKey={}",
-                                        this.hashCode(), task.call().tenantId, task.call().matchInfo,
-                                        task.call().delivererKey);
-                                    task.resultPromise().complete(DeliveryResult.Code.OK);
-                                }
-                            }
-                        }
-                        return null;
-                    });
-            }
-        }
-
-        DeliveryCallBatcher(DelivererKey batcherKey,
-                            String name,
-                            long tolerableLatencyNanos,
-                            long burstLatencyNanos) {
-            super(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos);
-            int brokerId = batcherKey.subBrokerId();
-            this.deliverer = subBrokerManager.get(brokerId).open(batcherKey.delivererKey());
-        }
-
-        @Override
-        protected IBatchCall<DeliveryCall, DeliveryResult.Code, DelivererKey> newBatch() {
-            return new DeliveryBatchCall();
-        }
-
-        @Override
-        public void close() {
-            super.close();
-            deliverer.close();
-        }
-    }
 }

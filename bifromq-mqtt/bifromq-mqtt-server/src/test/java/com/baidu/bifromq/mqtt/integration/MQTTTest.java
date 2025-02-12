@@ -227,6 +227,7 @@ public abstract class MQTTTest {
         retainServer = IRetainServer.builder()
             .rpcServerBuilder(rpcServerBuilder)
             .subBrokerManager(inboxBrokerMgr)
+            .distClient(distClient)
             .retainStoreClient(retainStoreKVStoreClient)
             .settingProvider(settingProvider)
             .build();

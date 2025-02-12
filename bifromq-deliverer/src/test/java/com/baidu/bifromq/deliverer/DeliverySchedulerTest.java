@@ -14,11 +14,15 @@
 package com.baidu.bifromq.deliverer;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.fail;
 
+import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResults;
@@ -38,6 +42,8 @@ import org.testng.annotations.Test;
 public class DeliverySchedulerTest {
     private final String tenantId = "tenant";
     @Mock
+    private IDistClient distClient;
+    @Mock
     private ISubBrokerManager subBrokerManager;
     @Mock
     private ISubBroker subBroker;
@@ -52,7 +58,7 @@ public class DeliverySchedulerTest {
         when(subBrokerManager.get(0)).thenReturn(subBroker);
         when(subBroker.open(anyString())).thenReturn(groupWriter);
         when(subBroker.id()).thenReturn(0);
-        testDeliverer = new MessageDeliverer(subBrokerManager);
+        testDeliverer = new MessageDeliverer(subBrokerManager, distClient);
     }
 
     @SneakyThrows
@@ -93,7 +99,7 @@ public class DeliverySchedulerTest {
 
     @Test
     public void writeNoSub() {
-        MatchInfo matchInfo = MatchInfo.newBuilder().build();
+        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter("topic").setReceiverId("receiver").build();
         DeliveryCall request =
             new DeliveryCall(tenantId, matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
         when(groupWriter.deliver(any())).thenReturn(
@@ -107,11 +113,14 @@ public class DeliverySchedulerTest {
                 .build()));
         DeliveryResult.Code result = testDeliverer.schedule(request).join();
         assertEquals(result, DeliveryResult.Code.NO_SUB);
+        verify(distClient).removeTopicMatch(anyLong(),
+            eq(tenantId), eq(matchInfo.getTopicFilter()), eq(matchInfo.getReceiverId()),
+            eq("group1"), eq(0));
     }
 
     @Test
     public void writeNoReceiver() {
-        MatchInfo matchInfo = MatchInfo.newBuilder().build();
+        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter("topic").setReceiverId("receiver").build();
         DeliveryCall request =
             new DeliveryCall(tenantId, matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
         when(groupWriter.deliver(any())).thenReturn(
@@ -125,6 +134,9 @@ public class DeliverySchedulerTest {
                 .build()));
         DeliveryResult.Code result = testDeliverer.schedule(request).join();
         assertEquals(result, DeliveryResult.Code.NO_RECEIVER);
+        verify(distClient).removeTopicMatch(anyLong(),
+            eq(tenantId), eq(matchInfo.getTopicFilter()), eq(matchInfo.getReceiverId()),
+            eq("group1"), eq(0));
     }
 
 
