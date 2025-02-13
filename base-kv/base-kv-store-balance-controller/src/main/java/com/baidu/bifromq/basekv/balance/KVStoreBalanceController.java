@@ -42,6 +42,7 @@ import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
@@ -139,6 +140,13 @@ public class KVStoreBalanceController {
     private LoadRulesProposalHandler.Result handleLoadRulesProposal(String balancerClassFQN, Struct loadRules) {
         StoreBalancer balancer = balancers.get(balancerClassFQN);
         if (balancer != null) {
+            Value disableField = loadRules.getFieldsMap().get("disable");
+            if (disableField != null && !disableField.hasBoolValue()) {
+                log.warn("The 'disable' field of load rules for {} is not boolean: {}",
+                    balancerClassFQN, disableField.getKindCase());
+                // if disable field is not boolean, reject the proposal
+                return LoadRulesProposalHandler.Result.REJECTED;
+            }
             if (balancer.validate(loadRules)) {
                 return LoadRulesProposalHandler.Result.ACCEPTED;
             }
@@ -164,8 +172,16 @@ public class KVStoreBalanceController {
         }
         for (StoreBalancer balancer : balancers.values()) {
             try {
-                if (loadRules != null && loadRules.containsKey(balancer.getClass().getName())) {
-                    balancer.update(loadRules.get(balancer.getClass().getName()));
+                if (loadRules != null) {
+                    Struct balancerLoadRule = loadRules.get(balancer.getClass().getName());
+                    if (balancerLoadRule != null) {
+                        if (balancerLoadRule.getFieldsOrDefault("disable",
+                            Value.newBuilder().setBoolValue(false).build()).getBoolValue()) {
+                            log.debug("Balancer[{}] is disabled", balancer.getClass().getSimpleName());
+                            continue;
+                        }
+                        balancer.update(loadRules.get(balancer.getClass().getName()));
+                    }
                 }
                 balancer.update(landscape);
             } catch (Throwable e) {

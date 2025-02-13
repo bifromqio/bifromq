@@ -17,9 +17,11 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basekv.balance.command.BootstrapCommand;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
@@ -30,6 +32,7 @@ import com.baidu.bifromq.basekv.balance.command.TransferLeadershipCommand;
 import com.baidu.bifromq.basekv.balance.utils.DescriptorUtils;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
+import com.baidu.bifromq.basekv.metaservice.LoadRulesProposalHandler;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
@@ -40,6 +43,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import java.io.IOException;
 import java.time.Duration;
@@ -50,6 +54,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import lombok.extern.slf4j.Slf4j;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
@@ -348,6 +353,35 @@ public class KVStoreBalanceControllerTest {
             argThat(r -> r.getKvRangeId().equals(id)
                 && r.getVer() == command.getExpectedVer()
                 && r.getSplitKey().equals(command.getSplitKey())));
+    }
+
+    @Test
+    public void testDisableBalancerViaLoadRules() {
+        KVRangeId id = KVRangeIdUtil.generate();
+        Set<KVRangeStoreDescriptor> storeDescriptors = generateDescriptor();
+        when(storeBalancer.balance()).thenReturn(
+            BalanceNow.of(
+                BootstrapCommand.builder().kvRangeId(id).toStore(LOCAL_STORE_ID).boundary(FULL_BOUNDARY).build()));
+        when(storeClient.bootstrap(eq(LOCAL_STORE_ID), any())).thenReturn(new CompletableFuture<>());
+
+        storeDescSubject.onNext(storeDescriptors);
+        verify(storeClient, timeout(3000).times(1)).bootstrap(eq(LOCAL_STORE_ID),
+            argThat(c -> c.getKvRangeId().equals(id) && c.getBoundary().equals(FULL_BOUNDARY)));
+
+        loadRuleSubject.onNext(Map.of(storeBalancer.getClass().getName(),
+            Struct.newBuilder().putFields("disable", Value.newBuilder().setBoolValue(true).build()).build()));
+        reset(storeClient);
+        verify(storeClient, timeout(3000).times(0)).bootstrap(eq(LOCAL_STORE_ID),
+            argThat(c -> c.getKvRangeId().equals(id) && c.getBoundary().equals(FULL_BOUNDARY)));
+    }
+
+    @Test
+    public void testRejectProposalWhenDisableFieldTypeWrong() {
+        ArgumentCaptor<LoadRulesProposalHandler> captor = ArgumentCaptor.forClass(LoadRulesProposalHandler.class);
+        verify(metadataManager).setLoadRulesProposalHandler(captor.capture());
+        LoadRulesProposalHandler.Result result = captor.getValue().handle(storeBalancer.getClass().getName(),
+            Struct.newBuilder().putFields("disable", Value.newBuilder().setStringValue("wrongtype").build()).build());
+        assertEquals(result, LoadRulesProposalHandler.Result.REJECTED);
     }
 
     private Set<KVRangeStoreDescriptor> generateDescriptor() {
