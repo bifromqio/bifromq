@@ -21,9 +21,8 @@ import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.sysprops.props.DeliverersPerMqttServer;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.util.TopicUtil;
-import com.google.common.collect.Sets;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -36,10 +35,11 @@ public class LocalTopicRouter implements ILocalTopicRouter {
 
     private static class LocalRoutes implements ILocalRoutes {
         private final String localReceiverId;
-        private final Set<String> routeList = Sets.newConcurrentHashSet();
+        private final Map<String, Long> routesInfo = new ConcurrentHashMap<>();
+        private final long incarnation = System.nanoTime();
 
         private LocalRoutes(int bucketId) {
-            this.localReceiverId = ILocalDistService.localize(bucketId + "_" + System.nanoTime());
+            this.localReceiverId = ILocalDistService.localize(bucketId + "_" + incarnation);
         }
 
         public String localReceiverId() {
@@ -47,8 +47,13 @@ public class LocalTopicRouter implements ILocalTopicRouter {
         }
 
         @Override
-        public Set<String> routeList() {
-            return routeList;
+        public Map<String, Long> routesInfo() {
+            return routesInfo;
+        }
+
+        @Override
+        public long incarnation() {
+            return incarnation;
         }
 
         public static int parseBucketId(String localReceiverId) {
@@ -87,7 +92,10 @@ public class LocalTopicRouter implements ILocalTopicRouter {
 
 
     @Override
-    public CompletableFuture<MatchResult> addTopicRoute(long reqId, String tenantId, String topicFilter,
+    public CompletableFuture<MatchResult> addTopicRoute(long reqId,
+                                                        String tenantId,
+                                                        String topicFilter,
+                                                        long incarnation,
                                                         String channelId) {
         assert !TopicUtil.isSharedSubscription(topicFilter);
         int bucketId = topicFilterBucketId(channelId);
@@ -99,10 +107,12 @@ public class LocalTopicRouter implements ILocalTopicRouter {
                             k.tenantId,
                             k.topicFilter,
                             localRoutes.localReceiverId(),
-                            toDelivererKey(k.tenantId, localRoutes.localReceiverId(), serverId), 0)
+                            toDelivererKey(k.tenantId, localRoutes.localReceiverId(), serverId),
+                            0,
+                            localRoutes.incarnation())
                         .thenApply(matchResult -> {
                             if (matchResult == MatchResult.OK) {
-                                localRoutes.routeList.add(channelId);
+                                localRoutes.routesInfo.put(channelId, incarnation);
                                 return localRoutes;
                             }
                             throw new AddRouteException(matchResult);
@@ -113,7 +123,7 @@ public class LocalTopicRouter implements ILocalTopicRouter {
                         if (e != null) {
                             updated.completeExceptionally(e);
                         } else {
-                            routeList.routeList.add(channelId);
+                            routeList.routesInfo.put(channelId, incarnation);
                             updated.complete(routeList);
                         }
                     });
@@ -138,6 +148,7 @@ public class LocalTopicRouter implements ILocalTopicRouter {
     public CompletableFuture<UnmatchResult> removeTopicRoute(long reqId,
                                                              String tenantId,
                                                              String topicFilter,
+                                                             long incarnation,
                                                              String channelId) {
         assert !TopicUtil.isSharedSubscription(topicFilter);
         int bucketId = topicFilterBucketId(channelId);
@@ -148,13 +159,15 @@ public class LocalTopicRouter implements ILocalTopicRouter {
                     if (e != null) {
                         updated.completeExceptionally(e);
                     } else {
-                        localRoutes.routeList.remove(channelId);
-                        if (localRoutes.routeList.isEmpty()) {
+                        localRoutes.routesInfo.remove(channelId, incarnation);
+                        if (localRoutes.routesInfo.isEmpty()) {
                             distClient.removeTopicMatch(reqId,
                                     k.tenantId,
                                     k.topicFilter,
                                     localRoutes.localReceiverId(),
-                                    toDelivererKey(k.tenantId, localRoutes.localReceiverId(), serverId), 0)
+                                    toDelivererKey(k.tenantId, localRoutes.localReceiverId(), serverId),
+                                    0,
+                                    localRoutes.incarnation())
                                 .whenComplete((unmatchResult, t) -> {
                                     if (t != null) {
                                         updated.completeExceptionally(t);
@@ -195,10 +208,7 @@ public class LocalTopicRouter implements ILocalTopicRouter {
         int bucketId = LocalRoutes.parseBucketId(matchInfo.getReceiverId());
         CompletableFuture<? extends ILocalRoutes> routesFuture =
             routeMap.get(new TopicFilter(tenantId, matchInfo.getTopicFilter(), bucketId));
-        if (routesFuture != null) {
-            return Optional.of(routesFuture);
-        }
-        return Optional.empty();
+        return Optional.ofNullable(routesFuture);
     }
 
     private int topicFilterBucketId(String key) {

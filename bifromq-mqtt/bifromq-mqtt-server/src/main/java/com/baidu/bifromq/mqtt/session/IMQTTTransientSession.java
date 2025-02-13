@@ -13,14 +13,13 @@
 
 package com.baidu.bifromq.mqtt.session;
 
-import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import java.util.List;
 
 public interface IMQTTTransientSession extends IMQTTSession {
     String NAME = "MQTTTransientSession";
 
-    boolean publish(MatchInfo matchInfo, List<TopicMessagePack> messagePack);
+    boolean publish(String topicFilter, long incarnation, List<TopicMessagePack> messagePack);
 
     boolean isSubscribing(String topicFilter);
 }

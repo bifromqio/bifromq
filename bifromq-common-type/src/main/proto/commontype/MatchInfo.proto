@@ -9,4 +9,5 @@ option java_outer_classname = "MatchInfoProtos";
 message MatchInfo {
   string topicFilter = 1;
   string receiverId = 2;
+  uint64 incarnation = 3;
 }

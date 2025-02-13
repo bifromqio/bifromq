@@ -19,4 +19,5 @@ message TopicFilterOption{
   bool retainAsPublished = 3;
   bool noLocal = 4;
   RetainHandling retainHandling = 5;
+  uint64 incarnation = 6;
 }

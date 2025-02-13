@@ -9,7 +9,7 @@ option java_outer_classname = "DistCoProcProtos";
 package distservice;
 
 message GroupMatchRecord {
-  repeated string qReceiverId = 1; // qualified inboxId
+  map<string, uint64> qReceiverId = 1; // key: qReceiverId, val: incarnation
 }
 
 message TenantOption{
@@ -17,7 +17,7 @@ message TenantOption{
 }
 message BatchMatchRequest {
   uint64 reqId = 1;
-  repeated string scopedTopicFilter = 2;// tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
+  map< string, uint64> scopedTopicFilter = 2;// key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter), val: incarnation
   map<string, TenantOption> options = 3; // key: tenantId
 }
 
@@ -33,7 +33,7 @@ message BatchMatchReply {
 
 message BatchUnmatchRequest {
   uint64 reqId = 1;
-  repeated string scopedTopicFilter = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
+  map< string, uint64> scopedTopicFilter = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter), val: incarnation
 }
 
 message BatchUnmatchReply {

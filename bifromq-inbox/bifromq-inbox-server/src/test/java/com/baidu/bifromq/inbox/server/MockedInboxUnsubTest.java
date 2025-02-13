@@ -91,7 +91,8 @@ public class MockedInboxUnsubTest extends MockedInboxService {
                 .setReqId(reqId)
                 .setCode(UnsubReply.Code.OK)
                 .build()));
-        when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+            anyLong()))
             .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
 
         StreamObserver<UnsubReply> streamObserver = mock(StreamObserver.class);
@@ -110,7 +111,8 @@ public class MockedInboxUnsubTest extends MockedInboxService {
                 .setReqId(reqId)
                 .setCode(UnsubReply.Code.OK)
                 .build()));
-        when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+            anyLong()))
             .thenReturn(CompletableFuture.completedFuture(UnmatchResult.ERROR));
 
         StreamObserver<UnsubReply> streamObserver = mock(StreamObserver.class);

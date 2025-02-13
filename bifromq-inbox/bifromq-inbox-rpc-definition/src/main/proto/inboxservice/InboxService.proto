@@ -200,6 +200,7 @@ message UnsubReply {
   }
   uint64 reqId = 1;
   Code code = 2;
+  optional TopicFilterOption option = 3; // when code is OK
 }
 
 message SendRequest {

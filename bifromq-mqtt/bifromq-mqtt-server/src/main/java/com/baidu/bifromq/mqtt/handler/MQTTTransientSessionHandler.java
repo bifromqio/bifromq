@@ -168,7 +168,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
             subNumGauge.addAndGet(1);
             memUsage.addAndGet(topicFilter.length());
         }
-        return addMatchRecord(reqId, topicFilter)
+        return addMatchRecord(reqId, topicFilter, option.getIncarnation())
             .thenApplyAsync(matchResult -> {
                 switch (matchResult) {
                     case OK -> {
@@ -192,14 +192,18 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     }
 
     @Override
-    protected CompletableFuture<MatchReply> matchRetainedMessage(long reqId, String topicFilter) {
+    protected CompletableFuture<MatchReply> matchRetainedMessage(long reqId,
+                                                                 String topicFilter,
+                                                                 TopicFilterOption option) {
         String tenantId = clientInfo().getTenantId();
         return sessionCtx.retainClient.match(MatchRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setMatchInfo(MatchInfo.newBuilder()
                 .setTopicFilter(topicFilter)
+                // receive retain message via global channel
                 .setReceiverId(globalize(channelId()))
+                .setIncarnation(option.getIncarnation())
                 .build())
             .setDelivererKey(toDelivererKey(tenantId, globalize(channelId()), sessionCtx.serverId))
             .setBrokerId(0)
@@ -218,13 +222,15 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         }
         tenantMeter.recordCount(MqttTransientUnsubCount);
         Timer.Sample start = Timer.start();
-        if (topicFilters.remove(topicFilter) == null) {
+        TopicFilterOption option = topicFilters.remove(topicFilter);
+        if (option == null) {
             return CompletableFuture.completedFuture(IMQTTProtocolHelper.UnsubResult.NO_SUB);
+        } else {
+            subNumGauge.addAndGet(-1);
+            memUsage.addAndGet(-topicFilter.length());
         }
-        return removeMatchRecord(reqId, topicFilter)
+        return removeMatchRecord(reqId, topicFilter, option.getIncarnation())
             .handleAsync((result, e) -> {
-                subNumGauge.addAndGet(-1);
-                memUsage.addAndGet(-topicFilter.length());
                 if (e != null) {
                     return ERROR;
                 } else {
@@ -250,10 +256,9 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     }
 
     @Override
-    public boolean publish(MatchInfo matchInfo, List<TopicMessagePack> topicMsgPacks) {
-        String topicFilter = matchInfo.getTopicFilter();
+    public boolean publish(String topicFilter, long incarnation, List<TopicMessagePack> topicMsgPacks) {
         TopicFilterOption option = topicFilters.get(topicFilter);
-        if (option == null || !ctx.channel().isActive()) {
+        if (option == null || option.getIncarnation() != incarnation || !ctx.channel().isActive()) {
             return false;
         }
         ctx.executor().execute(() -> publish(topicFilter, option, topicMsgPacks));
@@ -326,11 +331,11 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         }
     }
 
-    private CompletableFuture<MatchResult> addMatchRecord(long reqId, String topicFilter) {
-        return sessionCtx.localDistService.match(reqId, topicFilter, this);
+    private CompletableFuture<MatchResult> addMatchRecord(long reqId, String topicFilter, long incarnation) {
+        return sessionCtx.localDistService.match(reqId, topicFilter, incarnation, this);
     }
 
-    private CompletableFuture<UnmatchResult> removeMatchRecord(long reqId, String topicFilter) {
-        return sessionCtx.localDistService.unmatch(reqId, topicFilter, this);
+    private CompletableFuture<UnmatchResult> removeMatchRecord(long reqId, String topicFilter, long incarnation) {
+        return sessionCtx.localDistService.unmatch(reqId, topicFilter, incarnation, this);
     }
 }

@@ -69,6 +69,7 @@ import com.baidu.bifromq.inbox.server.scheduler.IInboxUnsubScheduler;
 import com.baidu.bifromq.inbox.storage.proto.BatchDeleteReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchDeleteRequest;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
+import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.inbox.store.gc.IInboxStoreGCProcessor;
 import com.baidu.bifromq.inbox.store.gc.InboxStoreGCProcessor;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
@@ -337,7 +338,9 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                             request.getTenantId(),
                             request.getTopicFilter(),
                             distInboxId(request.getInboxId(), request.getIncarnation()),
-                            getDelivererKey(request.getTenantId(), request.getInboxId()), inboxClient.id())
+                            getDelivererKey(request.getTenantId(), request.getInboxId()),
+                            inboxClient.id(),
+                            request.getOption().getIncarnation())
                         .thenApply(matchResult -> {
                             switch (matchResult) {
                                 case OK -> {
@@ -401,7 +404,8 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         request.getTenantId(),
                         request.getInboxId(),
                         request.getIncarnation(),
-                        request.getTopicFilter())
+                        request.getTopicFilter(),
+                        v.getOption())
                         .thenApply(unmatchResult -> switch (unmatchResult) {
                             case OK -> v;
                             case NOT_EXISTED -> UnsubReply.newBuilder()
@@ -449,9 +453,10 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                                      String tenantId,
                                                      String inboxId,
                                                      long incarnation,
-                                                     String topicFilter) {
+                                                     String topicFilter,
+                                                     TopicFilterOption option) {
         return distClient.removeTopicMatch(reqId, tenantId, topicFilter, distInboxId(inboxId, incarnation),
-            getDelivererKey(tenantId, inboxId), inboxClient.id());
+            getDelivererKey(tenantId, inboxId), inboxClient.id(), option.getIncarnation());
     }
 
     @Override
@@ -773,9 +778,10 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     .thenCompose(result -> {
                         if (result.getCode() == BatchDeleteReply.Code.OK) {
                             List<CompletableFuture<UnmatchResult>> unmatchFutures =
-                                result.getTopicFiltersList().stream()
-                                    .map(topicFilter -> unmatch(System.nanoTime(), scopedInbox.tenantId(),
-                                        scopedInbox.inboxId(), scopedInbox.incarnation(), topicFilter)).toList();
+                                result.getTopicFiltersMap().entrySet().stream()
+                                    .map(e -> unmatch(System.nanoTime(), scopedInbox.tenantId(),
+                                        scopedInbox.inboxId(), scopedInbox.incarnation(), e.getKey(), e.getValue()))
+                                    .toList();
                             return CompletableFuture.allOf(unmatchFutures.toArray(CompletableFuture[]::new));
                         }
                         return CompletableFuture.completedFuture(null);

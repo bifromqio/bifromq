@@ -25,6 +25,8 @@ import static com.google.protobuf.ByteString.copyFromUtf8;
 
 import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.UnsafeByteOperations;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
@@ -105,32 +107,17 @@ public class EntityUtil {
         int lastSplit = matchRecordKeyStr.lastIndexOf(NUL_CHAR);
         char flag = matchRecordKeyStr.charAt(lastSplit + 1);
         try {
-            if (flag <= 3) {
-                switch (flag) {
-                    case FLAG_NORMAL_VAL:
-                        String scopedInbox = matchRecordKeyStr.substring(lastSplit + 2);
-                        return new NormalMatching(matchRecordKey, scopedInbox);
-                    case FLAG_UNORDERED_VAL:
-                    case FLAG_ORDERED_VAL:
-                    default:
-                        GroupMatchRecord matchRecord = GroupMatchRecord.parseFrom(matchRecordValue);
-                        String group = matchRecordKeyStr.substring(lastSplit + 2);
-                        return new GroupMatching(matchRecordKey, group, flag == FLAG_ORDERED_VAL,
-                            matchRecord.getQReceiverIdList());
-                }
-            } else {
-                // TODO: ONLY FOR BACKWARD COMPATIBLE WITH PREVIOUS ENCODING, WILL BE REMOVED IN FUTURE VERSION
-                switch (flag) {
-                    case '0':
-                        String scopedInbox = matchRecordKeyStr.substring(lastSplit + 2);
-                        return new NormalMatching(matchRecordKey, scopedInbox);
-                    case '1':
-                    case '2':
-                    default:
-                        GroupMatchRecord matchRecord = GroupMatchRecord.parseFrom(matchRecordValue);
-                        String group = matchRecordKeyStr.substring(lastSplit + 2);
-                        return new GroupMatching(matchRecordKey, group, flag == '2', matchRecord.getQReceiverIdList());
-                }
+            switch (flag) {
+                case FLAG_NORMAL_VAL:
+                    String scopedInbox = matchRecordKeyStr.substring(lastSplit + 2);
+                    return new NormalMatching(matchRecordKey, scopedInbox, toLong(matchRecordValue));
+                case FLAG_UNORDERED_VAL:
+                case FLAG_ORDERED_VAL:
+                default:
+                    GroupMatchRecord matchRecord = GroupMatchRecord.parseFrom(matchRecordValue);
+                    String group = matchRecordKeyStr.substring(lastSplit + 2);
+                    return new GroupMatching(matchRecordKey, group, flag == FLAG_ORDERED_VAL,
+                        matchRecord.getQReceiverIdMap());
             }
         } catch (Exception e) {
             throw new IllegalStateException("Unable to parse matching record", e);
@@ -214,37 +201,19 @@ public class EntityUtil {
         int lastSplit = matchRecordKeyStr.lastIndexOf(NUL_CHAR);
         String topicFilter = unescape(matchRecordKeyStr.substring(firstSplit + 2, lastSplit));
         char flag = matchRecordKeyStr.charAt(lastSplit + 1);
-        if (flag <= 3) {
-            switch (flag) {
-                case FLAG_NORMAL_VAL -> {
-                    return topicFilter;
-                }
-                case FLAG_UNORDERED_VAL -> {
-                    String group = matchRecordKeyStr.substring(lastSplit + 2);
-                    return UNORDERED_SHARE + DELIMITER_CHAR + group + DELIMITER_CHAR + topicFilter;
-                }
-                case FLAG_ORDERED_VAL -> {
-                    String group = matchRecordKeyStr.substring(lastSplit + 2);
-                    return ORDERED_SHARE + DELIMITER_CHAR + group + DELIMITER_CHAR + topicFilter;
-                }
-                default -> throw new UnsupportedOperationException("Unknown flag: " + flag);
+        switch (flag) {
+            case FLAG_NORMAL_VAL -> {
+                return topicFilter;
             }
-        } else {
-            // TODO: ONLY FOR BACKWARD COMPATIBLE WITH PREVIOUS ENCODING, WILL BE REMOVED IN FUTURE VERSION
-            switch (flag) {
-                case '0' -> {
-                    return topicFilter;
-                }
-                case '1' -> {
-                    String group = matchRecordKeyStr.substring(lastSplit + 2);
-                    return UNORDERED_SHARE + DELIMITER_CHAR + group + DELIMITER_CHAR + topicFilter;
-                }
-                case '2' -> {
-                    String group = matchRecordKeyStr.substring(lastSplit + 2);
-                    return ORDERED_SHARE + DELIMITER_CHAR + group + DELIMITER_CHAR + topicFilter;
-                }
-                default -> throw new UnsupportedOperationException("Unknown flag: " + flag);
+            case FLAG_UNORDERED_VAL -> {
+                String group = matchRecordKeyStr.substring(lastSplit + 2);
+                return UNORDERED_SHARE + DELIMITER_CHAR + group + DELIMITER_CHAR + topicFilter;
             }
+            case FLAG_ORDERED_VAL -> {
+                String group = matchRecordKeyStr.substring(lastSplit + 2);
+                return ORDERED_SHARE + DELIMITER_CHAR + group + DELIMITER_CHAR + topicFilter;
+            }
+            default -> throw new UnsupportedOperationException("Unknown flag: " + flag);
         }
     }
 
@@ -260,5 +229,15 @@ public class EntityUtil {
         public String toGlobalTopicFilter() {
             return tenantId + NUL + escapedTopicFilter;
         }
+    }
+
+    public static long toLong(ByteString b) {
+        assert b.size() == Long.BYTES;
+        ByteBuffer buffer = b.asReadOnlyByteBuffer();
+        return buffer.getLong();
+    }
+
+    public static ByteString toByteString(long l) {
+        return UnsafeByteOperations.unsafeWrap(ByteBuffer.allocate(Long.BYTES).putLong(l).array());
     }
 }

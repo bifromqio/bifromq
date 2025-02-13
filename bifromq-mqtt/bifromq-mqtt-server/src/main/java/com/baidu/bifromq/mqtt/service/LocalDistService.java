@@ -66,30 +66,40 @@ public class LocalDistService implements ILocalDistService {
     }
 
     @Override
-    public CompletableFuture<MatchResult> match(long reqId, String topicFilter, IMQTTTransientSession session) {
+    public CompletableFuture<MatchResult> match(long reqId,
+                                                String topicFilter,
+                                                long incarnation,
+                                                IMQTTTransientSession session) {
         String tenantId = session.clientInfo().getTenantId();
         if (TopicUtil.isSharedSubscription(topicFilter)) {
             return distClient.addTopicMatch(reqId,
                 tenantId,
                 topicFilter,
                 ILocalDistService.globalize(session.channelId()),
-                toDelivererKey(tenantId, ILocalDistService.globalize(session.channelId()), serverId), 0);
+                toDelivererKey(tenantId, ILocalDistService.globalize(session.channelId()), serverId),
+                0,
+                incarnation);
         } else {
-            return localTopicRouter.addTopicRoute(reqId, tenantId, topicFilter, session.channelId());
+            return localTopicRouter.addTopicRoute(reqId, tenantId, topicFilter, incarnation, session.channelId());
         }
     }
 
     @Override
-    public CompletableFuture<UnmatchResult> unmatch(long reqId, String topicFilter, IMQTTTransientSession session) {
+    public CompletableFuture<UnmatchResult> unmatch(long reqId,
+                                                    String topicFilter,
+                                                    long incarnation,
+                                                    IMQTTTransientSession session) {
         String tenantId = session.clientInfo().getTenantId();
         if (TopicUtil.isSharedSubscription(topicFilter)) {
             return distClient.removeTopicMatch(reqId,
                 tenantId,
                 topicFilter,
                 ILocalDistService.globalize(session.channelId()),
-                toDelivererKey(tenantId, ILocalDistService.globalize(session.channelId()), serverId), 0);
+                toDelivererKey(tenantId, ILocalDistService.globalize(session.channelId()), serverId),
+                0,
+                incarnation);
         } else {
-            return localTopicRouter.removeTopicRoute(reqId, tenantId, topicFilter, session.channelId());
+            return localTopicRouter.removeTopicRoute(reqId, tenantId, topicFilter, incarnation, session.channelId());
         }
     }
 
@@ -116,8 +126,10 @@ public class LocalDistService implements ILocalDistService {
                             IMQTTSession session =
                                 sessionRegistry.get(ILocalDistService.parseReceiverId(matchInfo.getReceiverId()));
                             if (session instanceof IMQTTTransientSession) {
-                                boolean success =
-                                    ((IMQTTTransientSession) session).publish(matchInfo, singletonList(topicMsgPack));
+                                boolean success = ((IMQTTTransientSession) session)
+                                    .publish(matchInfo.getTopicFilter(),
+                                        matchInfo.getIncarnation(),
+                                        singletonList(topicMsgPack));
                                 if (success) {
                                     ok.add(matchInfo);
                                 } else {
@@ -152,25 +164,33 @@ public class LocalDistService implements ILocalDistService {
                                 }
                                 boolean published = false;
                                 if (!isFanOutThrottled) {
-                                    fanoutScale *= localRoutes.routeList().size();
-                                    for (String sessionId : localRoutes.routeList()) {
+                                    fanoutScale *= localRoutes.routesInfo().size();
+                                    for (Map.Entry<String, Long> route : localRoutes.routesInfo().entrySet()) {
+                                        String sessionId = route.getKey();
+                                        long incarnation = route.getValue();
                                         // at least one session should publish the message
                                         IMQTTSession session = sessionRegistry.get(sessionId);
                                         if (session instanceof IMQTTTransientSession) {
                                             if (((IMQTTTransientSession) session)
-                                                .publish(matchInfo, singletonList(topicMsgPack))) {
+                                                .publish(matchInfo.getTopicFilter(),
+                                                    incarnation,
+                                                    singletonList(topicMsgPack))) {
                                                 published = true;
                                             }
                                         }
                                     }
                                 } else {
                                     // send to one subscriber for each topic to make sure matchinfo not lost
-                                    for (String sessionId : localRoutes.routeList()) {
+                                    for (Map.Entry<String, Long> route : localRoutes.routesInfo().entrySet()) {
+                                        String sessionId = route.getKey();
+                                        long incarnation = route.getValue();
                                         // at least one session should publish the message
                                         IMQTTSession session = sessionRegistry.get(sessionId);
                                         if (session instanceof IMQTTTransientSession) {
                                             if (((IMQTTTransientSession) session)
-                                                .publish(matchInfo, singletonList(topicMsgPack))) {
+                                                .publish(matchInfo.getTopicFilter(),
+                                                    incarnation,
+                                                    singletonList(topicMsgPack))) {
                                                 published = true;
                                                 hasFanOutDone = true;
                                                 break;
@@ -239,7 +259,7 @@ public class LocalDistService implements ILocalDistService {
             if (!localRoutes.localReceiverId().equals(matchInfo.getReceiverId())) {
                 return CheckReply.Code.NO_RECEIVER;
             }
-            if (localRoutes.routeList().isEmpty()) {
+            if (localRoutes.routesInfo().isEmpty()) {
                 return CheckReply.Code.NO_RECEIVER;
             }
             return CheckReply.Code.OK;

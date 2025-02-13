@@ -345,12 +345,13 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockDistMatch(QoS qos, boolean success) {
-        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+            anyLong()))
             .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
     }
 
     protected void mockDistMatch(String topic, boolean success) {
-        when(distClient.addTopicMatch(anyLong(), anyString(), eq(topic), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), eq(topic), anyString(), anyString(), anyInt(), anyLong()))
             .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
     }
 
@@ -369,7 +370,8 @@ public abstract class BaseMQTTTest {
                 : CompletableFuture.failedFuture(new RuntimeException("InternalError"));
         }
         OngoingStubbing<CompletableFuture<UnmatchResult>> ongoingStubbing =
-            when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()));
+            when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+                anyLong()));
         for (CompletableFuture<UnmatchResult> result : unsubResults) {
             ongoingStubbing = ongoingStubbing.thenReturn(result);
         }

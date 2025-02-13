@@ -89,9 +89,11 @@ public abstract class InboxServiceTest {
         when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
         when(settingProvider.provide(any(), anyString())).thenAnswer(
             invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
-        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+            anyLong()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
-        when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+            anyLong()))
             .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()
             .addr("127.0.0.1")

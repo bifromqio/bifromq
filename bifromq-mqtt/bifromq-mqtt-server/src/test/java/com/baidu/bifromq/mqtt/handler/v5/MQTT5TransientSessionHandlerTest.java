@@ -109,6 +109,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.mockito.ArgumentCaptor;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -183,11 +184,12 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
     @AfterMethod(alwaysRun = true)
     public void tearDown(Method method) {
         if (shouldCleanSubs) {
-            when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+            when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+                anyLong()))
                 .thenReturn(CompletableFuture.completedFuture(null));
             channel.close();
             verify(localDistService, atLeast(1))
-                .unmatch(anyLong(), anyString(), any());
+                .unmatch(anyLong(), anyString(), anyLong(), any());
         } else {
             channel.close();
         }
@@ -623,8 +625,11 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         mockDistMatch(true);
         transientSessionHandler.subscribe(System.nanoTime(), topicFilter, QoS.AT_MOST_ONCE);
         channel.runPendingTasks();
+        ArgumentCaptor<Long> longCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(localDistService).match(anyLong(), eq(topicFilter), longCaptor.capture(), any());
 
-        transientSessionHandler.publish(matchInfo(topicFilter), s2cMQTT5MessageList(topic, 5, QoS.AT_MOST_ONCE));
+        transientSessionHandler.publish(topicFilter, longCaptor.getValue(),
+            s2cMQTT5MessageList(topic, 5, QoS.AT_MOST_ONCE));
         channel.runPendingTasks();
         for (int i = 0; i < 5; i++) {
             MqttPublishMessage message = channel.readOutbound();
@@ -643,10 +648,13 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         mockDistMatch(true);
         transientSessionHandler.subscribe(System.nanoTime(), topicFilter, QoS.AT_MOST_ONCE);
         channel.runPendingTasks();
+        ArgumentCaptor<Long> longCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(localDistService).match(anyLong(), eq(topicFilter), longCaptor.capture(), any());
 
         channel.writeOneOutbound(MQTTMessageUtils.largeMqttMessage(300 * 1024));
         List<ByteBuffer> payloads = s2cMessagesPayload(1, 32 * 1024);
-        transientSessionHandler.publish(matchInfo(topicFilter), s2cMQTT5MessageList(topic, payloads, QoS.AT_MOST_ONCE));
+        transientSessionHandler.publish(topicFilter, longCaptor.getValue(),
+            s2cMQTT5MessageList(topic, payloads, QoS.AT_MOST_ONCE));
         channel.runPendingTasks();
         MqttPublishMessage message = channel.readOutbound();
         assertNull(message);
@@ -659,9 +667,11 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         mockDistMatch(true);
         transientSessionHandler.subscribe(System.nanoTime(), topicFilter, QoS.AT_LEAST_ONCE);
         channel.runPendingTasks();
+        ArgumentCaptor<Long> longCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(localDistService).match(anyLong(), eq(topicFilter), longCaptor.capture(), any());
 
         int messageCount = 3;
-        transientSessionHandler.publish(matchInfo(topicFilter),
+        transientSessionHandler.publish(topicFilter, longCaptor.getValue(),
             s2cMQTT5MessageList(topic, messageCount, QoS.AT_LEAST_ONCE));
         channel.runPendingTasks();
         // s2c pub received and ack
@@ -684,8 +694,11 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         mockDistMatch(true);
         transientSessionHandler.subscribe(System.nanoTime(), topicFilter, QoS.EXACTLY_ONCE);
         channel.runPendingTasks();
+        ArgumentCaptor<Long> longCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(localDistService).match(anyLong(), eq(topicFilter), longCaptor.capture(), any());
 
-        transientSessionHandler.publish(matchInfo(topicFilter), s2cMQTT5MessageList(topic, 1, QoS.EXACTLY_ONCE));
+        transientSessionHandler.publish(topicFilter, longCaptor.getValue(),
+            s2cMQTT5MessageList(topic, 1, QoS.EXACTLY_ONCE));
         channel.runPendingTasks();
         // s2c pub received and rec
         MqttPublishMessage message = channel.readOutbound();
@@ -700,6 +713,4 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
             ((MqttMessageIdVariableHeader) pubRel.variableHeader()).messageId()));
         verifyEvent(MQTT_SESSION_START, QOS2_PUSHED, QOS2_RECEIVED, QOS2_CONFIRMED);
     }
-
-
 }

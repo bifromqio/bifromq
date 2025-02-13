@@ -47,6 +47,7 @@ public interface IDistClient extends IConnectable, AutoCloseable {
      * @param receiverId   the id of the receiver hosted by the subbroker
      * @param delivererKey the key of the deliverer via which the message will be sent to the receiver
      * @param subBrokerId  the hosting subbroker of the receiver
+     * @param incarnation  the incarnation of the receiver
      * @return correspond to Mqtt Sub QoS
      */
     CompletableFuture<MatchResult> addTopicMatch(long reqId,
@@ -54,7 +55,8 @@ public interface IDistClient extends IConnectable, AutoCloseable {
                                                  String topicFilter,
                                                  String receiverId,
                                                  String delivererKey,
-                                                 int subBrokerId);
+                                                 int subBrokerId,
+                                                 long incarnation);
 
     /**
      * Remove a topic match.
@@ -65,6 +67,7 @@ public interface IDistClient extends IConnectable, AutoCloseable {
      * @param receiverId   the id of the receiver hosted by the subbroker
      * @param delivererKey the key of the deliverer via which the message will be sent to the receiver
      * @param subBrokerId  the hosting subbroker of the receiver
+     * @param incarnation  the incarnation of the receiver
      * @return true for remove successfully, false for match not found
      */
     CompletableFuture<UnmatchResult> removeTopicMatch(long reqId,
@@ -72,7 +75,8 @@ public interface IDistClient extends IConnectable, AutoCloseable {
                                                       String topicFilter,
                                                       String receiverId,
                                                       String delivererKey,
-                                                      int subBrokerId);
+                                                      int subBrokerId,
+                                                      long incarnation);
 
     void close();
 }

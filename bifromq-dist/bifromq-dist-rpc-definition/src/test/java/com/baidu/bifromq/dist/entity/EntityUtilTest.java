@@ -15,6 +15,7 @@ package com.baidu.bifromq.dist.entity;
 
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
 import static com.baidu.bifromq.dist.entity.EntityUtil.parseTopicFilter;
+import static com.baidu.bifromq.dist.entity.EntityUtil.toByteString;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toMatchRecordKey;
 import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
 import static com.baidu.bifromq.util.TopicUtil.escape;
@@ -43,7 +44,7 @@ public class EntityUtilTest {
     public void testParseNormalMatchRecord() {
         String scopedInboxId = toQInboxId(MqttBroker, "inbox1", "delivererKey1");
         ByteString key = toMatchRecordKey("tenantId", "/a/b/c", scopedInboxId);
-        Matching matching = parseMatchRecord(key, ByteString.EMPTY);
+        Matching matching = parseMatchRecord(key, toByteString(1L));
         assertEquals(matching.tenantId, "tenantId");
         assertEquals(matching.escapedTopicFilter, escape("/a/b/c"));
         assertEquals(matching.originalTopicFilter(), "/a/b/c");
@@ -53,6 +54,7 @@ public class EntityUtilTest {
         MatchInfo matchInfo = ((NormalMatching) matching).matchInfo;
         assertEquals(matchInfo.getReceiverId(), "inbox1");
         assertEquals(matchInfo.getTopicFilter(), "/a/b/c");
+        assertEquals(matchInfo.getIncarnation(), 1L);
 
         assertEquals(((NormalMatching) matching).subBrokerId, MqttBroker);
         assertEquals(((NormalMatching) matching).delivererKey, "delivererKey1");
@@ -63,7 +65,7 @@ public class EntityUtilTest {
         String scopedReceiverId = toQInboxId(MqttBroker, "inbox1", "server1");
         ByteString key = toMatchRecordKey("tenantId", "$share/group//a/b/c", scopedReceiverId);
         GroupMatchRecord record = GroupMatchRecord.newBuilder()
-            .addQReceiverId(scopedReceiverId)
+            .putQReceiverId(scopedReceiverId, 1)
             .build();
         Matching matching = parseMatchRecord(key, record.toByteString());
         assertEquals(matching.tenantId, "tenantId");
@@ -71,7 +73,9 @@ public class EntityUtilTest {
         assertEquals(matching.originalTopicFilter(), "$share/group//a/b/c");
         assertTrue(matching instanceof GroupMatching);
         assertEquals(((GroupMatching) matching).group, "group");
+        assertEquals(((GroupMatching) matching).receiverIds.get(scopedReceiverId), 1);
         assertEquals(((GroupMatching) matching).receiverList.get(0).scopedInboxId, scopedReceiverId);
+        assertEquals(((GroupMatching) matching).receiverList.get(0).incarnation(), 1);
 
         MatchInfo matchInfo = ((GroupMatching) matching).receiverList.get(0).matchInfo;
         assertEquals(matchInfo.getReceiverId(), "inbox1");

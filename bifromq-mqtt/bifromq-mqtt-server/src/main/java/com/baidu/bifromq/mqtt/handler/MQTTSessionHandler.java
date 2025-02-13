@@ -305,8 +305,10 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     @Override
     public final CompletableFuture<SubReply.Result> subscribe(long reqId, String topicFilter, QoS qos) {
         return CompletableFuture.completedFuture(true)
-            .thenComposeAsync(v -> checkAndSubscribe(reqId, topicFilter, TopicFilterOption.newBuilder()
+            .thenComposeAsync(v -> checkAndSubscribe(reqId, topicFilter, TopicFilterOption
+                .newBuilder()
                 .setQos(qos)
+                .setIncarnation(HLC.INST.get())
                 .build(), UserProperties.getDefaultInstance())
                 .thenApply(subResult -> SubReply.Result.forNumber(subResult.ordinal())), ctx.executor());
     }
@@ -585,7 +587,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                                     .clientInfo(clientInfo));
                                                 return CompletableFuture.completedFuture(EXCEED_LIMIT);
                                             }
-                                            return addFgTask(matchRetainedMessage(reqId, topicFilter))
+                                            return addFgTask(matchRetainedMessage(reqId, topicFilter, option))
                                                 .handle((v, e) -> {
                                                     if (e != null || v.getResult() == MatchReply.Result.ERROR) {
                                                         return IMQTTProtocolHelper.SubResult.ERROR;
@@ -619,7 +621,9 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                                                                        String topicFilter,
                                                                                        TopicFilterOption option);
 
-    protected abstract CompletableFuture<MatchReply> matchRetainedMessage(long reqId, String topicFilter);
+    protected abstract CompletableFuture<MatchReply> matchRetainedMessage(long reqId,
+                                                                          String topicFilter,
+                                                                          TopicFilterOption option);
 
     private void handleUnsubMsg(MqttUnsubscribeMessage message) {
         ProtocolResponse goAwayOnInvalid = helper().validateUnsubMessage(message);

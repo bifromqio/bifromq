@@ -398,7 +398,7 @@ abstract class InboxStoreTest {
         return output.getBatchSub().getCodeList();
     }
 
-    protected List<BatchUnsubReply.Code> requestUnsub(BatchUnsubRequest.Params... params) {
+    protected List<BatchUnsubReply.Result> requestUnsub(BatchUnsubRequest.Params... params) {
         assert params.length > 0;
         long reqId = ThreadLocalRandom.current().nextInt();
         ByteString routeKey = inboxPrefix(params[0].getTenantId(), params[0].getInboxId());
@@ -408,7 +408,7 @@ abstract class InboxStoreTest {
         InboxServiceRWCoProcOutput output = mutate(routeKey, input);
         assertTrue(output.hasBatchUnsub());
         assertEquals(output.getReqId(), reqId);
-        return output.getBatchUnsub().getCodeList();
+        return output.getBatchUnsub().getResultList();
     }
 
     protected List<BatchTouchReply.Code> requestTouch(BatchTouchRequest.Params... params) {

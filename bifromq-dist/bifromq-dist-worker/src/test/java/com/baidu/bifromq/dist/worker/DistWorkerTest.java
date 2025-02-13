@@ -262,8 +262,10 @@ public abstract class DistWorkerTest {
             method.getDeclaringClass().getName(), method.getName());
     }
 
-    protected BatchMatchReply.Result match(String tenantId, String topicFilter,
-                                           int subBroker, String inboxId,
+    protected BatchMatchReply.Result match(String tenantId,
+                                           String topicFilter,
+                                           int subBroker,
+                                           String inboxId,
                                            String delivererKey) {
         return match(tenantId, topicFilter, subBroker, inboxId, delivererKey, 100);
     }
@@ -273,6 +275,25 @@ public abstract class DistWorkerTest {
                                            int subBroker,
                                            String inboxId,
                                            String delivererKey,
+                                           long incarnation) {
+        return match(tenantId, topicFilter, subBroker, inboxId, delivererKey, incarnation, 100);
+    }
+
+    protected BatchMatchReply.Result match(String tenantId,
+                                           String topicFilter,
+                                           int subBroker,
+                                           String inboxId,
+                                           String delivererKey,
+                                           int maxMembersPerSharedSubGroup) {
+        return match(tenantId, topicFilter, subBroker, inboxId, delivererKey, 0L, maxMembersPerSharedSubGroup);
+    }
+
+    protected BatchMatchReply.Result match(String tenantId,
+                                           String topicFilter,
+                                           int subBroker,
+                                           String inboxId,
+                                           String delivererKey,
+                                           long incarnation,
                                            int maxMembersPerSharedSubGroup) {
         long reqId = ThreadLocalRandom.current().nextInt();
         String qInboxId = toQInboxId(subBroker, inboxId, delivererKey);
@@ -282,7 +303,7 @@ public abstract class DistWorkerTest {
         DistServiceRWCoProcInput input = DistServiceRWCoProcInput.newBuilder()
             .setBatchMatch(BatchMatchRequest.newBuilder()
                 .setReqId(reqId)
-                .addScopedTopicFilter(EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter))
+                .putScopedTopicFilter(EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter), incarnation)
                 .putOptions(tenantId,
                     TenantOption.newBuilder().setMaxReceiversPerSharedSubGroup(maxMembersPerSharedSubGroup).build())
                 .build())
@@ -300,8 +321,20 @@ public abstract class DistWorkerTest {
         return batchMatchReply.getResultsMap().get(scopedTopicFilter);
     }
 
-    protected BatchUnmatchReply.Result unmatch(String tenantId, String topicFilter, int subBroker, String inboxId,
+    protected BatchUnmatchReply.Result unmatch(String tenantId,
+                                               String topicFilter,
+                                               int subBroker,
+                                               String inboxId,
                                                String delivererKey) {
+        return unmatch(tenantId, topicFilter, subBroker, inboxId, delivererKey, 0L);
+    }
+
+    protected BatchUnmatchReply.Result unmatch(String tenantId,
+                                               String topicFilter,
+                                               int subBroker,
+                                               String inboxId,
+                                               String delivererKey,
+                                               long incarnation) {
         long reqId = ThreadLocalRandom.current().nextInt();
         String qInboxId = toQInboxId(subBroker, inboxId, delivererKey);
         KVRangeSetting s =
@@ -310,7 +343,7 @@ public abstract class DistWorkerTest {
         DistServiceRWCoProcInput input = DistServiceRWCoProcInput.newBuilder()
             .setBatchUnmatch(BatchUnmatchRequest.newBuilder()
                 .setReqId(reqId)
-                .addScopedTopicFilter(scopedTopicFilter)
+                .putScopedTopicFilter(scopedTopicFilter, incarnation)
                 .build()).build();
         KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
             .setReqId(reqId)

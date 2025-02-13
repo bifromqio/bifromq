@@ -108,8 +108,13 @@ class DeliveryBatchCall implements IBatchCall<DeliveryCall, DeliveryResult.Code,
                             matchInfo.getReceiverId(),
                             batcherKey.delivererKey(),
                             batcherKey.subBrokerId());
-                        distClient.removeTopicMatch(System.nanoTime(), tenantId, matchInfo.getTopicFilter(),
-                            matchInfo.getReceiverId(), batcherKey.delivererKey(), batcherKey.subBrokerId());
+                        distClient.removeTopicMatch(System.nanoTime(),
+                            tenantId,
+                            matchInfo.getTopicFilter(),
+                            matchInfo.getReceiverId(),
+                            batcherKey.delivererKey(),
+                            batcherKey.subBrokerId(),
+                            matchInfo.getIncarnation());
                     }
                 }
             }

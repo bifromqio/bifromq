@@ -239,7 +239,7 @@ public class BaseSessionHandlerTest extends MockableTest {
                 : CompletableFuture.failedFuture(new RuntimeException("InternalError"));
         }
         OngoingStubbing<CompletableFuture<UnmatchResult>> ongoingStubbing =
-            when(localDistService.unmatch(anyLong(), anyString(), any()));
+            when(localDistService.unmatch(anyLong(), anyString(), anyLong(), any()));
         for (CompletableFuture<UnmatchResult> result : unsubResults) {
             ongoingStubbing = ongoingStubbing.thenReturn(result);
         }
@@ -256,12 +256,12 @@ public class BaseSessionHandlerTest extends MockableTest {
     }
 
     protected void mockDistMatch(boolean success) {
-        when(localDistService.match(anyLong(), anyString(), any()))
+        when(localDistService.match(anyLong(), anyString(), anyLong(), any()))
             .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
     }
 
     protected void mockDistMatch(String topicFilter, boolean success) {
-        when(localDistService.match(anyLong(), eq(topicFilter), any()))
+        when(localDistService.match(anyLong(), eq(topicFilter), anyLong(), any()))
             .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
     }
 
@@ -494,7 +494,8 @@ public class BaseSessionHandlerTest extends MockableTest {
                 : CompletableFuture.failedFuture(new RuntimeException("InternalError"));
         }
         OngoingStubbing<CompletableFuture<UnmatchResult>> ongoingStubbing =
-            when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()));
+            when(distClient
+                .removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong()));
         for (CompletableFuture<UnmatchResult> result : unsubResults) {
             ongoingStubbing = ongoingStubbing.thenReturn(result);
         }

@@ -39,9 +39,15 @@ public interface ILocalDistService {
         return receiverId.startsWith("0");
     }
 
-    CompletableFuture<MatchResult> match(long reqId, String topicFilter, IMQTTTransientSession session);
+    CompletableFuture<MatchResult> match(long reqId,
+                                         String topicFilter,
+                                         long incarnation,
+                                         IMQTTTransientSession session);
 
-    CompletableFuture<UnmatchResult> unmatch(long reqId, String topicFilter, IMQTTTransientSession session);
+    CompletableFuture<UnmatchResult> unmatch(long reqId,
+                                             String topicFilter,
+                                             long incarnation,
+                                             IMQTTTransientSession session);
 
     CompletableFuture<DeliveryReply> dist(DeliveryRequest request);
 

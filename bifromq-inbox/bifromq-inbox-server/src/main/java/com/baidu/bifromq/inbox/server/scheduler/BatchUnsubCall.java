@@ -23,6 +23,7 @@ import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.records.ScopedInbox;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchUnsubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import java.time.Duration;
@@ -66,13 +67,17 @@ class BatchUnsubCall extends BatchMutationCall<UnsubRequest, UnsubReply> {
     @Override
     protected void handleOutput(Queue<ICallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey>> batchedTasks,
                                 RWCoProcOutput output) {
-        assert batchedTasks.size() == output.getInboxService().getBatchUnsub().getCodeCount();
+        assert batchedTasks.size() == output.getInboxService().getBatchUnsub().getResultCount();
         ICallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey> task;
         int i = 0;
         while ((task = batchedTasks.poll()) != null) {
             UnsubReply.Builder replyBuilder = UnsubReply.newBuilder().setReqId(task.call().getReqId());
-            switch (output.getInboxService().getBatchUnsub().getCode(i++)) {
-                case OK -> task.resultPromise().complete(replyBuilder.setCode(UnsubReply.Code.OK).build());
+            BatchUnsubReply.Result result = output.getInboxService().getBatchUnsub().getResult(i++);
+            switch (result.getCode()) {
+                case OK -> task.resultPromise().complete(replyBuilder
+                    .setCode(UnsubReply.Code.OK)
+                    .setOption(result.getOption())
+                    .build());
                 case NO_INBOX -> task.resultPromise().complete(replyBuilder.setCode(UnsubReply.Code.NO_INBOX).build());
                 case NO_SUB -> task.resultPromise().complete(replyBuilder.setCode(UnsubReply.Code.NO_SUB).build());
                 case CONFLICT -> task.resultPromise().complete(replyBuilder.setCode(UnsubReply.Code.CONFLICT).build());

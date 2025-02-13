@@ -30,6 +30,7 @@ import lombok.ToString;
 public class NormalMatching extends Matching {
     public final String scopedInboxId;
     private final String originalTopicFilter;
+    private final long incarnation;
 
     @EqualsAndHashCode.Exclude
     public final String delivererKey;
@@ -38,10 +39,11 @@ public class NormalMatching extends Matching {
     @EqualsAndHashCode.Exclude
     public final MatchInfo matchInfo;
 
-    NormalMatching(ByteString key, String scopedInboxId) {
+    NormalMatching(ByteString key, String scopedInboxId, long incarnation) {
         super(key);
         this.scopedInboxId = scopedInboxId;
         this.originalTopicFilter = unescape(escapedTopicFilter);
+        this.incarnation = incarnation;
 
         scopedInboxId = new String(Base64.getDecoder().decode(scopedInboxId), StandardCharsets.UTF_8);
         String[] parts = scopedInboxId.split(NUL);
@@ -50,13 +52,15 @@ public class NormalMatching extends Matching {
         matchInfo = MatchInfo.newBuilder()
             .setReceiverId(parts[1])
             .setTopicFilter(originalTopicFilter)
+            .setIncarnation(incarnation)
             .build();
     }
 
-    NormalMatching(ByteString key, String originalTopicFilter, String scopedInboxId) {
+    NormalMatching(ByteString key, String originalTopicFilter, String scopedInboxId, long incarnation) {
         super(key);
         this.scopedInboxId = scopedInboxId;
         this.originalTopicFilter = originalTopicFilter;
+        this.incarnation = incarnation;
 
         scopedInboxId = new String(Base64.getDecoder().decode(scopedInboxId), StandardCharsets.UTF_8);
         String[] parts = scopedInboxId.split(NUL);
@@ -65,6 +69,7 @@ public class NormalMatching extends Matching {
         matchInfo = MatchInfo.newBuilder()
             .setReceiverId(parts[1])
             .setTopicFilter(originalTopicFilter)
+            .setIncarnation(incarnation)
             .build();
     }
 
@@ -76,5 +81,9 @@ public class NormalMatching extends Matching {
     @Override
     public String originalTopicFilter() {
         return originalTopicFilter;
+    }
+
+    public long incarnation() {
+        return incarnation;
     }
 }

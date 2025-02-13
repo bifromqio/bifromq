@@ -58,7 +58,8 @@ final class DistClient implements IDistClient {
                                                         String topicFilter,
                                                         String receiverId,
                                                         String delivererKey,
-                                                        int subBrokerId) {
+                                                        int subBrokerId,
+                                                        long incarnation) {
         MatchRequest request = MatchRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
@@ -66,6 +67,7 @@ final class DistClient implements IDistClient {
             .setReceiverId(receiverId)
             .setDelivererKey(delivererKey)
             .setBrokerId(subBrokerId)
+            .setIncarnation(incarnation)
             .build();
         log.trace("Handling match request:\n{}", request);
         return rpcClient.invoke(tenantId, null, request, DistServiceGrpc.getMatchMethod())
@@ -84,7 +86,9 @@ final class DistClient implements IDistClient {
     @Override
     public CompletableFuture<UnmatchResult> removeTopicMatch(long reqId, String tenantId, String topicFilter,
                                                              String receiverId,
-                                                             String delivererKey, int subBrokerId) {
+                                                             String delivererKey,
+                                                             int subBrokerId,
+                                                             long incarnation) {
         UnmatchRequest request = UnmatchRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
@@ -92,6 +96,7 @@ final class DistClient implements IDistClient {
             .setReceiverId(receiverId)
             .setDelivererKey(delivererKey)
             .setBrokerId(subBrokerId)
+            .setIncarnation(incarnation)
             .build();
         log.trace("Handling unsub request:\n{}", request);
         return rpcClient.invoke(tenantId, null, request, DistServiceGrpc.getUnmatchMethod())

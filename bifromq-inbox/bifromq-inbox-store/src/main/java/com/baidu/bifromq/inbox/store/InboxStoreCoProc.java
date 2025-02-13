@@ -270,7 +270,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 continue;
             }
             InboxMetadata metadata = metadataOpt.get();
-            if (metadata.getTopicFiltersMap().containsKey(params.getTopicFilter())) {
+            if (metadata.containsTopicFilters(params.getTopicFilter())) {
                 replyBuilder.addCode(BatchCheckSubReply.Code.OK);
             } else {
                 replyBuilder.addCode(BatchCheckSubReply.Code.NO_MATCH);
@@ -539,7 +539,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             replyBuilder.addResult(BatchDeleteReply.Result
                 .newBuilder()
                 .setCode(BatchDeleteReply.Code.OK)
-                .addAllTopicFilters(metadata.getTopicFiltersMap().keySet())
+                .putAllTopicFilters(metadata.getTopicFiltersMap())
                 .build());
         }
         return () -> toBeRemoved.forEach((tenantId, removeSet) -> removeSet.forEach(inboxMetadata -> tenantStates
@@ -596,20 +596,29 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             Optional<InboxMetadata> metadataOpt =
                 tenantStates.get(params.getTenantId(), params.getInboxId(), params.getIncarnation());
             if (metadataOpt.isEmpty()) {
-                replyBuilder.addCode(BatchUnsubReply.Code.NO_INBOX);
+                replyBuilder.addResult(BatchUnsubReply.Result.newBuilder()
+                    .setCode(BatchUnsubReply.Code.NO_INBOX)
+                    .build());
                 continue;
             }
             if (metadataOpt.get().getVersion() != params.getVersion()) {
-                replyBuilder.addCode(BatchUnsubReply.Code.CONFLICT);
+                replyBuilder.addResult(BatchUnsubReply.Result.newBuilder()
+                    .setCode(BatchUnsubReply.Code.CONFLICT)
+                    .build());
                 continue;
             }
             InboxMetadata metadata = metadataOpt.get();
             InboxMetadata.Builder metadataBuilder = metadata.toBuilder();
             if (metadataBuilder.containsTopicFilters(params.getTopicFilter())) {
                 metadataBuilder.removeTopicFilters(params.getTopicFilter());
-                replyBuilder.addCode(BatchUnsubReply.Code.OK);
+                replyBuilder.addResult(BatchUnsubReply.Result.newBuilder()
+                    .setCode(BatchUnsubReply.Code.OK)
+                    .setOption(metadata.getTopicFiltersMap().get(params.getTopicFilter()))
+                    .build());
             } else {
-                replyBuilder.addCode(BatchUnsubReply.Code.NO_SUB);
+                replyBuilder.addResult(BatchUnsubReply.Result.newBuilder()
+                    .setCode(BatchUnsubReply.Code.NO_SUB)
+                    .build());
             }
             metadata = metadataBuilder
                 .setLastActiveTime(params.getNow())

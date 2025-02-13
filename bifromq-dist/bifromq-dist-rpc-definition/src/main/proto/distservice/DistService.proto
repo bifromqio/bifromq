@@ -20,6 +20,7 @@ message MatchRequest {
   string receiverId = 4; // the structure of receiver id is defined by caller
   uint32 brokerId = 5;
   string delivererKey = 6;
+  uint64 incarnation = 7; // the incarnation of the receiver
 }
 
 message MatchReply {
@@ -40,6 +41,7 @@ message UnmatchRequest {
   string topicFilter = 4;
   uint32 brokerId = 5;
   string delivererKey = 6;
+  uint64 incarnation = 7; // the incarnation of the receiver
 }
 
 message UnmatchReply {

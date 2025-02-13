@@ -14,6 +14,7 @@
 package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.dist.entity.EntityUtil.toByteString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -102,8 +103,8 @@ public class DistWorkerCoProcTest {
             .setDistService(DistServiceRWCoProcInput.newBuilder()
                 .setBatchMatch(BatchMatchRequest.newBuilder()
                     .setReqId(123)
-                    .addScopedTopicFilter(scopedTopicFilter1)
-                    .addScopedTopicFilter(scopedTopicFilter2)
+                    .putScopedTopicFilter(scopedTopicFilter1, 1L)
+                    .putScopedTopicFilter(scopedTopicFilter2, 1L)
                     .putOptions("tenant1", TenantOption.newBuilder().setMaxReceiversPerSharedSubGroup(10).build())
                     .putOptions("tenant2", TenantOption.newBuilder().setMaxReceiversPerSharedSubGroup(5).build())
                     .build())
@@ -116,6 +117,7 @@ public class DistWorkerCoProcTest {
         Supplier<RWCoProcOutput> resultSupplier = distWorkerCoProc.mutate(rwCoProcInput, reader, writer);
         RWCoProcOutput result = resultSupplier.get();
 
+        verify(writer, times(2)).put(any(), eq(toByteString(1L)));
         // Verify that matches are added to the cache
         verify(routeCache, times(1)).refresh(any());
 
@@ -134,17 +136,18 @@ public class DistWorkerCoProcTest {
     public void testMutateBatchUnmatch() {
         String scopedTopicFilter = EntityUtil.toScopedTopicFilter("tenant1",
             EntityUtil.toQInboxId(1, "inbox1", "deliverer1"), "topicFilter1");
+        long incarnation = 1;
         RWCoProcInput rwCoProcInput = RWCoProcInput.newBuilder()
             .setDistService(DistServiceRWCoProcInput.newBuilder()
                 .setBatchUnmatch(BatchUnmatchRequest.newBuilder()
                     .setReqId(456)
-                    .addScopedTopicFilter(scopedTopicFilter)
+                    .putScopedTopicFilter(scopedTopicFilter, incarnation)
                     .build())
                 .build())
             .build();
 
         // Simulate match exists in the reader
-        when(reader.get(any(ByteString.class))).thenReturn(Optional.of(ByteString.EMPTY));
+        when(reader.get(any(ByteString.class))).thenReturn(Optional.of(toByteString(1L)));
 
         // Simulate mutation
         Supplier<RWCoProcOutput> resultSupplier = distWorkerCoProc.mutate(rwCoProcInput, reader, writer);
@@ -210,16 +213,16 @@ public class DistWorkerCoProcTest {
         String sharedTopic = "$share/group/topic3";
         ByteString groupMatchKey = EntityUtil.toGroupMatchRecordKey(tenant1, sharedTopic);
         GroupMatchRecord groupMatchRecord = GroupMatchRecord.newBuilder()
-            .addQReceiverId(scopedInbox1)
-            .addQReceiverId(scopedInbox2)
+            .putQReceiverId(scopedInbox1, 1L)
+            .putQReceiverId(scopedInbox2, 1L)
             .build();
 
         when(iterator.isValid()).thenReturn(true, true, true, false);
         when(iterator.key()).thenReturn(normalMatchKey1, groupMatchKey, normalMatchKey2);
         when(iterator.value()).thenReturn(
-            ByteString.EMPTY,
+            toByteString(1L),
             groupMatchRecord.toByteString(),
-            ByteString.EMPTY
+            toByteString(1L)
         );
 
         when(routeCache.isCached(eq(tenant1), eq(topic1))).thenReturn(false);
@@ -289,7 +292,7 @@ public class DistWorkerCoProcTest {
         ByteString normalMatchRecordKey = EntityUtil.toNormalMatchRecordKey(tenantId, topicFilter, qInboxId);
 
         // Construct the match record value (for example, an empty value for a normal match)
-        ByteString matchRecordValue = ByteString.EMPTY;
+        ByteString matchRecordValue = toByteString(1L);
 
         // Use EntityUtil to parse the key and value into a Matching object
         return EntityUtil.parseMatchRecord(normalMatchRecordKey, matchRecordValue);

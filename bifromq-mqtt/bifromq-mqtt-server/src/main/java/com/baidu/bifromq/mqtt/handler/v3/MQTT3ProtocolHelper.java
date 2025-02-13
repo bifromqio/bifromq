@@ -21,6 +21,7 @@ import static com.baidu.bifromq.mqtt.handler.v3.MQTT3MessageUtils.toMessage;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper;
 import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
@@ -170,6 +171,7 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
             .map(sub -> new SubTask(sub.topicName(),
                 TopicFilterOption.newBuilder()
                     .setQos(QoS.forNumber(sub.qualityOfService().value()))
+                    .setIncarnation(HLC.INST.get())
                     .build(),
                 UserProperties.getDefaultInstance()
             ))

@@ -25,7 +25,7 @@ import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
 import com.baidu.bifromq.type.ClientInfo;
-import java.util.List;
+import java.util.Set;
 import org.testng.annotations.Test;
 
 public class InboxSubUnsubTest extends InboxStoreTest {
@@ -157,7 +157,7 @@ public class InboxSubUnsubTest extends InboxStoreTest {
             .build();
         BatchDeleteReply.Result result = requestDelete(deleteParams).get(0);
         assertEquals(result.getCode(), BatchDeleteReply.Code.OK);
-        assertEquals(result.getTopicFiltersList(), List.of(topicFilter));
+        assertEquals(result.getTopicFiltersMap().keySet(), Set.of(topicFilter));
     }
 
     @Test(groups = "integration")
@@ -175,8 +175,8 @@ public class InboxSubUnsubTest extends InboxStoreTest {
             .setTopicFilter(topicFilter)
             .setNow(now)
             .build();
-        BatchUnsubReply.Code code = requestUnsub(unsubParams).get(0);
-        assertEquals(code, BatchUnsubReply.Code.NO_INBOX);
+        BatchUnsubReply.Result result = requestUnsub(unsubParams).get(0);
+        assertEquals(result.getCode(), BatchUnsubReply.Code.NO_INBOX);
     }
 
     @Test(groups = "integration")
@@ -205,8 +205,8 @@ public class InboxSubUnsubTest extends InboxStoreTest {
             .setTopicFilter(topicFilter)
             .setNow(now)
             .build();
-        BatchUnsubReply.Code code = requestUnsub(unsubParams).get(0);
-        assertEquals(code, BatchUnsubReply.Code.CONFLICT);
+        BatchUnsubReply.Result result = requestUnsub(unsubParams).get(0);
+        assertEquals(result.getCode(), BatchUnsubReply.Code.CONFLICT);
     }
 
     @Test(groups = "integration")
@@ -235,8 +235,8 @@ public class InboxSubUnsubTest extends InboxStoreTest {
             .setTopicFilter(topicFilter)
             .setNow(now)
             .build();
-        BatchUnsubReply.Code code = requestUnsub(unsubParams).get(0);
-        assertEquals(code, BatchUnsubReply.Code.NO_SUB);
+        BatchUnsubReply.Result result = requestUnsub(unsubParams).get(0);
+        assertEquals(result.getCode(), BatchUnsubReply.Code.NO_SUB);
     }
 
     @Test(groups = "integration")
@@ -276,8 +276,8 @@ public class InboxSubUnsubTest extends InboxStoreTest {
             .setTopicFilter(topicFilter)
             .setNow(now)
             .build();
-        BatchUnsubReply.Code code = requestUnsub(unsubParams).get(0);
-        assertEquals(code, BatchUnsubReply.Code.OK);
+        BatchUnsubReply.Result result = requestUnsub(unsubParams).get(0);
+        assertEquals(result.getCode(), BatchUnsubReply.Code.OK);
     }
 
     @Test(groups = "integration")

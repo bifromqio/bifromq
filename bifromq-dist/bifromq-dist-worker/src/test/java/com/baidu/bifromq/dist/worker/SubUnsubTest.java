@@ -86,4 +86,38 @@ public class SubUnsubTest extends DistWorkerTest {
         result = match(tenantA, "$share/sharedSubExceedLimit/a/b/c", MqttBroker, "inbox3", "server1");
         assertEquals(result, BatchMatchReply.Result.OK);
     }
+
+    @Test(groups = "integration")
+    public void normalResubWithIncarUpdated() {
+        String topicFilter = "/a/b/c";
+
+        BatchMatchReply.Result result = match(tenantA, topicFilter, MqttBroker, "inbox1", "server1", 1L);
+        assertEquals(result, BatchMatchReply.Result.OK);
+
+        result = match(tenantA, topicFilter, MqttBroker, "inbox1", "server1", 2L);
+        assertEquals(result, BatchMatchReply.Result.OK);
+
+        BatchUnmatchReply.Result unmatchResult = unmatch(tenantA, topicFilter, MqttBroker, "inbox1", "server1", 1L);
+        assertEquals(unmatchResult, BatchUnmatchReply.Result.NOT_EXISTED);
+
+        unmatchResult = unmatch(tenantA, topicFilter, MqttBroker, "inbox1", "server1", 2L);
+        assertEquals(unmatchResult, BatchUnmatchReply.Result.OK);
+    }
+
+    @Test(groups = "integration")
+    public void sharedResubWithIncarUpdate() {
+        String topicFilter = "$share/group/a/b/c";
+
+        BatchMatchReply.Result result = match(tenantA, topicFilter, MqttBroker, "inbox1", "server1", 1L);
+        assertEquals(result, BatchMatchReply.Result.OK);
+
+        result = match(tenantA, topicFilter, MqttBroker, "inbox1", "server1", 2L);
+        assertEquals(result, BatchMatchReply.Result.OK);
+
+        BatchUnmatchReply.Result unmatchResult = unmatch(tenantA, topicFilter, MqttBroker, "inbox1", "server1", 1L);
+        assertEquals(unmatchResult, BatchUnmatchReply.Result.NOT_EXISTED);
+
+        unmatchResult = unmatch(tenantA, topicFilter, MqttBroker, "inbox1", "server1", 2L);
+        assertEquals(unmatchResult, BatchUnmatchReply.Result.OK);
+    }
 }

@@ -49,11 +49,12 @@ public class MQTTSubTest extends BaseMQTTTest {
     @AfterMethod
     public void clean() {
         if (shouldCleanSubs) {
-            when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
+            when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+                anyLong()))
                 .thenReturn(CompletableFuture.completedFuture(null));
             channel.close();
             verify(distClient, atLeast(1))
-                .removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt());
+                .removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong());
         } else {
             channel.close();
         }
@@ -264,7 +265,7 @@ public class MQTTSubTest extends BaseMQTTTest {
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, new int[] {128, 128, 128});
         verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, SUB_ACTION_DISALLOW, SUB_ACTION_DISALLOW, SUB_ACTION_DISALLOW,
-                SUB_ACKED);
+            SUB_ACKED);
     }
 
     private void verifySubAck(MqttSubAckMessage subAckMessage, int[] expectedQos) {

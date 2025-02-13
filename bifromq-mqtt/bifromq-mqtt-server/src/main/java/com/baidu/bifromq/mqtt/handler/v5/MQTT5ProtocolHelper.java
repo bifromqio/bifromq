@@ -30,6 +30,7 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS
 import static com.baidu.bifromq.util.TopicUtil.isValidTopic;
 import static com.baidu.bifromq.util.UTF8Util.isWellFormed;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.storage.proto.RetainHandling;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper;
@@ -301,7 +302,8 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                     .setQos(QoS.forNumber(sub.option().qos().value()))
                     .setRetainAsPublished(sub.option().isRetainAsPublished())
                     .setNoLocal(sub.option().isNoLocal())
-                    .setRetainHandling(RetainHandling.forNumber(sub.option().retainHandling().value()));
+                    .setRetainHandling(RetainHandling.forNumber(sub.option().retainHandling().value()))
+                    .setIncarnation(HLC.INST.get());
                 subId.ifPresent(optionBuilder::setSubId);
                 return new SubTask(sub.topicName(), optionBuilder.build(), userProps);
             })

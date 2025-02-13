@@ -64,13 +64,15 @@ public class SubscriptionCleanerTest {
         String receiverId = "receiver1";
         String delivererKey = "deliverer1";
 
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setReceiverId(receiverId)
+            .setIncarnation(1)
+            .build();
         CheckRequest request = CheckRequest.newBuilder()
             .setTenantId(tenantId)
             .setDelivererKey(delivererKey)
-            .addMatchInfo(MatchInfo.newBuilder()
-                .setTopicFilter(topicFilter)
-                .setReceiverId(receiverId)
-                .build())
+            .addMatchInfo(matchInfo)
             .build();
 
         CheckReply checkReply = CheckReply.newBuilder()
@@ -81,7 +83,7 @@ public class SubscriptionCleanerTest {
         when(subBroker.check(request)).thenReturn(
             CompletableFuture.completedFuture(checkReply));
         when(distClient.removeTopicMatch(anyLong(), eq(tenantId), eq(topicFilter), eq(receiverId), eq(delivererKey),
-            eq(subBrokerId)))
+            eq(subBrokerId), eq(matchInfo.getIncarnation())))
             .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
 
         subscriptionCleaner.sweep(subBrokerId, request).join();
@@ -89,7 +91,7 @@ public class SubscriptionCleanerTest {
         verify(subBrokerManager, times(1)).get(subBrokerId);
         verify(subBroker, times(1)).check(request);
         verify(distClient, times(1)).removeTopicMatch(anyLong(), eq(tenantId), eq(topicFilter), eq(receiverId),
-            eq(delivererKey), eq(subBrokerId));
+            eq(delivererKey), eq(subBrokerId), eq(matchInfo.getIncarnation()));
     }
 
     @Test
@@ -100,13 +102,15 @@ public class SubscriptionCleanerTest {
         String receiverId = "receiver1";
         String delivererKey = "deliverer1";
 
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setReceiverId(receiverId)
+            .setIncarnation(1)
+            .build();
         CheckRequest request = CheckRequest.newBuilder()
             .setTenantId(tenantId)
             .setDelivererKey(delivererKey)
-            .addMatchInfo(MatchInfo.newBuilder()
-                .setTopicFilter(topicFilter)
-                .setReceiverId(receiverId)
-                .build())
+            .addMatchInfo(matchInfo)
             .build();
 
         CheckReply checkReply = CheckReply.newBuilder()
@@ -117,7 +121,7 @@ public class SubscriptionCleanerTest {
         when(subBroker.check(request)).thenReturn(
             CompletableFuture.completedFuture(checkReply));
         when(distClient.removeTopicMatch(anyLong(), eq(tenantId), eq(topicFilter), eq(receiverId), eq(delivererKey),
-            eq(subBrokerId)))
+            eq(subBrokerId), eq(matchInfo.getIncarnation())))
             .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
 
         subscriptionCleaner.sweep(subBrokerId, request).join();
@@ -125,7 +129,7 @@ public class SubscriptionCleanerTest {
         verify(subBrokerManager, times(1)).get(subBrokerId);
         verify(subBroker, times(1)).check(request);
         verify(distClient, times(1)).removeTopicMatch(anyLong(), eq(tenantId), eq(topicFilter), eq(receiverId),
-            eq(delivererKey), eq(subBrokerId));
+            eq(delivererKey), eq(subBrokerId), eq(matchInfo.getIncarnation()));
     }
 
     @Test
@@ -136,13 +140,15 @@ public class SubscriptionCleanerTest {
         String receiverId = "receiver1";
         String delivererKey = "deliverer1";
 
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setReceiverId(receiverId)
+            .setIncarnation(1)
+            .build();
         CheckRequest request = CheckRequest.newBuilder()
             .setTenantId(tenantId)
             .setDelivererKey(delivererKey)
-            .addMatchInfo(MatchInfo.newBuilder()
-                .setTopicFilter(topicFilter)
-                .setReceiverId(receiverId)
-                .build())
+            .addMatchInfo(matchInfo)
             .build();
 
         CheckReply checkReply = CheckReply.newBuilder()
@@ -158,6 +164,6 @@ public class SubscriptionCleanerTest {
         verify(subBrokerManager, times(1)).get(subBrokerId);
         verify(subBroker, times(1)).check(request);
         verify(distClient, times(0)).removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(),
-            anyInt());
+            anyInt(), anyLong());
     }
 }

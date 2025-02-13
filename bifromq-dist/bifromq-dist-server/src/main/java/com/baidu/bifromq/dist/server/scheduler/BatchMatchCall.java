@@ -33,11 +33,9 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import java.time.Duration;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Queue;
-import java.util.Set;
 
 public class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> {
     private final ISettingProvider settingProvider;
@@ -52,20 +50,18 @@ public class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> 
     protected RWCoProcInput makeBatch(Iterator<MatchRequest> reqIterator) {
         BatchMatchRequest.Builder reqBuilder = BatchMatchRequest.newBuilder();
         Map<String, TenantOption> tenantOptionMap = new HashMap<>();
-        Set<String> scopedTopicFilters = new HashSet<>();
         while (reqIterator.hasNext()) {
-            MatchRequest subCall = reqIterator.next();
+            MatchRequest matchReq = reqIterator.next();
             String qInboxId =
-                toQInboxId(subCall.getBrokerId(), subCall.getReceiverId(), subCall.getDelivererKey());
+                toQInboxId(matchReq.getBrokerId(), matchReq.getReceiverId(), matchReq.getDelivererKey());
             String scopedTopicFilter =
-                toScopedTopicFilter(subCall.getTenantId(), qInboxId, subCall.getTopicFilter());
-            scopedTopicFilters.add(scopedTopicFilter);
-            tenantOptionMap.computeIfAbsent(subCall.getTenantId(), k -> TenantOption.newBuilder()
+                toScopedTopicFilter(matchReq.getTenantId(), qInboxId, matchReq.getTopicFilter());
+            reqBuilder.putScopedTopicFilter(scopedTopicFilter, matchReq.getIncarnation());
+            tenantOptionMap.computeIfAbsent(matchReq.getTenantId(), k -> TenantOption.newBuilder()
                 .setMaxReceiversPerSharedSubGroup(
-                    settingProvider.provide(Setting.MaxSharedGroupMembers, subCall.getTenantId()))
+                    settingProvider.provide(Setting.MaxSharedGroupMembers, matchReq.getTenantId()))
                 .build());
         }
-        reqBuilder.addAllScopedTopicFilter(scopedTopicFilters);
         reqBuilder.putAllOptions(tenantOptionMap);
         long reqId = System.nanoTime();
         return RWCoProcInput.newBuilder()

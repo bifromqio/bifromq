@@ -16,8 +16,8 @@ package com.baidu.bifromq.mqtt.service;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.type.MatchInfo;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -32,12 +32,21 @@ public interface ILocalTopicRouter {
     interface ILocalRoutes {
         String localReceiverId();
 
-        Set<String> routeList();
+        Map<String, Long> routesInfo();
+
+        long incarnation();
     }
 
-    CompletableFuture<MatchResult> addTopicRoute(long reqId, String tenantId, String topicFilter, String channelId);
+    CompletableFuture<MatchResult> addTopicRoute(long reqId,
+                                                 String tenantId,
+                                                 String topicFilter,
+                                                 long incarnation,
+                                                 String channelId);
 
-    CompletableFuture<UnmatchResult> removeTopicRoute(long reqId, String tenantId, String topicFilter,
+    CompletableFuture<UnmatchResult> removeTopicRoute(long reqId,
+                                                      String tenantId,
+                                                      String topicFilter,
+                                                      long incarnation,
                                                       String channelId);
 
     Optional<CompletableFuture<? extends ILocalRoutes>> getTopicRoutes(String tenantId, MatchInfo matchInfo);

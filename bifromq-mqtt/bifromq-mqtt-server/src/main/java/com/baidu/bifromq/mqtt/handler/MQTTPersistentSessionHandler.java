@@ -301,7 +301,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     }
 
     @Override
-    protected CompletableFuture<MatchReply> matchRetainedMessage(long reqId, String topicFilter) {
+    protected CompletableFuture<MatchReply> matchRetainedMessage(long reqId,
+                                                                 String topicFilter,
+                                                                 TopicFilterOption option) {
         String tenantId = clientInfo().getTenantId();
         return sessionCtx.retainClient.match(MatchRequest.newBuilder()
             .setReqId(reqId)
@@ -309,6 +311,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
             .setMatchInfo(MatchInfo.newBuilder()
                 .setTopicFilter(topicFilter)
                 .setReceiverId(distInboxId(userSessionId, incarnation))
+                .setIncarnation(option.getIncarnation())
                 .build())
             .setDelivererKey(getDelivererKey(tenantId, userSessionId))
             .setBrokerId(inboxClient.id())

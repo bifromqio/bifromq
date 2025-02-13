@@ -18,10 +18,9 @@ import static com.baidu.bifromq.util.TopicConst.ORDERED_SHARE;
 import static com.baidu.bifromq.util.TopicConst.UNORDERED_SHARE;
 import static com.baidu.bifromq.util.TopicUtil.unescape;
 
-import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
@@ -36,14 +35,14 @@ public class GroupMatching extends Matching {
     @EqualsAndHashCode.Exclude
     public final List<NormalMatching> receiverList;
 
-    public final Set<String> receiverIds;
+    public final Map<String, Long> receiverIds;
     private final String origTopicFilter;
 
-    GroupMatching(ByteString key, String group, boolean ordered, List<String> scopedReceiverIds) {
+    GroupMatching(ByteString key, String group, boolean ordered, Map<String, Long> scopedReceiverIds) {
         super(key);
         this.group = group;
         this.ordered = ordered;
-        this.receiverIds = Sets.newHashSet(scopedReceiverIds);
+        this.receiverIds = scopedReceiverIds;
         if (ordered) {
             origTopicFilter =
                 ORDERED_SHARE + DELIMITER_CHAR + group + DELIMITER_CHAR + unescape(escapedTopicFilter);
@@ -51,8 +50,8 @@ public class GroupMatching extends Matching {
             origTopicFilter =
                 UNORDERED_SHARE + DELIMITER_CHAR + group + DELIMITER_CHAR + unescape(escapedTopicFilter);
         }
-        this.receiverList = Sets.newLinkedHashSet(scopedReceiverIds).stream()
-            .map(receiverId -> new NormalMatching(key, origTopicFilter, receiverId))
+        this.receiverList = scopedReceiverIds.entrySet().stream()
+            .map(e -> new NormalMatching(key, origTopicFilter, e.getKey(), e.getValue()))
             .collect(Collectors.toList());
     }
 
@@ -64,24 +63,5 @@ public class GroupMatching extends Matching {
     @Override
     public String originalTopicFilter() {
         return origTopicFilter;
-    }
-
-    public void addAll(Set<String> scopedReceiverIds) {
-        scopedReceiverIds.forEach(receiverId -> {
-            if (!receiverIds.contains(receiverId)) {
-                receiverIds.add(receiverId);
-                receiverList.add(new NormalMatching(key, origTopicFilter, receiverId));
-            }
-        });
-    }
-
-    public void removeAll(Set<String> scopedReceiverIds) {
-        receiverIds.removeIf(receiverId -> {
-            if (scopedReceiverIds.contains(receiverId)) {
-                receiverList.removeIf(receiver -> receiver.scopedInboxId.equals(receiverId));
-                return true;
-            }
-            return false;
-        });
     }
 }

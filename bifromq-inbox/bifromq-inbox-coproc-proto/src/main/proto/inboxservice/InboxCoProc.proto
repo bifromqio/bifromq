@@ -172,7 +172,7 @@ message BatchDeleteReply{
   }
   message Result{
     Code code = 1;
-    repeated string topicFilters = 2;
+    map<string, TopicFilterOption> topicFilters = 2;
   }
   repeated Result result = 1;
 }
@@ -222,7 +222,11 @@ message BatchUnsubReply{
     CONFLICT = 3;
     ERROR = 4;
   }
-  repeated Code code = 1;
+  message Result{
+    Code code = 1;
+    optional TopicFilterOption option = 2; // when code is OK
+  }
+  repeated Result result = 1;
 }
 
 message BatchFetchRequest{

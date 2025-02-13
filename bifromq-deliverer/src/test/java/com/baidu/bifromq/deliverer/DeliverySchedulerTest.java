@@ -99,7 +99,11 @@ public class DeliverySchedulerTest {
 
     @Test
     public void writeNoSub() {
-        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter("topic").setReceiverId("receiver").build();
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setTopicFilter("topic")
+            .setReceiverId("receiver")
+            .setIncarnation(1)
+            .build();
         DeliveryCall request =
             new DeliveryCall(tenantId, matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
         when(groupWriter.deliver(any())).thenReturn(
@@ -115,12 +119,16 @@ public class DeliverySchedulerTest {
         assertEquals(result, DeliveryResult.Code.NO_SUB);
         verify(distClient).removeTopicMatch(anyLong(),
             eq(tenantId), eq(matchInfo.getTopicFilter()), eq(matchInfo.getReceiverId()),
-            eq("group1"), eq(0));
+            eq("group1"), eq(0), eq(matchInfo.getIncarnation()));
     }
 
     @Test
     public void writeNoReceiver() {
-        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter("topic").setReceiverId("receiver").build();
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setTopicFilter("topic")
+            .setReceiverId("receiver")
+            .setIncarnation(1)
+            .build();
         DeliveryCall request =
             new DeliveryCall(tenantId, matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
         when(groupWriter.deliver(any())).thenReturn(
@@ -136,7 +144,7 @@ public class DeliverySchedulerTest {
         assertEquals(result, DeliveryResult.Code.NO_RECEIVER);
         verify(distClient).removeTopicMatch(anyLong(),
             eq(tenantId), eq(matchInfo.getTopicFilter()), eq(matchInfo.getReceiverId()),
-            eq("group1"), eq(0));
+            eq("group1"), eq(0), eq(matchInfo.getIncarnation()));
     }
 
 

@@ -35,6 +35,7 @@ import com.baidu.bifromq.inbox.rpc.proto.GetReply;
 import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
+import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
@@ -58,41 +59,41 @@ public class InboxExpiryTest extends InboxServiceTest {
         String inboxId = "inbox-" + System.nanoTime();
         long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder()
-                .setTopic("LastWill")
-                .setDelaySeconds(1)
-                .setMessage(Message.newBuilder()
-                        .setPubQoS(QoS.AT_LEAST_ONCE)
-                        .setPayload(ByteString.copyFromUtf8("last will"))
-                        .build())
-                .build();
+            .setTopic("LastWill")
+            .setDelaySeconds(1)
+            .setMessage(Message.newBuilder()
+                .setPubQoS(QoS.AT_LEAST_ONCE)
+                .setPayload(ByteString.copyFromUtf8("last will"))
+                .build())
+            .build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         when(distClient.pub(anyLong(), anyString(), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(PubResult.OK));
         inboxClient.create(CreateRequest.newBuilder()
-                .setReqId(reqId)
-                .setInboxId(inboxId)
-                .setIncarnation(incarnation)
-                .setKeepAliveSeconds(1)
-                .setExpirySeconds(2)
-                .setLimit(10)
-                .setDropOldest(true)
-                .setLwt(lwt)
-                .setClient(clientInfo)
-                .setNow(now)
-                .build()).join();
+            .setReqId(reqId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(1)
+            .setExpirySeconds(2)
+            .setLimit(10)
+            .setDropOldest(true)
+            .setLwt(lwt)
+            .setClient(clientInfo)
+            .setNow(now)
+            .build()).join();
         verify(distClient, timeout(5000).times(1))
-                .pub(anyLong(), eq(lwt.getTopic()),
-                        argThat(m -> m.getPubQoS() == QoS.AT_LEAST_ONCE &&
-                                m.getPayload().equals(lwt.getMessage().getPayload())),
-                        any());
+            .pub(anyLong(), eq(lwt.getTopic()),
+                argThat(m -> m.getPubQoS() == QoS.AT_LEAST_ONCE &&
+                    m.getPayload().equals(lwt.getMessage().getPayload())),
+                any());
         verify(eventCollector, timeout(5000)).report(argThat(e -> e.type() == EventType.WILL_DISTED));
         await().until(() -> {
             GetReply getReply = inboxClient.get(GetRequest.newBuilder()
-                    .setReqId(reqId)
-                    .setTenantId(tenantId)
-                    .setInboxId(inboxId)
-                    .setNow(0)
-                    .build()).join();
+                .setReqId(reqId)
+                .setTenantId(tenantId)
+                .setInboxId(inboxId)
+                .setNow(0)
+                .build()).join();
             return getReply.getCode() == GetReply.Code.NO_INBOX;
         });
     }
@@ -106,43 +107,43 @@ public class InboxExpiryTest extends InboxServiceTest {
         String inboxId = "inbox-" + System.nanoTime();
         long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setMessage(Message.newBuilder()
-                        .setIsRetain(true)
-                        .setPayload(ByteString.copyFromUtf8("last will"))
-                        .build())
-                .setDelaySeconds(1).build();
+                .setIsRetain(true)
+                .setPayload(ByteString.copyFromUtf8("last will"))
+                .build())
+            .setDelaySeconds(1).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         when(distClient.pub(anyLong(), anyString(), any(), any())).thenReturn(
             CompletableFuture.completedFuture(PubResult.OK));
         when(retainClient.retain(anyLong(), anyString(), any(), any(), anyInt(), any())).thenReturn(
-                CompletableFuture.completedFuture(
-                        RetainReply.newBuilder().setResult(RetainReply.Result.RETAINED).build()));
+            CompletableFuture.completedFuture(
+                RetainReply.newBuilder().setResult(RetainReply.Result.RETAINED).build()));
         inboxClient.create(CreateRequest.newBuilder()
-                .setReqId(reqId)
-                .setInboxId(inboxId)
-                .setIncarnation(incarnation)
-                .setKeepAliveSeconds(1)
-                .setExpirySeconds(2)
-                .setLimit(10)
-                .setDropOldest(true)
-                .setLwt(lwt)
-                .setClient(clientInfo)
-                .setNow(now)
-                .build()).join();
+            .setReqId(reqId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(1)
+            .setExpirySeconds(2)
+            .setLimit(10)
+            .setDropOldest(true)
+            .setLwt(lwt)
+            .setClient(clientInfo)
+            .setNow(now)
+            .build()).join();
         verify(retainClient, timeout(5000).times(1)).retain(anyLong(), anyString(), any(), any(), anyInt(), any());
         ArgumentCaptor<Event<?>> eventCaptor = ArgumentCaptor.forClass(Event.class);
         verify(eventCollector, timeout(5000).times(4)).report(eventCaptor.capture());
         assertEquals(eventCaptor.getAllValues().get(0).type(), EventType.MQTT_SESSION_START);
         assertTrue(eventCaptor.getAllValues()
-                .stream().map(Event::type)
-                .collect(Collectors.toSet())
-                .containsAll(List.of(EventType.MSG_RETAINED, EventType.WILL_DISTED, EventType.MQTT_SESSION_STOP)));
+            .stream().map(Event::type)
+            .collect(Collectors.toSet())
+            .containsAll(List.of(EventType.MSG_RETAINED, EventType.WILL_DISTED, EventType.MQTT_SESSION_STOP)));
         await().until(() -> {
             GetReply getReply = inboxClient.get(GetRequest.newBuilder()
-                    .setReqId(reqId)
-                    .setTenantId(tenantId)
-                    .setInboxId(inboxId)
-                    .setNow(0)
-                    .build()).join();
+                .setReqId(reqId)
+                .setTenantId(tenantId)
+                .setInboxId(inboxId)
+                .setNow(0)
+                .build()).join();
             return getReply.getCode() == GetReply.Code.NO_INBOX;
         });
     }
@@ -156,37 +157,37 @@ public class InboxExpiryTest extends InboxServiceTest {
         String inboxId = "inbox-" + System.nanoTime();
         long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setMessage(Message.newBuilder().setIsRetain(true).build())
-                .setDelaySeconds(1).build();
+            .setDelaySeconds(1).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         when(distClient.pub(anyLong(), anyString(), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(PubResult.OK));
         when(retainClient.retain(anyLong(), anyString(), any(), any(), anyInt(), any()))
-                .thenReturn(
-                        CompletableFuture.completedFuture(
-                                RetainReply.newBuilder().setResult(RetainReply.Result.ERROR).build()),
-                        CompletableFuture.completedFuture(
-                                RetainReply.newBuilder().setResult(RetainReply.Result.RETAINED).build()));
+            .thenReturn(
+                CompletableFuture.completedFuture(
+                    RetainReply.newBuilder().setResult(RetainReply.Result.ERROR).build()),
+                CompletableFuture.completedFuture(
+                    RetainReply.newBuilder().setResult(RetainReply.Result.RETAINED).build()));
         inboxClient.create(CreateRequest.newBuilder()
-                .setReqId(reqId)
-                .setInboxId(inboxId)
-                .setIncarnation(incarnation)
-                .setKeepAliveSeconds(1)
-                .setExpirySeconds(2)
-                .setLimit(10)
-                .setDropOldest(true)
-                .setLwt(lwt)
-                .setClient(clientInfo)
-                .setNow(now)
-                .build()).join();
+            .setReqId(reqId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(1)
+            .setExpirySeconds(2)
+            .setLimit(10)
+            .setDropOldest(true)
+            .setLwt(lwt)
+            .setClient(clientInfo)
+            .setNow(now)
+            .build()).join();
         verify(distClient, timeout(10000).times(2)).pub(anyLong(), anyString(), any(), any());
         verify(retainClient, timeout(10000).times(2)).retain(anyLong(), anyString(), any(), any(), anyInt(), any());
         await().until(() -> {
             GetReply getReply = inboxClient.get(GetRequest.newBuilder()
-                    .setReqId(reqId)
-                    .setTenantId(tenantId)
-                    .setInboxId(inboxId)
-                    .setNow(0)
-                    .build()).join();
+                .setReqId(reqId)
+                .setTenantId(tenantId)
+                .setInboxId(inboxId)
+                .setNow(0)
+                .build()).join();
             return getReply.getCode() == GetReply.Code.NO_INBOX;
         });
     }
@@ -200,41 +201,41 @@ public class InboxExpiryTest extends InboxServiceTest {
         String inboxId = "inbox-" + System.nanoTime();
         long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("LastWill")
-                .setDelaySeconds(1)
-                .setMessage(Message.newBuilder()
-                        .setPubQoS(QoS.AT_LEAST_ONCE)
-                        .setPayload(ByteString.copyFromUtf8("last will"))
-                        .build())
-                .build();
+            .setDelaySeconds(1)
+            .setMessage(Message.newBuilder()
+                .setPubQoS(QoS.AT_LEAST_ONCE)
+                .setPayload(ByteString.copyFromUtf8("last will"))
+                .build())
+            .build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         when(distClient.pub(anyLong(), anyString(), any(), any())).thenReturn(
             CompletableFuture.completedFuture(PubResult.OK));
         inboxClient.create(CreateRequest.newBuilder()
-                .setReqId(reqId)
-                .setInboxId(inboxId)
-                .setIncarnation(incarnation)
-                .setKeepAliveSeconds(10)
-                .setExpirySeconds(10)
-                .setLimit(10)
-                .setDropOldest(true)
-                .setLwt(lwt)
-                .setClient(clientInfo)
-                .setNow(now)
-                .build()).join();
+            .setReqId(reqId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(10)
+            .setExpirySeconds(10)
+            .setLimit(10)
+            .setDropOldest(true)
+            .setLwt(lwt)
+            .setClient(clientInfo)
+            .setNow(now)
+            .build()).join();
         inboxClient.detach(DetachRequest.newBuilder()
-                .setReqId(reqId)
-                .setInboxId(inboxId)
-                .setIncarnation(incarnation)
-                .setVersion(0)
-                .setExpirySeconds(10)
-                .setClient(clientInfo)
-                .setNow(now)
-                .build()).join();
+            .setReqId(reqId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .setExpirySeconds(10)
+            .setClient(clientInfo)
+            .setNow(now)
+            .build()).join();
         verify(distClient, timeout(2000).times(1))
-                .pub(anyLong(), eq(lwt.getTopic()),
-                        argThat(m -> m.getPubQoS() == QoS.AT_LEAST_ONCE &&
-                                m.getPayload().equals(lwt.getMessage().getPayload())),
-                        any());
+            .pub(anyLong(), eq(lwt.getTopic()),
+                argThat(m -> m.getPubQoS() == QoS.AT_LEAST_ONCE &&
+                    m.getPayload().equals(lwt.getMessage().getPayload())),
+                any());
         verify(eventCollector, timeout(2000)).report(argThat(e -> e.type() == EventType.WILL_DISTED));
     }
 
@@ -248,40 +249,43 @@ public class InboxExpiryTest extends InboxServiceTest {
         long incarnation = System.nanoTime();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         inboxClient.create(CreateRequest.newBuilder()
-                .setReqId(reqId)
-                .setInboxId(inboxId)
-                .setIncarnation(incarnation)
-                .setKeepAliveSeconds(1)
-                .setExpirySeconds(2)
-                .setLimit(10)
-                .setDropOldest(true)
-                .setClient(clientInfo)
-                .setNow(now)
-                .build()).join();
-        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt()))
-                .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
+            .setReqId(reqId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setKeepAliveSeconds(1)
+            .setExpirySeconds(2)
+            .setLimit(10)
+            .setDropOldest(true)
+            .setClient(clientInfo)
+            .setNow(now)
+            .build()).join();
+        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+            anyLong()))
+            .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         String topicFilter = "/a/b/c";
         inboxClient.sub(SubRequest.newBuilder()
+            .setReqId(reqId)
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .setTopicFilter(topicFilter)
+            .setOption(TopicFilterOption.newBuilder()
+                .setIncarnation(1L)
+                .build())
+            .setNow(now)
+            .build()).join();
+
+        verify(distClient, timeout(5000).times(0)).pub(anyLong(), anyString(), any(), any());
+        verify(distClient, timeout(5000).times(1))
+            .removeTopicMatch(anyLong(), eq(tenantId), eq(topicFilter), anyString(), anyString(), anyInt(), eq(1L));
+        await().until(() -> {
+            GetReply getReply = inboxClient.get(GetRequest.newBuilder()
                 .setReqId(reqId)
                 .setTenantId(tenantId)
                 .setInboxId(inboxId)
-                .setIncarnation(incarnation)
-                .setVersion(0)
-                .setTopicFilter(topicFilter)
-                .setNow(now)
+                .setNow(0)
                 .build()).join();
-
-        verify(distClient, timeout(5000).times(0)).pub(anyLong(), anyString(), any(), any());
-        verify(distClient, timeout(5000).times(1)).removeTopicMatch(anyLong(), eq(tenantId), eq(topicFilter),
-            anyString(),
-                anyString(), anyInt());
-        await().until(() -> {
-            GetReply getReply = inboxClient.get(GetRequest.newBuilder()
-                    .setReqId(reqId)
-                    .setTenantId(tenantId)
-                    .setInboxId(inboxId)
-                    .setNow(0)
-                    .build()).join();
             return getReply.getCode() == GetReply.Code.NO_INBOX;
         });
     }
