@@ -61,8 +61,9 @@ final class SetLoadRulesHandler extends AbstractLoadRulesHandler implements IHTT
             description = "optional caller provided request id", schema = @Schema(implementation = Long.class)),
         @Parameter(name = "store_name", in = ParameterIn.HEADER, required = true,
             description = "the store name", schema = @Schema(implementation = String.class)),
-        @Parameter(name = "balancer_class", in = ParameterIn.HEADER, required = true,
-            description = "the balancer class FQN", schema = @Schema(implementation = String.class))
+        @Parameter(name = "balancer_factory_class", in = ParameterIn.HEADER, required = true,
+            description = "the full qualified name of balancer factory class configured for the store",
+            schema = @Schema(implementation = String.class))
     })
     @RequestBody(content = @Content(mediaType = "application/json"))
     @ApiResponses(value = {
@@ -73,7 +74,7 @@ final class SetLoadRulesHandler extends AbstractLoadRulesHandler implements IHTT
                                                       @Parameter(hidden = true) FullHttpRequest req) {
         log.trace("Handling http set load rules request: {}", req);
         String storeName = HeaderUtils.getHeader(Headers.HEADER_STORE_NAME, req, true);
-        String balancerClass = HeaderUtils.getHeader(Headers.HEADER_BALANCER_CLASS, req, true);
+        String balancerFactoryClass = HeaderUtils.getHeader(Headers.HEADER_BALANCER_FACTORY_CLASS, req, true);
         IBaseKVClusterMetadataManager metadataManager = metadataManagers.get(storeName);
         if (metadataManager == null) {
             return CompletableFuture.completedFuture(new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
@@ -81,7 +82,7 @@ final class SetLoadRulesHandler extends AbstractLoadRulesHandler implements IHTT
         }
         try {
             Struct loadRules = fromJson(req.content().toString(io.netty.util.CharsetUtil.UTF_8));
-            return metadataManager.proposeLoadRules(balancerClass, loadRules)
+            return metadataManager.proposeLoadRules(balancerFactoryClass, loadRules)
                 .handle((v, e) -> {
                     if (e != null) {
                         if (e.getCause() instanceof TimeoutException) {

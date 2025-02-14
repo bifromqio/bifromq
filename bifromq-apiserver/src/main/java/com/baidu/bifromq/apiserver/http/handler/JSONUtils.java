@@ -61,8 +61,8 @@ public class JSONUtils {
 
     public static JsonNode toJSON(Boundary boundary, ObjectMapper mapper) {
         ObjectNode boundaryObject = mapper.createObjectNode();
-        boundaryObject.put("startKey", toHex(boundary.getStartKey()));
-        boundaryObject.put("endKey", toHex(boundary.getEndKey()));
+        boundaryObject.put("startKey", boundary.hasStartKey() ? toHex(boundary.getStartKey()) : null);
+        boundaryObject.put("endKey", boundary.hasEndKey() ? toHex(boundary.getEndKey()) : null);
         return boundaryObject;
     }
 
@@ -89,10 +89,6 @@ public class JSONUtils {
     }
 
     public static String toHex(ByteString bs) {
-        if (bs == null || bs.isEmpty()) {
-            return "";
-        }
-
         StringBuilder hexString = new StringBuilder(bs.size() * 5);
         for (int i = 0; i < bs.size(); i++) {
             byte b = bs.byteAt(i);

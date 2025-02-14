@@ -128,8 +128,8 @@ class BaseKVClusterMetadataManager implements IBaseKVClusterMetadataManager {
     }
 
     @Override
-    public CompletableFuture<ProposalResult> proposeLoadRules(String balancerClassFQN, Struct loadRules) {
-        IMVReg balancerProposalMVReg = loadRulesProposalORMap.getMVReg(ByteString.copyFromUtf8(balancerClassFQN));
+    public CompletableFuture<ProposalResult> proposeLoadRules(String balancerFactoryClass, Struct loadRules) {
+        IMVReg balancerProposalMVReg = loadRulesProposalORMap.getMVReg(ByteString.copyFromUtf8(balancerFactoryClass));
         CompletableFuture<ProposalResult> resultFuture = new CompletableFuture<>();
         long now = HLC.INST.get();
         balancerProposalMVReg.inflation()

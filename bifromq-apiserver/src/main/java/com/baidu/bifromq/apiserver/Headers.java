@@ -31,7 +31,7 @@ public enum Headers {
     HEADER_SERVER_ID("server_id"),
     HEADER_SERVICE_NAME("service_name"),
     HEADER_STORE_NAME("store_name"),
-    HEADER_BALANCER_CLASS("balancer_class");
+    HEADER_BALANCER_FACTORY_CLASS("balancer_factory_class");
 
     public final String header;
 

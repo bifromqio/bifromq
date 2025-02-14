@@ -48,11 +48,11 @@ public interface IBaseKVClusterMetadataManager {
     /**
      * Propose the LoadRules update for given balancer.
      *
-     * @param balancerClassFQN the balancer class full qualified name
-     * @param loadRules        the LoadRules in JSON object
+     * @param balancerFactoryClass the balancer factory class
+     * @param loadRules            the LoadRules in JSON object
      * @return the future of setting LoadRules
      */
-    CompletableFuture<ProposalResult> proposeLoadRules(String balancerClassFQN, Struct loadRules);
+    CompletableFuture<ProposalResult> proposeLoadRules(String balancerFactoryClass, Struct loadRules);
 
     /**
      * Get the observable of landscape.

@@ -122,7 +122,7 @@ public class KVStoreBalanceControllerTest {
         verify(storeBalancer, timeout(1200).times(1)).balance();
 
         log.info("Test input done");
-        loadRuleSubject.onNext(Map.of(storeBalancer.getClass().getName(), Struct.getDefaultInstance()));
+        loadRuleSubject.onNext(Map.of(balancerFactory.getClass().getName(), Struct.getDefaultInstance()));
         verify(storeBalancer, timeout(1200).times(1)).update(eq(Struct.getDefaultInstance()));
         verify(storeBalancer, timeout(1200).times(2)).balance();
     }
@@ -347,7 +347,7 @@ public class KVStoreBalanceControllerTest {
             CompletableFuture.completedFuture(KVRangeSplitReply.newBuilder().setCode(ReplyCode.Ok).build()));
         storeDescSubject.onNext(storeDescriptors);
         verify(storeBalancer, timeout(1200).times(1)).update(any(Set.class));
-        loadRuleSubject.onNext(Map.of(storeBalancer.getClass().getName(), Struct.getDefaultInstance()));
+        loadRuleSubject.onNext(Map.of(balancerFactory.getClass().getName(), Struct.getDefaultInstance()));
         verify(storeBalancer, timeout(1200).times(1)).update(any(Struct.class));
         verify(storeClient, timeout(1200).times(1)).splitRange(eq(LOCAL_STORE_ID),
             argThat(r -> r.getKvRangeId().equals(id)
@@ -379,7 +379,7 @@ public class KVStoreBalanceControllerTest {
     public void testRejectProposalWhenDisableFieldTypeWrong() {
         ArgumentCaptor<LoadRulesProposalHandler> captor = ArgumentCaptor.forClass(LoadRulesProposalHandler.class);
         verify(metadataManager).setLoadRulesProposalHandler(captor.capture());
-        LoadRulesProposalHandler.Result result = captor.getValue().handle(storeBalancer.getClass().getName(),
+        LoadRulesProposalHandler.Result result = captor.getValue().handle(balancerFactory.getClass().getName(),
             Struct.newBuilder().putFields("disable", Value.newBuilder().setStringValue("wrongtype").build()).build());
         assertEquals(result, LoadRulesProposalHandler.Result.REJECTED);
     }
