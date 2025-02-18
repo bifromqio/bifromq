@@ -16,14 +16,11 @@ package com.baidu.bifromq.apiserver.http.handler;
 import static io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR;
 import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
-import static java.util.Collections.emptyMap;
 
 import com.baidu.bifromq.apiserver.Headers;
 import com.baidu.bifromq.apiserver.http.IHTTPRequestHandler;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.protobuf.Struct;
 import com.google.protobuf.util.JsonFormat;
 import io.netty.buffer.Unpooled;
@@ -39,7 +36,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -63,9 +59,12 @@ final class GetLoadRulesHandler extends AbstractLoadRulesHandler implements IHTT
             schema = @Schema(implementation = Long.class)),
         @Parameter(name = "store_name", in = ParameterIn.HEADER, required = true,
             description = "the service name",
+            schema = @Schema(implementation = String.class)),
+        @Parameter(name = "balancer_factory_class", in = ParameterIn.HEADER, required = true,
+            description = "the full qualified name of balancer factory class configured for the store",
             schema = @Schema(implementation = String.class))
     })
-    @RequestBody(required = false)
+    @RequestBody()
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200",
             description = "Success",
@@ -80,6 +79,7 @@ final class GetLoadRulesHandler extends AbstractLoadRulesHandler implements IHTT
         try {
             log.trace("Handling http get load rules request: {}", req);
             String storeName = HeaderUtils.getHeader(Headers.HEADER_STORE_NAME, req, true);
+            String balancerFactoryClass = HeaderUtils.getHeader(Headers.HEADER_BALANCER_FACTORY_CLASS, req, true);
             IBaseKVClusterMetadataManager metadataManager = metadataManagers.get(storeName);
             if (metadataManager == null) {
                 return CompletableFuture.completedFuture(new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
@@ -95,7 +95,7 @@ final class GetLoadRulesHandler extends AbstractLoadRulesHandler implements IHTT
                         if (e instanceof TimeoutException) {
                             DefaultFullHttpResponse resp =
                                 new DefaultFullHttpResponse(req.protocolVersion(), OK,
-                                    Unpooled.wrappedBuffer(toJson(emptyMap()).getBytes()));
+                                    Unpooled.wrappedBuffer(toJson(Struct.getDefaultInstance()).getBytes()));
                             resp.headers().set("Content-Type", "application/json");
                             return resp;
                         } else {
@@ -103,10 +103,15 @@ final class GetLoadRulesHandler extends AbstractLoadRulesHandler implements IHTT
                                 Unpooled.copiedBuffer(e.getMessage().getBytes()));
                         }
                     } else {
-                        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(req.protocolVersion(), OK,
-                            Unpooled.wrappedBuffer(toJson(loadRules).getBytes()));
-                        resp.headers().set("Content-Type", "application/json");
-                        return resp;
+                        if (loadRules.containsKey(balancerFactoryClass)) {
+                            DefaultFullHttpResponse resp = new DefaultFullHttpResponse(req.protocolVersion(), OK,
+                                Unpooled.wrappedBuffer(toJson(loadRules.get(balancerFactoryClass)).getBytes()));
+                            resp.headers().set("Content-Type", "application/json");
+                            return resp;
+                        } else {
+                            return new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
+                                Unpooled.copiedBuffer("NO_BALANCER".getBytes()));
+                        }
                     }
                 });
         } catch (Throwable e) {
@@ -115,15 +120,7 @@ final class GetLoadRulesHandler extends AbstractLoadRulesHandler implements IHTT
     }
 
     @SneakyThrows
-    private String toJson(Map<String, Struct> balancerLoadRules) {
-        ObjectMapper objectMapper = new ObjectMapper();
-        ObjectNode rootNode = objectMapper.createObjectNode();
-        for (Map.Entry<String, Struct> entry : balancerLoadRules.entrySet()) {
-            String key = entry.getKey();
-            Struct value = entry.getValue();
-            String jsonValue = JsonFormat.printer().print(value);
-            rootNode.set(key, objectMapper.readTree(jsonValue));
-        }
-        return objectMapper.writeValueAsString(rootNode);
+    private String toJson(Struct loadRules) {
+        return JsonFormat.printer().print(loadRules);
     }
 }

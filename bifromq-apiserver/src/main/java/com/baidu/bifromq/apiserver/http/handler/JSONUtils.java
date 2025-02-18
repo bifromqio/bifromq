@@ -89,14 +89,15 @@ public class JSONUtils {
     }
 
     public static String toHex(ByteString bs) {
-        StringBuilder hexString = new StringBuilder(bs.size() * 5);
+        StringBuilder sb = new StringBuilder(bs.size() * 5);
         for (int i = 0; i < bs.size(); i++) {
             byte b = bs.byteAt(i);
-            hexString.append(String.format("0x%02X", b));
-            if (i < bs.size() - 1) {
-                hexString.append(" ");
+            if (b >= 32 && b <= 126) {
+                sb.append((char) b);
+            } else {
+                sb.append(String.format("0x%02X", b));
             }
         }
-        return hexString.toString();
+        return sb.toString();
     }
 }
