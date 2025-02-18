@@ -117,7 +117,7 @@ public class RangeLeaderBalancer extends StoreBalancer {
                 for (String underloadedStore : storeSortedByLeaderCount) {
                     // move to one underloaded store which is current follower
                     int leaderCount = storeLeaderCount.get(underloadedStore);
-                    if (leaderCount + 1 >= atMostLeadersPerStore
+                    if (leaderCount + 1 <= atMostLeadersPerStore
                         && voters.contains(underloadedStore)
                         && !underloadedStore.equals(leaderStoreId)) {
                         if (leaderStoreId.equals(localStoreId)) {
@@ -134,7 +134,7 @@ public class RangeLeaderBalancer extends StoreBalancer {
             } else {
                 // check if least overloaded store holds a voter replica of current range and safe to transfer leadership to it
                 int leaderCount = storeLeaderCount.get(leaderStoreId);
-                if (voters.contains(leastLeadersStore) && leaderCount - 1 > atLeastLeadersPerStore) {
+                if (voters.contains(leastLeadersStore) && leaderCount - 1 >= atLeastLeadersPerStore) {
                     if (leaderStoreId.equals(localStoreId)) {
                         return BalanceNow.of(TransferLeadershipCommand.builder()
                             .toStore(leaderStoreId)

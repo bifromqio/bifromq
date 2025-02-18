@@ -130,10 +130,13 @@ public class ReplicaCntBalancer extends RuleBasedPlacementBalancer {
             }
             // voter count not meet expectation or exceeds actual store node amount
             Set<String> voters = new HashSet<>(clusterConfig.getVotersList());
+            Set<String> learners = new HashSet<>(clusterConfig.getLearnersList());
             if (clusterConfig.getVotersCount() != expectedVoters || clusterConfig.getVotersCount() > landscape.size()) {
                 if (clusterConfig.getVotersCount() < expectedVoters) {
                     // add some voters from the least range count store
                     List<String> aliveStoresSortedByRangeCountAsc = landscape.entrySet().stream()
+                        .filter(e ->
+                            !learners.contains(e.getKey()) && !voters.contains(e.getKey()))
                         .sorted(Comparator.comparingInt(e -> e.getValue().getRangesCount()))
                         .map(Map.Entry::getKey)
                         .toList();

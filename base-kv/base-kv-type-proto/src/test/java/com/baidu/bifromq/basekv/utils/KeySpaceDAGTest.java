@@ -13,20 +13,20 @@
 
 package com.baidu.bifromq.basekv.utils;
 
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.MIN_KEY;
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.NULL_BOUNDARY;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
-
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.google.protobuf.ByteString;
+import org.testng.annotations.Test;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
-import org.testng.annotations.Test;
+
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.MIN_KEY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.NULL_BOUNDARY;
+import static org.testng.Assert.*;
 
 public class KeySpaceDAGTest {
     @Test
@@ -562,5 +562,57 @@ public class KeySpaceDAGTest {
             .setEndKey(ByteString.copyFromUtf8("c"))
             .build();
         assertEquals(gaps.get(0), gap1);
+    }
+
+    @Test
+    public void leftOpenEndGap() {
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> rangeDescriptorsByStoreId = new HashMap<>();
+
+        KVRangeDescriptor range1 = KVRangeDescriptor.newBuilder()
+            .setId(KVRangeId.newBuilder().setId(1).setEpoch(1).build())
+            .setBoundary(Boundary.newBuilder()
+                .setStartKey(ByteString.copyFromUtf8("a")) // (null, "a")
+                .build())
+            .build();
+
+        Map<KVRangeId, KVRangeDescriptor> ranges = new HashMap<>() {{
+            put(range1.getId(), range1);
+        }};
+
+        rangeDescriptorsByStoreId.put("store1", ranges);
+
+        KeySpaceDAG dag = new KeySpaceDAG(rangeDescriptorsByStoreId);
+
+        List<Boundary> result = dag.findGaps();
+
+        assertEquals(result.size(), 1);
+        assertEquals(result.get(0).getEndKey(), ByteString.copyFromUtf8("a"));
+        assertFalse(result.get(0).hasStartKey());
+    }
+
+    @Test
+    public void rightOpenEndGap() {
+        Map<String, Map<KVRangeId, KVRangeDescriptor>> rangeDescriptorsByStoreId = new HashMap<>();
+
+        KVRangeDescriptor range1 = KVRangeDescriptor.newBuilder()
+            .setId(KVRangeId.newBuilder().setId(1).setEpoch(1).build())
+            .setBoundary(Boundary.newBuilder()
+                .setEndKey(ByteString.copyFromUtf8("a")) // (null, "a")
+                .build())
+            .build();
+
+        Map<KVRangeId, KVRangeDescriptor> ranges = new HashMap<>() {{
+            put(range1.getId(), range1);
+        }};
+
+        rangeDescriptorsByStoreId.put("store1", ranges);
+
+        KeySpaceDAG dag = new KeySpaceDAG(rangeDescriptorsByStoreId);
+
+        List<Boundary> result = dag.findGaps();
+
+        assertEquals(result.size(), 1);
+        assertEquals(result.get(0).getStartKey(), ByteString.copyFromUtf8("a"));
+        assertFalse(result.get(0).hasEndKey());
     }
 }

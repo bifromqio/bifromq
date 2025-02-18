@@ -1071,6 +1071,10 @@ public class KVRangeFSM implements IKVRangeFSM {
                         "Merge abort, range is in state:" + state.getType().name())));
                     break;
                 }
+                log.info(
+                    "Merging[term={}, index={}, taskId={}, ver={}, state={}]: mergerId={}, mergeeId={}",
+                    logTerm, logIndex, taskId, ver, state,
+                    KVRangeIdUtil.toString(id), KVRangeIdUtil.toString(command.getPrepareMergeWith().getMergeeId()));
 
                 CompletableFuture<KVRangeMessage> onceFuture = messenger.once(m -> m.hasPrepareMergeToReply()
                     && m.getPrepareMergeToReply().getTaskId().equals(taskId)
@@ -1117,6 +1121,10 @@ public class KVRangeFSM implements IKVRangeFSM {
                     onDone.complete(NOOP);
                     break;
                 }
+                log.info(
+                    "Merge canceled[term={}, index={}, taskId={}, ver={}, state={}]: mergerId={}, mergeeId={}",
+                    logTerm, logIndex, taskId, ver, state,
+                    KVRangeIdUtil.toString(id), KVRangeIdUtil.toString(command.getPrepareMergeWith().getMergeeId()));
                 assert state.getType() == PreparedMerging && state.hasTaskId()
                     && taskId.equals(state.getTaskId());
                 rangeWriter.state(State.newBuilder()
@@ -1300,6 +1308,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 onDone.completeExceptionally(e != null
                                     ? e : new KVRangeException.InternalException("Failed to send MergeDone request"));
                             } else {
+                                log.info(
+                                    "Merger done[term={}, index={}, taskId={}, ver={}, state={}]: mergerId={}, boundary={}",
+                                    logTerm, logIndex, taskId, ver, state, KVRangeIdUtil.toString(id), mergedBoundary);
                                 onDone.complete(() -> {
                                     try {
                                         // reset hinter when boundary changed
@@ -1333,6 +1344,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                     onDone.complete(NOOP);
                     break;
                 }
+                log.info(
+                    "Mergee done[term={}, index={}, taskId={}, ver={}, state={}]: mergeeId={}",
+                    logTerm, logIndex, taskId, ver, state, KVRangeIdUtil.toString(id));
                 if (request.getStoreId().equals(hostStoreId)) {
                     assert state.getType() == WaitingForMerge
                         && state.hasTaskId()

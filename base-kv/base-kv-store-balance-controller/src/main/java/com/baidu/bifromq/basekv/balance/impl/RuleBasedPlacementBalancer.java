@@ -31,6 +31,7 @@ import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.basekv.utils.DescriptorUtil;
 import com.baidu.bifromq.basekv.utils.KeySpaceDAG;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
 import com.google.protobuf.Struct;
 import java.util.Map;
@@ -48,7 +49,6 @@ import java.util.stream.Collectors;
 public abstract class RuleBasedPlacementBalancer extends StoreBalancer {
     private final AtomicReference<RangeCommand> balanceCommandHolder = new AtomicReference<>();
     private volatile Struct loadRules;
-    private volatile Set<KVRangeStoreDescriptor> landscape;
 
     /**
      * Constructor of StoreBalancer.
@@ -64,14 +64,10 @@ public abstract class RuleBasedPlacementBalancer extends StoreBalancer {
     public void update(Struct loadRules) {
         this.loadRules = loadRules;
         log.debug("Update load rules: {}", loadRules);
-        if (landscape != null) {
-            update(loadRules, landscape);
-        }
     }
 
     @Override
     public final void update(Set<KVRangeStoreDescriptor> landscape) {
-        this.landscape = landscape;
         log.trace("Update landscape: {}", landscape);
         if (loadRules != null) {
             update(loadRules, landscape);
@@ -156,7 +152,8 @@ public abstract class RuleBasedPlacementBalancer extends StoreBalancer {
         }
     }
 
-    private boolean verify(Map<Boundary, ClusterConfig> rangeLayout, Set<KVRangeStoreDescriptor> landscape) {
+    @VisibleForTesting
+    boolean verify(Map<Boundary, ClusterConfig> rangeLayout, Set<KVRangeStoreDescriptor> landscape) {
         // 1. check boundary non overlap and form a complete landscape
         if (rangeLayout.keySet().stream().anyMatch(b -> !BoundaryUtil.isNonEmptyRange(b))) {
             log.error("Balancer[{}] generated empty boundary in range layout: {}",

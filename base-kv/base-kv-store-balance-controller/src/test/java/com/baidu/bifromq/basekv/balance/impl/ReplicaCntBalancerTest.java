@@ -14,6 +14,8 @@
 package com.baidu.bifromq.basekv.balance.impl;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.toLeaderRanges;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertSame;
@@ -29,8 +31,12 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
+import com.baidu.bifromq.basekv.utils.KeySpaceDAG;
 import com.google.protobuf.ByteString;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Set;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -412,5 +418,48 @@ public class ReplicaCntBalancerTest {
         assertEquals(command.getExpectedVer(), kvRangeDescriptor1.getVer());
         assertTrue(command.getLearners().contains("s3"));
         assertTrue(command.getVoters().contains("s1"));
+    }
+
+    @Test
+    public void generateCorrectClusterConfig() {
+        KVRangeId kvRangeId = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
+        KVRangeDescriptor kvRangeDescriptor = KVRangeDescriptor.newBuilder()
+            .setId(kvRangeId)
+            .setRole(RaftNodeStatus.Leader)
+            .setVer(1)
+            .setBoundary(FULL_BOUNDARY)
+            .setConfig(ClusterConfig.newBuilder()
+                .addVoters("localStore")
+                .addLearners("learnerStore")
+                .build())
+            .build();
+
+        KVRangeStoreDescriptor storeDescriptor = KVRangeStoreDescriptor.newBuilder()
+            .setId("localStore")
+            .addRanges(kvRangeDescriptor)
+            .putStatistics("cpu.usage", 0.5)
+            .build();
+        KVRangeStoreDescriptor learnerStoreDescriptor = KVRangeStoreDescriptor.newBuilder()
+            .setId("learnerStore")
+            .addRanges(kvRangeDescriptor)
+            .putStatistics("cpu.usage", 0.5)
+            .build();
+
+        Set<KVRangeStoreDescriptor> allStoreDescriptors = new HashSet<>();
+        Map<String, KVRangeStoreDescriptor> storeDescriptors = new HashMap<>();
+        allStoreDescriptors.add(storeDescriptor);
+        allStoreDescriptors.add(learnerStoreDescriptor);
+        storeDescriptors.put(storeDescriptor.getId(), storeDescriptor);
+        storeDescriptors.put(learnerStoreDescriptor.getId(), learnerStoreDescriptor);
+
+        KeySpaceDAG keySpaceDAG =
+            new KeySpaceDAG(toLeaderRanges(getEffectiveEpoch(allStoreDescriptors).get().storeDescriptors()));
+        NavigableMap<Boundary, KeySpaceDAG.LeaderRange> effectiveRoute = keySpaceDAG.getEffectiveFullCoveredRoute();
+
+
+        Map<Boundary, ClusterConfig> layout =
+            balancer.doGenerate(balancer.defaultLoadRules(), storeDescriptors, effectiveRoute);
+
+        assertTrue(balancer.verify(layout, allStoreDescriptors));
     }
 }

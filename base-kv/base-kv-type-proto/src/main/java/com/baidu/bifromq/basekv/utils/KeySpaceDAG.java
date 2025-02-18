@@ -98,7 +98,9 @@ public class KeySpaceDAG {
             Node nextNode = graph.ceilingKey(currentNode);
             Boundary gapBoundary = createBoundary(currentNode, nextNode == null ? OPEN_END_KEY : nextNode);
             gaps.add(gapBoundary);
-            identifyGaps(nextNode, gaps);
+            if (nextNode != null) {
+                identifyGaps(nextNode, gaps);
+            }
             return;
         }
 
