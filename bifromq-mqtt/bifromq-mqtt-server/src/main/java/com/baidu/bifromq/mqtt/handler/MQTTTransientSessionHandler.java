@@ -163,16 +163,14 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         if (topicFilters.size() >= maxTopicFiltersPerInbox) {
             return CompletableFuture.completedFuture(EXCEED_LIMIT);
         }
-        TopicFilterOption prevOption = topicFilters.put(topicFilter, option);
-        if (prevOption == null) {
-            subNumGauge.addAndGet(1);
-            memUsage.addAndGet(topicFilter.length());
-        }
         return addMatchRecord(reqId, topicFilter)
             .thenApplyAsync(matchResult -> {
                 switch (matchResult) {
                     case OK -> {
+                        TopicFilterOption prevOption = topicFilters.put(topicFilter, option);
                         if (prevOption == null) {
+                            subNumGauge.addAndGet(1);
+                            memUsage.addAndGet(topicFilter.length());
                             return OK;
                         } else {
                             return EXISTS;
@@ -248,7 +246,6 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         String topicFilter = matchInfo.getTopicFilter();
         TopicFilterOption option = topicFilters.get(topicFilter);
         if (option == null || !ctx.channel().isActive()) {
-            log.warn("TopicFilter: {} is not in session", topicFilter);
             return false;
         }
         ctx.executor().execute(() -> publish(topicFilter, option, topicMsgPacks));
