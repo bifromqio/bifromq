@@ -31,6 +31,8 @@ import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthData;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -47,6 +49,7 @@ import io.netty.handler.codec.mqtt.MqttIdentifierRejectedException;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageBuilders;
 import io.netty.handler.codec.mqtt.MqttMessageType;
+import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import io.netty.handler.codec.mqtt.MqttQoS;
 import io.netty.handler.codec.mqtt.MqttUnacceptableProtocolVersionException;
 import io.netty.handler.codec.mqtt.MqttVersion;
@@ -241,6 +244,23 @@ public class MQTTPreludeHandlerTest extends MockableTest {
         embeddedChannel.runScheduledPendingTasks();
         assertNull(embeddedChannel.readOutbound());
         verify(eventCollector).report(argThat(e -> e.type() == EventType.PROTOCOL_ERROR));
+    }
+
+    @Test
+    public void testReleaseFirstPublish() {
+        MqttPublishMessage message = MqttMessageBuilders.publish()
+            .topicName("abc")
+            .qos(MqttQoS.AT_MOST_ONCE)
+            .payload(Unpooled.buffer().writeBytes("abc".getBytes()))
+            .build();
+        ByteBuf payload = message.payload();
+        assertEquals(payload.refCnt(), 1);
+        embeddedChannel.writeInbound(message);
+        embeddedChannel.advanceTimeBy(5, TimeUnit.SECONDS);
+        embeddedChannel.runScheduledPendingTasks();
+        assertNull(embeddedChannel.readOutbound());
+        verify(eventCollector).report(argThat(e -> e.type() == EventType.PROTOCOL_ERROR));
+        assertEquals(payload.refCnt(), 0);
     }
 
     @Test

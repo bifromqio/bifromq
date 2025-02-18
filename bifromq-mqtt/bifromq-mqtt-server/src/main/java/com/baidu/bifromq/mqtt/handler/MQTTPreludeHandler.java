@@ -19,6 +19,7 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_MALFORMED_PACKET;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PACKET_TOO_LARGE;
 import static io.netty.handler.codec.mqtt.MqttMessageType.CONNECT;
+import static io.netty.handler.codec.mqtt.MqttMessageType.PUBLISH;
 
 import com.baidu.bifromq.mqtt.handler.v3.MQTT3ConnectHandler;
 import com.baidu.bifromq.mqtt.handler.v5.MQTT5ConnectHandler;
@@ -39,6 +40,7 @@ import io.netty.handler.codec.mqtt.MqttConnectVariableHeader;
 import io.netty.handler.codec.mqtt.MqttIdentifierRejectedException;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageBuilders;
+import io.netty.handler.codec.mqtt.MqttPublishMessage;
 import io.netty.handler.codec.mqtt.MqttUnacceptableProtocolVersionException;
 import java.net.InetSocketAddress;
 import java.util.concurrent.ScheduledFuture;
@@ -164,10 +166,13 @@ public class MQTTPreludeHandler extends ChannelDuplexHandler {
                     getLocal(ProtocolError.class).peerAddress(remoteAddr).statement(cause.getMessage()));
                 return;
             }
-        } else if (!(message instanceof MqttConnectMessage)) {
+        } else if (message.fixedHeader().messageType() != CONNECT) {
+            if (message.fixedHeader().messageType() == PUBLISH) {
+                ((MqttPublishMessage) message).release();
+            }
             // according to [MQTT-3.1.0-1]
             closeChannelWithRandomDelay(getLocal(ProtocolError.class).statement("MQTT-3.1.0-1"));
-            log.warn("First packet must be mqtt connect message: remote={}", remoteAddr);
+            log.debug("First packet must be mqtt connect message: remote={}", remoteAddr);
             return;
         }
 
