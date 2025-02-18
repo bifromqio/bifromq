@@ -133,7 +133,7 @@ fi
 
 echo "Using Java Version ${JAVA_VERSION} locating at '${JAVA}'"
 MEMORY=$(total_memory)
-echo -e "Total Memory: $(($MEMORY / 1024 / 1024 / 1024)) GB\n"
+echo -e "Total Memory: $(awk -v mem="$MEMORY" 'BEGIN {printf "%.1f", mem/1024/1024/1024}') GB\n"
 
 # Perf options
 if [ -z "$JVM_PERF_OPTS" ]; then
