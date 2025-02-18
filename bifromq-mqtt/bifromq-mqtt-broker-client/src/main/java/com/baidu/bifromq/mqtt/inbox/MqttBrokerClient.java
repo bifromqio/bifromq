@@ -17,8 +17,6 @@ import static com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply.Result.ERROR;
 import static java.util.Collections.emptyMap;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
-import com.baidu.bifromq.baserpc.exception.ServerNotFoundException;
-import com.baidu.bifromq.baserpc.exception.ServerUnreachableException;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubRequest;
@@ -27,16 +25,12 @@ import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil;
-import com.baidu.bifromq.plugin.subbroker.*;
-import com.baidu.bifromq.type.MatchInfo;
+import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
+import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
+import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.type.QoS;
 import com.google.common.base.Preconditions;
 import io.reactivex.rxjava3.core.Observable;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
@@ -48,12 +42,12 @@ final class MqttBrokerClient implements IMqttBrokerClient {
 
     MqttBrokerClient(MqttBrokerClientBuilder builder) {
         this.rpcClient = IRPCClient.newBuilder()
-            .bluePrint(RPCBluePrint.INSTANCE)
-            .executor(builder.executor)
-            .eventLoopGroup(builder.eventLoopGroup)
-            .sslContext(builder.sslContext)
-            .crdtService(builder.crdtService)
-            .build();
+                .bluePrint(RPCBluePrint.INSTANCE)
+                .executor(builder.executor)
+                .eventLoopGroup(builder.eventLoopGroup)
+                .sslContext(builder.sslContext)
+                .crdtService(builder.crdtService)
+                .build();
     }
 
     public IDeliverer open(String delivererKey) {
@@ -84,16 +78,16 @@ final class MqttBrokerClient implements IMqttBrokerClient {
                                            QoS qos,
                                            String brokerServerId) {
         return rpcClient.invoke(tenantId, brokerServerId, SubRequest.newBuilder()
-                .setReqId(reqId)
-                .setTenantId(tenantId)
-                .setSessionId(sessionId)
-                .setTopicFilter(topicFilter)
-                .setSubQoS(qos)
-                .build(), OnlineInboxBrokerGrpc.getSubMethod())
-            .exceptionally(e -> {
-                log.debug("Failed to sub", e);
-                return SubReply.newBuilder().setReqId(reqId).setResult(ERROR).build();
-            });
+                        .setReqId(reqId)
+                        .setTenantId(tenantId)
+                        .setSessionId(sessionId)
+                        .setTopicFilter(topicFilter)
+                        .setSubQoS(qos)
+                        .build(), OnlineInboxBrokerGrpc.getSubMethod())
+                .exceptionally(e -> {
+                    log.debug("Failed to sub", e);
+                    return SubReply.newBuilder().setReqId(reqId).setResult(ERROR).build();
+                });
     }
 
     @Override
@@ -103,18 +97,18 @@ final class MqttBrokerClient implements IMqttBrokerClient {
                                                String topicFilter,
                                                String brokerServerId) {
         return rpcClient.invoke(tenantId, brokerServerId, UnsubRequest.newBuilder()
-                    .setReqId(reqId)
-                    .setTenantId(tenantId)
-                    .setSessionId(sessionId)
-                    .setTopicFilter(topicFilter)
-                    .build(),
-                OnlineInboxBrokerGrpc.getUnsubMethod())
-            .exceptionally(e -> {
-                log.debug("Failed to unsub", e);
-                return UnsubReply.newBuilder()
-                    .setResult(UnsubReply.Result.ERROR)
-                    .build();
-            });
+                                .setReqId(reqId)
+                                .setTenantId(tenantId)
+                                .setSessionId(sessionId)
+                                .setTopicFilter(topicFilter)
+                                .build(),
+                        OnlineInboxBrokerGrpc.getUnsubMethod())
+                .exceptionally(e -> {
+                    log.debug("Failed to unsub", e);
+                    return UnsubReply.newBuilder()
+                            .setResult(UnsubReply.Result.ERROR)
+                            .build();
+                });
     }
 
     private class DeliveryPipeline implements IDeliverer {
@@ -122,7 +116,7 @@ final class MqttBrokerClient implements IMqttBrokerClient {
 
         DeliveryPipeline(String deliveryGroupKey) {
             ppln = rpcClient.createRequestPipeline("", DeliveryGroupKeyUtil.parseServerId(deliveryGroupKey), "",
-                emptyMap(), OnlineInboxBrokerGrpc.getWriteMethod());
+                    emptyMap(), OnlineInboxBrokerGrpc.getWriteMethod());
         }
 
         @Override
@@ -130,35 +124,10 @@ final class MqttBrokerClient implements IMqttBrokerClient {
             Preconditions.checkState(!hasStopped.get());
             long reqId = System.nanoTime();
             return ppln.invoke(WriteRequest.newBuilder()
-                    .setReqId(reqId)
-                    .setRequest(request)
-                    .build())
-                .thenApply(WriteReply::getReply)
-                .handle((reply, ex) -> {
-                    if (ex != null) {
-                        if (ex.getCause() instanceof ServerUnreachableException
-                                || ex.getCause() instanceof ServerNotFoundException) {
-                            DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder();
-                            Map<String, DeliveryResults> resultsMap = new HashMap<>();
-                            for (Map.Entry<String, DeliveryPackage> entry : request.getPackageMap().entrySet()) {
-                                String tenantId = entry.getKey();
-                                List<DeliveryResult> deliveryResults = new ArrayList<>();
-                                for (DeliveryPack pack: entry.getValue().getPackList()) {
-                                    for (MatchInfo matchInfo : pack.getMatchInfoList()) {
-                                        deliveryResults.add(DeliveryResult.newBuilder()
-                                                .setCode(DeliveryResult.Code.NO_SUB).setMatchInfo(matchInfo).build());
-                                    }
-                                }
-                                resultsMap.put(tenantId, DeliveryResults.newBuilder()
-                                        .addAllResult(deliveryResults).build());
-                            }
-                            return  replyBuilder.putAllResult(resultsMap).build();
-                        } else {
-                            throw new RuntimeException(ex);
-                        }
-                    }
-                    return reply;
-                });
+                            .setReqId(reqId)
+                            .setRequest(request)
+                            .build())
+                    .thenApply(WriteReply::getReply);
         }
 
         @Override
