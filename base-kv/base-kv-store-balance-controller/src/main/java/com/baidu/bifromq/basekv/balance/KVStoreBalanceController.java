@@ -13,31 +13,14 @@
 
 package com.baidu.bifromq.basekv.balance;
 
-import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
-import com.baidu.bifromq.basekv.balance.command.BootstrapCommand;
-import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
-import com.baidu.bifromq.basekv.balance.command.MergeCommand;
-import com.baidu.bifromq.basekv.balance.command.RangeCommand;
-import com.baidu.bifromq.basekv.balance.command.RecoveryCommand;
-import com.baidu.bifromq.basekv.balance.command.SplitCommand;
-import com.baidu.bifromq.basekv.balance.command.TransferLeadershipCommand;
+import com.baidu.bifromq.basekv.balance.command.*;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
 import com.baidu.bifromq.basekv.metaservice.LoadRulesProposalHandler;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
-import com.baidu.bifromq.basekv.store.proto.BootstrapRequest;
-import com.baidu.bifromq.basekv.store.proto.ChangeReplicaConfigReply;
-import com.baidu.bifromq.basekv.store.proto.ChangeReplicaConfigRequest;
-import com.baidu.bifromq.basekv.store.proto.KVRangeMergeReply;
-import com.baidu.bifromq.basekv.store.proto.KVRangeMergeRequest;
-import com.baidu.bifromq.basekv.store.proto.KVRangeSplitReply;
-import com.baidu.bifromq.basekv.store.proto.KVRangeSplitRequest;
-import com.baidu.bifromq.basekv.store.proto.RecoverRequest;
-import com.baidu.bifromq.basekv.store.proto.ReplyCode;
-import com.baidu.bifromq.basekv.store.proto.TransferLeadershipReply;
-import com.baidu.bifromq.basekv.store.proto.TransferLeadershipRequest;
+import com.baidu.bifromq.basekv.store.proto.*;
 import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
@@ -49,21 +32,18 @@ import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.Timer.Sample;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import lombok.Builder;
+import org.slf4j.Logger;
+
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
-import lombok.Builder;
-import org.slf4j.Logger;
 
 /**
  * The controller to manage the balance of KVStore.
@@ -176,12 +156,12 @@ public class KVStoreBalanceController {
                 // if disable field is not boolean, reject the proposal
                 return LoadRulesProposalHandler.Result.REJECTED;
             }
-            boolean needDisabled = disableField != null && disableField.getBoolValue();
             loadRules = disableField != null ? loadRules.toBuilder().removeFields("disable").build() : loadRules;
-            if (balancerState.disabled.compareAndSet(!needDisabled, needDisabled)) {
-                log.info("Balancer[{}] is {}", balancerFactoryClassFQN, needDisabled ? "disabled" : "enabled");
-            }
             if (balancerState.balancer.validate(loadRules)) {
+                boolean needDisabled = disableField != null && disableField.getBoolValue();
+                if (balancerState.disabled.compareAndSet(!needDisabled, needDisabled)) {
+                    log.info("Balancer[{}] is {}", balancerFactoryClassFQN, needDisabled ? "disabled" : "enabled");
+                }
                 return LoadRulesProposalHandler.Result.ACCEPTED;
             }
             return LoadRulesProposalHandler.Result.REJECTED;
