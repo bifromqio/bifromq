@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
-import static com.baidu.bifromq.apiserver.Headers.HEADER_SERVICE_NAME;
+import static com.baidu.bifromq.apiserver.Headers.HEADER_BALANCER_FACTORY_CLASS;
 import static com.baidu.bifromq.apiserver.Headers.HEADER_STORE_NAME;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -56,6 +56,7 @@ public class GetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<GetL
     public void noClusterFound() {
         DefaultFullHttpRequest req = buildRequest(HttpMethod.GET);
         req.headers().set(HEADER_STORE_NAME.header, "fakeUserId");
+        req.headers().set(HEADER_BALANCER_FACTORY_CLASS.header, "fakeBalancerFactoryClass");
         GetLoadRulesHandler handler = new GetLoadRulesHandler(metaService);
         FullHttpResponse resp = handler.handle(123, req).join();
         assertEquals(resp.status(), HttpResponseStatus.NOT_FOUND);
@@ -64,8 +65,10 @@ public class GetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<GetL
     @Test
     public void clusterChanged() {
         String clusterId = "dist.worker";
+        String balancerFacClass = "balancerFactoryClass";
         DefaultFullHttpRequest req = buildRequest(HttpMethod.GET);
         req.headers().set(HEADER_STORE_NAME.header, clusterId);
+        req.headers().set(HEADER_BALANCER_FACTORY_CLASS.header, balancerFacClass);
         when(metaService.metadataManager(eq(clusterId))).thenReturn(metadataManager);
         when(metadataManager.loadRules()).thenReturn(mockLoadRulesSubject);
 
@@ -86,9 +89,11 @@ public class GetLoadRulesHandlerTest extends AbstractHTTPRequestHandlerTest<GetL
     @Test
     public void loadRules() {
         String storeName = "dist.worker";
+        String balancerFacClass = "balancerFactoryClass";
         DefaultFullHttpRequest req = buildRequest(HttpMethod.GET);
-        Map<String, Struct> loadRules = Map.of("balancerClass", Struct.getDefaultInstance());
+        Map<String, Struct> loadRules = Map.of("balancerFactoryClass", Struct.getDefaultInstance());
         req.headers().set(HEADER_STORE_NAME.header, storeName);
+        req.headers().set(HEADER_BALANCER_FACTORY_CLASS.header, balancerFacClass);
         when(metaService.metadataManager(eq(storeName))).thenReturn(metadataManager);
         when(metadataManager.loadRules()).thenReturn(mockLoadRulesSubject);
         mockClusterIdSubject.onNext(Set.of(storeName));
