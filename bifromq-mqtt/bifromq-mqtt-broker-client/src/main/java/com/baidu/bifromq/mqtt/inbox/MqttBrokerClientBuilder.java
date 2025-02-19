@@ -14,6 +14,7 @@
 package com.baidu.bifromq.mqtt.inbox;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baserpc.IRPCClient;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import java.util.concurrent.Executor;
@@ -32,6 +33,12 @@ public final class MqttBrokerClientBuilder implements IMqttBrokerClientBuilder {
     Executor executor;
 
     public IMqttBrokerClient build() {
-        return new MqttBrokerClient(this);
+        return new MqttBrokerClient(IRPCClient.newBuilder()
+                .bluePrint(RPCBluePrint.INSTANCE)
+                .executor(executor)
+                .eventLoopGroup(eventLoopGroup)
+                .sslContext(sslContext)
+                .crdtService(crdtService)
+                .build());
     }
 }
