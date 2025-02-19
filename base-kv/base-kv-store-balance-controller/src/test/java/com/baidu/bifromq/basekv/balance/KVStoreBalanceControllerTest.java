@@ -384,6 +384,15 @@ public class KVStoreBalanceControllerTest {
         assertEquals(result, LoadRulesProposalHandler.Result.REJECTED);
     }
 
+    @Test
+    public void testDisableFieldRemovedBeforeValidation() {
+        ArgumentCaptor<LoadRulesProposalHandler> captor = ArgumentCaptor.forClass(LoadRulesProposalHandler.class);
+        verify(metadataManager).setLoadRulesProposalHandler(captor.capture());
+        LoadRulesProposalHandler.Result result = captor.getValue().handle(balancerFactory.getClass().getName(),
+            Struct.newBuilder().putFields("disable", Value.newBuilder().setBoolValue(true).build()).build());
+        verify(storeBalancer).validate(argThat(s -> !s.containsFields("disable")));
+    }
+
     private Set<KVRangeStoreDescriptor> generateDescriptor() {
         KVRangeId id = KVRangeIdUtil.generate();
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1");
