@@ -102,9 +102,22 @@ public class BoundaryUtilTest {
 
         assertFalse(inRange(copyFromUtf8("b"), copyFromUtf8("d"), copyFromUtf8("a"), copyFromUtf8("c")));
 
+        Boundary _a = boundary(null, "a");
+        Boundary _b = boundary(null, "b");
+        Boundary a_ = boundary("a", null);
+        Boundary b_ = boundary("b", null);
         Boundary a_e = boundary("a", "e");
         Boundary b_d = boundary("b", "d");
 
+        assertTrue(inRange(_a, _a));
+        assertTrue(inRange(_a, _b));
+        assertFalse(inRange(_b, _a));
+        assertTrue(inRange(a_, a_));
+        assertFalse(inRange(a_, b_));
+        assertTrue(inRange(b_, a_));
+        assertFalse(inRange(_a, a_));
+        assertTrue(inRange(a_e, a_));
+        assertFalse(inRange(a_, a_e));
         assertFalse(inRange(a_e, b_d));
         assertTrue(inRange(b_d, a_e));
         assertTrue(inRange(a_e, a_e));

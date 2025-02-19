@@ -40,7 +40,7 @@ public abstract class StoreBalancer {
     }
 
     public boolean validate(Struct loadRules) {
-        return false;
+        return Struct.getDefaultInstance().equals(loadRules);
     }
 
     /**

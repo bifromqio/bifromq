@@ -281,35 +281,10 @@ public class BoundaryUtil {
      */
     public static boolean inRange(ByteString startKey1, ByteString endKey1, ByteString startKey2, ByteString endKey2) {
         assert isValid(startKey1, endKey1) && isValid(startKey2, endKey2);
-
-        if (startKey2 == null && endKey2 == null) {
-            // open-ended range
+        if (startKey1 == null && ByteString.EMPTY.equals(endKey1)) {
             return true;
         }
-        if (startKey2 != null && endKey2 == null) {
-            // right open-ended
-            if (startKey1 == null) {
-                return MIN_KEY.equals(endKey1);
-            }
-            // start2 <= start1
-            return compare(startKey1, startKey2) >= 0;
-        }
-        if (startKey2 == null) {
-            // left open-ended
-            if (endKey1 == null) {
-                return false;
-            }
-            // end1 <= end2
-            return compare(endKey1, endKey2) <= 0;
-        }
-        // range2 is closed ended
-        if (startKey1 == null && endKey1 == null) {
-            return false;
-        } else if (startKey1 == null) {
-            return ByteString.EMPTY.equals(endKey1);
-        } else {
-            return compare(startKey2, startKey1) <= 0 && compare(endKey1, endKey2) <= 0;
-        }
+        return compareStartKey(startKey2, startKey1) <= 0 && compareEndKeys(endKey1, endKey2) <= 0;
     }
 
     public static ByteString upperBound(ByteString key) {
