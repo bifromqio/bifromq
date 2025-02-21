@@ -33,10 +33,7 @@ import com.baidu.bifromq.type.QoS;
 import com.google.common.base.Preconditions;
 import io.reactivex.rxjava3.core.Observable;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
@@ -136,15 +133,16 @@ final class MqttBrokerClient implements IMqttBrokerClient {
                             Map<String, DeliveryResults> resultsMap = new HashMap<>();
                             for (Map.Entry<String, DeliveryPackage> entry : request.getPackageMap().entrySet()) {
                                 String tenantId = entry.getKey();
-                                List<DeliveryResult> deliveryResults = new ArrayList<>();
+                                Set<MatchInfo> noSub = new HashSet<>();
+                                DeliveryResults.Builder deliveryResultsBuilder = DeliveryResults.newBuilder();
                                 for (DeliveryPack pack: entry.getValue().getPackList()) {
-                                    for (MatchInfo matchInfo : pack.getMatchInfoList()) {
-                                        deliveryResults.add(DeliveryResult.newBuilder()
-                                                .setCode(DeliveryResult.Code.NO_SUB).setMatchInfo(matchInfo).build());
-                                    }
+                                    noSub.addAll(pack.getMatchInfoList());
                                 }
-                                resultsMap.put(tenantId, DeliveryResults.newBuilder()
-                                        .addAllResult(deliveryResults).build());
+                                noSub.forEach(matchInfo -> deliveryResultsBuilder.addResult(DeliveryResult.newBuilder()
+                                        .setMatchInfo(matchInfo)
+                                        .setCode(DeliveryResult.Code.NO_SUB)
+                                        .build()));
+                                resultsMap.put(tenantId, deliveryResultsBuilder.build());
                             }
                             return  replyBuilder.putAllResult(resultsMap).build();
                         } else {

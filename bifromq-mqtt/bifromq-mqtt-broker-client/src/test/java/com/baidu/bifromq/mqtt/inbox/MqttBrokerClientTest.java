@@ -37,7 +37,9 @@ public class MqttBrokerClientTest {
             .build();
     private final DeliveryRequest request = DeliveryRequest.newBuilder()
             .putPackage(tenantId, DeliveryPackage.newBuilder()
-                    .addPack(DeliveryPack.newBuilder().addMatchInfo(matchInfo).build())
+                    .addPack(DeliveryPack.newBuilder()
+                            .addMatchInfo(matchInfo)
+                            .addMatchInfo(matchInfo).build())
                     .build())
             .build();
 
@@ -92,6 +94,7 @@ public class MqttBrokerClientTest {
         DeliveryReply reply = deliverer.deliver(request).join();
         DeliveryResults results = reply.getResultMap().get(tenantId);
         assert  results != null;
+        assert results.getResultList().size() == 1;
         DeliveryResult result = results.getResult(0);
         assert result.getCode() == DeliveryResult.Code.NO_SUB;
         assert result.getMatchInfo().equals(matchInfo);
