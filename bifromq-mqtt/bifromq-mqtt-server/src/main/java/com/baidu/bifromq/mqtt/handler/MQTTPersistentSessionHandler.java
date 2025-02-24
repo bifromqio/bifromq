@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
-import static com.baidu.bifromq.inbox.records.ScopedInbox.distInboxId;
+import static com.baidu.bifromq.inbox.records.ScopedInbox.receiverId;
 import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCount;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubLatency;
@@ -310,7 +310,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
             .setTenantId(tenantId)
             .setMatchInfo(MatchInfo.newBuilder()
                 .setTopicFilter(topicFilter)
-                .setReceiverId(distInboxId(userSessionId, incarnation))
+                .setReceiverId(receiverId(userSessionId, incarnation))
                 .setIncarnation(option.getIncarnation())
                 .build())
             .setDelivererKey(getDelivererKey(tenantId, userSessionId))

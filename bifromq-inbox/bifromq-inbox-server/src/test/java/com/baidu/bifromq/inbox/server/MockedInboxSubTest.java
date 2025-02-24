@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static com.baidu.bifromq.inbox.records.ScopedInbox.distInboxId;
+import static com.baidu.bifromq.inbox.records.ScopedInbox.receiverId;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -234,7 +234,7 @@ public class MockedInboxSubTest extends MockedInboxService {
             .build(), streamObserver);
 
         verify(distClient).addTopicMatch(eq(reqId), eq(tenantId), eq(topicFilter),
-            eq(distInboxId(inboxId, incarnation)), anyString(), eq(1), anyLong());
+            eq(receiverId(inboxId, incarnation)), anyString(), eq(1), anyLong());
         verify(streamObserver).onNext(argThat(reply ->
             reply.getReqId() == reqId && reply.getCode() == SubReply.Code.EXCEED_LIMIT));
         verify(streamObserver).onCompleted();
@@ -272,7 +272,7 @@ public class MockedInboxSubTest extends MockedInboxService {
             .build(), streamObserver);
 
         verify(distClient).addTopicMatch(eq(reqId), eq(tenantId), eq(topicFilter),
-            eq(distInboxId(inboxId, incarnation)), anyString(), eq(1), anyLong());
+            eq(receiverId(inboxId, incarnation)), anyString(), eq(1), anyLong());
         verify(streamObserver).onNext(argThat(reply ->
             reply.getReqId() == reqId && reply.getCode() == code));
         verify(streamObserver).onCompleted();

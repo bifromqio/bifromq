@@ -104,7 +104,7 @@ public class InboxInsertTest extends InboxStoreTest {
             .setIncarnation(incarnation)
             .setVersion(0)
             .setTopicFilter(topicFilter)
-            .setOption(TopicFilterOption.newBuilder().setQos(qos).build())
+            .setOption(TopicFilterOption.newBuilder().setIncarnation(1L).setQos(qos).build())
             .setNow(now)
             .build());
 
@@ -116,6 +116,7 @@ public class InboxInsertTest extends InboxStoreTest {
             .setIncarnation(incarnation)
             .addMessagePack(SubMessagePack.newBuilder()
                 .setTopicFilter(topicFilter)
+                .setIncarnation(1L)
                 .addMessages(TopicMessagePack.newBuilder()
                     .setTopic(topicFilter)
                     .addMessage(msg1)
@@ -125,7 +126,7 @@ public class InboxInsertTest extends InboxStoreTest {
             .build()).get(0);
         assertEquals(insertResult.getCode(), BatchInsertReply.Code.OK);
         assertEquals(insertResult.getInsertionResult(0).getTopicFilter(), topicFilter);
-        assertFalse(insertResult.getInsertionResult(0).getRejected());
+        assertEquals(insertResult.getInsertionResult(0).getIncarnation(), 1L);
 
         Fetched fetched = requestFetch(
             BatchFetchRequest.Params.newBuilder()
@@ -174,7 +175,7 @@ public class InboxInsertTest extends InboxStoreTest {
             .setIncarnation(incarnation)
             .setVersion(0)
             .setTopicFilter(topicFilter)
-            .setOption(TopicFilterOption.newBuilder().setQos(qos).build())
+            .setOption(TopicFilterOption.newBuilder().setIncarnation(1L).setQos(qos).build())
             .setNow(now)
             .build());
         TopicMessagePack.PublisherPack msg1 = message(qos, "hello");
@@ -185,6 +186,7 @@ public class InboxInsertTest extends InboxStoreTest {
             .setIncarnation(incarnation)
             .addMessagePack(SubMessagePack.newBuilder()
                 .setTopicFilter(topicFilter)
+                .setIncarnation(1L)
                 .addMessages(TopicMessagePack.newBuilder()
                     .setTopic(topicFilter)
                     .addMessage(msg1)
@@ -194,7 +196,7 @@ public class InboxInsertTest extends InboxStoreTest {
             .build()).get(0);
         assertEquals(insertResult.getCode(), BatchInsertReply.Code.OK);
         assertEquals(insertResult.getInsertionResult(0).getTopicFilter(), topicFilter);
-        assertFalse(insertResult.getInsertionResult(0).getRejected());
+        assertEquals(insertResult.getInsertionResult(0).getIncarnation(), 1L);
 
         Fetched fetched = requestFetch(BatchFetchRequest.Params.newBuilder()
             .setTenantId(tenantId)

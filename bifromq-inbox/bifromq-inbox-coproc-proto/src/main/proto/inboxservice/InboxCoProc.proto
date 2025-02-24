@@ -248,7 +248,8 @@ message BatchFetchReply{
 // insert won't change version & lastActive timestamp
 message SubMessagePack{
   string topicFilter = 1;
-  repeated commontype.TopicMessagePack messages = 2;
+  uint64 incarnation = 2; // the incarnation of the subscription
+  repeated commontype.TopicMessagePack messages = 3;
 }
 message InboxSubMessagePack{
   string tenantId = 1;
@@ -269,13 +270,14 @@ message BatchInsertReply{
   }
   message InsertionResult{
     string topicFilter = 1;
-    bool rejected = 2; // if the insertion for the topic filter is rejected
+    uint64 incarnation = 2;
+    bool rejected = 3;
   }
   message Result{
     Code code = 1;
-    repeated InsertionResult insertionResult = 2;
+    repeated InsertionResult insertionResult = 2; // same order as messagePack
   }
-  repeated Result result = 1;
+  repeated Result result = 1; // same order as inboxSubMsgPack
 }
 
 message BatchCommitRequest{

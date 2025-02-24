@@ -258,16 +258,18 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     @Override
     public boolean publish(String topicFilter, long incarnation, List<TopicMessagePack> topicMsgPacks) {
         TopicFilterOption option = topicFilters.get(topicFilter);
-        if (option == null || option.getIncarnation() != incarnation || !ctx.channel().isActive()) {
+        if (option == null || !ctx.channel().isActive()) {
             return false;
+        }
+        if (option.getIncarnation() > incarnation) {
+            log.debug("Receive message from previous subscription: topicFilter={}, inc={}, prevInc={}",
+                topicFilter, option.getIncarnation(), incarnation);
         }
         ctx.executor().execute(() -> publish(topicFilter, option, topicMsgPacks));
         return true;
     }
 
-    private void publish(String topicFilter,
-                         TopicFilterOption option,
-                         List<TopicMessagePack> topicMsgPacks) {
+    private void publish(String topicFilter, TopicFilterOption option, List<TopicMessagePack> topicMsgPacks) {
         assert ctx.executor().inEventLoop();
         if (!ctx.channel().isActive()) {
             return;

@@ -22,22 +22,19 @@ public record ScopedInbox(String tenantId, String inboxId, long incarnation) imp
         .thenComparing(ScopedInbox::inboxId)
         .thenComparing(ScopedInbox::incarnation);
 
-    public static String distInboxId(String inboxId, long incarnation) {
+    public static String receiverId(String inboxId, long incarnation) {
         return inboxId + SEPARATOR + incarnation;
     }
 
     public static ScopedInbox from(String tenantId, MatchInfo subInfo) {
-        int splitAt = subInfo.getReceiverId().lastIndexOf(SEPARATOR);
+        String receiverId = subInfo.getReceiverId();
+        int splitAt = receiverId.lastIndexOf(SEPARATOR);
         return new ScopedInbox(tenantId,
-            subInfo.getReceiverId().substring(0, splitAt),
-            Long.parseUnsignedLong(subInfo.getReceiverId().substring(splitAt + 1)));
+            receiverId.substring(0, splitAt), Long.parseUnsignedLong(receiverId.substring(splitAt + 1)));
     }
 
-    public MatchInfo convertTo(String topicFilter) {
-        return MatchInfo.newBuilder()
-            .setReceiverId(inboxId + SEPARATOR + incarnation)
-            .setTopicFilter(topicFilter)
-            .build();
+    public String receiverId() {
+        return inboxId + SEPARATOR + incarnation;
     }
 
     @Override

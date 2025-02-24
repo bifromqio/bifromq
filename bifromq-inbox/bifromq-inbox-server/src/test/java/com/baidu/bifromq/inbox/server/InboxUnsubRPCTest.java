@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static com.baidu.bifromq.inbox.records.ScopedInbox.distInboxId;
+import static com.baidu.bifromq.inbox.records.ScopedInbox.receiverId;
 import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -171,9 +171,9 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
 
         CheckReply checkReply = inboxClient.check(CheckRequest.newBuilder()
             .setTenantId(tenantId)
-            .setDelivererKey(getDelivererKey(inboxId, distInboxId(inboxId, incarnation)))
+            .setDelivererKey(getDelivererKey(inboxId, receiverId(inboxId, incarnation)))
             .addMatchInfo(MatchInfo.newBuilder()
-                .setReceiverId(distInboxId(inboxId, incarnation))
+                .setReceiverId(receiverId(inboxId, incarnation))
                 .setTopicFilter(topicFilter)
                 .build())
             .build()).join();

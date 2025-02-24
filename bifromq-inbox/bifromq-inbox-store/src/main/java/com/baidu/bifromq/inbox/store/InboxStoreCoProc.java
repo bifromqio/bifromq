@@ -725,13 +725,20 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                     .setCode(BatchInsertReply.Code.OK);
                 List<SubMessage> qos0MsgList = new ArrayList<>();
                 List<SubMessage> bufferMsgList = new ArrayList<>();
-                Map<String, Boolean> reject = new HashMap<>();
                 for (SubMessagePack messagePack : params.getMessagePackList()) {
                     TopicFilterOption tfOption = metadata.getTopicFiltersMap().get(messagePack.getTopicFilter());
                     if (tfOption == null) {
-                        reject.put(messagePack.getTopicFilter(), true);
+                        resBuilder.addInsertionResult(BatchInsertReply.InsertionResult.newBuilder()
+                            .setTopicFilter(messagePack.getTopicFilter())
+                            .setIncarnation(messagePack.getIncarnation())
+                            .setRejected(true)
+                            .build());
                     } else {
-                        reject.put(messagePack.getTopicFilter(), false);
+                        if (tfOption.getIncarnation() > messagePack.getIncarnation()) {
+                            // messages from old sub incarnation
+                            log.debug("Receive message from previous subscription: topicFilter={}, inc={}, prevInc={}",
+                                messagePack.getTopicFilter(), tfOption.getIncarnation(), messagePack.getIncarnation());
+                        }
                         for (TopicMessagePack topicMsgPack : messagePack.getMessagesList()) {
                             String topic = topicMsgPack.getTopic();
                             for (TopicMessagePack.PublisherPack publisherPack : topicMsgPack.getMessageList()) {
@@ -749,17 +756,20 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                     switch (finalQoS) {
                                         case AT_MOST_ONCE -> qos0MsgList.add(subMessage);
                                         case AT_LEAST_ONCE, EXACTLY_ONCE -> bufferMsgList.add(subMessage);
+                                        default -> {
+                                            // never happen, do nothing
+                                        }
                                     }
                                 }
                             }
                         }
+                        resBuilder.addInsertionResult(BatchInsertReply.InsertionResult.newBuilder()
+                            .setTopicFilter(messagePack.getTopicFilter())
+                            .setIncarnation(messagePack.getIncarnation())
+                            .setRejected(false)
+                            .build());
                     }
                 }
-                resBuilder.addAllInsertionResult(reject.entrySet().stream()
-                    .map(e -> BatchInsertReply.InsertionResult.newBuilder()
-                        .setTopicFilter(e.getKey())
-                        .setRejected(e.getValue())
-                        .build()).toList());
                 InboxMetadata.Builder metadataBuilder = metadata.toBuilder();
                 dropOldestMap.put(metadata.getClient(), metadata.getDropOldest());
                 ByteString metadataKey =

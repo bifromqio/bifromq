@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static com.baidu.bifromq.inbox.records.ScopedInbox.distInboxId;
+import static com.baidu.bifromq.inbox.records.ScopedInbox.receiverId;
 import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
@@ -67,7 +67,7 @@ public class InboxInsertTest extends InboxServiceTest {
             TopicMessagePack.PublisherPack.newBuilder().addMessage(msg).build();
         TopicMessagePack pack = TopicMessagePack.newBuilder().setTopic("topic").addMessage(publisherPack).build();
         MatchInfo matchInfo =
-            MatchInfo.newBuilder().setReceiverId(distInboxId(inboxId, incarnation)).setTopicFilter("topic").build();
+            MatchInfo.newBuilder().setReceiverId(receiverId(inboxId, incarnation)).setTopicFilter("topic").build();
         reqBuilder.putPackage(tenantId, DeliveryPackage.newBuilder()
             .addPack(DeliveryPack.newBuilder().setMessagePack(pack).addMatchInfo(matchInfo).build()).build());
 
@@ -126,7 +126,7 @@ public class InboxInsertTest extends InboxServiceTest {
         TopicMessagePack pack1 = TopicMessagePack.newBuilder().setTopic("topic").addMessage(publisherPack).build();
         TopicMessagePack pack2 = TopicMessagePack.newBuilder().setTopic("topic").addMessage(publisherPack).build();
         MatchInfo matchInfo =
-            MatchInfo.newBuilder().setReceiverId(distInboxId(inboxId, incarnation)).setTopicFilter("topic").build();
+            MatchInfo.newBuilder().setReceiverId(receiverId(inboxId, incarnation)).setTopicFilter("topic").build();
         DeliveryRequest req1 = DeliveryRequest.newBuilder().putPackage(tenantId, DeliveryPackage.newBuilder()
             .addPack(DeliveryPack.newBuilder().setMessagePack(pack1).addMatchInfo(matchInfo).build()).build()).build();
         DeliveryRequest req2 = DeliveryRequest.newBuilder().putPackage(tenantId, DeliveryPackage.newBuilder()

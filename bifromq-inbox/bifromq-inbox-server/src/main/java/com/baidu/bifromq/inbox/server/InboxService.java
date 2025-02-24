@@ -14,7 +14,7 @@
 package com.baidu.bifromq.inbox.server;
 
 import static com.baidu.bifromq.baserpc.server.UnaryResponse.response;
-import static com.baidu.bifromq.inbox.records.ScopedInbox.distInboxId;
+import static com.baidu.bifromq.inbox.records.ScopedInbox.receiverId;
 import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainEnabled;
@@ -337,7 +337,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     return distClient.addTopicMatch(request.getReqId(),
                             request.getTenantId(),
                             request.getTopicFilter(),
-                            distInboxId(request.getInboxId(), request.getIncarnation()),
+                            receiverId(request.getInboxId(), request.getIncarnation()),
                             getDelivererKey(request.getTenantId(), request.getInboxId()),
                             inboxClient.id(),
                             request.getOption().getIncarnation())
@@ -455,7 +455,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                                      long incarnation,
                                                      String topicFilter,
                                                      TopicFilterOption option) {
-        return distClient.removeTopicMatch(reqId, tenantId, topicFilter, distInboxId(inboxId, incarnation),
+        return distClient.removeTopicMatch(reqId, tenantId, topicFilter, receiverId(inboxId, incarnation),
             getDelivererKey(tenantId, inboxId), inboxClient.id(), option.getIncarnation());
     }
 

@@ -36,28 +36,29 @@ import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxWriter implements InboxWriterPipeline.ISendRequestHandler {
+class InboxWriter implements InboxWriterPipeline.ISendRequestHandler {
     private final IInboxInsertScheduler insertScheduler;
 
-    public InboxWriter(IInboxInsertScheduler insertScheduler) {
+    InboxWriter(IInboxInsertScheduler insertScheduler) {
         this.insertScheduler = insertScheduler;
     }
 
     @Override
     public CompletableFuture<SendReply> handle(SendRequest request) {
-        // scopedInbox -> topicFilter -> messagePack
-        Map<ScopedInbox, Map<String, List<TopicMessagePack>>> msgsByInbox = new HashMap<>();
+        // scopedInbox -> matchInfo -> messagePack
+        Map<ScopedInbox, Map<MatchInfo, List<TopicMessagePack>>> msgPackByInbox = new HashMap<>();
         // group messages by inboxId
         for (String tenantId : request.getRequest().getPackageMap().keySet()) {
             for (DeliveryPack pack : request.getRequest().getPackageMap().get(tenantId).getPackList()) {
                 for (MatchInfo matchInfo : pack.getMatchInfoList()) {
-                    msgsByInbox.computeIfAbsent(ScopedInbox.from(tenantId, matchInfo), k -> new HashMap<>())
-                        .computeIfAbsent(matchInfo.getTopicFilter(), k -> new LinkedList<>())
+                    ScopedInbox scopedInbox = ScopedInbox.from(tenantId, matchInfo);
+                    msgPackByInbox.computeIfAbsent(scopedInbox, k -> new HashMap<>())
+                        .computeIfAbsent(matchInfo, k -> new LinkedList<>())
                         .add(pack.getMessagePack());
                 }
             }
         }
-        List<CompletableFuture<BatchInsertReply.Result>> replyFutures = msgsByInbox.entrySet()
+        List<CompletableFuture<BatchInsertReply.Result>> replyFutures = msgPackByInbox.entrySet()
             .stream()
             .map(entry -> insertScheduler.schedule(InboxSubMessagePack.newBuilder()
                     .setTenantId(entry.getKey().tenantId())
@@ -65,55 +66,61 @@ public class InboxWriter implements InboxWriterPipeline.ISendRequestHandler {
                     .setIncarnation(entry.getKey().incarnation())
                     .addAllMessagePack(entry.getValue().entrySet().stream()
                         .map(e -> SubMessagePack.newBuilder()
-                            .setTopicFilter(e.getKey())
-                            .addAllMessages(e.getValue())
-                            .build()).toList())
+                            .setTopicFilter(e.getKey().getTopicFilter())
+                            .setIncarnation(e.getKey().getIncarnation())
+                            .addAllMessages(e.getValue()).build())
+                        .toList())
                     .build())
-                .exceptionally(
-                    e -> {
-                        log.debug("Failed to insert", e);
-                        return BatchInsertReply.Result.newBuilder()
-                            .setCode(BatchInsertReply.Code.ERROR)
-                            .build();
-                    }))
+                .exceptionally(e -> {
+                    log.debug("Failed to insert", e);
+                    return BatchInsertReply.Result.newBuilder()
+                        .setCode(BatchInsertReply.Code.ERROR)
+                        .build();
+                }))
             .toList();
         return CompletableFuture.allOf(replyFutures.toArray(new CompletableFuture[0]))
             .thenApply(v -> replyFutures.stream().map(CompletableFuture::join).collect(Collectors.toList()))
             .thenApply(results -> {
-                assert results.size() == msgsByInbox.size();
-                int i = 0;
                 SendReply.Builder replyBuilder = SendReply.newBuilder().setReqId(request.getReqId());
                 Map<String, Map<MatchInfo, DeliveryResult.Code>> tenantMatchResultMap = new HashMap<>();
-                for (ScopedInbox scopedInbox : msgsByInbox.keySet()) {
+                int i = 0;
+                for (ScopedInbox scopedInbox : msgPackByInbox.keySet()) {
+                    String receiverId = scopedInbox.receiverId();
                     BatchInsertReply.Result result = results.get(i++);
                     Map<MatchInfo, DeliveryResult.Code> matchResultMap =
                         tenantMatchResultMap.computeIfAbsent(scopedInbox.tenantId(), k -> new HashMap<>());
                     switch (result.getCode()) {
                         case OK -> {
-                            for (BatchInsertReply.InsertionResult insertionResult : result.getInsertionResultList()) {
-                                matchResultMap.putIfAbsent(scopedInbox.convertTo(insertionResult.getTopicFilter()),
-                                    insertionResult.getRejected() ? DeliveryResult.Code.NO_SUB :
-                                        DeliveryResult.Code.OK);
-                            }
+                            assert result.getInsertionResultCount() == msgPackByInbox.get(scopedInbox).size();
+                            result.getInsertionResultList().forEach(insertionResult -> {
+                                DeliveryResult.Code code = insertionResult.getRejected()
+                                    ? DeliveryResult.Code.NO_SUB : DeliveryResult.Code.OK;
+                                matchResultMap.putIfAbsent(MatchInfo.newBuilder()
+                                    .setReceiverId(receiverId)
+                                    .setTopicFilter(insertionResult.getTopicFilter())
+                                    .setIncarnation(insertionResult.getIncarnation())
+                                    .build(), code);
+                            });
                         }
                         case NO_INBOX -> {
-                            for (String topicFilter : msgsByInbox.get(scopedInbox)
-                                .keySet()) {
-                                matchResultMap.putIfAbsent(scopedInbox.convertTo(topicFilter),
-                                    DeliveryResult.Code.NO_RECEIVER);
+                            for (MatchInfo matchInfo : msgPackByInbox.get(scopedInbox).keySet()) {
+                                matchResultMap.putIfAbsent(matchInfo, DeliveryResult.Code.NO_RECEIVER);
                             }
                         }
                         case ERROR -> {
-                            for (String topicFilter : msgsByInbox.get(scopedInbox)
-                                .keySet()) {
-                                matchResultMap.putIfAbsent(scopedInbox.convertTo(topicFilter),
-                                    DeliveryResult.Code.ERROR);
+                            for (MatchInfo matchInfo : msgPackByInbox.get(scopedInbox).keySet()) {
+                                matchResultMap.putIfAbsent(matchInfo, DeliveryResult.Code.ERROR);
+                            }
+                        }
+                        default -> {
+                            log.error("Unexpected result code: {}", result.getCode());
+                            for (MatchInfo matchInfo : msgPackByInbox.get(scopedInbox).keySet()) {
+                                matchResultMap.putIfAbsent(matchInfo, DeliveryResult.Code.ERROR);
                             }
                         }
                     }
                 }
-                return replyBuilder
-                    .setReqId(request.getReqId())
+                return replyBuilder.setReqId(request.getReqId())
                     .setReply(DeliveryReply.newBuilder()
                         .putAllResult(toResult(tenantMatchResultMap))
                         .build())
