@@ -17,6 +17,8 @@ import static com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply.Result.ERROR;
 import static java.util.Collections.emptyMap;
 
 import com.baidu.bifromq.baserpc.IRPCClient;
+import com.baidu.bifromq.baserpc.exception.ServerNotFoundException;
+import com.baidu.bifromq.baserpc.exception.ServerUnreachableException;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.OnlineInboxBrokerGrpc;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.SubRequest;
@@ -25,12 +27,13 @@ import com.baidu.bifromq.mqtt.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import com.baidu.bifromq.mqtt.inbox.util.DeliveryGroupKeyUtil;
-import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
-import com.baidu.bifromq.plugin.subbroker.DeliveryRequest;
-import com.baidu.bifromq.plugin.subbroker.IDeliverer;
+import com.baidu.bifromq.plugin.subbroker.*;
+import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.QoS;
 import com.google.common.base.Preconditions;
 import io.reactivex.rxjava3.core.Observable;
+
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
@@ -40,14 +43,8 @@ final class MqttBrokerClient implements IMqttBrokerClient {
     private final AtomicBoolean hasStopped = new AtomicBoolean();
     private final IRPCClient rpcClient;
 
-    MqttBrokerClient(MqttBrokerClientBuilder builder) {
-        this.rpcClient = IRPCClient.newBuilder()
-            .bluePrint(RPCBluePrint.INSTANCE)
-            .executor(builder.executor)
-            .eventLoopGroup(builder.eventLoopGroup)
-            .sslContext(builder.sslContext)
-            .crdtService(builder.crdtService)
-            .build();
+    MqttBrokerClient(IRPCClient rpcClient) {
+        this.rpcClient = rpcClient;
     }
 
     public IDeliverer open(String delivererKey) {
@@ -127,7 +124,33 @@ final class MqttBrokerClient implements IMqttBrokerClient {
                     .setReqId(reqId)
                     .setRequest(request)
                     .build())
-                .thenApply(WriteReply::getReply);
+                .thenApply(WriteReply::getReply)
+                .handle((reply, ex) -> {
+                    if (ex != null) {
+                        if (ex.getCause() instanceof ServerUnreachableException
+                                || ex.getCause() instanceof ServerNotFoundException) {
+                            DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder();
+                            Map<String, DeliveryResults> resultsMap = new HashMap<>();
+                            for (Map.Entry<String, DeliveryPackage> entry : request.getPackageMap().entrySet()) {
+                                String tenantId = entry.getKey();
+                                Set<MatchInfo> noSub = new HashSet<>();
+                                DeliveryResults.Builder deliveryResultsBuilder = DeliveryResults.newBuilder();
+                                for (DeliveryPack pack: entry.getValue().getPackList()) {
+                                    noSub.addAll(pack.getMatchInfoList());
+                                }
+                                noSub.forEach(matchInfo -> deliveryResultsBuilder.addResult(DeliveryResult.newBuilder()
+                                        .setMatchInfo(matchInfo)
+                                        .setCode(DeliveryResult.Code.NO_SUB)
+                                        .build()));
+                                resultsMap.put(tenantId, deliveryResultsBuilder.build());
+                            }
+                            return  replyBuilder.putAllResult(resultsMap).build();
+                        } else {
+                            throw new RuntimeException(ex);
+                        }
+                    }
+                    return reply;
+                });
         }
 
         @Override
