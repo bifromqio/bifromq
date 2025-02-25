@@ -19,7 +19,7 @@
     <parent>
         <artifactId>bifromq-parent</artifactId>
         <groupId>com.baidu.bifromq</groupId>
-        <version>3.3.4</version>
+        <version>3.3.5</version>
     </parent>
     <packaging>pom</packaging>
 
