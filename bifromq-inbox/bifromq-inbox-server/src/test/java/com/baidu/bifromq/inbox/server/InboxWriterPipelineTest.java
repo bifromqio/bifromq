@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static com.baidu.bifromq.inbox.server.InboxWriterTest.matchInfo;
-import static com.baidu.bifromq.inbox.server.InboxWriterTest.sendRequest;
+import static com.baidu.bifromq.inbox.server.Fixtures.matchInfo;
+import static com.baidu.bifromq.inbox.server.Fixtures.sendRequest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
@@ -48,7 +48,6 @@ import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-
 
 @Slf4j
 public class InboxWriterPipelineTest {
@@ -141,13 +140,11 @@ public class InboxWriterPipelineTest {
             .build();
     }
 
-
     @Test
     public void testConstructorDirectMemoryUsageCatch() {
         when(memUsage.nettyDirectMemoryUsage())
             .thenReturn(IngressSlowDownDirectMemoryUsage.INSTANCE.get() + 0.1f);
         when(memUsage.heapMemoryUsage()).thenReturn(IngressSlowDownHeapMemoryUsage.INSTANCE.get() - 0.1f);
-
         testMemoryUsageThresholdExceed();
     }
 
@@ -167,11 +164,9 @@ public class InboxWriterPipelineTest {
         testMemoryUsageThresholdExceed();
     }
 
-
     private void testMemoryUsageThresholdExceed() {
         when(inboxWriter.handle(any())).thenReturn(CompletableFuture.completedFuture(SendReply.getDefaultInstance()));
         doNothing().when(fetcherSignaler).afterWrite(any(), any());
-
         try (MockedStatic<MemUsage> mocked = Mockito.mockStatic(MemUsage.class)) {
             mocked.when(MemUsage::local).thenReturn(memUsage);
             SendRequest sendRequest = SendRequest.getDefaultInstance();
