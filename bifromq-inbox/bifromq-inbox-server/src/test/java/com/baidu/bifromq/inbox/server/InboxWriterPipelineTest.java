@@ -13,6 +13,13 @@
 
 package com.baidu.bifromq.inbox.server;
 
+import static com.baidu.bifromq.inbox.server.InboxWriterTest.matchInfo;
+import static com.baidu.bifromq.inbox.server.InboxWriterTest.sendRequest;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+
 import com.baidu.bifromq.baseenv.MemUsage;
 import com.baidu.bifromq.baserpc.RPCContext;
 import com.baidu.bifromq.baserpc.metrics.IRPCMeter;
@@ -25,35 +32,26 @@ import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResults;
 import com.baidu.bifromq.sysprops.props.IngressSlowDownDirectMemoryUsage;
 import com.baidu.bifromq.sysprops.props.IngressSlowDownHeapMemoryUsage;
-import com.baidu.bifromq.type.MatchInfo;
 import io.grpc.Context;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import java.lang.reflect.Field;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-
-import static com.baidu.bifromq.inbox.records.ScopedInbox.receiverId;
-import static com.baidu.bifromq.inbox.server.InboxWriterTest.matchInfo;
-import static com.baidu.bifromq.inbox.server.InboxWriterTest.sendRequest;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.when;
-import static org.testng.Assert.assertEquals;
 
 @Slf4j
 public class InboxWriterPipelineTest {
-    private static final String TENANT_ID = "testTenantId";
 
     private AutoCloseable closeable;
 
@@ -79,10 +77,10 @@ public class InboxWriterPipelineTest {
         Map<String, String> metaData = new HashMap<>();
         metaData.put(PipelineUtil.PIPELINE_ATTR_KEY_ID, "id");
         Context.current()
-                .withValue(RPCContext.METER_KEY_CTX_KEY, createMockMeter())
-                .withValue(RPCContext.TENANT_ID_CTX_KEY, TENANT_ID)
-                .withValue(RPCContext.CUSTOM_METADATA_CTX_KEY, metaData)
-                .attach();
+            .withValue(RPCContext.METER_KEY_CTX_KEY, createMockMeter())
+            .withValue(RPCContext.TENANT_ID_CTX_KEY, "tenantId")
+            .withValue(RPCContext.CUSTOM_METADATA_CTX_KEY, metaData)
+            .attach();
     }
 
     private IRPCMeter.IRPCMethodMeter createMockMeter() {
@@ -133,70 +131,56 @@ public class InboxWriterPipelineTest {
 
     private SendReply createSendReply(DeliveryResult.Code code) {
         return SendReply.newBuilder()
-                .setReqId(1)
-                .setReply(DeliveryReply.newBuilder()
-                        .putResult(TENANT_ID, DeliveryResults.newBuilder()
-                                .addResult(DeliveryResult.newBuilder()
-                                        .setMatchInfo(matchInfo())
-                                        .setCode(code).build()).build())
-                        .build())
-                .build();
+            .setReqId(1)
+            .setReply(DeliveryReply.newBuilder()
+                .putResult("tenantId", DeliveryResults.newBuilder()
+                    .addResult(DeliveryResult.newBuilder()
+                        .setMatchInfo(matchInfo())
+                        .setCode(code).build()).build())
+                .build())
+            .build();
     }
 
 
     @Test
     public void testConstructorDirectMemoryUsageCatch() {
-        // Equal, used to trigger subsequent comparisons
         when(memUsage.nettyDirectMemoryUsage())
-                .thenReturn(IngressSlowDownDirectMemoryUsage.INSTANCE.get() + 0.1f);
+            .thenReturn(IngressSlowDownDirectMemoryUsage.INSTANCE.get() + 0.1f);
         when(memUsage.heapMemoryUsage()).thenReturn(IngressSlowDownHeapMemoryUsage.INSTANCE.get() - 0.1f);
+
         testMemoryUsageThresholdExceed();
     }
 
     @Test
     public void testConstructorHeapMemoryUsageCatch() {
-        // Equal, used to trigger subsequent comparisons
         when(memUsage.nettyDirectMemoryUsage())
-                .thenReturn(IngressSlowDownDirectMemoryUsage.INSTANCE.get() - 0.1f);
+            .thenReturn(IngressSlowDownDirectMemoryUsage.INSTANCE.get() - 0.1f);
         when(memUsage.heapMemoryUsage()).thenReturn(IngressSlowDownHeapMemoryUsage.INSTANCE.get() + 0.1f);
         testMemoryUsageThresholdExceed();
     }
 
     @Test
     public void testConstructorHeapMemoryUsageAllNotCatch() {
-        // Equal, used to trigger subsequent comparisons
         when(memUsage.nettyDirectMemoryUsage())
-                .thenReturn(IngressSlowDownDirectMemoryUsage.INSTANCE.get() - 0.1f);
+            .thenReturn(IngressSlowDownDirectMemoryUsage.INSTANCE.get() - 0.1f);
         when(memUsage.heapMemoryUsage()).thenReturn(IngressSlowDownHeapMemoryUsage.INSTANCE.get() - 0.1f);
         testMemoryUsageThresholdExceed();
     }
 
 
-    public void testMemoryUsageThresholdExceed() {
-
+    private void testMemoryUsageThresholdExceed() {
         when(inboxWriter.handle(any())).thenReturn(CompletableFuture.completedFuture(SendReply.getDefaultInstance()));
         doNothing().when(fetcherSignaler).afterWrite(any(), any());
-        setLocalMemUsage(memUsage);
 
-        SendRequest sendRequest = SendRequest.getDefaultInstance();
-        InboxWriterPipeline writerPipeline = new InboxWriterPipeline(fetcherSignaler, inboxWriter, responseObserver);
-        writerPipeline.onNext(sendRequest);
-        SendReply sendReply = writerPipeline.handleRequest("_", sendRequest).join();
-        assertEquals(sendReply, SendReply.getDefaultInstance());
-    }
-
-
-    public static void setLocalMemUsage(MemUsage memUsage) {
-        Field threadLocalField;
-        try {
-            threadLocalField = MemUsage.class.getDeclaredField("THREAD_LOCAL");
-            threadLocalField.setAccessible(true);
-            ThreadLocal<MemUsage> threadLocal = (ThreadLocal<MemUsage>) threadLocalField.get(null);
-            threadLocal.set(memUsage);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            throw new RuntimeException(e);
+        try (MockedStatic<MemUsage> mocked = Mockito.mockStatic(MemUsage.class)) {
+            mocked.when(MemUsage::local).thenReturn(memUsage);
+            SendRequest sendRequest = SendRequest.getDefaultInstance();
+            InboxWriterPipeline writerPipeline =
+                new InboxWriterPipeline(fetcherSignaler, inboxWriter, responseObserver);
+            writerPipeline.onNext(sendRequest);
+            SendReply sendReply = writerPipeline.handleRequest("_", sendRequest).join();
+            assertEquals(sendReply, SendReply.getDefaultInstance());
         }
-
     }
 
 }
