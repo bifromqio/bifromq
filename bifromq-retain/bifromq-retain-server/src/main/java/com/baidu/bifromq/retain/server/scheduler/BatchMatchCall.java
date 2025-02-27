@@ -44,7 +44,6 @@ import com.baidu.bifromq.retain.rpc.proto.MatchResult;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcInput;
 import com.baidu.bifromq.retain.utils.KeyUtil;
 import com.baidu.bifromq.type.TopicMessage;
-import com.google.common.primitives.UnsignedBytes;
 import com.google.protobuf.ByteString;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -187,12 +186,13 @@ public class BatchMatchCall implements IBatchCall<MatchCall, MatchCallResult, Ma
             assert isNormalTopicFilter(topicFilter);
             if (isWildcardTopicFilter(topicFilter)) {
                 List<String> filterLevels = parse(topicFilter, false);
+                short levels = (short) filterLevels.size();
                 ByteString startKey = isMultiWildcardTopicFilter(topicFilter)
-                    ? retainKeyPrefix(batcherKey.tenantId(), filterLevels.size() - 1, filterPrefix(filterLevels)) :
-                    retainKeyPrefix(batcherKey.tenantId(), filterLevels.size(), filterPrefix(filterLevels));
+                    ? retainKeyPrefix(batcherKey.tenantId(), (short) (levels - 1), filterPrefix(filterLevels))
+                    : retainKeyPrefix(batcherKey.tenantId(), levels, filterPrefix(filterLevels));
                 ByteString endKey = isMultiWildcardTopicFilter(topicFilter)
-                    ? retainKeyPrefix(batcherKey.tenantId(), UnsignedBytes.MAX_VALUE, filterPrefix(filterLevels)) :
-                    retainKeyPrefix(batcherKey.tenantId(), filterLevels.size() + 1, filterLevels);
+                    ? retainKeyPrefix(batcherKey.tenantId(), (short) 0xFFFF, filterPrefix(filterLevels))
+                    : retainKeyPrefix(batcherKey.tenantId(), (short) (levels + 1), filterLevels);
                 Boundary topicBoundary = Boundary.newBuilder().setStartKey(startKey).setEndKey(endKey).build();
                 List<KVRangeSetting> rangeSettingList = findByBoundary(topicBoundary, effectiveRouter);
                 for (KVRangeSetting rangeSetting : rangeSettingList) {

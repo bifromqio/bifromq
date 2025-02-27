@@ -43,7 +43,7 @@ public class KeyUtil {
     }
 
     public static ByteString retainKey(ByteString tenantNS, String topic) {
-        return tenantNS.concat(unsafeWrap(new byte[] {(byte) parse(topic, false).size()}))
+        return tenantNS.concat(toByteString((short) parse(topic, false).size()))
             .concat(copyFromUtf8(escape(topic)));
     }
 
@@ -56,15 +56,15 @@ public class KeyUtil {
         return filterLevels.subList(0, firstWildcard);
     }
 
-    public static ByteString retainKeyPrefix(String tenantId, int levels, List<String> filterPrefix) {
+    public static ByteString retainKeyPrefix(String tenantId, short levels, List<String> filterPrefix) {
         return tenantNS(tenantId)
-            .concat(unsafeWrap(new byte[] {(byte) levels}))
+            .concat(toByteString(levels))
             .concat(copyFromUtf8(fastJoin(NUL, filterPrefix)));
     }
 
     public static ByteString retainKeyPrefix(ByteString tenantNS, List<String> topicFilterLevels) {
         ByteString prefix = ByteString.empty();
-        byte leastLevels = 0;
+        short leastLevels = 0;
         boolean singleLevelWildcard = false;
         for (int i = 0; i < topicFilterLevels.size(); i++) {
             String tfl = topicFilterLevels.get(i);
@@ -86,7 +86,7 @@ public class KeyUtil {
                 }
             }
         }
-        return tenantNS.concat(unsafeWrap(new byte[] {leastLevels})).concat(prefix);
+        return tenantNS.concat(toByteString(leastLevels)).concat(prefix);
     }
 
     public static boolean isTenantNS(ByteString key) {
@@ -107,12 +107,20 @@ public class KeyUtil {
 
     public static List<String> parseTopic(ByteString retainKey) {
         String escapedTopic =
-            retainKey.substring(TENANT_ID_PREFIX_LENGTH + tenantIdLength(retainKey) + 1).toStringUtf8();
+            retainKey.substring(TENANT_ID_PREFIX_LENGTH + tenantIdLength(retainKey) + Short.BYTES).toStringUtf8();
         return parse(escapedTopic, true);
     }
 
     static ByteString toByteString(int i) {
         return unsafeWrap(toBytes(i));
+    }
+
+    static ByteString toByteString(short s) {
+        return unsafeWrap(toBytes(s));
+    }
+
+    static byte[] toBytes(short s) {
+        return ByteBuffer.allocate(Short.BYTES).putShort(s).array();
     }
 
     static byte[] toBytes(int i) {

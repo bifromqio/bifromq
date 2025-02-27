@@ -20,10 +20,10 @@ import static com.baidu.bifromq.retain.utils.KeyUtil.parseTopic;
 import static com.baidu.bifromq.retain.utils.KeyUtil.retainKey;
 import static com.baidu.bifromq.retain.utils.KeyUtil.retainKeyPrefix;
 import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
+import static com.baidu.bifromq.retain.utils.KeyUtil.toByteString;
 import static com.baidu.bifromq.util.TopicConst.NUL;
 import static com.baidu.bifromq.util.TopicUtil.parse;
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
@@ -34,7 +34,7 @@ import org.testng.annotations.Test;
 public class KeyUtilTest {
 
     private static ByteString levelByte(int value) {
-        return unsafeWrap(new byte[] {(byte) value});
+        return toByteString((short) value);
     }
 
     @Test

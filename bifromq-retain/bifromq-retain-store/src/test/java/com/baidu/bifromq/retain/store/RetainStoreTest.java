@@ -18,9 +18,6 @@ import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainNumGauge;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainSpaceGauge;
-import static com.baidu.bifromq.retain.utils.MessageUtil.buildGCRequest;
-import static com.baidu.bifromq.retain.utils.MessageUtil.buildMatchRequest;
-import static com.baidu.bifromq.retain.utils.MessageUtil.buildRetainRequest;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
@@ -51,6 +48,7 @@ import com.baidu.bifromq.metrics.TenantMetric;
 import com.baidu.bifromq.retain.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.BatchRetainRequest;
 import com.baidu.bifromq.retain.rpc.proto.GCReply;
+import com.baidu.bifromq.retain.rpc.proto.GCRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchParam;
 import com.baidu.bifromq.retain.rpc.proto.MatchResult;
 import com.baidu.bifromq.retain.rpc.proto.RetainMessage;
@@ -117,12 +115,9 @@ public class RetainStoreTest {
         Metrics.globalRegistry.add(meterRegistry);
         dbRootDir = Files.createTempDirectory("");
 
-        AgentHostOptions agentHostOpts = AgentHostOptions.builder()
-            .addr("127.0.0.1")
-            .baseProbeInterval(Duration.ofSeconds(10))
-            .joinRetryInSec(5)
-            .joinTimeout(Duration.ofMinutes(5))
-            .build();
+        AgentHostOptions agentHostOpts =
+            AgentHostOptions.builder().addr("127.0.0.1").baseProbeInterval(Duration.ofSeconds(10)).joinRetryInSec(5)
+                .joinTimeout(Duration.ofMinutes(5)).build();
         agentHost = IAgentHost.newInstance(agentHostOpts);
 
         crdtService = ICRDTService.newInstance(agentHost, CRDTServiceOptions.builder().build());
@@ -132,21 +127,16 @@ public class RetainStoreTest {
 
         String uuid = UUID.randomUUID().toString();
         options = new KVRangeStoreOptions();
-        ((RocksDBCPableKVEngineConfigurator) options.getDataEngineConfigurator())
-            .dbCheckpointRootDir(Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid)
-                .toString())
+        ((RocksDBCPableKVEngineConfigurator) options.getDataEngineConfigurator()).dbCheckpointRootDir(
+                Paths.get(dbRootDir.toString(), DB_CHECKPOINT_DIR_NAME, uuid).toString())
             .dbRootDir(Paths.get(dbRootDir.toString(), DB_NAME, uuid).toString());
-        ((RocksDBWALableKVEngineConfigurator) options.getWalEngineConfigurator())
-            .dbRootDir(Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
-        bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
-            EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
+        ((RocksDBWALableKVEngineConfigurator) options.getWalEngineConfigurator()).dbRootDir(
+            Paths.get(dbRootDir.toString(), DB_WAL_NAME, uuid).toString());
+        bgTaskExecutor = new ScheduledThreadPoolExecutor(1, EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
 
-        storeClient = IBaseKVStoreClient
-            .newBuilder()
-            .clusterId(IRetainStore.CLUSTER_NAME)
-            .trafficService(trafficService)
-            .metaService(metaService)
-            .build();
+        storeClient =
+            IBaseKVStoreClient.newBuilder().clusterId(IRetainStore.CLUSTER_NAME).trafficService(trafficService)
+                .metaService(metaService).build();
         buildStoreServer();
         rpcServer.start();
         storeClient.join();
@@ -155,19 +145,11 @@ public class RetainStoreTest {
 
     private void buildStoreServer() {
         RPCServerBuilder rpcServerBuilder = IRPCServer.newBuilder().host("127.0.0.1").trafficService(trafficService);
-        testStore = IRetainStore.builder()
-            .rpcServerBuilder(rpcServerBuilder)
-            .agentHost(agentHost)
-            .metaService(metaService)
-            .retainStoreClient(storeClient)
-            .storeOptions(options)
-            .tickerThreads(tickerThreads)
-            .bgTaskExecutor(bgTaskExecutor)
-            .gcInterval(Duration.ofSeconds(60))
-            .balancerFactoryConfig(
-                Map.of(RangeBootstrapBalancerFactory.class.getName(),
-                    Struct.getDefaultInstance()))
-            .build();
+        testStore =
+            IRetainStore.builder().rpcServerBuilder(rpcServerBuilder).agentHost(agentHost).metaService(metaService)
+                .retainStoreClient(storeClient).storeOptions(options).tickerThreads(tickerThreads)
+                .bgTaskExecutor(bgTaskExecutor).gcInterval(Duration.ofSeconds(60)).balancerFactoryConfig(
+                    Map.of(RangeBootstrapBalancerFactory.class.getName(), Struct.getDefaultInstance())).build();
         rpcServer = rpcServerBuilder.build();
     }
 
@@ -191,10 +173,7 @@ public class RetainStoreTest {
         crdtService.close();
         agentHost.close();
         try {
-            Files.walk(dbRootDir)
-                .sorted(Comparator.reverseOrder())
-                .map(Path::toFile)
-                .forEach(File::delete);
+            Files.walk(dbRootDir).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
         } catch (IOException e) {
             log.error("Failed to delete db root dir", e);
         }
@@ -209,22 +188,14 @@ public class RetainStoreTest {
         KVRangeSetting s = findByKey(tenantNS, storeClient.latestEffectiveRouter()).get();
         String topic = topicMsg.getTopic();
         Message message = topicMsg.getMessage();
-        BatchRetainRequest request = BatchRetainRequest.newBuilder()
-            .setReqId(message.getMessageId())
-            .putParams(tenantId, RetainParam.newBuilder()
-                .putTopicMessages(topic, RetainMessage.newBuilder()
-                    .setMessage(message)
-                    .setPublisher(topicMsg.getPublisher())
-                    .build())
-                .build())
+        BatchRetainRequest request = BatchRetainRequest.newBuilder().setReqId(message.getMessageId())
+            .putParams(tenantId, RetainParam.newBuilder().putTopicMessages(topic,
+                RetainMessage.newBuilder().setMessage(message).setPublisher(topicMsg.getPublisher()).build()).build())
             .build();
         RetainServiceRWCoProcInput input = buildRetainRequest(request);
-        KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
-            .setReqId(reqId)
-            .setVer(s.ver)
-            .setKvRangeId(s.id)
-            .setRwCoProc(RWCoProcInput.newBuilder().setRetainService(input).build())
-            .build()).join();
+        KVRangeRWReply reply = storeClient.execute(s.leader,
+            KVRangeRWRequest.newBuilder().setReqId(reqId).setVer(s.ver).setKvRangeId(s.id)
+                .setRwCoProc(RWCoProcInput.newBuilder().setRetainService(input).build()).build()).join();
         assertEquals(reply.getReqId(), reqId);
         assertEquals(reply.getCode(), ReplyCode.Ok);
         RetainServiceRWCoProcOutput output = reply.getRwCoProcResult().getRetainService();
@@ -241,20 +212,13 @@ public class RetainStoreTest {
         long reqId = ThreadLocalRandom.current().nextInt();
         ByteString tenantNS = KeyUtil.tenantNS(tenantId);
         KVRangeSetting s = findByKey(tenantNS, storeClient.latestEffectiveRouter()).get();
-        BatchMatchRequest request = BatchMatchRequest.newBuilder()
-            .setReqId(reqId)
-            .putMatchParams(tenantId, MatchParam.newBuilder()
-                .setNow(now)
-                .putTopicFilters(topicFilter, limit)
-                .build())
+        BatchMatchRequest request = BatchMatchRequest.newBuilder().setReqId(reqId)
+            .putMatchParams(tenantId, MatchParam.newBuilder().setNow(now).putTopicFilters(topicFilter, limit).build())
             .build();
         RetainServiceROCoProcInput input = buildMatchRequest(request);
-        KVRangeROReply reply = storeClient.query(s.leader, KVRangeRORequest.newBuilder()
-            .setReqId(reqId)
-            .setVer(s.ver)
-            .setKvRangeId(s.id)
-            .setRoCoProc(ROCoProcInput.newBuilder().setRetainService(input).build())
-            .build()).join();
+        KVRangeROReply reply = storeClient.query(s.leader,
+            KVRangeRORequest.newBuilder().setReqId(reqId).setVer(s.ver).setKvRangeId(s.id)
+                .setRoCoProc(ROCoProcInput.newBuilder().setRetainService(input).build()).build()).join();
         assertEquals(reply.getReqId(), reqId);
         assertEquals(reply.getCode(), ReplyCode.Ok);
         RetainServiceROCoProcOutput output = reply.getRoCoProcResult().getRetainService();
@@ -267,12 +231,9 @@ public class RetainStoreTest {
         long reqId = ThreadLocalRandom.current().nextInt();
         KVRangeSetting s = findByBoundary(FULL_BOUNDARY, storeClient.latestEffectiveRouter()).get(0);
         RetainServiceRWCoProcInput input = buildGCRequest(reqId, now, tenantId, expirySeconds);
-        KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
-            .setReqId(reqId)
-            .setVer(s.ver)
-            .setKvRangeId(s.id)
-            .setRwCoProc(RWCoProcInput.newBuilder().setRetainService(input).build())
-            .build()).join();
+        KVRangeRWReply reply = storeClient.execute(s.leader,
+            KVRangeRWRequest.newBuilder().setReqId(reqId).setVer(s.ver).setKvRangeId(s.id)
+                .setRwCoProc(RWCoProcInput.newBuilder().setRetainService(input).build()).build()).join();
         assertEquals(reply.getReqId(), reqId);
         assertEquals(reply.getCode(), ReplyCode.Ok);
         RetainServiceRWCoProcOutput output = reply.getRwCoProcResult().getRetainService();
@@ -293,9 +254,9 @@ public class RetainStoreTest {
         await().until(() -> {
             boolean found = false;
             for (Meter meter : meterRegistry.getMeters()) {
-                if (meter.getId().getType() == Meter.Type.GAUGE
-                    && meter.getId().getName().equals(gaugeMetric.metricName)
-                    && Objects.equals(meter.getId().getTag("tenantId"), tenantId)) {
+                if (meter.getId().getType() == Meter.Type.GAUGE &&
+                    meter.getId().getName().equals(gaugeMetric.metricName) &&
+                    Objects.equals(meter.getId().getTag("tenantId"), tenantId)) {
                     found = true;
                 }
             }
@@ -307,9 +268,9 @@ public class RetainStoreTest {
         AtomicReference<Gauge> holder = new AtomicReference<>();
         await().until(() -> {
             for (Meter meter : meterRegistry.getMeters()) {
-                if (meter.getId().getType() == Meter.Type.GAUGE
-                    && meter.getId().getName().equals(gaugeMetric.metricName)
-                    && Objects.equals(meter.getId().getTag("tenantId"), tenantId)) {
+                if (meter.getId().getType() == Meter.Type.GAUGE &&
+                    meter.getId().getName().equals(gaugeMetric.metricName) &&
+                    Objects.equals(meter.getId().getTag("tenantId"), tenantId)) {
                     holder.set((Gauge) meter);
                     break;
                 }
@@ -324,15 +285,28 @@ public class RetainStoreTest {
     }
 
     protected TopicMessage message(String topic, String payload, long timestamp, int expirySeconds) {
-        return TopicMessage.newBuilder()
-            .setTopic(topic)
-            .setMessage(Message.newBuilder()
-                .setMessageId(System.nanoTime())
-                .setPayload(ByteString.copyFromUtf8(payload))
-                .setTimestamp(timestamp)
-                .setExpiryInterval(expirySeconds)
-                .build())
-            .setPublisher(ClientInfo.getDefaultInstance())
-            .build();
+        return TopicMessage.newBuilder().setTopic(topic).setMessage(
+                Message.newBuilder().setMessageId(System.nanoTime()).setPayload(ByteString.copyFromUtf8(payload))
+                    .setTimestamp(timestamp).setExpiryInterval(expirySeconds).build())
+            .setPublisher(ClientInfo.getDefaultInstance()).build();
+    }
+
+    private RetainServiceRWCoProcInput buildGCRequest(long reqId, long now, String tenantId, Integer expirySeconds) {
+        GCRequest.Builder reqBuilder = GCRequest.newBuilder().setReqId(reqId).setNow(now);
+        if (tenantId != null) {
+            reqBuilder.setTenantId(tenantId);
+        }
+        if (expirySeconds != null) {
+            reqBuilder.setExpirySeconds(expirySeconds);
+        }
+        return RetainServiceRWCoProcInput.newBuilder().setGc(reqBuilder.build()).build();
+    }
+
+    private RetainServiceRWCoProcInput buildRetainRequest(BatchRetainRequest request) {
+        return RetainServiceRWCoProcInput.newBuilder().setBatchRetain(request).build();
+    }
+
+    private RetainServiceROCoProcInput buildMatchRequest(BatchMatchRequest request) {
+        return RetainServiceROCoProcInput.newBuilder().setBatchMatch(request).build();
     }
 }

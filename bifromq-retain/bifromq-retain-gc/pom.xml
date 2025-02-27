@@ -17,6 +17,10 @@
             <artifactId>base-kv-store-client</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-retain-coproc-proto</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
         </dependency>

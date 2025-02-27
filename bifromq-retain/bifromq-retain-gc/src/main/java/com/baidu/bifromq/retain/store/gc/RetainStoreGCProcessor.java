@@ -17,13 +17,14 @@ import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
-import static com.baidu.bifromq.retain.utils.MessageUtil.buildGCRequest;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
+import com.baidu.bifromq.retain.rpc.proto.GCRequest;
+import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcInput;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import javax.annotation.Nullable;
@@ -70,12 +71,21 @@ public class RetainStoreGCProcessor implements IRetainStoreGCProcessor {
                                               @Nullable String tenantId,
                                               @Nullable Integer expirySeconds,
                                               long now) {
+        GCRequest.Builder reqBuilder = GCRequest.newBuilder().setReqId(reqId).setNow(now);
+        if (tenantId != null) {
+            reqBuilder.setTenantId(tenantId);
+        }
+        if (expirySeconds != null) {
+            reqBuilder.setExpirySeconds(expirySeconds);
+        }
         return storeClient.execute(rangeSetting.leader, KVRangeRWRequest.newBuilder()
                 .setReqId(reqId)
                 .setKvRangeId(rangeSetting.id)
                 .setVer(rangeSetting.ver)
                 .setRwCoProc(RWCoProcInput.newBuilder()
-                    .setRetainService(buildGCRequest(reqId, now, tenantId, expirySeconds))
+                    .setRetainService(RetainServiceRWCoProcInput.newBuilder()
+                        .setGc(reqBuilder.build())
+                        .build())
                     .build())
                 .build())
             .thenApply(reply -> {
