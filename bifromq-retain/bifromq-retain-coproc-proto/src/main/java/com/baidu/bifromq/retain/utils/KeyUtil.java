@@ -14,10 +14,8 @@
 package com.baidu.bifromq.retain.utils;
 
 import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
-import static com.baidu.bifromq.util.TopicConst.NUL;
 import static com.baidu.bifromq.util.TopicConst.SINGLE_WILDCARD;
 import static com.baidu.bifromq.util.TopicUtil.escape;
-import static com.baidu.bifromq.util.TopicUtil.fastJoin;
 import static com.baidu.bifromq.util.TopicUtil.parse;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
@@ -42,16 +40,22 @@ public class KeyUtil {
         return retainKey(tenantNS(tenantId), topic);
     }
 
-    public static ByteString retainKey(ByteString tenantNS, String topic) {
-        return tenantNS.concat(toByteString((short) parse(topic, false).size()))
+    private static ByteString retainKey(ByteString tenantNS, String topic) {
+        List<String> topicLevels = parse(topic, false);
+        short levels = (short) topicLevels.size();
+        return tenantNS.concat(toByteString(levels))
+            .concat(LevelHash.hash(topicLevels))
             .concat(copyFromUtf8(escape(topic)));
     }
 
     public static List<String> filterPrefix(List<String> filterLevels) {
         int firstWildcard = filterLevels.indexOf(SINGLE_WILDCARD);
         if (firstWildcard == -1) {
-            assert filterLevels.get(filterLevels.size() - 1).equals(MULTI_WILDCARD);
-            firstWildcard = filterLevels.size() - 1;
+            if (filterLevels.get(filterLevels.size() - 1).equals(MULTI_WILDCARD)) {
+                firstWildcard = filterLevels.size() - 1;
+                return filterLevels.subList(0, firstWildcard);
+            }
+            return filterLevels;
         }
         return filterLevels.subList(0, firstWildcard);
     }
@@ -59,34 +63,7 @@ public class KeyUtil {
     public static ByteString retainKeyPrefix(String tenantId, short levels, List<String> filterPrefix) {
         return tenantNS(tenantId)
             .concat(toByteString(levels))
-            .concat(copyFromUtf8(fastJoin(NUL, filterPrefix)));
-    }
-
-    public static ByteString retainKeyPrefix(ByteString tenantNS, List<String> topicFilterLevels) {
-        ByteString prefix = ByteString.empty();
-        short leastLevels = 0;
-        boolean singleLevelWildcard = false;
-        for (int i = 0; i < topicFilterLevels.size(); i++) {
-            String tfl = topicFilterLevels.get(i);
-            if ("+".equals(tfl)) {
-                leastLevels++;
-                singleLevelWildcard = true;
-                continue;
-            }
-            if ("#".equals(tfl)) {
-                break;
-            }
-            leastLevels++;
-            if (!singleLevelWildcard) {
-                prefix = prefix.concat(copyFromUtf8(tfl));
-            }
-            if (i + 1 < topicFilterLevels.size()) {
-                if (!topicFilterLevels.get(i + 1).equals("#") && !singleLevelWildcard) {
-                    prefix = prefix.concat(copyFromUtf8(NUL));
-                }
-            }
-        }
-        return tenantNS.concat(toByteString(leastLevels)).concat(prefix);
+            .concat(LevelHash.hash(filterPrefix));
     }
 
     public static boolean isTenantNS(ByteString key) {
@@ -101,13 +78,34 @@ public class KeyUtil {
         return key.substring(0, TENANT_ID_PREFIX_LENGTH + tenantIdLength(key));
     }
 
+    public static short parseLevel(ByteString key) {
+        assert !isTenantNS(key);
+        int startIdx = TENANT_ID_PREFIX_LENGTH + tenantIdLength(key);
+        return parseLevel(key, startIdx);
+    }
+
+    private static short parseLevel(ByteString key, int startIdx) {
+        return toShort(key.substring(startIdx, startIdx + Short.BYTES));
+    }
+
+    public static ByteString parseLevelHash(ByteString key) {
+        assert !isTenantNS(key);
+        int tenantIdLength = tenantIdLength(key);
+        short levels = parseLevel(key, TENANT_ID_PREFIX_LENGTH + tenantIdLength);
+        int startIdx = TENANT_ID_PREFIX_LENGTH + tenantIdLength + Short.BYTES;
+        return key.substring(startIdx, startIdx + levels);
+    }
+
     private static int tenantIdLength(ByteString key) {
         return toInt(key.substring(SCHEMA_VER.size(), TENANT_ID_PREFIX_LENGTH));
     }
 
     public static List<String> parseTopic(ByteString retainKey) {
-        String escapedTopic =
-            retainKey.substring(TENANT_ID_PREFIX_LENGTH + tenantIdLength(retainKey) + Short.BYTES).toStringUtf8();
+        int tenantIdLength = tenantIdLength(retainKey);
+        short levels = toShort(retainKey.substring(TENANT_ID_PREFIX_LENGTH + tenantIdLength,
+            TENANT_ID_PREFIX_LENGTH + tenantIdLength + Short.BYTES));
+        String escapedTopic = retainKey.substring(TENANT_ID_PREFIX_LENGTH + tenantIdLength + Short.BYTES + levels)
+            .toStringUtf8();
         return parse(escapedTopic, true);
     }
 
@@ -131,5 +129,11 @@ public class KeyUtil {
         assert b.size() == Integer.BYTES;
         ByteBuffer buffer = b.asReadOnlyByteBuffer();
         return buffer.getInt();
+    }
+
+    static short toShort(ByteString s) {
+        assert s.size() == Short.BYTES;
+        ByteBuffer buffer = s.asReadOnlyByteBuffer();
+        return buffer.getShort();
     }
 }

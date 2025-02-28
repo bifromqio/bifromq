@@ -13,22 +13,13 @@
 
 package com.baidu.bifromq.retain.server.scheduler;
 
-import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
-import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
 import static com.baidu.bifromq.retain.rpc.proto.MatchReply.Result.ERROR;
 import static com.baidu.bifromq.retain.rpc.proto.MatchReply.Result.OK;
-import static com.baidu.bifromq.retain.utils.KeyUtil.filterPrefix;
-import static com.baidu.bifromq.retain.utils.KeyUtil.retainKeyPrefix;
-import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
-import static com.baidu.bifromq.util.TopicUtil.isMultiWildcardTopicFilter;
-import static com.baidu.bifromq.util.TopicUtil.isNormalTopicFilter;
-import static com.baidu.bifromq.util.TopicUtil.isWildcardTopicFilter;
-import static com.baidu.bifromq.util.TopicUtil.parse;
+import static com.baidu.bifromq.retain.server.scheduler.MatchCallRangeRouter.rangeLookup;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
-import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
@@ -42,9 +33,7 @@ import com.baidu.bifromq.retain.rpc.proto.MatchParam;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchResult;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcInput;
-import com.baidu.bifromq.retain.utils.KeyUtil;
 import com.baidu.bifromq.type.TopicMessage;
-import com.google.protobuf.ByteString;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -53,8 +42,6 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableMap;
-import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -94,7 +81,7 @@ public class BatchMatchCall implements IBatchCall<MatchCall, MatchCallResult, Ma
         long now = HLC.INST.getPhysical();
         long reqId = System.nanoTime();
         Map<KVRangeSetting, Set<String>> topicFiltersByRange =
-            rangeLookup(topicFilters, retainStoreClient.latestEffectiveRouter());
+            rangeLookup(batcherKey.tenantId(), topicFilters, retainStoreClient.latestEffectiveRouter());
         List<CompletableFuture<BatchMatchReply>> futures = new ArrayList<>(topicFiltersByRange.size());
         int limit = settingProvider.provide(Setting.RetainMessageMatchLimit, batcherKey.tenantId());
         for (KVRangeSetting rangeSetting : topicFiltersByRange.keySet()) {
@@ -176,35 +163,5 @@ public class BatchMatchCall implements IBatchCall<MatchCall, MatchCallResult, Ma
                 log.warn("Failed to exec ro co-proc[code={}]", v.getCode());
                 throw new RuntimeException("Failed to exec rw co-proc");
             });
-    }
-
-    private Map<KVRangeSetting, Set<String>> rangeLookup(Set<String> topicFilters,
-                                                         NavigableMap<Boundary, KVRangeSetting> effectiveRouter) {
-        Map<KVRangeSetting, Set<String>> topicFiltersByRange = new HashMap<>();
-        for (String topicFilter : topicFilters) {
-            // not shared subscription
-            assert isNormalTopicFilter(topicFilter);
-            if (isWildcardTopicFilter(topicFilter)) {
-                List<String> filterLevels = parse(topicFilter, false);
-                short levels = (short) filterLevels.size();
-                ByteString startKey = isMultiWildcardTopicFilter(topicFilter)
-                    ? retainKeyPrefix(batcherKey.tenantId(), (short) (levels - 1), filterPrefix(filterLevels))
-                    : retainKeyPrefix(batcherKey.tenantId(), levels, filterPrefix(filterLevels));
-                ByteString endKey = isMultiWildcardTopicFilter(topicFilter)
-                    ? retainKeyPrefix(batcherKey.tenantId(), (short) 0xFFFF, filterPrefix(filterLevels))
-                    : retainKeyPrefix(batcherKey.tenantId(), (short) (levels + 1), filterLevels);
-                Boundary topicBoundary = Boundary.newBuilder().setStartKey(startKey).setEndKey(endKey).build();
-                List<KVRangeSetting> rangeSettingList = findByBoundary(topicBoundary, effectiveRouter);
-                for (KVRangeSetting rangeSetting : rangeSettingList) {
-                    topicFiltersByRange.computeIfAbsent(rangeSetting, k -> new HashSet<>()).add(topicFilter);
-                }
-            } else {
-                ByteString retainKey = KeyUtil.retainKey(tenantNS(batcherKey.tenantId()), topicFilter);
-                Optional<KVRangeSetting> rangeSetting = findByKey(retainKey, retainStoreClient.latestEffectiveRouter());
-                assert rangeSetting.isPresent();
-                topicFiltersByRange.computeIfAbsent(rangeSetting.get(), k -> new HashSet<>()).add(topicFilter);
-            }
-        }
-        return topicFiltersByRange;
     }
 }

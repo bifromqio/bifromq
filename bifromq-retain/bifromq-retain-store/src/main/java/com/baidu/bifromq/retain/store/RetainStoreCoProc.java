@@ -15,7 +15,6 @@ package com.baidu.bifromq.retain.store;
 
 import static com.baidu.bifromq.retain.utils.KeyUtil.isTenantNS;
 import static com.baidu.bifromq.retain.utils.KeyUtil.parseTenantId;
-import static com.baidu.bifromq.retain.utils.KeyUtil.parseTenantNS;
 import static com.baidu.bifromq.retain.utils.KeyUtil.retainKey;
 import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
 import static java.util.Collections.emptyList;
@@ -281,8 +280,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
             for (itr.seekToFirst(); itr.isValid(); itr.next()) {
                 if (!isTenantNS(itr.key())) {
                     try {
-                        ByteString tenantNS = parseTenantNS(itr.key());
-                        String tenantId = parseTenantId(tenantNS);
+                        String tenantId = parseTenantId(itr.key());
                         TopicMessage topicMessage = TopicMessage.parseFrom(itr.value());
                         index.add(tenantId, topicMessage.getTopic(), topicMessage.getMessage().getTimestamp(),
                             topicMessage.getMessage().getExpiryInterval());
