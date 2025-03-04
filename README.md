@@ -44,7 +44,7 @@ the hosting server's physical memory for determining JVM parameters. This can re
 terminated by the host's Out-of-Memory (OOM) Killer. Refer to [here](https://bifromq.io/docs/installation/docker/)
 for more information.
 
-You can build a BifroMQ cluster using Docker Compose. Suppose you want to create a cluster with three nodes: node1, 
+You can build a BifroMQ cluster using Docker Compose on a single host for development and testing. Suppose you want to create a cluster with three nodes: node1, 
 node2, and node3. The directory structure should be as follows:
 ```
 |- docker-compose.yml
@@ -71,7 +71,7 @@ services:
     ports:
       - "1883:1883"
     environment:
-      - MEM_LIMIT=2147483648
+      - MEM_LIMIT=2147483648 # Adjust the value according to the actual host configuration.
     networks:
       - bifromq-net
 

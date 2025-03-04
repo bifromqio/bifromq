@@ -36,7 +36,7 @@ docker run -d -m <MEM_LIMIT> -e MEM_LIMIT='<MEM_LIMIT_IN_BYTES>' --name bifromq 
 替换`<MEM_LIMIT_IN_BYTES>`。如果未指定这些值，BifroMQ 默认使用宿主服务器的物理内存来确定JVM参数。这可能导致 Docker
 进程被宿主机的OOM Killer终止，更多供信息[参考](https://bifromq.io/zh-Hans/docs/installation/docker/)。
 
-你可以使用 Docker Compose 搭建 BifroMQ 集群。假设你想创建一个包含三个节点的集群：node1、node2 和 node3，目录结构如下：
+你可以使用Docker Compose在单个host上搭建BifroMQ集群用于开发和测试。假设你想创建一个包含三个节点的集群：node1、node2 和 node3，目录结构如下：
 ```
 |- docker-compose.yml
 |- node1
@@ -62,7 +62,7 @@ services:
     ports:
       - "1883:1883"
     environment:
-      - MEM_LIMIT=2147483648
+      - MEM_LIMIT=2147483648 # 根据host的实际配置进行调整
     networks:
       - bifromq-net
 
