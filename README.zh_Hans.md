@@ -36,6 +36,69 @@ docker run -d -m <MEM_LIMIT> -e MEM_LIMIT='<MEM_LIMIT_IN_BYTES>' --name bifromq 
 替换`<MEM_LIMIT_IN_BYTES>`。如果未指定这些值，BifroMQ 默认使用宿主服务器的物理内存来确定JVM参数。这可能导致 Docker
 进程被宿主机的OOM Killer终止，更多供信息[参考](https://bifromq.io/zh-Hans/docs/installation/docker/)。
 
+你可以使用Docker Compose在单个host上搭建BifroMQ集群用于开发和测试。假设你想创建一个包含三个节点的集群：node1、node2 和 node3，目录结构如下：
+```
+|- docker-compose.yml
+|- node1
+|- node2
+|- node3
+```
+每个节点对应的配置文件如下：
+```yml
+clusterConfig:
+  env: "Test"
+  host: bifromq-node1 # 对于node2和node3分别改成bifromq-node2和bifromq-node3
+  port: 8899
+  seedEndpoints: "bifromq-node1:8899,bifromq-node2:8899,bifromq-node3:8899"
+```
+`docker-compose.yml` 文件定义了三个节点的服务：
+```yml
+services:
+  bifromq-node1:
+    image: bifromq/bifromq:latest
+    container_name: bifromq-node1
+    volumes:
+      - ./node1/standalone.yml:/home/bifromq/conf/standalone.yml
+    ports:
+      - "1883:1883"
+    environment:
+      - MEM_LIMIT=2147483648 # 根据host的实际配置进行调整
+    networks:
+      - bifromq-net
+
+  bifromq-node2:
+    image: bifromq/bifromq:latest
+    container_name: bifromq-node2
+    volumes:
+      - ./node2/standalone.yml:/home/bifromq/conf/standalone.yml
+    ports:
+      - "1884:1883"
+    environment:
+      - MEM_LIMIT=2147483648
+    networks:
+      - bifromq-net
+
+  bifromq-node3:
+    image: bifromq/bifromq:latest
+    container_name: bifromq-node3
+    volumes:
+      - ./node3/standalone.yml:/home/bifromq/conf/standalone.yml
+    ports:
+      - "1885:1883"
+    environment:
+      - MEM_LIMIT=2147483648
+    networks:
+      - bifromq-net
+
+networks:
+  bifromq-net:
+    driver: bridge
+```
+运行以下命令启动集群：
+```shell
+docker compose up -d
+```
+
 ### 从源码构建
 
 #### 预备条件

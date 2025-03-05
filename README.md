@@ -44,6 +44,69 @@ the hosting server's physical memory for determining JVM parameters. This can re
 terminated by the host's Out-of-Memory (OOM) Killer. Refer to [here](https://bifromq.io/docs/installation/docker/)
 for more information.
 
+You can build a BifroMQ cluster using Docker Compose on a single host for development and testing. Suppose you want to create a cluster with three nodes: node1, 
+node2, and node3. The directory structure should be as follows:
+```
+|- docker-compose.yml
+|- node1
+|- node2
+|- node3
+```
+Each node should have a configuration file, it is defined as follows:
+```yml
+clusterConfig:
+  env: "Test"
+  host: bifromq-node1 # Change this to bifromq-node2 for node2 and bifromq-node3 for node3
+  port: 8899
+  seedEndpoints: "bifromq-node1:8899,bifromq-node2:8899,bifromq-node3:8899"
+```
+The `docker-compose.yml` file defines the services for the three nodes:
+```yml
+services:
+  bifromq-node1:
+    image: bifromq/bifromq:latest
+    container_name: bifromq-node1
+    volumes:
+      - ./node1/standalone.yml:/home/bifromq/conf/standalone.yml
+    ports:
+      - "1883:1883"
+    environment:
+      - MEM_LIMIT=2147483648 # Adjust the value according to the actual host configuration.
+    networks:
+      - bifromq-net
+
+  bifromq-node2:
+    image: bifromq/bifromq:latest
+    container_name: bifromq-node2
+    volumes:
+      - ./node2/standalone.yml:/home/bifromq/conf/standalone.yml
+    ports:
+      - "1884:1883"
+    environment:
+      - MEM_LIMIT=2147483648
+    networks:
+      - bifromq-net
+
+  bifromq-node3:
+    image: bifromq/bifromq:latest
+    container_name: bifromq-node3
+    volumes:
+      - ./node3/standalone.yml:/home/bifromq/conf/standalone.yml
+    ports:
+      - "1885:1883"
+    environment:
+      - MEM_LIMIT=2147483648
+    networks:
+      - bifromq-net
+
+networks:
+  bifromq-net:
+    driver: bridge
+```
+To launch the cluster, run the following command:
+```shell
+docker compose up -d
+```
 ### Build from source
 
 #### Prerequisites
