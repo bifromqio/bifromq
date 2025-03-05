@@ -15,11 +15,15 @@ package com.baidu.bifromq.retain.server.scheduler;
 
 import static com.baidu.bifromq.retain.rpc.proto.MatchReply.Result.ERROR;
 import static com.baidu.bifromq.retain.rpc.proto.MatchReply.Result.OK;
+import static com.baidu.bifromq.retain.server.scheduler.BatchMatchCallHelper.parallelMatch;
+import static com.baidu.bifromq.retain.server.scheduler.BatchMatchCallHelper.serialMatch;
 import static com.baidu.bifromq.retain.server.scheduler.MatchCallRangeRouter.rangeLookup;
+import static com.baidu.bifromq.util.TopicUtil.isWildcardTopicFilter;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
@@ -29,19 +33,17 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.rpc.proto.BatchMatchReply;
 import com.baidu.bifromq.retain.rpc.proto.BatchMatchRequest;
+import com.baidu.bifromq.retain.rpc.proto.MatchError;
 import com.baidu.bifromq.retain.rpc.proto.MatchParam;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchResult;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcInput;
-import com.baidu.bifromq.type.TopicMessage;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -49,17 +51,17 @@ import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class BatchMatchCall implements IBatchCall<MatchCall, MatchCallResult, MatchCallBatcherKey> {
+class BatchMatchCall implements IBatchCall<MatchCall, MatchCallResult, MatchCallBatcherKey> {
     private final MatchCallBatcherKey batcherKey;
     private final IBaseKVStoreClient retainStoreClient;
     private final ISettingProvider settingProvider;
     private final Queue<ICallTask<MatchCall, MatchCallResult, MatchCallBatcherKey>> tasks = new ArrayDeque<>(128);
-    private Set<String> topicFilters = new HashSet<>(128);
+    private Set<String> nonWildcardTopicFilters = new HashSet<>(128);
+    private Set<String> wildcardTopicFilters = new HashSet<>(128);
 
 
-    public BatchMatchCall(MatchCallBatcherKey batcherKey,
-                          IBaseKVStoreClient retainStoreClient,
-                          ISettingProvider settingProvider) {
+    BatchMatchCall(MatchCallBatcherKey batcherKey, IBaseKVStoreClient retainStoreClient,
+                   ISettingProvider settingProvider) {
         this.batcherKey = batcherKey;
         this.retainStoreClient = retainStoreClient;
         this.settingProvider = settingProvider;
@@ -68,33 +70,40 @@ public class BatchMatchCall implements IBatchCall<MatchCall, MatchCallResult, Ma
     @Override
     public void add(ICallTask<MatchCall, MatchCallResult, MatchCallBatcherKey> task) {
         tasks.add(task);
-        topicFilters.add(task.call().topicFilter());
+        if (isWildcardTopicFilter(task.call().topicFilter())) {
+            wildcardTopicFilters.add(task.call().topicFilter());
+        } else {
+            nonWildcardTopicFilters.add(task.call().topicFilter());
+        }
     }
 
     @Override
     public void reset() {
-        topicFilters = new HashSet<>(128);
+        nonWildcardTopicFilters = new HashSet<>(128);
+        wildcardTopicFilters = new HashSet<>(128);
     }
 
     @Override
     public CompletableFuture<Void> execute() {
         long now = HLC.INST.getPhysical();
         long reqId = System.nanoTime();
-        Map<KVRangeSetting, Set<String>> topicFiltersByRange =
-            rangeLookup(batcherKey.tenantId(), topicFilters, retainStoreClient.latestEffectiveRouter());
-        List<CompletableFuture<BatchMatchReply>> futures = new ArrayList<>(topicFiltersByRange.size());
-        int limit = settingProvider.provide(Setting.RetainMessageMatchLimit, batcherKey.tenantId());
-        for (KVRangeSetting rangeSetting : topicFiltersByRange.keySet()) {
-            Set<String> topicFilters = topicFiltersByRange.get(rangeSetting);
-            futures.add(queryCoProc(BatchMatchRequest.newBuilder()
-                .putMatchParams(batcherKey.tenantId(), MatchParam.newBuilder()
-                    .putAllTopicFilters(topicFilters.stream().collect(Collectors.toMap(k -> k, v -> limit)))
-                    .setNow(now)
-                    .build())
-                .setReqId(reqId)
-                .build(), rangeSetting));
+        NavigableMap<Boundary, KVRangeSetting> effectiveRouter = retainStoreClient.latestEffectiveRouter();
+
+        Map<KVRangeSetting, Set<String>> parallelMatches =
+            rangeLookup(batcherKey.tenantId(), nonWildcardTopicFilters, effectiveRouter);
+        CompletableFuture<Map<String, MatchResult>> parallelMatchFutures =
+            parallelMatch(reqId, now, parallelMatches, this::match);
+        CompletableFuture<Map<String, MatchResult>> wildcardMatchFuture;
+        if (wildcardTopicFilters.isEmpty()) {
+            wildcardMatchFuture = CompletableFuture.completedFuture(Collections.emptyMap());
+        } else {
+            int limit = settingProvider.provide(Setting.RetainMessageMatchLimit, batcherKey.tenantId());
+            Map<KVRangeSetting, Set<String>> serialMatches =
+                rangeLookup(batcherKey.tenantId(), wildcardTopicFilters, effectiveRouter);
+            wildcardMatchFuture = serialMatch(reqId, now, serialMatches, limit, this::match);
         }
-        return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
+
+        return CompletableFuture.allOf(parallelMatchFutures, wildcardMatchFuture)
             .handle((v, e) -> {
                 ICallTask<MatchCall, MatchCallResult, MatchCallBatcherKey> task;
                 if (e != null) {
@@ -104,34 +113,14 @@ public class BatchMatchCall implements IBatchCall<MatchCall, MatchCallResult, Ma
                     }
                 } else {
                     // aggregate result from each reply
-                    Map<String, List<MatchResult>> aggregatedResults = new HashMap<>();
-                    for (CompletableFuture<BatchMatchReply> future : futures) {
-                        BatchMatchReply reply = future.join();
-                        Map<String, MatchResult> matchResults =
-                            reply.getResultPackMap().get(batcherKey.tenantId()).getResultsMap();
-                        matchResults.forEach((topic, matchResult) ->
-                            aggregatedResults.computeIfAbsent(topic, k -> new ArrayList<>()).add(matchResult));
-                    }
+                    Map<String, MatchResult> aggregatedResults = new HashMap<>();
+                    aggregatedResults.putAll(parallelMatchFutures.join());
+                    aggregatedResults.putAll(wildcardMatchFuture.join());
                     while ((task = tasks.poll()) != null) {
-                        List<MatchResult> matchResults = aggregatedResults.get(task.call().topicFilter());
-                        List<TopicMessage> messages = new LinkedList<>();
-                        int i = 0;
-                        boolean anySucceed = false;
-                        out:
-                        for (MatchResult matchResult : matchResults) {
-                            if (matchResult.hasOk()) {
-                                for (TopicMessage message : matchResult.getOk().getMessagesList()) {
-                                    if (i++ < limit) {
-                                        messages.add(message);
-                                    } else {
-                                        break out;
-                                    }
-                                }
-                                anySucceed = true;
-                            }
-                        }
-                        if (anySucceed) {
-                            task.resultPromise().complete(new MatchCallResult(OK, messages));
+                        MatchResult matchResult = aggregatedResults.get(task.call().topicFilter());
+                        if (matchResult.hasOk()) {
+                            task.resultPromise()
+                                .complete(new MatchCallResult(OK, matchResult.getOk().getMessagesList()));
                         } else {
                             task.resultPromise().complete(new MatchCallResult(ERROR, Collections.emptyList()));
                         }
@@ -141,22 +130,25 @@ public class BatchMatchCall implements IBatchCall<MatchCall, MatchCallResult, Ma
             });
     }
 
+    private CompletableFuture<Map<String, MatchResult>> match(long reqId, long now, Map<String, Integer> topicFilters,
+                                                              KVRangeSetting rangeSetting) {
+        BatchMatchRequest request = BatchMatchRequest.newBuilder().putMatchParams(batcherKey.tenantId(),
+            MatchParam.newBuilder().putAllTopicFilters(topicFilters).setNow(now).build()).setReqId(reqId).build();
+        return queryCoProc(request, rangeSetting).thenApply(
+            reply -> reply.getResultPackMap().get(batcherKey.tenantId()).getResultsMap()).exceptionally(
+            e -> topicFilters.keySet().stream().collect(Collectors.toMap(k -> k,
+                v -> MatchResult.newBuilder().setError(MatchError.getDefaultInstance()).build())));
+    }
+
     private CompletableFuture<BatchMatchReply> queryCoProc(BatchMatchRequest request, KVRangeSetting rangeSetting) {
-        return retainStoreClient.query(rangeSetting.randomReplica(), KVRangeRORequest.newBuilder()
-                .setReqId(request.getReqId())
-                .setKvRangeId(rangeSetting.id)
-                .setVer(rangeSetting.ver)
-                .setRoCoProc(ROCoProcInput.newBuilder()
-                    .setRetainService(RetainServiceROCoProcInput.newBuilder()
-                        .setBatchMatch(request)
-                        .build())
+        return retainStoreClient.query(rangeSetting.randomReplica(),
+                KVRangeRORequest.newBuilder().setReqId(request.getReqId()).setKvRangeId(rangeSetting.id)
+                    .setVer(rangeSetting.ver).setRoCoProc(ROCoProcInput.newBuilder()
+                        .setRetainService(RetainServiceROCoProcInput.newBuilder().setBatchMatch(request).build()).build())
                     .build())
-                .build())
             .thenApply(v -> {
                 if (v.getCode() == ReplyCode.Ok) {
-                    BatchMatchReply batchMatchReply = v.getRoCoProcResult()
-                        .getRetainService()
-                        .getBatchMatch();
+                    BatchMatchReply batchMatchReply = v.getRoCoProcResult().getRetainService().getBatchMatch();
                     assert batchMatchReply.getReqId() == request.getReqId();
                     return batchMatchReply;
                 }
