@@ -2,7 +2,7 @@ name: Release assets
 permissions: write-all
 on:
   release:
-    types: [ prereleased, published ]
+    types: [ published ]
 
 jobs:
   prepare:
