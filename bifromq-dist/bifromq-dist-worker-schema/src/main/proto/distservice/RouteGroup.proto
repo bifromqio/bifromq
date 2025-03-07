@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.dist.rpc.proto";
+option java_outer_classname = "GroupMembersProtos";
+
+package distservice;
+
+message RouteGroup {
+  map<string, uint64> members = 1; // key: receiverUrl, val: incarnation
+}
+

@@ -16,16 +16,16 @@ package com.baidu.bifromq.dist.worker.cache;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compare;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isNULLRange;
-import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKeyPrefix;
-import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordPrefixWithEscapedTopicFilter;
-import static com.baidu.bifromq.dist.entity.EntityUtil.parseMatchRecord;
-import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.buildMatchRoute;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantRouteStartKey;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantStartKey;
 import static com.baidu.bifromq.util.TopicConst.NUL;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
-import com.baidu.bifromq.dist.entity.Matching;
+import com.baidu.bifromq.dist.worker.schema.Matching;
 import com.baidu.bifromq.dist.trie.TopicFilterIterator;
 import com.baidu.bifromq.dist.trie.TopicTrieNode;
 import com.baidu.bifromq.util.TopicUtil;
@@ -67,9 +67,10 @@ class TenantRouteMatcher implements ITenantRouteMatcher {
         IKVReader rangeReader = kvReaderSupplier.get();
         rangeReader.refresh();
 
-        Boundary tenantBoundary = intersect(
-            Boundary.newBuilder().setStartKey(matchRecordKeyPrefix(tenantId)).setEndKey(tenantUpperBound(tenantId))
-                .build(), rangeReader.boundary());
+        Boundary tenantBoundary = intersect(Boundary.newBuilder()
+            .setStartKey(tenantStartKey(tenantId))
+            .setEndKey(upperBound(tenantStartKey(tenantId)))
+            .build(), rangeReader.boundary());
         if (isNULLRange(tenantBoundary)) {
             return matchedRoutes;
         }
@@ -78,7 +79,7 @@ class TenantRouteMatcher implements ITenantRouteMatcher {
         itr.seek(tenantBoundary.getStartKey());
         while (itr.isValid() && compare(itr.key(), tenantBoundary.getEndKey()) < 0) {
             // track itr.key()
-            Matching matching = parseMatchRecord(itr.key(), itr.value());
+            Matching matching = buildMatchRoute(itr.key(), itr.value());
             // key: topic
             Set<String> matchedTopics = matchedTopicFilters.get(matching.escapedTopicFilter);
             if (matchedTopics == null) {
@@ -104,15 +105,9 @@ class TenantRouteMatcher implements ITenantRouteMatcher {
                             itr.next();
                         } else {
                             // seek to match next topic filter
-                            ByteString nextMatch = matchRecordPrefixWithEscapedTopicFilter(tenantId,
-                                TopicUtil.fastJoin(NUL, topicFilterToMatch));
-                            if (ByteString.unsignedLexicographicalComparator().compare(nextMatch, itr.key()) <= 0) {
-                                // TODO: THIS IS ONLY FOR BYPASSING THE HANG ISSUE CAUSED BY PREVIOUS BUGGY MATCH_RECORD_KEY ENCODING
-                                // AND WILL BE REMOVED IN LATER VERSION
-                                itr.next();
-                            } else {
-                                itr.seek(nextMatch);
-                            }
+                            ByteString nextMatch =
+                                tenantRouteStartKey(tenantId, TopicUtil.fastJoin(NUL, topicFilterToMatch));
+                            itr.seek(nextMatch);
                         }
                     }
                 } else {

@@ -56,6 +56,7 @@ public class UnmatchReqHandlerTest {
             .setTopicFilter("topic")
             .setBrokerId(10)
             .setDelivererKey("key123")
+            .setIncarnation(1L)
             .build();
         UnmatchReply reply = UnmatchReply.newBuilder()
             .setReqId(1)
@@ -66,7 +67,7 @@ public class UnmatchReqHandlerTest {
 
         CompletableFuture<UnmatchReply> result = handler.handle(request);
         assertNotNull(result);
-        assertEquals(UnmatchReply.Result.OK, result.get().getResult());
+        assertEquals(result.get().getResult(), UnmatchReply.Result.OK);
         verify(eventCollector, times(1)).report(any(Unmatched.class));
     }
 
@@ -79,6 +80,7 @@ public class UnmatchReqHandlerTest {
             .setTopicFilter("errorTopic")
             .setBrokerId(20)
             .setDelivererKey("keyError")
+            .setIncarnation(1L)
             .build();
         UnmatchReply reply = UnmatchReply.newBuilder()
             .setReqId(3)
@@ -89,7 +91,7 @@ public class UnmatchReqHandlerTest {
 
         CompletableFuture<UnmatchReply> result = handler.handle(request);
         assertNotNull(result);
-        assertEquals(UnmatchReply.Result.ERROR, result.get().getResult());
+        assertEquals(result.get().getResult(), UnmatchReply.Result.ERROR);
         verify(eventCollector, times(1)).report(argThat(e ->
             e.type() == EventType.UNMATCH_ERROR && ((UnmatchError) e).reason().contains("Internal Error")));
     }
@@ -103,7 +105,7 @@ public class UnmatchReqHandlerTest {
         when(unmatchCallScheduler.schedule(request)).thenReturn(failedFuture);
 
         UnmatchReply result = handler.handle(request).join();
-        assertEquals(UnmatchReply.Result.BACK_PRESSURE_REJECTED, result.getResult());
+        assertEquals(result.getResult(), UnmatchReply.Result.BACK_PRESSURE_REJECTED);
         verify(eventCollector, times(1)).report(argThat(e ->
             e.type() == EventType.UNMATCH_ERROR && ((UnmatchError) e).reason().contains("Back pressure")));
     }

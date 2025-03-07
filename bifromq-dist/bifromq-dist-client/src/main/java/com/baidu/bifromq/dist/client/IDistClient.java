@@ -44,10 +44,10 @@ public interface IDistClient extends IConnectable, AutoCloseable {
      * @param reqId        the caller supplied request id for event tracing
      * @param tenantId     the id of caller tenant
      * @param topicFilter  the topic filter to apply
-     * @param receiverId   the id of the receiver hosted by the subbroker
-     * @param delivererKey the key of the deliverer via which the message will be sent to the receiver
-     * @param subBrokerId  the hosting subbroker of the receiver
-     * @param incarnation  the incarnation of the receiver
+     * @param receiverId   the id of the receiverInfo hosted by the subbroker
+     * @param delivererKey the key of the deliverer via which the message will be sent to the receiverInfo
+     * @param subBrokerId  the hosting subbroker of the receiverInfo
+     * @param incarnation  the incarnation of the receiverInfo
      * @return correspond to Mqtt Sub QoS
      */
     CompletableFuture<MatchResult> addTopicMatch(long reqId,
@@ -64,10 +64,10 @@ public interface IDistClient extends IConnectable, AutoCloseable {
      * @param reqId        the caller supplied request id for event tracing
      * @param tenantId     the id of caller tenant
      * @param topicFilter  the topic filter to remove
-     * @param receiverId   the id of the receiver hosted by the subbroker
-     * @param delivererKey the key of the deliverer via which the message will be sent to the receiver
-     * @param subBrokerId  the hosting subbroker of the receiver
-     * @param incarnation  the incarnation of the receiver
+     * @param receiverId   the id of the receiverInfo hosted by the subbroker
+     * @param delivererKey the key of the deliverer via which the message will be sent to the receiverInfo
+     * @param subBrokerId  the hosting subbroker of the receiverInfo
+     * @param incarnation  the incarnation of the receiverInfo
      * @return true for remove successfully, false for match not found
      */
     CompletableFuture<UnmatchResult> removeTopicMatch(long reqId,

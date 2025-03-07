@@ -55,7 +55,8 @@ class SubscriptionCleaner implements ISubscriptionCleaner {
                                 request.getDelivererKey(), subBrokerId, matchInfo.getIncarnation()));
                         }
                         case NO_RECEIVER -> {
-                            log.debug("No receiver found: tenantId={}, topicFilter={}, receiverId={}, subBrokerId={}",
+                            log.debug(
+                                "No receiverInfo found: tenantId={}, topicFilter={}, receiverId={}, subBrokerId={}",
                                 request.getTenantId(), matchInfo.getTopicFilter(),
                                 matchInfo.getReceiverId(), subBrokerId);
                             futures.add(distClient.removeTopicMatch(reqId, request.getTenantId(),

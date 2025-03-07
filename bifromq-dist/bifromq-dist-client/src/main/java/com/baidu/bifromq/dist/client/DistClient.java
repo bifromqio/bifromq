@@ -84,7 +84,9 @@ final class DistClient implements IDistClient {
     }
 
     @Override
-    public CompletableFuture<UnmatchResult> removeTopicMatch(long reqId, String tenantId, String topicFilter,
+    public CompletableFuture<UnmatchResult> removeTopicMatch(long reqId,
+                                                             String tenantId,
+                                                             String topicFilter,
                                                              String receiverId,
                                                              String delivererKey,
                                                              int subBrokerId,

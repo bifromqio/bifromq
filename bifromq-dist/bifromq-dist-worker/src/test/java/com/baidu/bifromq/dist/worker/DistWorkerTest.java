@@ -14,8 +14,10 @@
 package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
-import static com.baidu.bifromq.dist.entity.EntityUtil.toMatchRecordKey;
-import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantStartKey;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toGroupRouteKey;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toNormalRouteKey;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toReceiverUrl;
 import static com.baidu.bifromq.plugin.subbroker.TypeUtil.to;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
@@ -23,6 +25,7 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
+import static com.baidu.bifromq.util.TopicUtil.isNormalTopicFilter;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -52,7 +55,6 @@ import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.dist.entity.EntityUtil;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.BatchMatchReply;
@@ -63,6 +65,7 @@ import com.baidu.bifromq.dist.rpc.proto.DistPack;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
+import com.baidu.bifromq.dist.rpc.proto.MatchRoute;
 import com.baidu.bifromq.dist.rpc.proto.TenantOption;
 import com.baidu.bifromq.dist.worker.balance.RangeBootstrapBalancerFactory;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
@@ -262,50 +265,64 @@ public abstract class DistWorkerTest {
             method.getDeclaringClass().getName(), method.getName());
     }
 
-    protected BatchMatchReply.Result match(String tenantId,
-                                           String topicFilter,
-                                           int subBroker,
-                                           String inboxId,
-                                           String delivererKey) {
+    protected BatchMatchReply.TenantBatch.Code match(String tenantId,
+                                                     String topicFilter,
+                                                     int subBroker,
+                                                     String inboxId,
+                                                     String delivererKey) {
         return match(tenantId, topicFilter, subBroker, inboxId, delivererKey, 100);
     }
 
-    protected BatchMatchReply.Result match(String tenantId,
-                                           String topicFilter,
-                                           int subBroker,
-                                           String inboxId,
-                                           String delivererKey,
-                                           long incarnation) {
+    protected BatchMatchReply.TenantBatch.Code match(String tenantId,
+                                                     String topicFilter,
+                                                     int subBroker,
+                                                     String inboxId,
+                                                     String delivererKey,
+                                                     long incarnation) {
         return match(tenantId, topicFilter, subBroker, inboxId, delivererKey, incarnation, 100);
     }
 
-    protected BatchMatchReply.Result match(String tenantId,
-                                           String topicFilter,
-                                           int subBroker,
-                                           String inboxId,
-                                           String delivererKey,
-                                           int maxMembersPerSharedSubGroup) {
+    protected BatchMatchReply.TenantBatch.Code match(String tenantId,
+                                                     String topicFilter,
+                                                     int subBroker,
+                                                     String inboxId,
+                                                     String delivererKey,
+                                                     int maxMembersPerSharedSubGroup) {
         return match(tenantId, topicFilter, subBroker, inboxId, delivererKey, 0L, maxMembersPerSharedSubGroup);
     }
 
-    protected BatchMatchReply.Result match(String tenantId,
-                                           String topicFilter,
-                                           int subBroker,
-                                           String inboxId,
-                                           String delivererKey,
-                                           long incarnation,
-                                           int maxMembersPerSharedSubGroup) {
+    protected BatchMatchReply.TenantBatch.Code match(String tenantId,
+                                                     String topicFilter,
+                                                     int subBroker,
+                                                     String inboxId,
+                                                     String delivererKey,
+                                                     long incarnation,
+                                                     int maxMembersPerSharedSubGroup) {
         long reqId = ThreadLocalRandom.current().nextInt();
-        String qInboxId = toQInboxId(subBroker, inboxId, delivererKey);
-        KVRangeSetting s =
-            findByKey(toMatchRecordKey(tenantId, topicFilter, qInboxId), storeClient.latestEffectiveRouter()).get();
-        String scopedTopicFilter = EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter);
+        MatchRoute route = MatchRoute.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setBrokerId(subBroker)
+            .setReceiverId(inboxId)
+            .setDelivererKey(delivererKey)
+            .setIncarnation(incarnation)
+            .build();
+        return match(tenantId, maxMembersPerSharedSubGroup, route).get(0);
+    }
+
+    protected List<BatchMatchReply.TenantBatch.Code> match(String tenantId,
+                                                           int maxMembersPerSharedSubGroup,
+                                                           MatchRoute... routes) {
+        long reqId = ThreadLocalRandom.current().nextInt();
+        KVRangeSetting s = findByKey(tenantStartKey(tenantId), storeClient.latestEffectiveRouter()).get();
         DistServiceRWCoProcInput input = DistServiceRWCoProcInput.newBuilder()
             .setBatchMatch(BatchMatchRequest.newBuilder()
                 .setReqId(reqId)
-                .putScopedTopicFilter(EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter), incarnation)
-                .putOptions(tenantId,
-                    TenantOption.newBuilder().setMaxReceiversPerSharedSubGroup(maxMembersPerSharedSubGroup).build())
+                .putRequests(tenantId, BatchMatchRequest.TenantBatch.newBuilder()
+                    .setOption(TenantOption.newBuilder()
+                        .setMaxReceiversPerSharedSubGroup(maxMembersPerSharedSubGroup)
+                        .build())
+                    .addAllRoute(List.of(routes))
+                    .build())
                 .build())
             .build();
         KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
@@ -318,33 +335,42 @@ public abstract class DistWorkerTest {
         assertEquals(reply.getCode(), ReplyCode.Ok);
         BatchMatchReply batchMatchReply = reply.getRwCoProcResult().getDistService().getBatchMatch();
         assertEquals(batchMatchReply.getReqId(), reqId);
-        return batchMatchReply.getResultsMap().get(scopedTopicFilter);
+        return batchMatchReply.getResultsMap().get(tenantId).getCodeList();
     }
 
-    protected BatchUnmatchReply.Result unmatch(String tenantId,
-                                               String topicFilter,
-                                               int subBroker,
-                                               String inboxId,
-                                               String delivererKey) {
+    protected BatchUnmatchReply.TenantBatch.Code unmatch(String tenantId,
+                                                         String topicFilter,
+                                                         int subBroker,
+                                                         String inboxId,
+                                                         String delivererKey) {
         return unmatch(tenantId, topicFilter, subBroker, inboxId, delivererKey, 0L);
     }
 
-    protected BatchUnmatchReply.Result unmatch(String tenantId,
-                                               String topicFilter,
-                                               int subBroker,
-                                               String inboxId,
-                                               String delivererKey,
-                                               long incarnation) {
+    protected BatchUnmatchReply.TenantBatch.Code unmatch(String tenantId,
+                                                         String topicFilter,
+                                                         int subBroker,
+                                                         String inboxId,
+                                                         String delivererKey,
+                                                         long incarnation) {
         long reqId = ThreadLocalRandom.current().nextInt();
-        String qInboxId = toQInboxId(subBroker, inboxId, delivererKey);
-        KVRangeSetting s =
-            findByKey(toMatchRecordKey(tenantId, topicFilter, qInboxId), storeClient.latestEffectiveRouter()).get();
-        String scopedTopicFilter = EntityUtil.toScopedTopicFilter(tenantId, qInboxId, topicFilter);
+        MatchRoute route = MatchRoute.newBuilder()
+            .setTopicFilter(topicFilter)
+            .setBrokerId(subBroker)
+            .setReceiverId(inboxId)
+            .setDelivererKey(delivererKey)
+            .setIncarnation(incarnation)
+            .build();
+        ByteString routeKey = isNormalTopicFilter(topicFilter)
+            ? toNormalRouteKey(tenantId, topicFilter, toReceiverUrl(route)) : toGroupRouteKey(tenantId, topicFilter);
+        KVRangeSetting s = findByKey(routeKey, storeClient.latestEffectiveRouter()).get();
         DistServiceRWCoProcInput input = DistServiceRWCoProcInput.newBuilder()
             .setBatchUnmatch(BatchUnmatchRequest.newBuilder()
                 .setReqId(reqId)
-                .putScopedTopicFilter(scopedTopicFilter, incarnation)
-                .build()).build();
+                .putRequests(tenantId, BatchUnmatchRequest.TenantBatch.newBuilder()
+                    .addRoute(route)
+                    .build())
+                .build())
+            .build();
         KVRangeRWReply reply = storeClient.execute(s.leader, KVRangeRWRequest.newBuilder()
             .setReqId(reqId)
             .setVer(s.ver)
@@ -355,13 +381,12 @@ public abstract class DistWorkerTest {
         assertEquals(reply.getCode(), ReplyCode.Ok);
         BatchUnmatchReply batchUnmatchReply = reply.getRwCoProcResult().getDistService().getBatchUnmatch();
         assertEquals(batchUnmatchReply.getReqId(), reqId);
-        return batchUnmatchReply.getResultsMap().get(scopedTopicFilter);
+        return batchUnmatchReply.getResultsMap().get(tenantId).getCode(0);
     }
 
     protected BatchDistReply dist(String tenantId, List<TopicMessagePack> msgs, String orderKey) {
         long reqId = ThreadLocalRandom.current().nextInt();
-        KVRangeSetting s =
-            findByKey(EntityUtil.matchRecordKeyPrefix(tenantId), storeClient.latestEffectiveRouter()).get();
+        KVRangeSetting s = findByKey(tenantStartKey(tenantId), storeClient.latestEffectiveRouter()).get();
         BatchDistRequest request = BatchDistRequest.newBuilder()
             .setReqId(reqId)
             .addDistPack(DistPack.newBuilder()

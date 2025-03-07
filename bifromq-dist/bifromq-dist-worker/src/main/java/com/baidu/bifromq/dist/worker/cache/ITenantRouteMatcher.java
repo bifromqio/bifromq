@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.worker.cache;
 
-import com.baidu.bifromq.dist.entity.Matching;
+import com.baidu.bifromq.dist.worker.schema.Matching;
 import java.util.Map;
 import java.util.Set;
 

@@ -1,6 +1,7 @@
 syntax = "proto3";
 import "commontype/TopicMessage.proto";
 import "distservice/TopicFanout.proto";
+import "distservice/MatchRoute.proto";
 
 option java_multiple_files = true;
 option java_package = "com.baidu.bifromq.dist.rpc.proto";
@@ -8,42 +9,52 @@ option java_outer_classname = "DistCoProcProtos";
 
 package distservice;
 
-message GroupMatchRecord {
-  map<string, uint64> qReceiverId = 1; // key: qReceiverId, val: incarnation
-}
-
 message TenantOption{
   uint32 maxReceiversPerSharedSubGroup = 1;
 }
+
 message BatchMatchRequest {
+  message TenantBatch {
+    repeated MatchRoute route = 1; // deduplicated list
+    TenantOption option = 2;
+  }
   uint64 reqId = 1;
-  map< string, uint64> scopedTopicFilter = 2;// key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter), val: incarnation
-  map<string, TenantOption> options = 3; // key: tenantId
+  map<string, TenantBatch> requests = 2; // key: tenantId
 }
 
 message BatchMatchReply {
-  enum Result{
-    OK = 0;
-    EXCEED_LIMIT = 1; // only for group join
-    ERROR = 2;
+  message TenantBatch {
+    enum Code{
+      OK = 0;
+      EXCEED_LIMIT = 1; // only for group join
+      ERROR = 2;
+    }
+    repeated Code code = 1; // the order is same as the input
   }
   uint64 reqId = 1;
-  map<string, Result>  results = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
+  map<string, TenantBatch> results = 2; // key: tenantId
 }
 
 message BatchUnmatchRequest {
+  message TenantBatch {
+    repeated MatchRoute route = 1; // deduplicated list
+  }
+
   uint64 reqId = 1;
-  map< string, uint64> scopedTopicFilter = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter), val: incarnation
+  map<string, TenantBatch> requests = 2; // key: tenantId
 }
 
 message BatchUnmatchReply {
-  enum Result{
-    OK = 0;
-    NOT_EXISTED = 1;
-    ERROR = 2;
+  message TenantBatch {
+    enum Code{
+      OK = 0;
+      NOT_EXISTED = 1;
+      ERROR = 2;
+    }
+    repeated Code code = 1; // the order is same as the input
   }
   uint64 reqId = 1;
-  map<string, Result>  results = 2; // key: tenantId_qInboxId_utf8_topicFilter(scopedTopicFilter)
+  map<string, TenantBatch> results = 2; // key: tenantId
 }
 message DistPack{
   string tenantId = 1;

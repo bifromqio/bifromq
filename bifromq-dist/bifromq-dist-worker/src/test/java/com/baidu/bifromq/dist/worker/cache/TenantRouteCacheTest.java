@@ -23,7 +23,7 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.dist.entity.Matching;
+import com.baidu.bifromq.dist.worker.schema.Matching;
 import com.baidu.bifromq.dist.worker.MeterTest;
 import com.baidu.bifromq.metrics.TenantMetric;
 import com.github.benmanes.caffeine.cache.Ticker;

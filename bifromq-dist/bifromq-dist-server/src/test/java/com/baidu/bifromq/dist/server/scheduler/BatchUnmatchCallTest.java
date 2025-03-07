@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.dist.server.scheduler;
 
-import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
-import static com.baidu.bifromq.dist.entity.EntityUtil.toScopedTopicFilter;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -63,6 +61,7 @@ public class BatchUnmatchCallTest {
             .setReceiverId("receiver1")
             .setBrokerId(1)
             .setDelivererKey("key1")
+            .setIncarnation(1L)
             .build();
 
         UnmatchRequest request2 = UnmatchRequest.newBuilder()
@@ -72,6 +71,7 @@ public class BatchUnmatchCallTest {
             .setReceiverId("receiver2")
             .setBrokerId(2)
             .setDelivererKey("key2")
+            .setIncarnation(1L)
             .build();
 
         // contain duplicate request
@@ -80,10 +80,11 @@ public class BatchUnmatchCallTest {
         RWCoProcInput input = batchUnmatchCall.makeBatch(iterator);
 
         BatchUnmatchRequest batchRequest = input.getDistService().getBatchUnmatch();
-        assertEquals(2, batchRequest.getScopedTopicFilterCount());
+        assertEquals(batchRequest.getRequestsCount(), 2);
     }
 
-    private void testHandleOutput(BatchUnmatchReply.Result batchResult, UnmatchReply.Result expectedUnmatchResult) {
+    private void testHandleOutput(BatchUnmatchReply.TenantBatch.Code batchResult,
+                                  UnmatchReply.Result expectedUnmatchResult) {
         ICallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey> callTask = mock(ICallTask.class);
         UnmatchRequest request = UnmatchRequest.newBuilder()
             .setReqId(1)
@@ -92,6 +93,7 @@ public class BatchUnmatchCallTest {
             .setReceiverId("receiver1")
             .setBrokerId(1)
             .setDelivererKey("key1")
+            .setIncarnation(1L)
             .build();
         when(callTask.call()).thenReturn(request);
         CompletableFuture<UnmatchReply> resultPromise = new CompletableFuture<>();
@@ -100,12 +102,9 @@ public class BatchUnmatchCallTest {
         Queue<ICallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey>> batchedTasks = new LinkedList<>();
         batchedTasks.add(callTask);
 
-        String qInboxId = toQInboxId(request.getBrokerId(), request.getReceiverId(), request.getDelivererKey());
-        String scopedTopicFilter = toScopedTopicFilter(request.getTenantId(), qInboxId, request.getTopicFilter());
-
         BatchUnmatchReply batchUnmatchReply = BatchUnmatchReply.newBuilder()
             .setReqId(1)
-            .putResults(scopedTopicFilter, batchResult)
+            .putResults(request.getTenantId(), BatchUnmatchReply.TenantBatch.newBuilder().addCode(batchResult).build())
             .build();
         RWCoProcOutput output = RWCoProcOutput.newBuilder()
             .setDistService(DistServiceRWCoProcOutput.newBuilder()
@@ -118,14 +117,14 @@ public class BatchUnmatchCallTest {
         verify(callTask).resultPromise();
         UnmatchReply reply = resultPromise.join();
         assertEquals(expectedUnmatchResult, reply.getResult());
-        assertEquals(1, reply.getReqId());
+        assertEquals(reply.getReqId(), 1);
     }
 
     @Test
     void testHandleOutput() {
-        testHandleOutput(BatchUnmatchReply.Result.OK, UnmatchReply.Result.OK);
-        testHandleOutput(BatchUnmatchReply.Result.NOT_EXISTED, UnmatchReply.Result.NOT_EXISTED);
-        testHandleOutput(BatchUnmatchReply.Result.ERROR, UnmatchReply.Result.ERROR);
+        testHandleOutput(BatchUnmatchReply.TenantBatch.Code.OK, UnmatchReply.Result.OK);
+        testHandleOutput(BatchUnmatchReply.TenantBatch.Code.NOT_EXISTED, UnmatchReply.Result.NOT_EXISTED);
+        testHandleOutput(BatchUnmatchReply.TenantBatch.Code.ERROR, UnmatchReply.Result.ERROR);
     }
 
     @Test

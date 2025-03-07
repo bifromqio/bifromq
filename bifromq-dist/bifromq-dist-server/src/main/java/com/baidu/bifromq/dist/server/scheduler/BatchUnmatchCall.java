@@ -13,9 +13,6 @@
 
 package com.baidu.bifromq.dist.server.scheduler;
 
-import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
-import static com.baidu.bifromq.dist.entity.EntityUtil.toScopedTopicFilter;
-
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
@@ -26,13 +23,18 @@ import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
+import com.baidu.bifromq.dist.rpc.proto.MatchRoute;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 
-public class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchReply> {
+class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchReply> {
     BatchUnmatchCall(KVRangeId rangeId,
                      IBaseKVStoreClient distWorkerClient,
                      Duration pipelineExpiryTime) {
@@ -42,14 +44,19 @@ public class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchR
     @Override
     protected RWCoProcInput makeBatch(Iterator<UnmatchRequest> reqIterator) {
         BatchUnmatchRequest.Builder reqBuilder = BatchUnmatchRequest.newBuilder();
+        Map<String, BatchUnmatchRequest.TenantBatch.Builder> builders = new HashMap<>();
         while (reqIterator.hasNext()) {
             UnmatchRequest unmatchReq = reqIterator.next();
-            String qInboxId =
-                toQInboxId(unmatchReq.getBrokerId(), unmatchReq.getReceiverId(), unmatchReq.getDelivererKey());
-            String scopedTopicFilter =
-                toScopedTopicFilter(unmatchReq.getTenantId(), qInboxId, unmatchReq.getTopicFilter());
-            reqBuilder.putScopedTopicFilter(scopedTopicFilter, unmatchReq.getIncarnation());
+            builders.computeIfAbsent(unmatchReq.getTenantId(), k -> BatchUnmatchRequest.TenantBatch.newBuilder())
+                .addRoute(MatchRoute.newBuilder()
+                    .setTopicFilter(unmatchReq.getTopicFilter())
+                    .setReceiverId(unmatchReq.getReceiverId())
+                    .setDelivererKey(unmatchReq.getDelivererKey())
+                    .setBrokerId(unmatchReq.getBrokerId())
+                    .setIncarnation(unmatchReq.getIncarnation())
+                    .build());
         }
+        builders.forEach((t, builder) -> reqBuilder.putRequests(t, builder.build()));
         long reqId = System.nanoTime();
         return RWCoProcInput.newBuilder()
             .setDistService(DistServiceRWCoProcInput.newBuilder()
@@ -70,27 +77,33 @@ public class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchR
     protected void handleOutput(Queue<ICallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey>> batchedTasks,
                                 RWCoProcOutput output) {
         ICallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey> callTask;
+        BatchUnmatchReply reply = output.getDistService().getBatchUnmatch();
+        Map<String, List<ICallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey>>> tasksByTenant =
+            new HashMap<>();
         while ((callTask = batchedTasks.poll()) != null) {
-            BatchUnmatchReply reply = output.getDistService().getBatchUnmatch();
-            UnmatchRequest request = callTask.call();
-            String qInboxId = toQInboxId(request.getBrokerId(), request.getReceiverId(), request.getDelivererKey());
-            String scopedTopicFilter = toScopedTopicFilter(request.getTenantId(), qInboxId, request.getTopicFilter());
-            BatchUnmatchReply.Result result =
-                reply.getResultsOrDefault(scopedTopicFilter, BatchUnmatchReply.Result.ERROR);
-            UnmatchReply.Result unmatchResult = switch (result) {
-                case OK:
-                    yield UnmatchReply.Result.OK;
-                case NOT_EXISTED:
-                    yield UnmatchReply.Result.NOT_EXISTED;
-                case ERROR:
-                default:
-                    yield UnmatchReply.Result.ERROR;
-            };
-
-            callTask.resultPromise().complete(UnmatchReply.newBuilder()
-                .setReqId(callTask.call().getReqId())
-                .setResult(unmatchResult)
-                .build());
+            tasksByTenant.computeIfAbsent(callTask.call().getTenantId(), k -> new ArrayList<>()).add(callTask);
+        }
+        for (String tenantId : tasksByTenant.keySet()) {
+            List<ICallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey>> tasks = tasksByTenant.get(tenantId);
+            List<BatchUnmatchReply.TenantBatch.Code> codes = reply.getResultsMap().get(tenantId).getCodeList();
+            assert tasks.size() == codes.size();
+            for (int i = 0; i < tasks.size(); i++) {
+                UnmatchReply.Result unmatchResult = switch (codes.get(i)) {
+                    case OK:
+                        yield UnmatchReply.Result.OK;
+                    case NOT_EXISTED:
+                        yield UnmatchReply.Result.NOT_EXISTED;
+                    case ERROR:
+                    default:
+                        yield UnmatchReply.Result.ERROR;
+                };
+                tasks.get(i)
+                    .resultPromise()
+                    .complete(UnmatchReply.newBuilder()
+                        .setReqId(tasks.get(i).call().getReqId())
+                        .setResult(unmatchResult)
+                        .build());
+            }
         }
     }
 }

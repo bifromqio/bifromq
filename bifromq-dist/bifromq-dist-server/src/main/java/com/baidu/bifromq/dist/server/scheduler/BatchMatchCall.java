@@ -13,9 +13,6 @@
 
 package com.baidu.bifromq.dist.server.scheduler;
 
-import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
-import static com.baidu.bifromq.dist.entity.EntityUtil.toScopedTopicFilter;
-
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
@@ -28,19 +25,24 @@ import com.baidu.bifromq.dist.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.MatchReply;
 import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
+import com.baidu.bifromq.dist.rpc.proto.MatchRoute;
 import com.baidu.bifromq.dist.rpc.proto.TenantOption;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 
-public class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> {
+class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> {
     private final ISettingProvider settingProvider;
 
-    BatchMatchCall(KVRangeId rangeId, IBaseKVStoreClient distWorkerClient, Duration pipelineExpiryTime,
+    BatchMatchCall(KVRangeId rangeId,
+                   IBaseKVStoreClient distWorkerClient,
+                   Duration pipelineExpiryTime,
                    ISettingProvider settingProvider) {
         super(rangeId, distWorkerClient, pipelineExpiryTime);
         this.settingProvider = settingProvider;
@@ -49,20 +51,23 @@ public class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> 
     @Override
     protected RWCoProcInput makeBatch(Iterator<MatchRequest> reqIterator) {
         BatchMatchRequest.Builder reqBuilder = BatchMatchRequest.newBuilder();
-        Map<String, TenantOption> tenantOptionMap = new HashMap<>();
+        Map<String, BatchMatchRequest.TenantBatch.Builder> builders = new HashMap<>();
         while (reqIterator.hasNext()) {
             MatchRequest matchReq = reqIterator.next();
-            String qInboxId =
-                toQInboxId(matchReq.getBrokerId(), matchReq.getReceiverId(), matchReq.getDelivererKey());
-            String scopedTopicFilter =
-                toScopedTopicFilter(matchReq.getTenantId(), qInboxId, matchReq.getTopicFilter());
-            reqBuilder.putScopedTopicFilter(scopedTopicFilter, matchReq.getIncarnation());
-            tenantOptionMap.computeIfAbsent(matchReq.getTenantId(), k -> TenantOption.newBuilder()
-                .setMaxReceiversPerSharedSubGroup(
-                    settingProvider.provide(Setting.MaxSharedGroupMembers, matchReq.getTenantId()))
-                .build());
+            builders.computeIfAbsent(matchReq.getTenantId(), k -> BatchMatchRequest.TenantBatch.newBuilder()
+                    .setOption(TenantOption.newBuilder()
+                        .setMaxReceiversPerSharedSubGroup(
+                            settingProvider.provide(Setting.MaxSharedGroupMembers, matchReq.getTenantId()))
+                        .build()))
+                .addRoute(MatchRoute.newBuilder()
+                    .setTopicFilter(matchReq.getTopicFilter())
+                    .setReceiverId(matchReq.getReceiverId())
+                    .setDelivererKey(matchReq.getDelivererKey())
+                    .setBrokerId(matchReq.getBrokerId())
+                    .setIncarnation(matchReq.getIncarnation())
+                    .build());
         }
-        reqBuilder.putAllOptions(tenantOptionMap);
+        builders.forEach((t, builder) -> reqBuilder.putRequests(t, builder.build()));
         long reqId = System.nanoTime();
         return RWCoProcInput.newBuilder()
             .setDistService(DistServiceRWCoProcInput.newBuilder()
@@ -82,25 +87,31 @@ public class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> 
     protected void handleOutput(Queue<ICallTask<MatchRequest, MatchReply, MutationCallBatcherKey>> batchedTasks,
                                 RWCoProcOutput output) {
         ICallTask<MatchRequest, MatchReply, MutationCallBatcherKey> callTask;
+        BatchMatchReply reply = output.getDistService().getBatchMatch();
+        Map<String, List<ICallTask<MatchRequest, MatchReply, MutationCallBatcherKey>>> tasksByTenant = new HashMap<>();
         while ((callTask = batchedTasks.poll()) != null) {
-            BatchMatchReply reply = output.getDistService().getBatchMatch();
-            MatchRequest subCall = callTask.call();
-            String qInboxId = toQInboxId(subCall.getBrokerId(), subCall.getReceiverId(), subCall.getDelivererKey());
-            String scopedTopicFilter = toScopedTopicFilter(subCall.getTenantId(), qInboxId, subCall.getTopicFilter());
-            BatchMatchReply.Result result = reply.getResultsOrDefault(scopedTopicFilter, BatchMatchReply.Result.ERROR);
-            MatchReply.Result matchResult = switch (result) {
-                case OK:
-                    yield MatchReply.Result.OK;
-                case EXCEED_LIMIT:
-                    yield MatchReply.Result.EXCEED_LIMIT;
-                case ERROR:
-                default:
-                    yield MatchReply.Result.ERROR;
-            };
-            callTask.resultPromise().complete(MatchReply.newBuilder()
-                .setReqId(callTask.call().getReqId())
-                .setResult(matchResult)
-                .build());
+            tasksByTenant.computeIfAbsent(callTask.call().getTenantId(), k -> new ArrayList<>()).add(callTask);
+        }
+
+        for (String tenantId : tasksByTenant.keySet()) {
+            List<ICallTask<MatchRequest, MatchReply, MutationCallBatcherKey>> tasks = tasksByTenant.get(tenantId);
+            List<BatchMatchReply.TenantBatch.Code> codes = reply.getResultsMap().get(tenantId).getCodeList();
+            assert tasks.size() == codes.size();
+            for (int i = 0; i < tasks.size(); i++) {
+                MatchReply.Result matchResult = switch (codes.get(i)) {
+                    case OK:
+                        yield MatchReply.Result.OK;
+                    case EXCEED_LIMIT:
+                        yield MatchReply.Result.EXCEED_LIMIT;
+                    case ERROR:
+                    default:
+                        yield MatchReply.Result.ERROR;
+                };
+                tasks.get(i).resultPromise().complete(MatchReply.newBuilder()
+                    .setReqId(tasks.get(i).call().getReqId())
+                    .setResult(matchResult)
+                    .build());
+            }
         }
     }
 }

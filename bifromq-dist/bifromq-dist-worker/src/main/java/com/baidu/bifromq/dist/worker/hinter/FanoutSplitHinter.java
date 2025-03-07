@@ -13,11 +13,10 @@
 
 package com.baidu.bifromq.dist.worker.hinter;
 
-import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordSize;
-import static com.baidu.bifromq.dist.entity.EntityUtil.parseQInboxIdFromScopedTopicFilter;
-import static com.baidu.bifromq.dist.entity.EntityUtil.parseTenantIdFromScopedTopicFilter;
-import static com.baidu.bifromq.dist.entity.EntityUtil.parseTopicFilterFromScopedTopicFilter;
-import static com.baidu.bifromq.dist.entity.EntityUtil.toMatchRecordKeyPrefix;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toGroupRouteKey;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toNormalRouteKey;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toReceiverUrl;
+import static com.baidu.bifromq.util.TopicUtil.isNormalTopicFilter;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.SplitHint;
@@ -53,9 +52,9 @@ public class FanoutSplitHinter implements IKVRangeSplitHinter {
     private final Set<IKVCloseableReader> threadReaders = Sets.newConcurrentHashSet();
     private final ThreadLocal<IKVReader> threadLocalKVReader;
     // key: matchRecordKeyPrefix, value: splitKey
-    private final Map<ByteString, FanoutSplit> fanoutSplitKeys = new ConcurrentHashMap<>();
-    private final Gauge fanoutTopicFiltersGuage;
-    private final Gauge fanoutScaleGuage;
+    private final Map<ByteString, FanOutSplit> fanoutSplitKeys = new ConcurrentHashMap<>();
+    private final Gauge fanOutTopicFiltersGauge;
+    private final Gauge fanOutScaleGauge;
     private volatile Boundary boundary;
 
 
@@ -68,10 +67,10 @@ public class FanoutSplitHinter implements IKVRangeSplitHinter {
             return reader;
         });
         boundary = readerSupplier.get().boundary();
-        fanoutTopicFiltersGuage = Gauge.builder("dist.fanout.topicfilters", fanoutSplitKeys::size)
+        fanOutTopicFiltersGauge = Gauge.builder("dist.fanout.topicfilters", fanoutSplitKeys::size)
             .tags(tags)
             .register(Metrics.globalRegistry);
-        fanoutScaleGuage = Gauge.builder("dist.fanout.scale",
+        fanOutScaleGauge = Gauge.builder("dist.fanout.scale",
                 () -> fanoutSplitKeys.values()
                     .stream()
                     .map(f -> f.estimation.dataSize / f.estimation.recordSize)
@@ -90,29 +89,44 @@ public class FanoutSplitHinter implements IKVRangeSplitHinter {
         switch (input.getDistService().getTypeCase()) {
             case BATCHMATCH -> {
                 BatchMatchRequest request = input.getDistService().getBatchMatch();
-                Map<ByteString, RecordEstimation> matchRecordKeyPrefixMap = new HashMap<>();
-                request.getScopedTopicFilterMap().forEach((stf_str, incar) -> {
-                    String tenantId = parseTenantIdFromScopedTopicFilter(stf_str);
-                    String topicFilter = parseTopicFilterFromScopedTopicFilter(stf_str);
-                    String qInboxId = parseQInboxIdFromScopedTopicFilter(stf_str);
-                    matchRecordKeyPrefixMap.computeIfAbsent(toMatchRecordKeyPrefix(tenantId, topicFilter),
-                            k -> new RecordEstimation(false))
-                        .addRecordSize(matchRecordSize(tenantId, topicFilter, qInboxId));
-                });
-                doEstimate(matchRecordKeyPrefixMap);
+                Map<ByteString, RecordEstimation> routeKeyLoads = new HashMap<>();
+                request.getRequestsMap().forEach((tenantId, records) ->
+                    records.getRouteList().forEach(route -> {
+                        String topicFilter = route.getTopicFilter();
+                        if (isNormalTopicFilter(topicFilter)) {
+                            ByteString routeKey = toNormalRouteKey(tenantId, topicFilter, toReceiverUrl(route));
+                            routeKeyLoads.computeIfAbsent(routeKey,
+                                k -> new RecordEstimation(false)).addRecordSize(routeKey.size());
+                        } else {
+                            ByteString routeKey = toGroupRouteKey(tenantId, route.getTopicFilter());
+                            routeKeyLoads.computeIfAbsent(
+                                    toGroupRouteKey(tenantId, route.getTopicFilter()),
+                                    k -> new RecordEstimation(false))
+                                .addRecordSize(routeKey.size());
+                        }
+                    }));
+                doEstimate(routeKeyLoads);
             }
             case BATCHUNMATCH -> {
                 BatchUnmatchRequest request = input.getDistService().getBatchUnmatch();
-                Map<ByteString, RecordEstimation> matchRecordKeyPrefixMap = new HashMap<>();
-                request.getScopedTopicFilterMap().forEach((stf_str, incar) -> {
-                    String tenantId = parseTenantIdFromScopedTopicFilter(stf_str);
-                    String topicFilter = parseTopicFilterFromScopedTopicFilter(stf_str);
-                    String qInboxId = parseQInboxIdFromScopedTopicFilter(stf_str);
-                    matchRecordKeyPrefixMap.computeIfAbsent(toMatchRecordKeyPrefix(tenantId, topicFilter),
-                            k -> new RecordEstimation(true))
-                        .addRecordSize(matchRecordSize(tenantId, topicFilter, qInboxId));
-                });
-                doEstimate(matchRecordKeyPrefixMap);
+                Map<ByteString, RecordEstimation> routeKeyLoads = new HashMap<>();
+                request.getRequestsMap().forEach((tenantId, records) ->
+                    records.getRouteList().forEach(route -> {
+                        String topicFilter = route.getTopicFilter();
+                        if (isNormalTopicFilter(topicFilter)) {
+                            ByteString routeKey = toNormalRouteKey(tenantId, topicFilter, toReceiverUrl(route));
+                            routeKeyLoads.computeIfAbsent(routeKey,
+                                k -> new RecordEstimation(true)).addRecordSize(routeKey.size());
+                        } else {
+                            ByteString routeKey = toGroupRouteKey(tenantId, route.getTopicFilter());
+                            routeKeyLoads.computeIfAbsent(routeKey,
+                                k -> new RecordEstimation(true)).addRecordSize(routeKey.size());
+                        }
+                    }));
+                doEstimate(routeKeyLoads);
+            }
+            default -> {
+                // ignore
             }
         }
     }
@@ -121,9 +135,9 @@ public class FanoutSplitHinter implements IKVRangeSplitHinter {
     public void reset(Boundary boundary) {
         this.boundary = boundary;
         Map<ByteString, RecordEstimation> finished = new HashMap<>();
-        for (Map.Entry<ByteString, FanoutSplit> entry : fanoutSplitKeys.entrySet()) {
+        for (Map.Entry<ByteString, FanOutSplit> entry : fanoutSplitKeys.entrySet()) {
             ByteString matchRecordKeyPrefix = entry.getKey();
-            FanoutSplit fanoutSplit = entry.getValue();
+            FanOutSplit fanoutSplit = entry.getValue();
             if (!BoundaryUtil.inRange(fanoutSplit.splitKey, boundary)) {
                 fanoutSplitKeys.remove(matchRecordKeyPrefix);
                 RecordEstimation recordEst = new RecordEstimation(false);
@@ -137,7 +151,7 @@ public class FanoutSplitHinter implements IKVRangeSplitHinter {
 
     @Override
     public SplitHint estimate() {
-        Optional<Map.Entry<ByteString, FanoutSplit>> firstSplit = fanoutSplitKeys.entrySet().stream().findFirst();
+        Optional<Map.Entry<ByteString, FanOutSplit>> firstSplit = fanoutSplitKeys.entrySet().stream().findFirst();
         SplitHint.Builder hintBuilder = SplitHint.newBuilder().setType(TYPE)
             .putLoad(LOAD_TYPE_FANOUT_TOPIC_FILTERS, fanoutSplitKeys.size())
             .putLoad(LOAD_TYPE_FANOUT_SCALE, 0);
@@ -156,35 +170,35 @@ public class FanoutSplitHinter implements IKVRangeSplitHinter {
     @Override
     public void close() {
         threadReaders.forEach(IKVCloseableReader::close);
-        Metrics.globalRegistry.remove(fanoutTopicFiltersGuage);
-        Metrics.globalRegistry.remove(fanoutScaleGuage);
+        Metrics.globalRegistry.remove(fanOutTopicFiltersGauge);
+        Metrics.globalRegistry.remove(fanOutScaleGauge);
     }
 
-    private void doEstimate(Map<ByteString, RecordEstimation> matchRecordKeyPrefixMap) {
+    private void doEstimate(Map<ByteString, RecordEstimation> routeKeyLoads) {
         Map<ByteString, RangeEstimation> splitCandidate = new HashMap<>();
-        matchRecordKeyPrefixMap.forEach((matchRecordKeyPrefix, recordEst) -> {
+        routeKeyLoads.forEach((matchRecordKeyPrefix, recordEst) -> {
             long dataSize = (threadLocalKVReader.get()
                 .size(Boundary.newBuilder()
                     .setStartKey(matchRecordKeyPrefix)
                     .setEndKey(BoundaryUtil.upperBound(matchRecordKeyPrefix))
                     .build())) - recordEst.tombstoneSize();
-            long fanoutScale = dataSize / recordEst.avgRecordSize();
-            if (fanoutScale >= splitAtScale) {
+            long fanOutScale = dataSize / recordEst.avgRecordSize();
+            if (fanOutScale >= splitAtScale) {
                 splitCandidate.put(matchRecordKeyPrefix, new RangeEstimation(dataSize, recordEst.avgRecordSize()));
-            } else if (fanoutSplitKeys.containsKey(matchRecordKeyPrefix) && fanoutScale < 0.5 * splitAtScale) {
+            } else if (fanoutSplitKeys.containsKey(matchRecordKeyPrefix) && fanOutScale < 0.5 * splitAtScale) {
                 fanoutSplitKeys.remove(matchRecordKeyPrefix);
             }
         });
         if (!splitCandidate.isEmpty()) {
             try (IKVCloseableReader reader = readerSupplier.get()) {
-                for (ByteString matchKeyPrefix : splitCandidate.keySet()) {
-                    RangeEstimation recEst = splitCandidate.get(matchKeyPrefix);
-                    fanoutSplitKeys.computeIfAbsent(matchKeyPrefix, k -> {
+                for (ByteString routeKey : splitCandidate.keySet()) {
+                    RangeEstimation recEst = splitCandidate.get(routeKey);
+                    fanoutSplitKeys.computeIfAbsent(routeKey, k -> {
                         IKVIterator itr = reader.iterator();
                         int i = 0;
-                        for (itr.seek(matchKeyPrefix); itr.isValid(); itr.next()) {
+                        for (itr.seek(routeKey); itr.isValid(); itr.next()) {
                             if (i++ >= splitAtScale) {
-                                return new FanoutSplit(recEst, itr.key());
+                                return new FanOutSplit(recEst, itr.key());
                             }
                         }
                         return null;
@@ -197,6 +211,6 @@ public class FanoutSplitHinter implements IKVRangeSplitHinter {
     private record RangeEstimation(long dataSize, int recordSize) {
     }
 
-    private record FanoutSplit(RangeEstimation estimation, ByteString splitKey) {
+    private record FanOutSplit(RangeEstimation estimation, ByteString splitKey) {
     }
 }

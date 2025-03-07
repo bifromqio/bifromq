@@ -13,6 +13,9 @@
 
 package com.baidu.bifromq.retain.utils;
 
+import static com.baidu.bifromq.util.BSUtil.toByteString;
+import static com.baidu.bifromq.util.BSUtil.toInt;
+import static com.baidu.bifromq.util.BSUtil.toShort;
 import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
 import static com.baidu.bifromq.util.TopicConst.SINGLE_WILDCARD;
 import static com.baidu.bifromq.util.TopicUtil.escape;
@@ -21,7 +24,6 @@ import static com.google.protobuf.ByteString.copyFromUtf8;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 
 import com.google.protobuf.ByteString;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -109,31 +111,4 @@ public class KeyUtil {
         return parse(escapedTopic, true);
     }
 
-    static ByteString toByteString(int i) {
-        return unsafeWrap(toBytes(i));
-    }
-
-    static ByteString toByteString(short s) {
-        return unsafeWrap(toBytes(s));
-    }
-
-    static byte[] toBytes(short s) {
-        return ByteBuffer.allocate(Short.BYTES).putShort(s).array();
-    }
-
-    static byte[] toBytes(int i) {
-        return ByteBuffer.allocate(Integer.BYTES).putInt(i).array();
-    }
-
-    static int toInt(ByteString b) {
-        assert b.size() == Integer.BYTES;
-        ByteBuffer buffer = b.asReadOnlyByteBuffer();
-        return buffer.getInt();
-    }
-
-    static short toShort(ByteString s) {
-        assert s.size() == Short.BYTES;
-        ByteBuffer buffer = s.asReadOnlyByteBuffer();
-        return buffer.getShort();
-    }
 }

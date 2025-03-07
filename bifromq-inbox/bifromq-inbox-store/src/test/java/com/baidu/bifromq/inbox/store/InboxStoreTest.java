@@ -80,7 +80,6 @@ import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
 import com.baidu.bifromq.inbox.store.balance.RangeBootstrapBalancerFactory;
-import com.baidu.bifromq.inbox.util.MessageUtil;
 import com.baidu.bifromq.metrics.TenantMetric;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;

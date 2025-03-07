@@ -32,5 +32,6 @@
         <module>bifromq-dist-server</module>
         <module>bifromq-dist-rpc-definition</module>
         <module>bifromq-dist-coproc-proto</module>
+        <module>bifromq-dist-worker-schema</module>
     </modules>
 </project>

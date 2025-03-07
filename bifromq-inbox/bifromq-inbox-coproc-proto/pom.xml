@@ -28,6 +28,10 @@
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-common-type</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-util</artifactId>
+        </dependency>
     </dependencies>
     <build>
         <plugins>

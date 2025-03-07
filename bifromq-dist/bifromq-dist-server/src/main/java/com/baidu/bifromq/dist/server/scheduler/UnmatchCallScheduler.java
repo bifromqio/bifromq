@@ -13,8 +13,10 @@
 
 package com.baidu.bifromq.dist.server.scheduler;
 
-import static com.baidu.bifromq.dist.entity.EntityUtil.toMatchRecordKey;
-import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toGroupRouteKey;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toNormalRouteKey;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toReceiverUrl;
+import static com.baidu.bifromq.util.TopicUtil.isNormalTopicFilter;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
@@ -48,7 +50,11 @@ public class UnmatchCallScheduler extends MutationCallScheduler<UnmatchRequest, 
     }
 
     protected ByteString rangeKey(UnmatchRequest call) {
-        String qInboxId = toQInboxId(call.getBrokerId(), call.getReceiverId(), call.getDelivererKey());
-        return toMatchRecordKey(call.getTenantId(), call.getTopicFilter(), qInboxId);
+        if (isNormalTopicFilter(call.getTopicFilter())) {
+            return toNormalRouteKey(call.getTenantId(), call.getTopicFilter(),
+                toReceiverUrl(call.getBrokerId(), call.getReceiverId(), call.getDelivererKey()));
+        } else {
+            return toGroupRouteKey(call.getTenantId(), call.getTopicFilter());
+        }
     }
 }

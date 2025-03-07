@@ -30,7 +30,7 @@ import static org.testng.Assert.assertTrue;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
-import com.baidu.bifromq.dist.entity.Matching;
+import com.baidu.bifromq.dist.worker.schema.Matching;
 import com.github.benmanes.caffeine.cache.Ticker;
 import com.google.protobuf.ByteString;
 import java.time.Duration;

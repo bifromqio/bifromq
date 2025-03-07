@@ -14,8 +14,8 @@
 package com.baidu.bifromq.dist.worker.cache;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
-import static com.baidu.bifromq.dist.entity.EntityUtil.matchRecordKeyPrefix;
-import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantStartKey;
 import static com.baidu.bifromq.dist.worker.cache.SubscriptionCache.TenantKey.noRefreshExpiry;
 import static com.baidu.bifromq.dist.worker.cache.SubscriptionCache.TenantKey.refreshExpiry;
 
@@ -23,7 +23,7 @@ import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.baidu.bifromq.dist.entity.Matching;
+import com.baidu.bifromq.dist.worker.schema.Matching;
 import com.baidu.bifromq.sysprops.props.DistTopicMatchExpirySeconds;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Expiry;
@@ -113,8 +113,8 @@ public class SubscriptionCache implements ISubscriptionCache {
     public CompletableFuture<Set<Matching>> get(String tenantId, String topic) {
         ITenantRouteCache routesCache = tenantCache.get(refreshExpiry(tenantId));
         Boundary tenantBoundary = intersect(Boundary.newBuilder()
-            .setStartKey(matchRecordKeyPrefix(tenantId))
-            .setEndKey(tenantUpperBound(tenantId))
+                .setStartKey(tenantStartKey(tenantId))
+                .setEndKey(upperBound(tenantStartKey((tenantId))))
             .build(), boundary);
         return routesCache.getMatch(topic, tenantBoundary);
     }

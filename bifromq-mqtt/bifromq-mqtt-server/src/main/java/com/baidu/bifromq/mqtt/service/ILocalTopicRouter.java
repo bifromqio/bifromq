@@ -22,7 +22,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Local topic router maintains the mapping between topic filter and channel id which made by non-shared subscription.
- * Internally the mappings are organized into buckets, each bucket identified by its id as a receiver could be routed
+ * Internally the mappings are organized into buckets, each bucket identified by its id as a receiverInfo could be routed
  * globally by dist service.
  */
 public interface ILocalTopicRouter {

@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import com.baidu.bifromq.dist.entity.Matching;
+import com.baidu.bifromq.dist.worker.schema.Matching;
 import com.baidu.bifromq.type.TopicMessagePack;
 import java.util.Set;
 

@@ -21,7 +21,7 @@ import static com.baidu.bifromq.retain.utils.KeyUtil.parseTopic;
 import static com.baidu.bifromq.retain.utils.KeyUtil.retainKey;
 import static com.baidu.bifromq.retain.utils.KeyUtil.retainKeyPrefix;
 import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
-import static com.baidu.bifromq.retain.utils.KeyUtil.toByteString;
+import static com.baidu.bifromq.util.BSUtil.toByteString;
 import static com.baidu.bifromq.util.TopicUtil.isMultiWildcardTopicFilter;
 import static com.baidu.bifromq.util.TopicUtil.parse;
 import static org.testng.Assert.assertEquals;

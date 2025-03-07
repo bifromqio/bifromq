@@ -15,8 +15,8 @@ package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isNULLRange;
-import static com.baidu.bifromq.dist.entity.EntityUtil.tenantPrefix;
-import static com.baidu.bifromq.dist.entity.EntityUtil.tenantUpperBound;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantStartKey;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
@@ -115,8 +115,8 @@ class TenantsState implements ITenantsState {
         return () -> {
             try {
                 Boundary tenantSection = intersect(boundary, Boundary.newBuilder()
-                    .setStartKey(tenantPrefix(tenantId))
-                    .setEndKey(tenantUpperBound(tenantId))
+                        .setStartKey(tenantStartKey(tenantId))
+                        .setEndKey(upperBound(tenantStartKey(tenantId)))
                     .build());
                 if (isNULLRange(tenantSection)) {
                     return 0;

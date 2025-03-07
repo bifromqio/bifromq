@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.balance.impl;
 
-import static com.baidu.bifromq.basekv.balance.impl.CommandUtil.diffBy;
+import static com.baidu.bifromq.basekv.balance.util.CommandUtil.diffBy;
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.toLeaderRanges;
 

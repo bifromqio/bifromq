@@ -17,6 +17,10 @@
             <artifactId>base-kv-store-balance-spi</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-dist-worker-schema</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.google.protobuf</groupId>
             <artifactId>protobuf-java</artifactId>
         </dependency>

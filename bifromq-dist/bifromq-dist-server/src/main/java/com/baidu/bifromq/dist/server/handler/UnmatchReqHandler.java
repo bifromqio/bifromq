@@ -43,8 +43,8 @@ public class UnmatchReqHandler implements IDistServiceReqHandler<UnmatchRequest,
                     log.debug("Failed to exec UnsubRequest, tenantId={}, req={}", request.getTenantId(), request, e);
                     eventCollector.report(getLocal(UnmatchError.class)
                         .reqId(request.getReqId())
-                        .topicFilter(request.getTopicFilter())
                         .tenantId(request.getTenantId())
+                        .topicFilter(request.getTopicFilter())
                         .receiverId(request.getReceiverId())
                         .subBrokerId(request.getBrokerId())
                         .delivererKey(request.getDelivererKey())
@@ -63,16 +63,16 @@ public class UnmatchReqHandler implements IDistServiceReqHandler<UnmatchRequest,
                     if (v.getResult() == UnmatchReply.Result.OK) {
                         eventCollector.report(getLocal(Unmatched.class)
                             .reqId(request.getReqId())
-                            .topicFilter(request.getTopicFilter())
                             .tenantId(request.getTenantId())
+                            .topicFilter(request.getTopicFilter())
                             .receiverId(request.getReceiverId())
                             .subBrokerId(request.getBrokerId())
                             .delivererKey(request.getDelivererKey()));
                     } else {
                         eventCollector.report(getLocal(UnmatchError.class)
                             .reqId(request.getReqId())
-                            .topicFilter(request.getTopicFilter())
                             .tenantId(request.getTenantId())
+                            .topicFilter(request.getTopicFilter())
                             .receiverId(request.getReceiverId())
                             .subBrokerId(request.getBrokerId())
                             .delivererKey(request.getDelivererKey())

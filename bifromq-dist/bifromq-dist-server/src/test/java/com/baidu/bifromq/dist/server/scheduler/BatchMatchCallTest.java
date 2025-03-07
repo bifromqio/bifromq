@@ -14,8 +14,6 @@
 package com.baidu.bifromq.dist.server.scheduler;
 
 
-import static com.baidu.bifromq.dist.entity.EntityUtil.toQInboxId;
-import static com.baidu.bifromq.dist.entity.EntityUtil.toScopedTopicFilter;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,7 +31,6 @@ import com.baidu.bifromq.dist.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.MatchReply;
 import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
-import com.baidu.bifromq.dist.rpc.proto.TenantOption;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import java.time.Duration;
@@ -70,6 +67,7 @@ public class BatchMatchCallTest {
             .setReceiverId("receiver1")
             .setBrokerId(1)
             .setDelivererKey("key1")
+            .setIncarnation(1L)
             .build();
 
         MatchRequest request2 = MatchRequest.newBuilder()
@@ -79,6 +77,7 @@ public class BatchMatchCallTest {
             .setReceiverId("receiver2")
             .setBrokerId(2)
             .setDelivererKey("key2")
+            .setIncarnation(1L)
             .build();
 
         // contain duplicate request
@@ -90,15 +89,14 @@ public class BatchMatchCallTest {
         RWCoProcInput input = batchMatchCall.makeBatch(iterator);
 
         BatchMatchRequest batchRequest = input.getDistService().getBatchMatch();
-        assertEquals(2, batchRequest.getScopedTopicFilterCount());
-        assertEquals(2, batchRequest.getOptionsCount());
+        assertEquals(batchRequest.getRequestsCount(), 2);
 
-        Map<String, TenantOption> options = batchRequest.getOptionsMap();
-        assertEquals(100, options.get("tenant1").getMaxReceiversPerSharedSubGroup());
-        assertEquals(200, options.get("tenant2").getMaxReceiversPerSharedSubGroup());
+        Map<String, BatchMatchRequest.TenantBatch> options = batchRequest.getRequestsMap();
+        assertEquals(options.get("tenant1").getOption().getMaxReceiversPerSharedSubGroup(), 100);
+        assertEquals(options.get("tenant2").getOption().getMaxReceiversPerSharedSubGroup(), 200);
     }
 
-    private void testHandleOutput(BatchMatchReply.Result batchResult, MatchReply.Result expectedMatchResult) {
+    private void testHandleOutput(BatchMatchReply.TenantBatch.Code batchResult, MatchReply.Result expectedMatchResult) {
         ICallTask<MatchRequest, MatchReply, MutationCallBatcherKey> callTask = mock(ICallTask.class);
         MatchRequest request = MatchRequest.newBuilder()
             .setReqId(1)
@@ -107,6 +105,7 @@ public class BatchMatchCallTest {
             .setReceiverId("receiver1")
             .setBrokerId(1)
             .setDelivererKey("key1")
+            .setIncarnation(1L)
             .build();
         when(callTask.call()).thenReturn(request);
         CompletableFuture<MatchReply> resultPromise = new CompletableFuture<>();
@@ -117,32 +116,25 @@ public class BatchMatchCallTest {
         Queue<ICallTask<MatchRequest, MatchReply, MutationCallBatcherKey>> batchedTasks = new LinkedList<>();
         batchedTasks.add(callTask);
 
-        String qInboxId = toQInboxId(request.getBrokerId(), request.getReceiverId(), request.getDelivererKey());
-        String scopedTopicFilter = toScopedTopicFilter(request.getTenantId(), qInboxId, request.getTopicFilter());
-
-        BatchMatchReply batchMatchReply = BatchMatchReply.newBuilder()
-            .setReqId(1)
-            .putResults(scopedTopicFilter, batchResult)
+        BatchMatchReply batchMatchReply = BatchMatchReply.newBuilder().setReqId(1)
+            .putResults(request.getTenantId(), BatchMatchReply.TenantBatch.newBuilder().addCode(batchResult).build())
             .build();
         RWCoProcOutput output = RWCoProcOutput.newBuilder()
-            .setDistService(DistServiceRWCoProcOutput.newBuilder()
-                .setBatchMatch(batchMatchReply)
-                .build())
-            .build();
+            .setDistService(DistServiceRWCoProcOutput.newBuilder().setBatchMatch(batchMatchReply).build()).build();
 
         batchMatchCall.handleOutput(batchedTasks, output);
 
         verify(callTask).resultPromise();
         MatchReply reply = resultPromise.join();
         assertEquals(expectedMatchResult, reply.getResult());
-        assertEquals(1, reply.getReqId());
+        assertEquals(reply.getReqId(), 1);
     }
 
     @Test
     void testHandleOutput() {
-        testHandleOutput(BatchMatchReply.Result.OK, MatchReply.Result.OK);
-        testHandleOutput(BatchMatchReply.Result.EXCEED_LIMIT, MatchReply.Result.EXCEED_LIMIT);
-        testHandleOutput(BatchMatchReply.Result.ERROR, MatchReply.Result.ERROR);
+        testHandleOutput(BatchMatchReply.TenantBatch.Code.OK, MatchReply.Result.OK);
+        testHandleOutput(BatchMatchReply.TenantBatch.Code.EXCEED_LIMIT, MatchReply.Result.EXCEED_LIMIT);
+        testHandleOutput(BatchMatchReply.TenantBatch.Code.ERROR, MatchReply.Result.ERROR);
     }
 
     @Test

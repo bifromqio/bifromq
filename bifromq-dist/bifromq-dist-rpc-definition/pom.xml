@@ -29,19 +29,7 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-util</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-dist-coproc-proto</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.baidu.bifromq</groupId>
             <artifactId>base-rpc-common</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-collections4</artifactId>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
@@ -54,23 +42,6 @@
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-stub</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-        </dependency>
-        <!-- for testing-->
-        <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.openjdk.jmh</groupId>
-            <artifactId>jmh-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.openjdk.jmh</groupId>
-            <artifactId>jmh-generator-annprocess</artifactId>
         </dependency>
     </dependencies>
     <build>

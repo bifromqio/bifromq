@@ -20,9 +20,9 @@ import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersi
 import static com.google.common.hash.Hashing.murmur3_128;
 
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
-import com.baidu.bifromq.dist.entity.GroupMatching;
-import com.baidu.bifromq.dist.entity.Matching;
-import com.baidu.bifromq.dist.entity.NormalMatching;
+import com.baidu.bifromq.dist.worker.schema.GroupMatching;
+import com.baidu.bifromq.dist.worker.schema.Matching;
+import com.baidu.bifromq.dist.worker.schema.NormalMatching;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
@@ -147,7 +147,7 @@ class DeliverExecutorGroup implements IDeliverExecutorGroup {
     }
 
     private boolean isSendToInbox(Matching matching) {
-        return matching.type() == Matching.Type.Normal && ((NormalMatching) matching).subBrokerId == 1;
+        return matching.type() == Matching.Type.Normal && ((NormalMatching) matching).subBrokerId() == 1;
     }
 
     @Override
@@ -173,19 +173,18 @@ class DeliverExecutorGroup implements IDeliverExecutorGroup {
                         NormalMatching matchedInbox = orderedSharedMatching
                             .get(new OrderedSharedMatchingKey(groupMatching.tenantId, groupMatching.escapedTopicFilter))
                             .get(sender, senderInfo -> {
-                                RendezvousHash<ClientInfo, NormalMatching> hash =
-                                    new RendezvousHash<>(murmur3_128(),
-                                        (from, into) -> into.putInt(from.hashCode()),
-                                        (from, into) -> into.putBytes(from.scopedInboxId.getBytes()),
-                                        Comparator.comparing(a -> a.scopedInboxId));
+                                RendezvousHash<ClientInfo, NormalMatching> hash = new RendezvousHash<>(murmur3_128(),
+                                    (from, into) -> into.putInt(from.hashCode()),
+                                    (from, into) -> into.putBytes(from.receiverUrl.getBytes()),
+                                    Comparator.comparing(a -> a.receiverUrl));
                                 groupMatching.receiverList.forEach(hash::add);
                                 NormalMatching matchRecord = hash.get(senderInfo);
                                 log.debug(
                                     "Ordered shared matching: sender={}: topicFilter={}, receiverId={}, subBroker={}",
                                     senderInfo,
                                     matchRecord.originalTopicFilter(),
-                                    matchRecord.matchInfo.getReceiverId(),
-                                    matchRecord.subBrokerId);
+                                    matchRecord.matchInfo().getReceiverId(),
+                                    matchRecord.subBrokerId());
                                 return matchRecord;
                             });
                         // ordered share sub

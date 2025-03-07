@@ -17,10 +17,10 @@ message MatchRequest {
   uint64 reqId = 1;
   string tenantId = 2;
   string topicFilter = 3;
-  string receiverId = 4; // the structure of receiver id is defined by caller
-  uint32 brokerId = 5;
+  uint32 brokerId = 4;
+  string receiverId = 5;
   string delivererKey = 6;
-  uint64 incarnation = 7; // the incarnation of the receiver
+  uint64 incarnation = 7;
 }
 
 message MatchReply {
@@ -37,11 +37,11 @@ message MatchReply {
 message UnmatchRequest {
   uint64 reqId = 1;
   string tenantId = 2;
-  string receiverId = 3; // the structure of receiver id is defined by caller
-  string topicFilter = 4;
-  uint32 brokerId = 5;
+  string topicFilter = 3;
+  uint32 brokerId = 4;
+  string receiverId = 5;
   string delivererKey = 6;
-  uint64 incarnation = 7; // the incarnation of the receiver
+  uint64 incarnation = 7;
 }
 
 message UnmatchReply {

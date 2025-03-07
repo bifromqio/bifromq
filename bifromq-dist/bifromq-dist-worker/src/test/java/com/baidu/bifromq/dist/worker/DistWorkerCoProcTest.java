@@ -14,7 +14,8 @@
 package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
-import static com.baidu.bifromq.dist.entity.EntityUtil.toByteString;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toReceiverUrl;
+import static com.baidu.bifromq.util.BSUtil.toByteString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -35,8 +36,6 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
-import com.baidu.bifromq.dist.entity.EntityUtil;
-import com.baidu.bifromq.dist.entity.Matching;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.BatchMatchReply;
@@ -48,9 +47,12 @@ import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.GCReply;
 import com.baidu.bifromq.dist.rpc.proto.GCRequest;
-import com.baidu.bifromq.dist.rpc.proto.GroupMatchRecord;
+import com.baidu.bifromq.dist.rpc.proto.MatchRoute;
+import com.baidu.bifromq.dist.rpc.proto.RouteGroup;
 import com.baidu.bifromq.dist.rpc.proto.TenantOption;
 import com.baidu.bifromq.dist.worker.cache.ISubscriptionCache;
+import com.baidu.bifromq.dist.worker.schema.KVSchemaUtil;
+import com.baidu.bifromq.dist.worker.schema.Matching;
 import com.baidu.bifromq.plugin.subbroker.CheckRequest;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.google.protobuf.ByteString;
@@ -95,18 +97,30 @@ public class DistWorkerCoProcTest {
 
     @Test
     public void testMutateBatchMatch() {
-        String scopedTopicFilter1 = EntityUtil.toScopedTopicFilter("tenant1",
-            EntityUtil.toQInboxId(1, "inbox1", "deliverer1"), "topicFilter1");
-        String scopedTopicFilter2 = EntityUtil.toScopedTopicFilter("tenant2",
-            EntityUtil.toQInboxId(1, "inbox2", "deliverer2"), "topicFilter2");
         RWCoProcInput rwCoProcInput = RWCoProcInput.newBuilder()
             .setDistService(DistServiceRWCoProcInput.newBuilder()
                 .setBatchMatch(BatchMatchRequest.newBuilder()
                     .setReqId(123)
-                    .putScopedTopicFilter(scopedTopicFilter1, 1L)
-                    .putScopedTopicFilter(scopedTopicFilter2, 1L)
-                    .putOptions("tenant1", TenantOption.newBuilder().setMaxReceiversPerSharedSubGroup(10).build())
-                    .putOptions("tenant2", TenantOption.newBuilder().setMaxReceiversPerSharedSubGroup(5).build())
+                    .putRequests("tenant1", BatchMatchRequest.TenantBatch.newBuilder()
+                        .setOption(TenantOption.newBuilder().setMaxReceiversPerSharedSubGroup(10).build())
+                        .addRoute(MatchRoute.newBuilder()
+                            .setTopicFilter("topicFilter1")
+                            .setBrokerId(1)
+                            .setReceiverId("inbox1")
+                            .setDelivererKey("deliverer1")
+                            .setIncarnation(1L)
+                            .build())
+                        .build())
+                    .putRequests("tenant2", BatchMatchRequest.TenantBatch.newBuilder()
+                        .setOption(TenantOption.newBuilder().setMaxReceiversPerSharedSubGroup(5).build())
+                        .addRoute(MatchRoute.newBuilder()
+                            .setTopicFilter("topicFilter2")
+                            .setBrokerId(1)
+                            .setReceiverId("inbox2")
+                            .setDelivererKey("deliverer2")
+                            .setIncarnation(1L)
+                            .build())
+                        .build())
                     .build())
                 .build())
             .build();
@@ -127,21 +141,27 @@ public class DistWorkerCoProcTest {
 
         // Check the result output
         BatchMatchReply reply = result.getDistService().getBatchMatch();
-        assertEquals(123, reply.getReqId());
-        assertEquals(BatchMatchReply.Result.OK, reply.getResultsOrThrow(scopedTopicFilter1));
-        assertEquals(BatchMatchReply.Result.OK, reply.getResultsOrThrow(scopedTopicFilter2));
+        assertEquals(reply.getReqId(), 123);
+        assertEquals(reply.getResultsOrThrow("tenant1").getCode(0), BatchMatchReply.TenantBatch.Code.OK);
+        assertEquals(reply.getResultsOrThrow("tenant2").getCode(0), BatchMatchReply.TenantBatch.Code.OK);
     }
 
     @Test
     public void testMutateBatchUnmatch() {
-        String scopedTopicFilter = EntityUtil.toScopedTopicFilter("tenant1",
-            EntityUtil.toQInboxId(1, "inbox1", "deliverer1"), "topicFilter1");
         long incarnation = 1;
         RWCoProcInput rwCoProcInput = RWCoProcInput.newBuilder()
             .setDistService(DistServiceRWCoProcInput.newBuilder()
                 .setBatchUnmatch(BatchUnmatchRequest.newBuilder()
                     .setReqId(456)
-                    .putScopedTopicFilter(scopedTopicFilter, incarnation)
+                    .putRequests("tenant1", BatchUnmatchRequest.TenantBatch.newBuilder()
+                        .addRoute(MatchRoute.newBuilder()
+                            .setTopicFilter("topicFilter1")
+                            .setBrokerId(1)
+                            .setReceiverId("inbox1")
+                            .setDelivererKey("deliverer1")
+                            .setIncarnation(incarnation)
+                            .build())
+                        .build())
                     .build())
                 .build())
             .build();
@@ -162,8 +182,8 @@ public class DistWorkerCoProcTest {
 
         // Check the result output
         BatchUnmatchReply reply = result.getDistService().getBatchUnmatch();
-        assertEquals(456, reply.getReqId());
-        assertEquals(BatchUnmatchReply.Result.OK, reply.getResultsOrThrow(scopedTopicFilter));
+        assertEquals(reply.getReqId(), 456);
+        assertEquals(reply.getResultsOrThrow("tenant1").getCode(0), BatchUnmatchReply.TenantBatch.Code.OK);
     }
 
     @Test
@@ -181,9 +201,14 @@ public class DistWorkerCoProcTest {
             .build();
 
         // Simulate routes in cache
-        CompletableFuture<Set<Matching>> futureRoutes =
-            CompletableFuture.completedFuture(
-                Set.of(createMatching("tenant1", "topic1", EntityUtil.toQInboxId(1, "inbox1", "deliverer1"))));
+        CompletableFuture<Set<Matching>> futureRoutes = CompletableFuture.completedFuture(
+            Set.of(createMatching("tenant1", MatchRoute.newBuilder()
+                .setTopicFilter("topic1")
+                .setBrokerId(1)
+                .setReceiverId("inbox1")
+                .setDelivererKey("deliverer1")
+                .setIncarnation(1L)
+                .build())));
         when(routeCache.get(eq("tenant1"), eq("topic1"))).thenReturn(futureRoutes);
 
         // Simulate query
@@ -204,29 +229,31 @@ public class DistWorkerCoProcTest {
         String tenant2 = "tenant2";
         String topic1 = "topic1";
         String topic2 = "topic2";
-        String scopedInbox1 = EntityUtil.toQInboxId(1, "inbox1", "deliverer1");
-        String scopedInbox2 = EntityUtil.toQInboxId(2, "inbox2", "deliverer2");
+        String receiverUrl1 = toReceiverUrl(1, "inbox1", "deliverer1");
+        String receiverUrl2 = toReceiverUrl(2, "inbox2", "deliverer2");
 
-        ByteString normalMatchKey1 = EntityUtil.toNormalMatchRecordKey(tenant1, topic1, scopedInbox1);
-        ByteString normalMatchKey2 = EntityUtil.toNormalMatchRecordKey(tenant2, topic2, scopedInbox2);
+        ByteString normalMatchKey1 =
+            KVSchemaUtil.toNormalRouteKey(tenant1, topic1, toReceiverUrl(1, "inbox1", "deliverer1"));
+        ByteString normalMatchKey2 =
+            KVSchemaUtil.toNormalRouteKey(tenant2, topic2, toReceiverUrl(2, "inbox2", "deliverer2"));
 
         String sharedTopic = "$share/group/topic3";
-        ByteString groupMatchKey = EntityUtil.toGroupMatchRecordKey(tenant1, sharedTopic);
-        GroupMatchRecord groupMatchRecord = GroupMatchRecord.newBuilder()
-            .putQReceiverId(scopedInbox1, 1L)
-            .putQReceiverId(scopedInbox2, 1L)
+        ByteString groupMatchKey = KVSchemaUtil.toGroupRouteKey(tenant1, sharedTopic);
+        RouteGroup groupMembers = RouteGroup.newBuilder()
+            .putMembers(receiverUrl1, 1L)
+            .putMembers(receiverUrl2, 1L)
             .build();
 
         when(iterator.isValid()).thenReturn(true, true, true, false);
         when(iterator.key()).thenReturn(normalMatchKey1, groupMatchKey, normalMatchKey2);
         when(iterator.value()).thenReturn(
             toByteString(1L),
-            groupMatchRecord.toByteString(),
+            groupMembers.toByteString(),
             toByteString(1L)
         );
 
         when(routeCache.isCached(eq(tenant1), eq(topic1))).thenReturn(false);
-        when(routeCache.isCached(eq(tenant1), eq(EntityUtil.parseTopicFilter(groupMatchKey.toStringUtf8()))))
+        when(routeCache.isCached(eq(tenant1), eq(KVSchemaUtil.parseRouteDetail(groupMatchKey).topicFilter())))
             .thenReturn(false);
         when(routeCache.isCached(eq(tenant2), eq(topic2))).thenReturn(false);
 
@@ -285,16 +312,17 @@ public class DistWorkerCoProcTest {
         verify(deliverExecutorGroup, times(1)).shutdown();
     }
 
-    private Matching createMatching(String tenantId, String topicFilter, String qInboxId) {
+    private Matching createMatching(String tenantId, MatchRoute route) {
         // Sample data for creating a Matching object
 
         // Construct a ByteString for normal match record key
-        ByteString normalMatchRecordKey = EntityUtil.toNormalMatchRecordKey(tenantId, topicFilter, qInboxId);
+        ByteString normalRouteKey =
+            KVSchemaUtil.toNormalRouteKey(tenantId, route.getTopicFilter(), toReceiverUrl(route));
 
         // Construct the match record value (for example, an empty value for a normal match)
         ByteString matchRecordValue = toByteString(1L);
 
         // Use EntityUtil to parse the key and value into a Matching object
-        return EntityUtil.parseMatchRecord(normalMatchRecordKey, matchRecordValue);
+        return KVSchemaUtil.buildMatchRoute(normalRouteKey, matchRecordValue);
     }
 }

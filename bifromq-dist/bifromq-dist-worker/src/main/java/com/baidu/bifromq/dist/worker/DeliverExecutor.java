@@ -18,7 +18,7 @@ import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLo
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.deliverer.DeliveryCall;
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
-import com.baidu.bifromq.dist.entity.NormalMatching;
+import com.baidu.bifromq.dist.worker.schema.NormalMatching;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverNoInbox;
@@ -83,9 +83,9 @@ public class DeliverExecutor {
     }
 
     private void send(NormalMatching matched, TopicMessagePack msgPack) {
-        int subBrokerId = matched.subBrokerId;
-        String delivererKey = matched.delivererKey;
-        MatchInfo sub = matched.matchInfo;
+        int subBrokerId = matched.subBrokerId();
+        String delivererKey = matched.delivererKey();
+        MatchInfo sub = matched.matchInfo();
         DeliveryCall request = new DeliveryCall(matched.tenantId, sub, subBrokerId, delivererKey, msgPack);
         deliverer.schedule(request).whenComplete((result, e) -> {
             if (e != null) {

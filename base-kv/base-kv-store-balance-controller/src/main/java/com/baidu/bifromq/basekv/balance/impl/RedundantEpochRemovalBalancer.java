@@ -13,18 +13,19 @@
 
 package com.baidu.bifromq.basekv.balance.impl;
 
-import static com.baidu.bifromq.basekv.balance.impl.CommandUtil.quit;
-import static com.baidu.bifromq.basekv.utils.DescriptorUtil.organizeByEpoch;
-
 import com.baidu.bifromq.basekv.balance.BalanceResult;
 import com.baidu.bifromq.basekv.balance.NoNeedBalance;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
+
 import java.util.Collections;
 import java.util.NavigableMap;
 import java.util.Set;
+
+import static com.baidu.bifromq.basekv.balance.util.CommandUtil.quit;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.organizeByEpoch;
 
 /**
  * The RedundantEpochRemovalBalancer is a specialized StoreBalancer designed to manage and remove redundant replicas

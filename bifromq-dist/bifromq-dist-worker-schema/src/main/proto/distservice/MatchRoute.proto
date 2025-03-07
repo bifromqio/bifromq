@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.dist.rpc.proto";
+option java_outer_classname = "MatchRouteProtos";
+
+package distservice;
+
+message MatchRoute {
+  string topicFilter = 1;
+  uint32 brokerId = 2;
+  string receiverId = 3;
+  string delivererKey = 4;
+  uint64 incarnation = 5;
+}

@@ -101,7 +101,7 @@ public class DeliverySchedulerTest {
     public void writeNoSub() {
         MatchInfo matchInfo = MatchInfo.newBuilder()
             .setTopicFilter("topic")
-            .setReceiverId("receiver")
+            .setReceiverId("receiverInfo")
             .setIncarnation(1)
             .build();
         DeliveryCall request =
@@ -126,7 +126,7 @@ public class DeliverySchedulerTest {
     public void writeNoReceiver() {
         MatchInfo matchInfo = MatchInfo.newBuilder()
             .setTopicFilter("topic")
-            .setReceiverId("receiver")
+            .setReceiverId("receiverInfo")
             .setIncarnation(1)
             .build();
         DeliveryCall request =

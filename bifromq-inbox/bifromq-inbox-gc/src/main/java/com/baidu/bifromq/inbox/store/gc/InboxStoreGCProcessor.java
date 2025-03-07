@@ -17,7 +17,6 @@ import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
-import static com.baidu.bifromq.inbox.util.MessageUtil.buildGCRequest;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
@@ -30,6 +29,8 @@ import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
 import com.baidu.bifromq.inbox.storage.proto.GCReply;
+import com.baidu.bifromq.inbox.storage.proto.GCRequest;
+import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.google.protobuf.ByteString;
 import java.util.Arrays;
 import java.util.List;
@@ -149,5 +150,22 @@ public class InboxStoreGCProcessor implements IInboxStoreGCProcessor {
                     tenantId, KVRangeIdUtil.toString(rangeSetting.id), e);
                 return GCReply.newBuilder().setCode(GCReply.Code.ERROR).build();
             });
+    }
+
+    private InboxServiceROCoProcInput buildGCRequest(long reqId,
+                                                     String tenantId,
+                                                     Integer expirySeconds,
+                                                     long now) {
+        GCRequest.Builder reqBuilder = GCRequest.newBuilder().setNow(now);
+        if (tenantId != null) {
+            reqBuilder.setTenantId(tenantId);
+        }
+        if (expirySeconds != null) {
+            reqBuilder.setExpirySeconds(expirySeconds);
+        }
+        return InboxServiceROCoProcInput.newBuilder()
+            .setReqId(reqId)
+            .setGc(reqBuilder.build())
+            .build();
     }
 }
