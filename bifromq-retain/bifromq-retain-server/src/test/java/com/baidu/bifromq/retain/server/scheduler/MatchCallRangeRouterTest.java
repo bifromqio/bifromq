@@ -17,7 +17,7 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.inRange;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.split;
 import static com.baidu.bifromq.retain.server.scheduler.MatchCallRangeRouter.rangeLookup;
-import static com.baidu.bifromq.retain.utils.KeyUtil.retainKey;
+import static com.baidu.bifromq.retain.store.schema.KVSchemaUtil.retainMessageKey;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
@@ -90,8 +90,8 @@ public class MatchCallRangeRouterTest {
         assertTrue(result.keySet()
             .stream()
             .map(setting -> setting.boundary)
-            .anyMatch(boundary -> inRange(retainKey(tenantId, "a/a/c"), boundary)
-                || inRange(retainKey(tenantId, "a/c/c"), boundary)));
+            .anyMatch(boundary -> inRange(retainMessageKey(tenantId, "a/a/c"), boundary)
+                || inRange(retainMessageKey(tenantId, "a/c/c"), boundary)));
     }
 
     @Test
@@ -120,8 +120,8 @@ public class MatchCallRangeRouterTest {
         assertTrue(result.keySet()
             .stream()
             .map(setting -> setting.boundary)
-            .anyMatch(boundary -> inRange(retainKey(tenantId, "a/b"), boundary)
-                || inRange(retainKey(tenantId, "a/b/c"), boundary)));
+            .anyMatch(boundary -> inRange(retainMessageKey(tenantId, "a/b"), boundary)
+                || inRange(retainMessageKey(tenantId, "a/b/c"), boundary)));
 
     }
 
@@ -130,7 +130,7 @@ public class MatchCallRangeRouterTest {
         router.put(FULL_BOUNDARY, toRangeSetting(FULL_BOUNDARY));
         for (String topic : topics) {
             Iterator<Boundary> itr = router.keySet().iterator();
-            ByteString retainKey = retainKey(tenantId, topic);
+            ByteString retainKey = retainMessageKey(tenantId, topic);
             while (itr.hasNext()) {
                 Boundary boundary = itr.next();
                 if (inRange(retainKey, boundary)) {

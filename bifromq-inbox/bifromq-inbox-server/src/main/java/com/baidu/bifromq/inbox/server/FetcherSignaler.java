@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import com.baidu.bifromq.inbox.records.ScopedInbox;
+import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 
 public class FetcherSignaler implements InboxWriterPipeline.IWriteCallback {
     private final IInboxFetcherRegistry registry;
@@ -23,9 +23,10 @@ public class FetcherSignaler implements InboxWriterPipeline.IWriteCallback {
     }
 
     @Override
-    public void afterWrite(ScopedInbox scopedInbox, String delivererKey) {
-        for (IInboxFetcher fetcher : registry.get(scopedInbox.tenantId(), delivererKey)) {
-            if (fetcher.signalFetch(scopedInbox.inboxId(), scopedInbox.incarnation())) {
+    public void afterWrite(TenantInboxInstance tenantInboxInstance, String delivererKey) {
+        for (IInboxFetcher fetcher : registry.get(tenantInboxInstance.tenantId(), delivererKey)) {
+            if (fetcher.signalFetch(tenantInboxInstance.instance().inboxId(),
+                tenantInboxInstance.instance().incarnation())) {
                 break;
             }
         }

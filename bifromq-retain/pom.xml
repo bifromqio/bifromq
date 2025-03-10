@@ -33,5 +33,6 @@
         <module>bifromq-retain-store</module>
         <module>bifromq-retain-server</module>
         <module>bifromq-retain-store-spi</module>
+        <module>bifromq-retain-store-schema</module>
     </modules>
 </project>

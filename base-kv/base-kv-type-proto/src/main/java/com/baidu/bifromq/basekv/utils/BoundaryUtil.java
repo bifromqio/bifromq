@@ -17,7 +17,6 @@ import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.UnsafeByteOperations;
 import java.util.Iterator;
 import java.util.NavigableSet;
 import java.util.Set;
@@ -241,9 +240,7 @@ public class BoundaryUtil {
             }
         }
         if (endKey != null) {
-            if (compare(key, endKey) >= 0) {
-                return false;
-            }
+            return compare(key, endKey) < 0;
         }
         return true;
     }
@@ -287,32 +284,52 @@ public class BoundaryUtil {
         return compareStartKey(startKey2, startKey1) <= 0 && compareEndKeys(endKey1, endKey2) <= 0;
     }
 
+    /**
+     * Get the least upper bound of a key.
+     *
+     * @param key key
+     * @return least upper bound of the key, or null stands for open end
+     */
     public static ByteString upperBound(ByteString key) {
-        return UnsafeByteOperations.unsafeWrap(upperBoundInternal(key.toByteArray()));
+        int upperBoundIdx = upperBoundIdx(key::byteAt, key.size());
+        if (upperBoundIdx < 0) {
+            return null;
+        }
+        byte[] upper = key.substring(0, upperBoundIdx + 1).toByteArray();
+        upper[upperBoundIdx]++;
+        return unsafeWrap(upper);
     }
 
     /**
      * Get the least upper bound of a key.
      *
      * @param key key
-     * @return least upper bound of the key
+     * @return least upper bound of the key, or null stands for open end
      */
     public static byte[] upperBound(byte[] key) {
-        byte[] upperBound = new byte[key.length];
-        System.arraycopy(key, 0, upperBound, 0, key.length);
-        return upperBoundInternal(upperBound);
+        int upperBoundIdx = upperBoundIdx(i -> key[i], key.length);
+        if (upperBoundIdx < 0) {
+            return null;
+        }
+        byte[] upper = new byte[upperBoundIdx + 1];
+        System.arraycopy(key, 0, upper, 0, upperBoundIdx + 1);
+        upper[upperBoundIdx]++;
+        return upper;
     }
 
-    private static byte[] upperBoundInternal(byte[] upperBound) {
-        int i = upperBound.length;
+    private static int upperBoundIdx(ByteGetter byteGetter, int size) {
+        int i = size;
+        if (i == 0) {
+            // empty key has open end as upper bound
+            return -1;
+        }
         while (--i >= 0) {
-            byte b = upperBound[i];
-            if (compare(new byte[] {b}, new byte[] {(byte) 0xFF}) < 0) {
-                upperBound[i]++;
+            byte b = byteGetter.get(i);
+            if (Byte.compareUnsigned(b, (byte) 0xFF) < 0) {
                 break;
             }
         }
-        return upperBound;
+        return i;
     }
 
     public static ByteString startKey(Boundary boundary) {
@@ -494,5 +511,9 @@ public class BoundaryUtil {
 
     public static boolean isNonEmptyRange(Boundary boundary) {
         return isValid(boundary) && !isNULLRange(boundary);
+    }
+
+    private interface ByteGetter {
+        byte get(int size);
     }
 }

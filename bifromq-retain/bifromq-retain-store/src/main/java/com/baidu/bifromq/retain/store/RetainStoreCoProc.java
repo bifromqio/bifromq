@@ -13,9 +13,8 @@
 
 package com.baidu.bifromq.retain.store;
 
-import static com.baidu.bifromq.retain.utils.KeyUtil.isTenantNS;
-import static com.baidu.bifromq.retain.utils.KeyUtil.parseTenantId;
-import static com.baidu.bifromq.retain.utils.KeyUtil.retainKey;
+import static com.baidu.bifromq.retain.store.schema.KVSchemaUtil.parseTenantId;
+import static com.baidu.bifromq.retain.store.schema.KVSchemaUtil.retainMessageKey;
 import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
 import static java.util.Collections.emptyList;
 
@@ -171,7 +170,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
             if (messages.size() >= limit) {
                 break;
             }
-            Optional<ByteString> val = reader.get(retainKey(msgInfo.tenantId, msgInfo.topic));
+            Optional<ByteString> val = reader.get(retainMessageKey(msgInfo.tenantId, msgInfo.topic));
             if (val.isPresent()) {
                 TopicMessage message = TopicMessage.parseFrom(val.get());
                 if (expireAt(message.getMessage()) > now) {
@@ -202,7 +201,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                         .setMessage(retainMessage.getMessage())
                         .setPublisher(retainMessage.getPublisher())
                         .build();
-                    ByteString retainKey = retainKey(tenantId, topicMessage.getTopic());
+                    ByteString retainKey = retainMessageKey(tenantId, topicMessage.getTopic());
                     Set<RetainedMsgInfo> retainedMsgInfos = index.match(tenantId, topic);
                     if (topicMessage.getMessage().getPayload().isEmpty()) {
                         // delete existing retained
@@ -261,7 +260,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
             long expireTime = expireAt(msgInfo.timestamp,
                 (request.hasExpirySeconds() ? request.getExpirySeconds() : msgInfo.expirySeconds));
             if (expireTime <= now) {
-                writer.delete(retainKey(msgInfo.tenantId, msgInfo.topic));
+                writer.delete(retainMessageKey(msgInfo.tenantId, msgInfo.topic));
                 removedTopics.computeIfAbsent(msgInfo.tenantId, k -> new HashSet<>()).add(msgInfo.topic);
             }
         }
@@ -278,16 +277,14 @@ class RetainStoreCoProc implements IKVRangeCoProc {
         try (IKVCloseableReader reader = rangeReaderProvider.get()) {
             IKVIterator itr = reader.iterator();
             for (itr.seekToFirst(); itr.isValid(); itr.next()) {
-                if (!isTenantNS(itr.key())) {
-                    try {
-                        String tenantId = parseTenantId(itr.key());
-                        TopicMessage topicMessage = TopicMessage.parseFrom(itr.value());
-                        index.add(tenantId, topicMessage.getTopic(), topicMessage.getMessage().getTimestamp(),
-                            topicMessage.getMessage().getExpiryInterval());
-                        tenantsState.increaseTopicCount(tenantId, 1);
-                    } catch (InvalidProtocolBufferException e) {
-                        log.error("Failed to parse retained message", e);
-                    }
+                try {
+                    String tenantId = parseTenantId(itr.key());
+                    TopicMessage topicMessage = TopicMessage.parseFrom(itr.value());
+                    index.add(tenantId, topicMessage.getTopic(), topicMessage.getMessage().getTimestamp(),
+                        topicMessage.getMessage().getExpiryInterval());
+                    tenantsState.increaseTopicCount(tenantId, 1);
+                } catch (InvalidProtocolBufferException e) {
+                    log.error("Failed to parse retained message", e);
                 }
             }
         }

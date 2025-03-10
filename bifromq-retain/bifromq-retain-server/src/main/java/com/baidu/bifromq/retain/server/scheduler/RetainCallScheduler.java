@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.retain.server.scheduler;
 
-import static com.baidu.bifromq.retain.utils.KeyUtil.retainKey;
+import static com.baidu.bifromq.retain.store.schema.KVSchemaUtil.retainMessageKey;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
@@ -51,7 +51,7 @@ public class RetainCallScheduler extends MutationCallScheduler<RetainRequest, Re
 
     @Override
     protected ByteString rangeKey(RetainRequest request) {
-        return retainKey(request.getPublisher().getTenantId(), request.getTopic());
+        return retainMessageKey(request.getPublisher().getTenantId(), request.getTopic());
     }
 
     private static class RetainCallBatcher extends MutationCallBatcher<RetainRequest, RetainReply> {

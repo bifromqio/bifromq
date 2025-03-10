@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.retain.server.scheduler;
 
+import static com.baidu.bifromq.retain.store.schema.KVSchemaUtil.retainMessageKey;
+
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
@@ -24,25 +26,22 @@ import com.baidu.bifromq.retain.rpc.proto.RetainRequest;
 import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
 import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
 import com.google.protobuf.ByteString;
-
 import java.time.Duration;
 
-import static com.baidu.bifromq.retain.utils.KeyUtil.retainKey;
-
 public class DeleteCallScheduler extends MutationCallScheduler<RetainRequest, RetainReply>
-        implements IRetainCallScheduler {
+    implements IRetainCallScheduler {
     private final IBaseKVStoreClient retainStoreClient;
 
     public DeleteCallScheduler(IBaseKVStoreClient retainStoreClient) {
         super("retain_server_delete_batcher", retainStoreClient,
-                Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
-                Duration.ofMillis(DataPlaneBurstLatencyMillis.INSTANCE.get()));
+            Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
+            Duration.ofMillis(DataPlaneBurstLatencyMillis.INSTANCE.get()));
         this.retainStoreClient = retainStoreClient;
     }
 
     @Override
     protected ByteString rangeKey(RetainRequest request) {
-        return retainKey(request.getPublisher().getTenantId(), request.getTopic());
+        return retainMessageKey(request.getPublisher().getTenantId(), request.getTopic());
     }
 
     @Override

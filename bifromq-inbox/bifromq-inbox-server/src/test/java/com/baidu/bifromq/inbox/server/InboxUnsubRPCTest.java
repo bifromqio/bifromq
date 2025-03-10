@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static com.baidu.bifromq.inbox.records.ScopedInbox.receiverId;
-import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
+import static com.baidu.bifromq.inbox.util.InboxServiceUtil.getDelivererKey;
+import static com.baidu.bifromq.inbox.util.InboxServiceUtil.receiverId;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;

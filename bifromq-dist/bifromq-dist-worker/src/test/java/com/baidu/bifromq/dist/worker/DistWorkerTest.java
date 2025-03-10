@@ -14,7 +14,7 @@
 package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
-import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantStartKey;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantBeginKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toGroupRouteKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toNormalRouteKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toReceiverUrl;
@@ -114,18 +114,13 @@ import org.testng.annotations.BeforeMethod;
 
 @Slf4j
 public abstract class DistWorkerTest {
+    protected static final int MqttBroker = 0;
+    protected static final int InboxService = 1;
     private static final String DB_NAME = "testDB";
     private static final String DB_CHECKPOINT_DIR_NAME = "testDB_cp";
     private static final String DB_WAL_NAME = "testWAL";
     private static final String DB_WAL_CHECKPOINT_DIR = "testWAL_cp";
-
-    protected static final int MqttBroker = 0;
-    protected static final int InboxService = 1;
-
-    private IAgentHost agentHost;
-    private ICRDTService crdtService;
-    private IRPCServiceTrafficService trafficService;
-    private IBaseKVMetaService metaService;
+    private final int tickerThreads = 2;
     @Mock
     protected IEventCollector eventCollector;
     @Mock
@@ -134,10 +129,8 @@ public abstract class DistWorkerTest {
     protected IDistClient distClient;
     @Mock
     protected ISubBrokerManager receiverManager;
-
     @Mock
     protected ISubBroker mqttBroker;
-
     @Mock
     protected ISubBroker inboxBroker;
     @Mock
@@ -150,10 +143,12 @@ public abstract class DistWorkerTest {
     protected IRPCServer rpcServer;
     protected IDistWorker testWorker;
     protected IBaseKVStoreClient storeClient;
-
     protected String tenantA = "tenantA";
     protected String tenantB = "tenantB";
-    private final int tickerThreads = 2;
+    private IAgentHost agentHost;
+    private ICRDTService crdtService;
+    private IRPCServiceTrafficService trafficService;
+    private IBaseKVMetaService metaService;
     private ScheduledExecutorService bgTaskExecutor;
     private Path dbRootDir;
 
@@ -313,7 +308,7 @@ public abstract class DistWorkerTest {
                                                            int maxMembersPerSharedSubGroup,
                                                            MatchRoute... routes) {
         long reqId = ThreadLocalRandom.current().nextInt();
-        KVRangeSetting s = findByKey(tenantStartKey(tenantId), storeClient.latestEffectiveRouter()).get();
+        KVRangeSetting s = findByKey(tenantBeginKey(tenantId), storeClient.latestEffectiveRouter()).get();
         DistServiceRWCoProcInput input = DistServiceRWCoProcInput.newBuilder()
             .setBatchMatch(BatchMatchRequest.newBuilder()
                 .setReqId(reqId)
@@ -386,7 +381,7 @@ public abstract class DistWorkerTest {
 
     protected BatchDistReply dist(String tenantId, List<TopicMessagePack> msgs, String orderKey) {
         long reqId = ThreadLocalRandom.current().nextInt();
-        KVRangeSetting s = findByKey(tenantStartKey(tenantId), storeClient.latestEffectiveRouter()).get();
+        KVRangeSetting s = findByKey(tenantBeginKey(tenantId), storeClient.latestEffectiveRouter()).get();
         BatchDistRequest request = BatchDistRequest.newBuilder()
             .setReqId(reqId)
             .addDistPack(DistPack.newBuilder()

@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
-import static com.baidu.bifromq.inbox.records.ScopedInbox.receiverId;
-import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
+import static com.baidu.bifromq.inbox.util.InboxServiceUtil.getDelivererKey;
+import static com.baidu.bifromq.inbox.util.InboxServiceUtil.receiverId;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCount;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubLatency;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentUnsubCount;

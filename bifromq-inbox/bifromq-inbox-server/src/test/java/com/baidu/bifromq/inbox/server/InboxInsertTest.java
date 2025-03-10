@@ -13,11 +13,6 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static com.baidu.bifromq.inbox.records.ScopedInbox.receiverId;
-import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
-
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
@@ -42,6 +37,11 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.testng.annotations.Test;
+
+import static com.baidu.bifromq.inbox.util.InboxServiceUtil.getDelivererKey;
+import static com.baidu.bifromq.inbox.util.InboxServiceUtil.receiverId;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 public class InboxInsertTest extends InboxServiceTest {
     @Test(groups = "integration")

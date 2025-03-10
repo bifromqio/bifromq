@@ -16,7 +16,15 @@ package com.baidu.bifromq.inbox.store.spi;
 import com.baidu.bifromq.basekv.balance.IStoreBalancerFactory;
 import com.google.protobuf.Struct;
 
+/**
+ * The factory for creating inbox store balancer.
+ */
 public interface IInboxStoreBalancerFactory extends IStoreBalancerFactory {
+    /**
+     * The config is set from config file.
+     *
+     * @param config the config for the balancer
+     */
     default void init(Struct config) {
     }
 

@@ -16,7 +16,7 @@ package com.baidu.bifromq.dist.worker.spi;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantRouteStartKey;
-import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantStartKey;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantBeginKey;
 import static com.baidu.bifromq.util.TopicUtil.escape;
 import static com.baidu.bifromq.util.TopicUtil.isNormalTopicFilter;
 
@@ -25,7 +25,7 @@ import com.baidu.bifromq.dist.worker.schema.SharedTopicFilter;
 import com.google.protobuf.ByteString;
 
 /**
- * Utility for creating valid split key for dist worker.
+ * Utility for generating valid split key for dist worker.
  */
 public final class SplitKey {
     /**
@@ -35,8 +35,8 @@ public final class SplitKey {
      * @return the boundary
      */
     public static Boundary tenantBoundary(String tenantId) {
-        ByteString tenantStartKey = tenantStartKey(tenantId);
-        return toBoundary(tenantStartKey, upperBound(tenantStartKey));
+        ByteString tenantBeginKey = tenantBeginKey(tenantId);
+        return toBoundary(tenantBeginKey, upperBound(tenantBeginKey));
     }
 
     /**

@@ -14,8 +14,8 @@
 package com.baidu.bifromq.inbox.server;
 
 import static com.baidu.bifromq.baserpc.server.UnaryResponse.response;
-import static com.baidu.bifromq.inbox.records.ScopedInbox.receiverId;
-import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.getDelivererKey;
+import static com.baidu.bifromq.inbox.util.InboxServiceUtil.getDelivererKey;
+import static com.baidu.bifromq.inbox.util.InboxServiceUtil.receiverId;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainEnabled;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetainMessageSpaceBytes;
@@ -28,7 +28,8 @@ import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.records.ScopedInbox;
+import com.baidu.bifromq.inbox.record.InboxInstance;
+import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
@@ -97,14 +98,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
-    private enum State {
-        INIT,
-        STARTING,
-        STARTED,
-        STOPPING,
-        STOPPED
-    }
-
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private final ISettingProvider settingProvider;
     private final IEventCollector eventCollector;
@@ -126,7 +119,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final IInboxSubScheduler subScheduler;
     private final IInboxUnsubScheduler unsubScheduler;
     private final IInboxStoreGCProcessor inboxGCProc;
-    private final DelayTaskRunner<ScopedInbox, ExpireSessionTask> delayTaskRunner;
+    private final DelayTaskRunner<TenantInboxInstance, ExpireSessionTask> delayTaskRunner;
 
     @Builder
     InboxService(IEventCollector eventCollector,
@@ -167,7 +160,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         this.unsubScheduler = unsubScheduler;
         this.touchScheduler = touchScheduler;
         this.inboxGCProc = new InboxStoreGCProcessor(inboxClient, inboxStoreClient);
-        this.delayTaskRunner = new DelayTaskRunner<>(ScopedInbox::compareTo, HLC.INST::getPhysical);
+        this.delayTaskRunner = new DelayTaskRunner<>(TenantInboxInstance::compareTo, HLC.INST::getPhysical);
     }
 
     @Override
@@ -198,22 +191,20 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             .whenComplete((v, e) -> {
                 //reg a deadline for this inbox
                 if (v != null && v.getCode() == CreateReply.Code.OK) {
-                    ScopedInbox scopedInbox = new ScopedInbox(
-                        request.getClient().getTenantId(),
-                        request.getInboxId(),
-                        request.getIncarnation());
+                    TenantInboxInstance tenantInboxInstance = new TenantInboxInstance(request.getClient().getTenantId(),
+                        new InboxInstance(request.getInboxId(), request.getIncarnation()));
                     LWT lwt = request.hasLwt() ? request.getLwt() : null;
                     if (lwt != null) {
-                        delayTaskRunner.reg(scopedInbox,
+                        delayTaskRunner.reg(tenantInboxInstance,
                             idleTimeout(request.getKeepAliveSeconds()).plusSeconds(lwt.getDelaySeconds()),
-                            new ExpireSessionTask(scopedInbox, 0,
+                            new ExpireSessionTask(tenantInboxInstance, 0,
                                 request.getExpirySeconds(),
                                 request.getClient(),
                                 lwt));
                     } else {
-                        delayTaskRunner.reg(scopedInbox,
+                        delayTaskRunner.reg(tenantInboxInstance,
                             idleTimeout(request.getKeepAliveSeconds()).plusSeconds(request.getExpirySeconds()),
-                            new ExpireSessionTask(scopedInbox, 0,
+                            new ExpireSessionTask(tenantInboxInstance, 0,
                                 request.getExpirySeconds(),
                                 request.getClient(),
                                 null));
@@ -237,22 +228,20 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             .whenComplete((v, e) -> {
                 //reg a deadline for this inbox
                 if (v != null && v.getCode() == AttachReply.Code.OK) {
-                    ScopedInbox scopedInbox = new ScopedInbox(
-                        request.getClient().getTenantId(),
-                        request.getInboxId(),
-                        request.getIncarnation());
+                    TenantInboxInstance tenantInboxInstance = new TenantInboxInstance(request.getClient().getTenantId(),
+                        new InboxInstance(request.getInboxId(), request.getIncarnation()));
                     LWT lwt = request.hasLwt() ? request.getLwt() : null;
                     if (lwt != null) {
-                        delayTaskRunner.reg(scopedInbox,
+                        delayTaskRunner.reg(tenantInboxInstance,
                             idleTimeout(request.getKeepAliveSeconds()).plusSeconds(lwt.getDelaySeconds()),
-                            new ExpireSessionTask(scopedInbox,
+                            new ExpireSessionTask(tenantInboxInstance,
                                 request.getVersion() + 1,
                                 request.getExpirySeconds(), request.getClient(),
                                 lwt));
                     } else {
-                        delayTaskRunner.reg(scopedInbox,
+                        delayTaskRunner.reg(tenantInboxInstance,
                             idleTimeout(request.getKeepAliveSeconds()).plusSeconds(request.getExpirySeconds()),
-                            new ExpireSessionTask(scopedInbox,
+                            new ExpireSessionTask(tenantInboxInstance,
                                 request.getVersion() + 1,
                                 request.getExpirySeconds(),
                                 request.getClient(),
@@ -285,21 +274,19 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                 if (reply == null || reply.getCode() != DetachReply.Code.OK) {
                     return;
                 }
-                ScopedInbox scopedInbox = new ScopedInbox(
-                    request.getClient().getTenantId(),
-                    request.getInboxId(),
-                    request.getIncarnation());
-                delayTaskRunner.unreg(scopedInbox);
+                TenantInboxInstance tenantInboxInstance = new TenantInboxInstance(request.getClient().getTenantId(),
+                    new InboxInstance(request.getInboxId(), request.getIncarnation()));
+                delayTaskRunner.unreg(tenantInboxInstance);
                 LWT lwt = reply.hasLwt() ? reply.getLwt() : null;
                 if (lwt != null) {
                     assert lwt.getDelaySeconds() > 0;
-                    delayTaskRunner.reg(scopedInbox,
+                    delayTaskRunner.reg(tenantInboxInstance,
                         Duration.ofSeconds(Math.min(lwt.getDelaySeconds(), request.getExpirySeconds())),
-                        new ExpireSessionTask(scopedInbox, request.getVersion() + 1, request.getExpirySeconds(),
+                        new ExpireSessionTask(tenantInboxInstance, request.getVersion() + 1, request.getExpirySeconds(),
                             request.getClient(), lwt));
                 } else {
-                    delayTaskRunner.reg(scopedInbox, Duration.ofSeconds(request.getExpirySeconds()),
-                        new ExpireSessionTask(scopedInbox, request.getVersion() + 1, request.getExpirySeconds(),
+                    delayTaskRunner.reg(tenantInboxInstance, Duration.ofSeconds(request.getExpirySeconds()),
+                        new ExpireSessionTask(tenantInboxInstance, request.getVersion() + 1, request.getExpirySeconds(),
                             request.getClient(), null));
                 }
             });
@@ -319,11 +306,9 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             .whenComplete((v, e) -> {
                 //update monitored deadline record
                 if (v != null && v.getCode() == TouchReply.Code.OK) {
-                    ScopedInbox scopedInbox = new ScopedInbox(
-                        request.getTenantId(),
-                        request.getInboxId(),
-                        request.getIncarnation());
-                    delayTaskRunner.touch(scopedInbox);
+                    TenantInboxInstance tenantInboxInstance = new TenantInboxInstance(request.getTenantId(),
+                        new InboxInstance(request.getInboxId(), request.getIncarnation()));
+                    delayTaskRunner.touch(tenantInboxInstance);
                 }
             }), responseObserver);
     }
@@ -385,11 +370,9 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     && (v.getCode() == SubReply.Code.OK
                     || v.getCode() == SubReply.Code.EXISTS
                     || v.getCode() == SubReply.Code.EXCEED_LIMIT)) {
-                    ScopedInbox scopedInbox = new ScopedInbox(
-                        request.getTenantId(),
-                        request.getInboxId(),
-                        request.getIncarnation());
-                    delayTaskRunner.touch(scopedInbox);
+                    TenantInboxInstance tenantInboxInstance = new TenantInboxInstance(request.getTenantId(),
+                        new InboxInstance(request.getInboxId(), request.getIncarnation()));
+                    delayTaskRunner.touch(tenantInboxInstance);
                 }
             }), responseObserver);
     }
@@ -440,11 +423,9 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             .whenComplete((v, e) -> {
                 //update monitored deadline record
                 if (v != null && v.getCode() == UnsubReply.Code.OK) {
-                    ScopedInbox scopedInbox = new ScopedInbox(
-                        request.getTenantId(),
-                        request.getInboxId(),
-                        request.getIncarnation());
-                    delayTaskRunner.touch(scopedInbox);
+                    TenantInboxInstance tenantInboxInstance = new TenantInboxInstance(request.getTenantId(),
+                        new InboxInstance(request.getInboxId(), request.getIncarnation()));
+                    delayTaskRunner.touch(tenantInboxInstance);
                 }
             }), responseObserver);
     }
@@ -586,11 +567,9 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             .whenComplete((v, e) -> {
                 // update monitored deadline record
                 if (v != null && v.getCode() == CommitReply.Code.OK) {
-                    ScopedInbox scopedInbox = new ScopedInbox(
-                        request.getTenantId(),
-                        request.getInboxId(),
-                        request.getIncarnation());
-                    delayTaskRunner.touch(scopedInbox);
+                    TenantInboxInstance tenantInboxInstance = new TenantInboxInstance(request.getTenantId(),
+                        new InboxInstance(request.getInboxId(), request.getIncarnation()));
+                    delayTaskRunner.touch(tenantInboxInstance);
                 }
             }), responseObserver);
     }
@@ -622,19 +601,27 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         }
     }
 
+    private enum State {
+        INIT,
+        STARTING,
+        STARTED,
+        STOPPING,
+        STOPPED
+    }
+
     private class ExpireSessionTask implements Runnable {
-        private final ScopedInbox scopedInbox;
+        private final TenantInboxInstance tenantInboxInstance;
         private final int expireSeconds;
         private final LWT lwt;
         private final ClientInfo client;
         private final long version;
 
-        ExpireSessionTask(ScopedInbox scopedInbox,
+        ExpireSessionTask(TenantInboxInstance tenantInboxInstance,
                           long version,
                           int expireSeconds,
                           ClientInfo client,
                           @Nullable LWT lwt) {
-            this.scopedInbox = scopedInbox;
+            this.tenantInboxInstance = tenantInboxInstance;
             this.expireSeconds = expireSeconds;
             this.client = client;
             this.lwt = lwt;
@@ -725,8 +712,8 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         }
                         if (retry) {
                             // Delay some time and retry
-                            delayTaskRunner.reg(scopedInbox, Duration.ofSeconds(lwt.getDelaySeconds()),
-                                new ExpireSessionTask(scopedInbox, version, expireSeconds, client, lwt));
+                            delayTaskRunner.reg(tenantInboxInstance, Duration.ofSeconds(lwt.getDelaySeconds()),
+                                new ExpireSessionTask(tenantInboxInstance, version, expireSeconds, client, lwt));
                         } else {
                             switch (distLWTFuture.join()) {
                                 case OK, NO_MATCH -> {
@@ -737,12 +724,12 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                         .size(lwt.getMessage().getPayload().size())
                                         .clientInfo(client));
                                     if (lwt.getDelaySeconds() >= expireSeconds) {
-                                        delayTaskRunner.reg(scopedInbox, Duration.ZERO,
-                                            new ExpireSessionTask(scopedInbox, version, 0, client, null));
+                                        delayTaskRunner.reg(tenantInboxInstance, Duration.ZERO,
+                                            new ExpireSessionTask(tenantInboxInstance, version, 0, client, null));
                                     } else {
-                                        delayTaskRunner.reg(scopedInbox,
+                                        delayTaskRunner.reg(tenantInboxInstance,
                                             Duration.ofSeconds(expireSeconds - lwt.getDelaySeconds()),
-                                            new ExpireSessionTask(scopedInbox, version, 0, client, null));
+                                            new ExpireSessionTask(tenantInboxInstance, version, 0, client, null));
                                     }
                                 }
                                 case BACK_PRESSURE_REJECTED -> {
@@ -754,12 +741,12 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                         .reason("Server Busy")
                                         .clientInfo(client));
                                     if (lwt.getDelaySeconds() >= expireSeconds) {
-                                        delayTaskRunner.reg(scopedInbox, Duration.ZERO,
-                                            new ExpireSessionTask(scopedInbox, version, 0, client, null));
+                                        delayTaskRunner.reg(tenantInboxInstance, Duration.ZERO,
+                                            new ExpireSessionTask(tenantInboxInstance, version, 0, client, null));
                                     } else {
-                                        delayTaskRunner.reg(scopedInbox,
+                                        delayTaskRunner.reg(tenantInboxInstance,
                                             Duration.ofSeconds(expireSeconds - lwt.getDelaySeconds()),
-                                            new ExpireSessionTask(scopedInbox, version, 0, client, null));
+                                            new ExpireSessionTask(tenantInboxInstance, version, 0, client, null));
                                     }
                                 }
                                 default -> {
@@ -770,17 +757,21 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     });
             } else {
                 deleteScheduler.schedule(BatchDeleteRequest.Params.newBuilder()
-                        .setTenantId(scopedInbox.tenantId())
-                        .setInboxId(scopedInbox.inboxId())
-                        .setIncarnation(scopedInbox.incarnation())
+                        .setTenantId(tenantInboxInstance.tenantId())
+                        .setInboxId(tenantInboxInstance.instance().inboxId())
+                        .setIncarnation(tenantInboxInstance.instance().incarnation())
                         .setVersion(version)
                         .build())
                     .thenCompose(result -> {
                         if (result.getCode() == BatchDeleteReply.Code.OK) {
                             List<CompletableFuture<UnmatchResult>> unmatchFutures =
                                 result.getTopicFiltersMap().entrySet().stream()
-                                    .map(e -> unmatch(System.nanoTime(), scopedInbox.tenantId(),
-                                        scopedInbox.inboxId(), scopedInbox.incarnation(), e.getKey(), e.getValue()))
+                                    .map(e -> unmatch(System.nanoTime(),
+                                        tenantInboxInstance.tenantId(),
+                                        tenantInboxInstance.instance().inboxId(),
+                                        tenantInboxInstance.instance().incarnation(),
+                                        e.getKey(),
+                                        e.getValue()))
                                     .toList();
                             return CompletableFuture.allOf(unmatchFutures.toArray(CompletableFuture[]::new));
                         }

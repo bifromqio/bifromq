@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.inbox.server;
 
-import static com.baidu.bifromq.inbox.records.ScopedInbox.receiverId;
-
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
@@ -27,6 +25,8 @@ import com.baidu.bifromq.type.StringPair;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.baidu.bifromq.type.UserProperties;
 import com.google.protobuf.ByteString;
+
+import static com.baidu.bifromq.inbox.util.InboxServiceUtil.receiverId;
 
 public class Fixtures {
 

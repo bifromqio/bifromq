@@ -13,21 +13,6 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
-import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
-import static com.baidu.bifromq.inbox.util.KeyUtil.inboxPrefix;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionNumGauge;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionSpaceGauge;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCountGauge;
-import static org.awaitility.Awaitility.await;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.when;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
-
 import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
@@ -122,11 +107,28 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.inboxStartKeyPrefix;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionNumGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionSpaceGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCountGauge;
+import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
+
 @Slf4j
 abstract class InboxStoreTest {
     private static final String DB_NAME = "testDB";
     private static final String DB_CHECKPOINT_DIR_NAME = "testDB_cp";
     private static final String DB_WAL_NAME = "testWAL";
+    private final int tickerThreads = 2;
+    public Path dbRootDir;
     @Mock
     protected IInboxClient inboxClient;
     @Mock
@@ -134,20 +136,16 @@ abstract class InboxStoreTest {
     @Mock
     protected IEventCollector eventCollector;
     protected SimpleMeterRegistry meterRegistry;
+    protected IBaseKVStoreClient storeClient;
+    protected IInboxStore testStore;
     private IAgentHost agentHost;
     private ICRDTService crdtService;
     private IRPCServiceTrafficService trafficService;
     private IRPCServer rpcServer;
     private IBaseKVMetaService metaService;
     private ExecutorService queryExecutor;
-    private int tickerThreads = 2;
     private ScheduledExecutorService bgTaskExecutor;
-    public Path dbRootDir;
-
     private KVRangeStoreOptions options;
-    protected IBaseKVStoreClient storeClient;
-    protected IInboxStore testStore;
-
     private AutoCloseable closeable;
 
     @BeforeClass(groups = "integration")
@@ -309,7 +307,7 @@ abstract class InboxStoreTest {
     protected List<BatchGetReply.Result> requestGet(BatchGetRequest.Params... params) {
         assert params.length > 0;
         long reqId = ThreadLocalRandom.current().nextInt();
-        ByteString routeKey = inboxPrefix(params[0].getTenantId(), params[0].getInboxId());
+        ByteString routeKey = inboxStartKeyPrefix(params[0].getTenantId(), params[0].getInboxId());
         InboxServiceROCoProcInput input = MessageUtil.buildGetRequest(reqId, BatchGetRequest.newBuilder()
             .addAllParams(List.of(params))
             .build());
@@ -322,7 +320,7 @@ abstract class InboxStoreTest {
     protected List<Fetched> requestFetch(BatchFetchRequest.Params... params) {
         assert params.length > 0;
         long reqId = ThreadLocalRandom.current().nextInt();
-        ByteString routeKey = inboxPrefix(params[0].getTenantId(), params[0].getInboxId());
+        ByteString routeKey = inboxStartKeyPrefix(params[0].getTenantId(), params[0].getInboxId());
         InboxServiceROCoProcInput input = MessageUtil.buildFetchRequest(reqId, BatchFetchRequest.newBuilder()
             .addAllParams(List.of(params))
             .build());
@@ -335,7 +333,7 @@ abstract class InboxStoreTest {
     protected List<BatchAttachReply.Result> requestAttach(BatchAttachRequest.Params... params) {
         assert params.length > 0;
         long reqId = ThreadLocalRandom.current().nextInt();
-        ByteString routeKey = inboxPrefix(params[0].getClient().getTenantId(), params[0].getInboxId());
+        ByteString routeKey = inboxStartKeyPrefix(params[0].getClient().getTenantId(), params[0].getInboxId());
         InboxServiceRWCoProcInput input = MessageUtil.buildAttachRequest(reqId,
             BatchAttachRequest.newBuilder().addAllParams(List.of(params)).build());
         InboxServiceRWCoProcOutput output = mutate(routeKey, input);
@@ -348,7 +346,7 @@ abstract class InboxStoreTest {
     protected List<BatchDetachReply.Result> requestDetach(BatchDetachRequest.Params... params) {
         assert params.length > 0;
         long reqId = ThreadLocalRandom.current().nextInt();
-        ByteString routeKey = inboxPrefix(params[0].getTenantId(), params[0].getInboxId());
+        ByteString routeKey = inboxStartKeyPrefix(params[0].getTenantId(), params[0].getInboxId());
         InboxServiceRWCoProcInput input = MessageUtil.buildDetachRequest(reqId,
             BatchDetachRequest.newBuilder().addAllParams(List.of(params)).build());
         InboxServiceRWCoProcOutput output = mutate(routeKey, input);
@@ -361,7 +359,7 @@ abstract class InboxStoreTest {
     protected List<Boolean> requestCreate(BatchCreateRequest.Params... params) {
         assert params.length > 0;
         long reqId = ThreadLocalRandom.current().nextInt();
-        ByteString routeKey = inboxPrefix(params[0].getClient().getTenantId(), params[0].getInboxId());
+        ByteString routeKey = inboxStartKeyPrefix(params[0].getClient().getTenantId(), params[0].getInboxId());
         InboxServiceRWCoProcInput input = MessageUtil.buildCreateRequest(reqId,
             BatchCreateRequest.newBuilder().addAllParams(List.of(params)).build());
         InboxServiceRWCoProcOutput output = mutate(routeKey, input);
@@ -374,7 +372,7 @@ abstract class InboxStoreTest {
     protected List<BatchDeleteReply.Result> requestDelete(BatchDeleteRequest.Params... params) {
         assert params.length > 0;
         long reqId = ThreadLocalRandom.current().nextInt();
-        ByteString routeKey = inboxPrefix(params[0].getTenantId(), params[0].getInboxId());
+        ByteString routeKey = inboxStartKeyPrefix(params[0].getTenantId(), params[0].getInboxId());
 
         InboxServiceRWCoProcInput input = MessageUtil.buildDeleteRequest(reqId, BatchDeleteRequest.newBuilder()
             .addAllParams(List.of(params)).build());
@@ -388,7 +386,7 @@ abstract class InboxStoreTest {
     protected List<BatchSubReply.Code> requestSub(BatchSubRequest.Params... params) {
         assert params.length > 0;
         long reqId = ThreadLocalRandom.current().nextInt();
-        ByteString routeKey = inboxPrefix(params[0].getTenantId(), params[0].getInboxId());
+        ByteString routeKey = inboxStartKeyPrefix(params[0].getTenantId(), params[0].getInboxId());
         InboxServiceRWCoProcInput input = MessageUtil
             .buildSubRequest(reqId, BatchSubRequest.newBuilder().addAllParams(List.of(params)).build());
         InboxServiceRWCoProcOutput output = mutate(routeKey, input);
@@ -400,7 +398,7 @@ abstract class InboxStoreTest {
     protected List<BatchUnsubReply.Result> requestUnsub(BatchUnsubRequest.Params... params) {
         assert params.length > 0;
         long reqId = ThreadLocalRandom.current().nextInt();
-        ByteString routeKey = inboxPrefix(params[0].getTenantId(), params[0].getInboxId());
+        ByteString routeKey = inboxStartKeyPrefix(params[0].getTenantId(), params[0].getInboxId());
         InboxServiceRWCoProcInput input = MessageUtil.buildUnsubRequest(reqId, BatchUnsubRequest.newBuilder()
             .addAllParams(List.of(params))
             .build());
@@ -413,7 +411,7 @@ abstract class InboxStoreTest {
     protected List<BatchTouchReply.Code> requestTouch(BatchTouchRequest.Params... params) {
         assert params.length > 0;
         long reqId = ThreadLocalRandom.current().nextInt();
-        ByteString routeKey = inboxPrefix(params[0].getTenantId(), params[0].getInboxId());
+        ByteString routeKey = inboxStartKeyPrefix(params[0].getTenantId(), params[0].getInboxId());
         InboxServiceRWCoProcInput input = MessageUtil.buildTouchRequest(reqId, BatchTouchRequest.newBuilder()
             .addAllParams(List.of(params))
             .build());
@@ -426,7 +424,8 @@ abstract class InboxStoreTest {
     protected List<BatchInsertReply.Result> requestInsert(InboxSubMessagePack... inboxSubMessagePack) {
         assert inboxSubMessagePack.length > 0;
         long reqId = ThreadLocalRandom.current().nextInt();
-        ByteString routeKey = inboxPrefix(inboxSubMessagePack[0].getTenantId(), inboxSubMessagePack[0].getInboxId());
+        ByteString routeKey =
+            inboxStartKeyPrefix(inboxSubMessagePack[0].getTenantId(), inboxSubMessagePack[0].getInboxId());
         InboxServiceRWCoProcInput input = MessageUtil.buildInsertRequest(reqId, BatchInsertRequest.newBuilder()
             .addAllInboxSubMsgPack(List.of(inboxSubMessagePack))
             .build());
@@ -440,7 +439,7 @@ abstract class InboxStoreTest {
     protected List<BatchCommitReply.Code> requestCommit(BatchCommitRequest.Params... params) {
         assert params.length > 0;
         long reqId = ThreadLocalRandom.current().nextInt();
-        ByteString routeKey = inboxPrefix(params[0].getTenantId(), params[0].getInboxId());
+        ByteString routeKey = inboxStartKeyPrefix(params[0].getTenantId(), params[0].getInboxId());
 
         InboxServiceRWCoProcInput input = MessageUtil.buildCommitRequest(reqId, BatchCommitRequest.newBuilder()
             .addAllParams(List.of(params))

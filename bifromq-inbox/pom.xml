@@ -28,6 +28,7 @@
     <modules>
         <module>bifromq-inbox-client</module>
         <module>bifromq-inbox-coproc-proto</module>
+        <module>bifromq-inbox-store-schema</module>
         <module>bifromq-inbox-rpc-definition</module>
         <module>bifromq-inbox-store</module>
         <module>bifromq-inbox-server</module>

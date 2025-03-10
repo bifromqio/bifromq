@@ -15,9 +15,10 @@ package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isNULLRange;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.buildMatchRoute;
-import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantStartKey;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantBeginKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toGroupRouteKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toNormalRouteKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toReceiverUrl;
@@ -54,8 +55,8 @@ import com.baidu.bifromq.dist.rpc.proto.MatchRoute;
 import com.baidu.bifromq.dist.rpc.proto.RouteGroup;
 import com.baidu.bifromq.dist.rpc.proto.TopicFanout;
 import com.baidu.bifromq.dist.worker.cache.ISubscriptionCache;
-import com.baidu.bifromq.dist.worker.schema.KVSchemaUtil;
 import com.baidu.bifromq.dist.worker.schema.GroupMatching;
+import com.baidu.bifromq.dist.worker.schema.KVSchemaUtil;
 import com.baidu.bifromq.dist.worker.schema.Matching;
 import com.baidu.bifromq.dist.worker.schema.NormalMatching;
 import com.baidu.bifromq.dist.worker.schema.RouteDetail;
@@ -182,9 +183,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         tenantsState.close();
         routeCache.close();
         deliverExecutorGroup.shutdown();
-    }
-
-    private record GlobalTopicFilter(String tenantId, String topicFilter) {
     }
 
     private Runnable batchMatch(BatchMatchRequest request,
@@ -377,10 +375,8 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         List<CompletableFuture<Map<String, Map<String, Integer>>>> distFanOutFutures = new ArrayList<>();
         for (DistPack distPack : distPackList) {
             String tenantId = distPack.getTenantId();
-            Boundary tenantBoundary = intersect(Boundary.newBuilder()
-                .setStartKey(tenantStartKey(tenantId))
-                .setEndKey(upperBound(tenantStartKey(tenantId)))
-                .build(), boundary);
+            ByteString tenantStartKey = tenantBeginKey(tenantId);
+            Boundary tenantBoundary = intersect(toBoundary(tenantStartKey, upperBound(tenantStartKey)), boundary);
             if (isNULLRange(tenantBoundary)) {
                 continue;
             }
@@ -471,5 +467,8 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 itr.next();
             }
         }
+    }
+
+    private record GlobalTopicFilter(String tenantId, String topicFilter) {
     }
 }

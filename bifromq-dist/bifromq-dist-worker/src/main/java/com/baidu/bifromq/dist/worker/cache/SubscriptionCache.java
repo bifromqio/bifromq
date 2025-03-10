@@ -14,10 +14,11 @@
 package com.baidu.bifromq.dist.worker.cache;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
-import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantStartKey;
 import static com.baidu.bifromq.dist.worker.cache.SubscriptionCache.TenantKey.noRefreshExpiry;
 import static com.baidu.bifromq.dist.worker.cache.SubscriptionCache.TenantKey.refreshExpiry;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantBeginKey;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -30,6 +31,7 @@ import com.github.benmanes.caffeine.cache.Expiry;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.Scheduler;
 import com.github.benmanes.caffeine.cache.Ticker;
+import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
@@ -44,26 +46,6 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class SubscriptionCache implements ISubscriptionCache {
-    @EqualsAndHashCode
-    static class TenantKey {
-        final String tenantId;
-        @EqualsAndHashCode.Exclude
-        final boolean refreshExpiry;
-
-        private TenantKey(String tenantId, boolean refreshExpiry) {
-            this.tenantId = tenantId;
-            this.refreshExpiry = refreshExpiry;
-        }
-
-        static TenantKey refreshExpiry(String tenantId) {
-            return new TenantKey(tenantId, true);
-        }
-
-        static TenantKey noRefreshExpiry(String tenantId) {
-            return new TenantKey(tenantId, false);
-        }
-    }
-
     private final ITenantRouteCacheFactory tenantRouteCacheFactory;
     private final LoadingCache<TenantKey, ITenantRouteCache> tenantCache;
     private volatile Boundary boundary;
@@ -112,10 +94,8 @@ public class SubscriptionCache implements ISubscriptionCache {
     @Override
     public CompletableFuture<Set<Matching>> get(String tenantId, String topic) {
         ITenantRouteCache routesCache = tenantCache.get(refreshExpiry(tenantId));
-        Boundary tenantBoundary = intersect(Boundary.newBuilder()
-                .setStartKey(tenantStartKey(tenantId))
-                .setEndKey(upperBound(tenantStartKey((tenantId))))
-            .build(), boundary);
+        ByteString tenantStartKey = tenantBeginKey(tenantId);
+        Boundary tenantBoundary = intersect(toBoundary(tenantStartKey, upperBound(tenantStartKey)), boundary);
         return routesCache.getMatch(topic, tenantBoundary);
     }
 
@@ -147,5 +127,25 @@ public class SubscriptionCache implements ISubscriptionCache {
     public void close() {
         tenantCache.invalidateAll();
         tenantRouteCacheFactory.close();
+    }
+
+    @EqualsAndHashCode
+    static class TenantKey {
+        final String tenantId;
+        @EqualsAndHashCode.Exclude
+        final boolean refreshExpiry;
+
+        private TenantKey(String tenantId, boolean refreshExpiry) {
+            this.tenantId = tenantId;
+            this.refreshExpiry = refreshExpiry;
+        }
+
+        static TenantKey refreshExpiry(String tenantId) {
+            return new TenantKey(tenantId, true);
+        }
+
+        static TenantKey noRefreshExpiry(String tenantId) {
+            return new TenantKey(tenantId, false);
+        }
     }
 }

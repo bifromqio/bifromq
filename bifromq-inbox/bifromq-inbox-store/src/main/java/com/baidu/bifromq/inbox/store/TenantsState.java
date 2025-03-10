@@ -15,8 +15,9 @@ package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isNULLRange;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
-import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
+import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.tenantBeginKeyPrefix;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
@@ -105,12 +106,9 @@ class TenantsState {
     private Supplier<Number> getTenantUsedSpace(String tenantId) {
         return () -> {
             try {
-                ByteString startKey = tenantPrefix(tenantId);
+                ByteString startKey = tenantBeginKeyPrefix(tenantId);
                 ByteString endKey = upperBound(startKey);
-                Boundary tenantBoundary = intersect(boundary, Boundary.newBuilder()
-                    .setStartKey(startKey)
-                    .setEndKey(endKey)
-                    .build());
+                Boundary tenantBoundary = intersect(boundary, toBoundary(startKey, endKey));
                 if (isNULLRange(tenantBoundary)) {
                     return 0;
                 }

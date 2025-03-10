@@ -15,14 +15,16 @@ package com.baidu.bifromq.retain.store;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isNULLRange;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainNumGauge;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainSpaceGauge;
-import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
+import static com.baidu.bifromq.retain.store.schema.KVSchemaUtil.tenantBeginKey;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.metrics.ITenantMeter;
+import com.google.protobuf.ByteString;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class TenantRetainedSet {
@@ -34,10 +36,9 @@ public class TenantRetainedSet {
         this.tenantId = tenantId;
         this.tags = tags;
         ITenantMeter.gauging(tenantId, MqttRetainSpaceGauge, () -> {
-            Boundary tenantBoundary = intersect(Boundary.newBuilder()
-                .setStartKey(tenantNS(tenantId))
-                .setEndKey(upperBound(tenantNS(tenantId)))
-                .build(), reader.boundary());
+            ByteString tenantBeginKey = tenantBeginKey(tenantId);
+            Boundary tenantBoundary =
+                intersect(toBoundary(tenantBeginKey, upperBound(tenantBeginKey)), reader.boundary());
             if (isNULLRange(tenantBoundary)) {
                 return 0L;
             }

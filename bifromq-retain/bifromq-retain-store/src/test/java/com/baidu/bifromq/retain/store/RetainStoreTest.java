@@ -59,7 +59,7 @@ import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcOutput;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcInput;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcOutput;
 import com.baidu.bifromq.retain.store.balance.RangeBootstrapBalancerFactory;
-import com.baidu.bifromq.retain.utils.KeyUtil;
+import com.baidu.bifromq.retain.store.schema.KVSchemaUtil;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
@@ -94,15 +94,15 @@ public class RetainStoreTest {
     private static final String DB_CHECKPOINT_DIR_NAME = "testDB_cp";
 
     private static final String DB_WAL_NAME = "testWAL";
-    private IAgentHost agentHost;
-    private ICRDTService crdtService;
-    private IRPCServiceTrafficService trafficService;
-    private IBaseKVMetaService metaService;
+    private final int tickerThreads = 2;
     protected SimpleMeterRegistry meterRegistry;
     protected IRPCServer rpcServer;
     protected IRetainStore testStore;
     protected IBaseKVStoreClient storeClient;
-    private int tickerThreads = 2;
+    private IAgentHost agentHost;
+    private ICRDTService crdtService;
+    private IRPCServiceTrafficService trafficService;
+    private IBaseKVMetaService metaService;
     private ScheduledExecutorService bgTaskExecutor;
     private KVRangeStoreOptions options;
     private Path dbRootDir;
@@ -184,7 +184,7 @@ public class RetainStoreTest {
 
     protected RetainResult.Code requestRetain(String tenantId, TopicMessage topicMsg) {
         long reqId = ThreadLocalRandom.current().nextInt();
-        ByteString tenantNS = KeyUtil.tenantNS(tenantId);
+        ByteString tenantNS = KVSchemaUtil.tenantBeginKey(tenantId);
         KVRangeSetting s = findByKey(tenantNS, storeClient.latestEffectiveRouter()).get();
         String topic = topicMsg.getTopic();
         Message message = topicMsg.getMessage();
@@ -210,7 +210,7 @@ public class RetainStoreTest {
 
     protected MatchResult requestMatch(String tenantId, long now, String topicFilter, int limit) {
         long reqId = ThreadLocalRandom.current().nextInt();
-        ByteString tenantNS = KeyUtil.tenantNS(tenantId);
+        ByteString tenantNS = KVSchemaUtil.tenantBeginKey(tenantId);
         KVRangeSetting s = findByKey(tenantNS, storeClient.latestEffectiveRouter()).get();
         BatchMatchRequest request = BatchMatchRequest.newBuilder().setReqId(reqId)
             .putMatchParams(tenantId, MatchParam.newBuilder().setNow(now).putTopicFilters(topicFilter, limit).build())

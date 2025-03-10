@@ -17,9 +17,9 @@ import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
-import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantRouteStartKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.parseRouteDetail;
-import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantStartKey;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantRouteStartKey;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantBeginKey;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.WildcardSubscriptionEnabled;
 import static com.baidu.bifromq.util.TopicConst.NUL;
 import static com.baidu.bifromq.util.TopicUtil.escape;
@@ -34,13 +34,13 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.basescheduler.ICallTask;
-import com.baidu.bifromq.dist.worker.schema.RouteDetail;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistPack;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 import com.baidu.bifromq.dist.trie.TopicFilterIterator;
 import com.baidu.bifromq.dist.trie.TopicTrieNode;
+import com.baidu.bifromq.dist.worker.schema.RouteDetail;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
@@ -196,10 +196,10 @@ class BatchDistServerCall
             assert distWorkerClient.latestEffectiveRouter().size() == 1;
             batchByRange.put(distWorkerClient.latestEffectiveRouter().get(FULL_BOUNDARY), batch);
         } else {
-            List<KVRangeSetting> coveredRanges = KVRangeRouterUtil.findByBoundary(Boundary.newBuilder()
-                    .setStartKey(tenantStartKey(batcherKey.tenantId()))
-                    .setEndKey(upperBound(tenantStartKey(batcherKey.tenantId())))
-                .build(), distWorkerClient.latestEffectiveRouter());
+            ByteString tenantStartKey = tenantBeginKey(batcherKey.tenantId());
+            List<KVRangeSetting> coveredRanges = KVRangeRouterUtil.findByBoundary(
+                toBoundary(tenantStartKey, upperBound(tenantStartKey)),
+                distWorkerClient.latestEffectiveRouter());
             if (coveredRanges.size() == 1) {
                 // one range per tenant mode
                 batchByRange.put(coveredRanges.get(0), batch);
@@ -210,10 +210,10 @@ class BatchDistServerCall
                         // wildcard disabled
                         ByteString startKey = tenantRouteStartKey(batcherKey.tenantId(), escape(topic));
                         List<KVRangeSetting> ranges = findByBoundary(toBoundary(startKey, upperBound(startKey)),
-                                distWorkerClient.latestEffectiveRouter());
+                            distWorkerClient.latestEffectiveRouter());
                         for (KVRangeSetting rangeSetting : ranges) {
                             batchByRange.computeIfAbsent(rangeSetting, k -> new HashMap<>())
-                                    .put(topic, batch.get(topic));
+                                .put(topic, batch.get(topic));
                         }
                     } else {
                         // wildcard enabled, rough screening via 'one-pass' scan
@@ -228,28 +228,28 @@ class BatchDistServerCall
                                 // left open range, must be the first range
                                 RouteDetail routeDetail = parseRouteDetail(boundary.getEndKey());
                                 List<String> globalTopicFilter =
-                                        TopicUtil.parse(routeDetail.tenantId(), routeDetail.escapedTopicFilter(), true);
+                                    TopicUtil.parse(routeDetail.tenantId(), routeDetail.escapedTopicFilter(), true);
                                 topicFilterIterator.seekPrev(globalTopicFilter);
                                 if (topicFilterIterator.isValid()) {
                                     batchByRange.computeIfAbsent(rangeSetting, k -> new HashMap<>())
                                         .computeIfAbsent(topic, k -> new HashMap<>())
-                                            .putAll(msgsByPublisher);
+                                        .putAll(msgsByPublisher);
                                 }
                             } else if (!boundary.hasEndKey()) {
                                 // right open range, must be the last range
                                 RouteDetail routeDetail = parseRouteDetail(boundary.getStartKey());
                                 List<String> globalTopicFilter = TopicUtil.parse(routeDetail.tenantId(),
-                                        routeDetail.escapedTopicFilter(), true);
+                                    routeDetail.escapedTopicFilter(), true);
                                 topicFilterIterator.seek(globalTopicFilter);
                                 if (topicFilterIterator.isValid()) {
                                     batchByRange.computeIfAbsent(rangeSetting, k -> new HashMap<>())
                                         .computeIfAbsent(topic, k -> new HashMap<>())
-                                            .putAll(msgsByPublisher);
+                                        .putAll(msgsByPublisher);
                                 }
                             } else {
                                 RouteDetail routeDetail = parseRouteDetail(boundary.getStartKey());
                                 List<String> startGlobalTopicFilter = TopicUtil.parse(routeDetail.tenantId(),
-                                        routeDetail.escapedTopicFilter(), true);
+                                    routeDetail.escapedTopicFilter(), true);
                                 topicFilterIterator.seek(startGlobalTopicFilter);
                                 if (topicFilterIterator.isValid()) {
                                     String probeTopicFilter = TopicUtil.fastJoin(NUL, topicFilterIterator.key());
@@ -258,7 +258,7 @@ class BatchDistServerCall
                                     if (probeTopicFilter.compareTo(endTopicFilter) < 0) {
                                         batchByRange.computeIfAbsent(rangeSetting, k -> new HashMap<>())
                                             .computeIfAbsent(topic, k -> new HashMap<>())
-                                                .putAll(msgsByPublisher);
+                                            .putAll(msgsByPublisher);
                                     }
                                 }
                             }

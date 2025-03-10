@@ -20,11 +20,12 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compareEndKeys;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compareStartKey;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.endKey;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.startKey;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
-import static com.baidu.bifromq.retain.utils.KeyUtil.filterPrefix;
-import static com.baidu.bifromq.retain.utils.KeyUtil.parseLevelHash;
-import static com.baidu.bifromq.retain.utils.KeyUtil.retainKeyPrefix;
-import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
+import static com.baidu.bifromq.retain.store.schema.KVSchemaUtil.filterPrefix;
+import static com.baidu.bifromq.retain.store.schema.KVSchemaUtil.parseLevelHash;
+import static com.baidu.bifromq.retain.store.schema.KVSchemaUtil.retainKeyPrefix;
+import static com.baidu.bifromq.retain.store.schema.KVSchemaUtil.tenantBeginKey;
 import static com.baidu.bifromq.util.TopicUtil.isMultiWildcardTopicFilter;
 import static com.baidu.bifromq.util.TopicUtil.isNormalTopicFilter;
 import static com.baidu.bifromq.util.TopicUtil.isWildcardTopicFilter;
@@ -32,8 +33,8 @@ import static com.baidu.bifromq.util.TopicUtil.parse;
 
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.proto.Boundary;
-import com.baidu.bifromq.retain.utils.KeyUtil;
-import com.baidu.bifromq.retain.utils.LevelHash;
+import com.baidu.bifromq.retain.store.schema.KVSchemaUtil;
+import com.baidu.bifromq.retain.store.schema.LevelHash;
 import com.google.protobuf.ByteString;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -59,10 +60,7 @@ class MatchCallRangeRouter {
                 List<KVRangeSetting> rangeSettingList;
                 if (isFixedLevelMatch) {
                     ByteString startKey = retainKeyPrefix(tenantId, levels, filterPrefix);
-                    Boundary topicBoundary = Boundary.newBuilder()
-                        .setStartKey(startKey)
-                        .setEndKey(upperBound(startKey))
-                        .build();
+                    Boundary topicBoundary = toBoundary(startKey, upperBound(startKey));
                     rangeSettingList = findByBoundary(topicBoundary, effectiveRouter);
                 } else {
                     // topic filter end with "#"
@@ -70,7 +68,7 @@ class MatchCallRangeRouter {
                         // topic filters start with wildcard
                         Boundary topicBoundary = Boundary.newBuilder()
                             .setStartKey(retainKeyPrefix(tenantId, levels, filterPrefix))
-                            .setEndKey(upperBound(tenantNS(tenantId)))
+                            .setEndKey(upperBound(tenantBeginKey(tenantId)))
                             .build();
                         rangeSettingList = findByBoundary(topicBoundary, effectiveRouter);
                     } else {
@@ -81,7 +79,7 @@ class MatchCallRangeRouter {
                     topicFiltersByRange.computeIfAbsent(rangeSetting, k -> new HashSet<>()).add(topicFilter);
                 }
             } else {
-                ByteString retainKey = KeyUtil.retainKey(tenantId, topicFilter);
+                ByteString retainKey = KVSchemaUtil.retainMessageKey(tenantId, topicFilter);
                 Optional<KVRangeSetting> rangeSetting = findByKey(retainKey, effectiveRouter);
                 assert rangeSetting.isPresent();
                 topicFiltersByRange.computeIfAbsent(rangeSetting.get(), k -> new HashSet<>()).add(topicFilter);
@@ -101,7 +99,7 @@ class MatchCallRangeRouter {
                                                        NavigableMap<Boundary, KVRangeSetting> effectiveRouter) {
         ByteString retainKeyPrefixBegin = retainKeyPrefix(tenantId, levels, filterPrefix);
         ByteString levelHash = LevelHash.hash(filterPrefix);
-        ByteString retainKeyPrefixEnd = upperBound(tenantNS(tenantId));
+        ByteString retainKeyPrefixEnd = upperBound(tenantBeginKey(tenantId));
         Boundary topicBoundary = Boundary.newBuilder()
             .setStartKey(retainKeyPrefixBegin)
             .setEndKey(retainKeyPrefixEnd)

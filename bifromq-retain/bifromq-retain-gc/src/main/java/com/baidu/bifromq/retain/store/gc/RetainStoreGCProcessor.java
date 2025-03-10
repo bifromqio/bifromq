@@ -15,8 +15,9 @@ package com.baidu.bifromq.retain.store.gc;
 
 import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
-import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantBeginKey;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
@@ -45,10 +46,12 @@ public class RetainStoreGCProcessor implements IRetainStoreGCProcessor {
                                         @Nullable String tenantId,
                                         @Nullable Integer expirySeconds,
                                         long now) {
-        Boundary boundary = tenantId != null ? Boundary.newBuilder()
-            .setStartKey(tenantNS(tenantId))
-            .setEndKey(upperBound(tenantNS(tenantId)))
-            .build() : FULL_BOUNDARY;
+        Boundary boundary;
+        if (tenantId == null) {
+            boundary = FULL_BOUNDARY;
+        } else {
+            boundary = toBoundary(tenantBeginKey(tenantId), upperBound(tenantBeginKey(tenantId)));
+        }
         CompletableFuture<?>[] gcFutures = findByBoundary(boundary, storeClient.latestEffectiveRouter())
             .stream()
             .filter(k -> localServerId == null || k.leader.equals(localServerId))

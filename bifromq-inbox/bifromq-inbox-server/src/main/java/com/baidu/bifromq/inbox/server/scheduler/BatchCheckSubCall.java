@@ -21,7 +21,7 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basescheduler.ICallTask;
-import com.baidu.bifromq.inbox.records.ScopedInbox;
+import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.storage.proto.BatchCheckSubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchCheckSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
@@ -41,10 +41,12 @@ class BatchCheckSubCall extends BatchQueryCall<IInboxCheckSubScheduler.CheckMatc
     protected ROCoProcInput makeBatch(Iterator<IInboxCheckSubScheduler.CheckMatchInfo> reqIterator) {
         BatchCheckSubRequest.Builder reqBuilder = BatchCheckSubRequest.newBuilder().setNow(HLC.INST.getPhysical());
         reqIterator.forEachRemaining(request -> {
-            ScopedInbox scopedInbox = ScopedInbox.from(request.tenantId(), request.matchInfo());
-            reqBuilder.addParams(BatchCheckSubRequest.Params.newBuilder().setTenantId(scopedInbox.tenantId())
-                .setInboxId(scopedInbox.inboxId()).setIncarnation(scopedInbox.incarnation())
-                .setTopicFilter(request.matchInfo().getTopicFilter()).build());
+            TenantInboxInstance tenantInboxInstance = TenantInboxInstance.from(request.tenantId(), request.matchInfo());
+            reqBuilder.addParams(BatchCheckSubRequest.Params.newBuilder().setTenantId(tenantInboxInstance.tenantId())
+                .setInboxId(tenantInboxInstance.instance().inboxId())
+                .setIncarnation(tenantInboxInstance.instance().incarnation())
+                .setTopicFilter(request.matchInfo().getTopicFilter())
+                .build());
         });
         long reqId = System.nanoTime();
         return ROCoProcInput.newBuilder().setInboxService(

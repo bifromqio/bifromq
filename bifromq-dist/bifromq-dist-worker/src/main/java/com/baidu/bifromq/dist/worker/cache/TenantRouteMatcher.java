@@ -16,18 +16,19 @@ package com.baidu.bifromq.dist.worker.cache;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compare;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isNULLRange;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.buildMatchRoute;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantRouteStartKey;
-import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantStartKey;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantBeginKey;
 import static com.baidu.bifromq.util.TopicConst.NUL;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
-import com.baidu.bifromq.dist.worker.schema.Matching;
 import com.baidu.bifromq.dist.trie.TopicFilterIterator;
 import com.baidu.bifromq.dist.trie.TopicTrieNode;
+import com.baidu.bifromq.dist.worker.schema.Matching;
 import com.baidu.bifromq.util.TopicUtil;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Timer;
@@ -67,10 +68,9 @@ class TenantRouteMatcher implements ITenantRouteMatcher {
         IKVReader rangeReader = kvReaderSupplier.get();
         rangeReader.refresh();
 
-        Boundary tenantBoundary = intersect(Boundary.newBuilder()
-            .setStartKey(tenantStartKey(tenantId))
-            .setEndKey(upperBound(tenantStartKey(tenantId)))
-            .build(), rangeReader.boundary());
+        ByteString tenantStartKey = tenantBeginKey(tenantId);
+        Boundary tenantBoundary =
+            intersect(toBoundary(tenantStartKey, upperBound(tenantStartKey)), rangeReader.boundary());
         if (isNULLRange(tenantBoundary)) {
             return matchedRoutes;
         }

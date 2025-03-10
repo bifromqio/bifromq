@@ -31,7 +31,7 @@ import com.baidu.bifromq.util.BSUtil;
 import com.google.protobuf.ByteString;
 
 /**
- * Utility for working with the route entry stored in dist worker.
+ * Utility for working with the data stored in dist worker.
  */
 public class KVSchemaUtil {
     public static final ByteString SCHEMA_VER = ByteString.copyFrom(new byte[] {0x00});
@@ -52,10 +52,6 @@ public class KVSchemaUtil {
         return subBrokerId + NUL + receiverId + NUL + delivererKey;
     }
 
-    public record Receiver(int subBrokerId, String receiverId, String delivererKey) {
-
-    }
-
     public static Receiver parseReceiver(String receiverUrl) {
         String[] parts = receiverUrl.split(NUL);
         return new Receiver(Integer.parseInt(parts[0]), parts[1], parts[2]);
@@ -73,14 +69,14 @@ public class KVSchemaUtil {
         }
     }
 
-    public static ByteString tenantStartKey(String tenantId) {
+    public static ByteString tenantBeginKey(String tenantId) {
         ByteString tenantIdBytes = copyFromUtf8(tenantId);
         return SCHEMA_VER.concat(toByteString((short) tenantIdBytes.size()).concat(tenantIdBytes));
     }
 
     public static ByteString tenantRouteStartKey(String tenantId, String escapedTopicFilter) {
         assert !escapedTopicFilter.contains(DELIMITER);
-        return tenantStartKey(tenantId).concat(copyFromUtf8(escapedTopicFilter)).concat(SEPARATOR_BYTES);
+        return tenantBeginKey(tenantId).concat(copyFromUtf8(escapedTopicFilter)).concat(SEPARATOR_BYTES);
     }
 
     public static ByteString tenantRouteBucketStartKey(String tenantId, String escapedTopicFilter, byte bucket) {
@@ -148,5 +144,9 @@ public class KVSchemaUtil {
     private static byte bucket(String receiver) {
         int hash = receiver.hashCode();
         return (byte) ((hash ^ (hash >>> 16)) & MAX_RECEIVER_BUCKETS);
+    }
+
+    public record Receiver(int subBrokerId, String receiverId, String delivererKey) {
+
     }
 }

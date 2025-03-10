@@ -16,14 +16,17 @@ package com.baidu.bifromq.basekv.utils;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.MIN_KEY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.NULL_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compareEndKeys;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.inRange;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isSplittable;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.split;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.google.protobuf.ByteString.EMPTY;
 import static com.google.protobuf.ByteString.copyFrom;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
@@ -137,13 +140,25 @@ public class BoundaryUtilTest {
 
     @Test
     public void findUpperBound() {
-        assertEquals(BoundaryUtil.upperBound(EMPTY), EMPTY);
-        assertEquals(ByteString.copyFrom(new byte[] {1, 2, 4}),
-            BoundaryUtil.upperBound(ByteString.copyFrom(new byte[] {1, 2, 3})));
-        assertEquals(ByteString.copyFrom(new byte[] {1, 3, (byte) 0xFF}),
-            BoundaryUtil.upperBound(ByteString.copyFrom(new byte[] {1, 2, (byte) 0xFF})));
-        assertEquals(ByteString.copyFrom(new byte[] {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF}),
-            BoundaryUtil.upperBound(ByteString.copyFrom(new byte[] {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF})));
+        ByteString key = MIN_KEY;
+        assertNull(upperBound(key));
+        assertTrue(compareEndKeys(key, upperBound(key)) < 0);
+
+        key = copyFrom(new byte[] {1, 2, 3});
+        assertEquals(upperBound(key), copyFrom(new byte[] {1, 2, 4}));
+        assertTrue(compareEndKeys(key, upperBound(key)) < 0);
+
+        key = copyFrom(new byte[] {1, 2, (byte) 0xFF});
+        assertEquals(upperBound(key), copyFrom(new byte[] {1, 3}));
+        assertTrue(compareEndKeys(key, upperBound(key)) < 0);
+
+        key = copyFrom(new byte[] {1, (byte) 0xFF, (byte) 0xFF});
+        assertEquals(upperBound(key), copyFrom(new byte[] {2}));
+        assertTrue(compareEndKeys(key, upperBound(key)) < 0);
+
+        key = copyFrom(new byte[] {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF});
+        assertNull(upperBound(key));
+        assertTrue(compareEndKeys(key, upperBound(key)) < 0);
     }
 
     @Test
@@ -428,94 +443,79 @@ public class BoundaryUtilTest {
 
     @Test
     public void compareBothStartAndEndKeysEqual() {
-        Boundary b1 = Boundary.newBuilder()
-            .setStartKey(ByteString.copyFromUtf8("a"))
-            .setEndKey(ByteString.copyFromUtf8("c"))
-            .build();
-        Boundary b2 = Boundary.newBuilder()
-            .setStartKey(ByteString.copyFromUtf8("a"))
-            .setEndKey(ByteString.copyFromUtf8("c"))
-            .build();
+        Boundary b1 =
+            Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("a")).setEndKey(ByteString.copyFromUtf8("c"))
+                .build();
+        Boundary b2 =
+            Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("a")).setEndKey(ByteString.copyFromUtf8("c"))
+                .build();
         assertEquals(BoundaryUtil.compare(b1, b2), 0);
     }
 
     @Test
     public void compareDifferentStartKeys() {
-        Boundary b1 = Boundary.newBuilder()
-            .setStartKey(ByteString.copyFromUtf8("a"))
-            .setEndKey(ByteString.copyFromUtf8("c"))
-            .build();
-        Boundary b2 = Boundary.newBuilder()
-            .setStartKey(ByteString.copyFromUtf8("b"))
-            .setEndKey(ByteString.copyFromUtf8("c"))
-            .build();
+        Boundary b1 =
+            Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("a")).setEndKey(ByteString.copyFromUtf8("c"))
+                .build();
+        Boundary b2 =
+            Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("b")).setEndKey(ByteString.copyFromUtf8("c"))
+                .build();
         assertEquals(BoundaryUtil.compare(b1, b2), -1);
     }
 
     @Test
     public void compareDifferentEndKeys() {
-        Boundary b1 = Boundary.newBuilder()
-            .setStartKey(ByteString.copyFromUtf8("a"))
-            .setEndKey(ByteString.copyFromUtf8("b"))
-            .build();
-        Boundary b2 = Boundary.newBuilder()
-            .setStartKey(ByteString.copyFromUtf8("a"))
-            .setEndKey(ByteString.copyFromUtf8("c"))
-            .build();
+        Boundary b1 =
+            Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("a")).setEndKey(ByteString.copyFromUtf8("b"))
+                .build();
+        Boundary b2 =
+            Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("a")).setEndKey(ByteString.copyFromUtf8("c"))
+                .build();
         assertEquals(BoundaryUtil.compare(b1, b2), -1);
     }
 
     @Test
     public void compareSameStartKeyDifferentEndKey() {
-        Boundary b1 = Boundary.newBuilder()
-            .setStartKey(ByteString.copyFromUtf8("a"))
-            .setEndKey(ByteString.copyFromUtf8("b"))
-            .build();
-        Boundary b2 = Boundary.newBuilder()
-            .setStartKey(ByteString.copyFromUtf8("a"))
-            .setEndKey(ByteString.copyFromUtf8("c"))
-            .build();
+        Boundary b1 =
+            Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("a")).setEndKey(ByteString.copyFromUtf8("b"))
+                .build();
+        Boundary b2 =
+            Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("a")).setEndKey(ByteString.copyFromUtf8("c"))
+                .build();
         assertEquals(BoundaryUtil.compare(b1, b2), -1);
     }
 
     @Test
     public void compareOneBoundaryFullOnePartial() {
-        Boundary b1 = Boundary.newBuilder()
-            .setStartKey(ByteString.copyFromUtf8("a"))
+        Boundary b1 = Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("a"))
             .build(); // No end key, meaning it’s open-ended
-        Boundary b2 = Boundary.newBuilder()
-            .setStartKey(ByteString.copyFromUtf8("a"))
-            .setEndKey(ByteString.copyFromUtf8("c"))
-            .build();
+        Boundary b2 =
+            Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("a")).setEndKey(ByteString.copyFromUtf8("c"))
+                .build();
         assertEquals(BoundaryUtil.compare(b1, b2), 1);
     }
 
     @Test
     public void compareNullStartKeyAndEndKey() {
-        Boundary b1 = Boundary.newBuilder()
-            .build(); // Both startKey and endKey are null
-        Boundary b2 = Boundary.newBuilder()
-            .setStartKey(ByteString.copyFromUtf8("a"))
-            .setEndKey(ByteString.copyFromUtf8("b"))
-            .build();
+        Boundary b1 = Boundary.newBuilder().build(); // Both startKey and endKey are null
+        Boundary b2 =
+            Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("a")).setEndKey(ByteString.copyFromUtf8("b"))
+                .build();
         assertEquals(BoundaryUtil.compare(b1, b2), -1);
     }
 
     @Test
     public void compareOneBoundaryOpenEnded() {
-        Boundary b1 = Boundary.newBuilder()
-            .setStartKey(ByteString.copyFromUtf8("a"))
-            .build(); // End key is null, open-ended
-        Boundary b2 = Boundary.newBuilder()
-            .setStartKey(ByteString.copyFromUtf8("a"))
-            .setEndKey(ByteString.copyFromUtf8("b"))
-            .build();
+        Boundary b1 =
+            Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("a")).build(); // End key is null, open-ended
+        Boundary b2 =
+            Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("a")).setEndKey(ByteString.copyFromUtf8("b"))
+                .build();
         assertEquals(BoundaryUtil.compare(b1, b2), 1);
     }
 
     private Boundary boundary(String startKey, String endKey) {
-        return BoundaryUtil.toBoundary(
-            startKey != null ? copyFromUtf8(startKey) : null,
+        return BoundaryUtil.toBoundary(startKey != null ? copyFromUtf8(startKey) : null,
             endKey != null ? copyFromUtf8(endKey) : null);
     }
 }

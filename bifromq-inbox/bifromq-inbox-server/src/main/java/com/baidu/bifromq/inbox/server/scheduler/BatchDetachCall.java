@@ -20,7 +20,8 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basescheduler.ICallTask;
-import com.baidu.bifromq.inbox.records.ScopedInbox;
+import com.baidu.bifromq.inbox.record.InboxInstance;
+import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchDetachReply;
@@ -103,7 +104,7 @@ class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
     }
 
     private static class BatchDetachCallTask extends MutationCallTaskBatch<DetachRequest, DetachReply> {
-        private final Set<ScopedInbox> inboxes = new HashSet<>();
+        private final Set<TenantInboxInstance> inboxes = new HashSet<>();
 
         private BatchDetachCallTask(String storeId, long ver) {
             super(storeId, ver);
@@ -112,19 +113,18 @@ class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
         @Override
         protected void add(ICallTask<DetachRequest, DetachReply, MutationCallBatcherKey> callTask) {
             super.add(callTask);
-            inboxes.add(new ScopedInbox(
+            inboxes.add(new TenantInboxInstance(
                 callTask.call().getClient().getTenantId(),
-                callTask.call().getInboxId(),
-                callTask.call().getIncarnation())
+                new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))
             );
         }
 
         @Override
         protected boolean isBatchable(ICallTask<DetachRequest, DetachReply, MutationCallBatcherKey> callTask) {
-            return !inboxes.contains(new ScopedInbox(
+            return !inboxes.contains(new TenantInboxInstance(
                 callTask.call().getClient().getTenantId(),
-                callTask.call().getInboxId(),
-                callTask.call().getIncarnation()));
+                new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))
+            );
         }
     }
 }

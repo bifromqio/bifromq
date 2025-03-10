@@ -15,12 +15,12 @@ package com.baidu.bifromq.inbox.store.gc;
 
 import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
-import static com.baidu.bifromq.inbox.util.KeyUtil.tenantPrefix;
+import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.tenantBeginKeyPrefix;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
-import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
@@ -40,9 +40,8 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class InboxStoreGCProcessor implements IInboxStoreGCProcessor {
-    private final IInboxClient inboxClient;
-
     protected final IBaseKVStoreClient storeClient;
+    private final IInboxClient inboxClient;
     private final String localServerId;
 
     public InboxStoreGCProcessor(IInboxClient inboxClient, IBaseKVStoreClient storeClient) {
@@ -62,9 +61,8 @@ public class InboxStoreGCProcessor implements IInboxStoreGCProcessor {
                                               long now) {
         List<KVRangeSetting> rangeSettingList;
         if (tenantId != null) {
-            ByteString tenantPrefix = tenantPrefix(tenantId);
-            rangeSettingList = findByBoundary(Boundary.newBuilder()
-                    .setStartKey(tenantPrefix).setEndKey(upperBound(tenantPrefix)).build(),
+            ByteString tenantBeginKey = tenantBeginKeyPrefix(tenantId);
+            rangeSettingList = findByBoundary(toBoundary(tenantBeginKey, upperBound(tenantBeginKey)),
                 storeClient.latestEffectiveRouter());
         } else {
             rangeSettingList = findByBoundary(FULL_BOUNDARY, storeClient.latestEffectiveRouter());

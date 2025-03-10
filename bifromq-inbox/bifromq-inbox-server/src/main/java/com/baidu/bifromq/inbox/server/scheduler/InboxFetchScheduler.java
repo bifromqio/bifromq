@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import static com.baidu.bifromq.inbox.util.KeyUtil.inboxBucketPrefix;
+import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.inboxInstanceStartKey;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcher;
@@ -35,12 +35,10 @@ public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler
     }
 
     @Override
-    protected Batcher<InboxFetch, Fetched, QueryCallBatcherKey> newBatcher(String name,
-                                                                           long tolerableLatencyNanos,
+    protected Batcher<InboxFetch, Fetched, QueryCallBatcherKey> newBatcher(String name, long tolerableLatencyNanos,
                                                                            long burstLatencyNanos,
                                                                            QueryCallBatcherKey inboxReadBatcherKey) {
-        return new InboxFetchBatcher(inboxReadBatcherKey, name, tolerableLatencyNanos, burstLatencyNanos,
-            storeClient);
+        return new InboxFetchBatcher(inboxReadBatcherKey, name, tolerableLatencyNanos, burstLatencyNanos, storeClient);
     }
 
     @Override
@@ -54,15 +52,12 @@ public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler
 
     @Override
     protected ByteString rangeKey(InboxFetch request) {
-        return inboxBucketPrefix(request.tenantId, request.inboxId);
+        return inboxInstanceStartKey(request.tenantId, request.inboxId, request.incarnation);
     }
 
     private static class InboxFetchBatcher extends QueryCallBatcher<InboxFetch, Fetched> {
-        InboxFetchBatcher(QueryCallBatcherKey batcherKey,
-                          String name,
-                          long tolerableLatencyNanos,
-                          long burstLatencyNanos,
-                          IBaseKVStoreClient storeClient) {
+        InboxFetchBatcher(QueryCallBatcherKey batcherKey, String name, long tolerableLatencyNanos,
+                          long burstLatencyNanos, IBaseKVStoreClient storeClient) {
             super(name, tolerableLatencyNanos, burstLatencyNanos, batcherKey, storeClient);
         }
 

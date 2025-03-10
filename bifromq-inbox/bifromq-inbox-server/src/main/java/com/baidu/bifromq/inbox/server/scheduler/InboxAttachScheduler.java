@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import static com.baidu.bifromq.inbox.util.KeyUtil.inboxBucketPrefix;
-
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
@@ -28,6 +26,8 @@ import com.baidu.bifromq.sysprops.props.ControlPlaneTolerableLatencyMillis;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
+
+import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.inboxStartKeyPrefix;
 
 @Slf4j
 public class InboxAttachScheduler extends MutationCallScheduler<AttachRequest, AttachReply>
@@ -49,7 +49,7 @@ public class InboxAttachScheduler extends MutationCallScheduler<AttachRequest, A
 
     @Override
     protected ByteString rangeKey(AttachRequest request) {
-        return inboxBucketPrefix(request.getClient().getTenantId(), request.getInboxId());
+        return inboxStartKeyPrefix(request.getClient().getTenantId(), request.getInboxId());
     }
 
     private static class InboxAttachBatcher extends MutationCallBatcher<AttachRequest, AttachReply> {

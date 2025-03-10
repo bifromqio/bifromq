@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.client;
 
-import static com.baidu.bifromq.inbox.util.DelivererKeyUtil.parseTenantId;
+import static com.baidu.bifromq.inbox.util.InboxServiceUtil.parseTenantId;
 import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_DELIVERERKEY;
 
 import com.baidu.bifromq.baserpc.client.IRPCClient;

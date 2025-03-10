@@ -15,11 +15,13 @@ package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isNULLRange;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
-import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantStartKey;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantBeginKey;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
+import com.google.protobuf.ByteString;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
@@ -114,10 +116,8 @@ class TenantsState implements ITenantsState {
     private Supplier<Number> getSpaceUsageProvider(String tenantId) {
         return () -> {
             try {
-                Boundary tenantSection = intersect(boundary, Boundary.newBuilder()
-                        .setStartKey(tenantStartKey(tenantId))
-                        .setEndKey(upperBound(tenantStartKey(tenantId)))
-                    .build());
+                ByteString tenantStartKey = tenantBeginKey(tenantId);
+                Boundary tenantSection = intersect(boundary, toBoundary(tenantStartKey, upperBound(tenantStartKey)));
                 if (isNULLRange(tenantSection)) {
                     return 0;
                 }

@@ -24,6 +24,7 @@ import static com.baidu.bifromq.basekv.store.wal.KVRangeWALKeys.configEntriesKey
 import static com.baidu.bifromq.basekv.store.wal.KVRangeWALKeys.configEntriesKeyPrefixInfix;
 import static com.baidu.bifromq.basekv.store.wal.KVRangeWALKeys.logEntriesKeyPrefixInfix;
 import static com.baidu.bifromq.basekv.store.wal.KVRangeWALKeys.logEntryKey;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 import static java.lang.String.format;
@@ -189,14 +190,10 @@ class KVRangeWALStore implements IKVRangeWALStore {
             try {
                 log.trace("Truncating all logs");
                 // clear entire logs
-                writer.clear(Boundary.newBuilder()
-                    .setStartKey(logEntriesKeyPrefixInfix(0))
-                    .setEndKey(upperBound(logEntriesKeyPrefixInfix(lastLogEntriesKeyInfix)))
-                    .build());
-                writer.clear(Boundary.newBuilder()
-                    .setStartKey(configEntriesKeyPrefixInfix(0))
-                    .setEndKey(upperBound(configEntriesKeyPrefixInfix(lastLogEntriesKeyInfix)))
-                    .build());
+                writer.clear(toBoundary(logEntriesKeyPrefixInfix(0),
+                    upperBound(logEntriesKeyPrefixInfix(lastLogEntriesKeyInfix))));
+                writer.clear(toBoundary(configEntriesKeyPrefixInfix(0),
+                    upperBound(configEntriesKeyPrefixInfix(lastLogEntriesKeyInfix))));
                 writer.done();
                 flush();
                 log.debug("All logs of truncated");
@@ -430,12 +427,27 @@ class KVRangeWALStore implements IKVRangeWALStore {
             .orElse(0);
     }
 
+    private void trace(String msg, Object... args) {
+        if (log.isTraceEnabled()) {
+            log.trace(msg, args);
+        }
+    }
+
+    private static class StabilizingIndex {
+        final long ts = System.nanoTime();
+        final long index;
+
+        private StabilizingIndex(long index) {
+            this.index = index;
+        }
+    }
+
     private class LogEntryIterator implements Iterator<LogEntry> {
         private final long maxIndex;
         private final long maxSize;
+        private final IKVSpaceIterator iterator;
         private long currentIndex;
         private long accumulatedSize;
-        private final IKVSpaceIterator iterator;
 
         private LogEntryIterator(long startIndex, long endIndex, long maxSize) {
             this.currentIndex = startIndex;
@@ -474,21 +486,6 @@ class KVRangeWALStore implements IKVRangeWALStore {
                     throw new KVRangeStoreException("Log data corruption", e);
                 }
             }
-        }
-    }
-
-    private void trace(String msg, Object... args) {
-        if (log.isTraceEnabled()) {
-            log.trace(msg, args);
-        }
-    }
-
-    private static class StabilizingIndex {
-        final long ts = System.nanoTime();
-        final long index;
-
-        private StabilizingIndex(long index) {
-            this.index = index;
         }
     }
 }

@@ -17,7 +17,7 @@ import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_DELIVE
 
 import com.baidu.bifromq.baseenv.MemUsage;
 import com.baidu.bifromq.baserpc.server.ResponsePipeline;
-import com.baidu.bifromq.inbox.records.ScopedInbox;
+import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
@@ -34,15 +34,6 @@ class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply> {
     private static final double SLOWDOWN_DIRECT_MEM_USAGE = IngressSlowDownDirectMemoryUsage.INSTANCE.get();
     private static final double SLOWDOWN_HEAP_MEM_USAGE = IngressSlowDownHeapMemoryUsage.INSTANCE.get();
     private static final Duration SLOWDOWN_TIMEOUT = Duration.ofSeconds(MaxSlowDownTimeoutSeconds.INSTANCE.get());
-
-    interface IWriteCallback {
-        void afterWrite(ScopedInbox scopedInbox, String delivererKey);
-    }
-
-    interface ISendRequestHandler {
-        CompletableFuture<SendReply> handle(SendRequest request);
-    }
-
     private final IWriteCallback writeCallback;
     private final ISendRequestHandler handler;
     private final String delivererKey;
@@ -64,11 +55,20 @@ class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply> {
             v.getReply().getResultMap().forEach((tenantId, deliveryResults) -> {
                 deliveryResults.getResultList().forEach(result -> {
                     if (result.getCode() == DeliveryResult.Code.OK) {
-                        writeCallback.afterWrite(ScopedInbox.from(tenantId, result.getMatchInfo()), delivererKey);
+                        writeCallback.afterWrite(TenantInboxInstance.from(tenantId, result.getMatchInfo()),
+                            delivererKey);
                     }
                 });
             });
             return v;
         });
+    }
+
+    interface IWriteCallback {
+        void afterWrite(TenantInboxInstance tenantInboxInstance, String delivererKey);
+    }
+
+    interface ISendRequestHandler {
+        CompletableFuture<SendReply> handle(SendRequest request);
     }
 }

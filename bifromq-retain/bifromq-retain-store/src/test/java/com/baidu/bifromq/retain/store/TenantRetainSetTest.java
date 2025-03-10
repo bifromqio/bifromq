@@ -15,15 +15,15 @@ package com.baidu.bifromq.retain.store;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
-import static com.baidu.bifromq.retain.utils.KeyUtil.tenantNS;
+import static com.baidu.bifromq.retain.store.schema.KVSchemaUtil.tenantBeginKey;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.metrics.TenantMetric;
@@ -58,10 +58,9 @@ public class TenantRetainSetTest {
     public void metricValue() {
         String tenantId = "tenant" + System.nanoTime();
         when(reader.boundary()).thenReturn(FULL_BOUNDARY);
-        when(reader.size(eq(intersect(FULL_BOUNDARY, Boundary.newBuilder()
-            .setStartKey(tenantNS(tenantId))
-            .setEndKey(upperBound(tenantNS(tenantId)))
-            .build())))).thenReturn(10L);
+        when(reader.size(
+            eq(intersect(FULL_BOUNDARY, toBoundary(tenantBeginKey(tenantId), upperBound(tenantBeginKey(tenantId)))))))
+            .thenReturn(10L);
         TenantRetainedSet tenantRetainedSet = new TenantRetainedSet(tenantId, reader);
         tenantRetainedSet.incrementTopicCount(10);
         assertGaugeValue(tenantId, TenantMetric.MqttRetainSpaceGauge, 10);

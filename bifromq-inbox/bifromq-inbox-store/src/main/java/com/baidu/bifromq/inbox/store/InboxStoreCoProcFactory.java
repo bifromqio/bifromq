@@ -14,8 +14,7 @@
 package com.baidu.bifromq.inbox.store;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
-import static com.baidu.bifromq.inbox.util.KeyUtil.isInboxKey;
-import static com.baidu.bifromq.inbox.util.KeyUtil.parseInboxBucketPrefix;
+import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.parseInboxBucketPrefix;
 
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
@@ -49,12 +48,11 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
     @Override
     public List<IKVRangeSplitHinter> createHinters(String clusterId, String storeId, KVRangeId id,
                                                    Supplier<IKVCloseableReader> rangeReaderProvider) {
-        return Collections.singletonList(new MutationKVLoadBasedSplitHinter(loadEstWindow, key -> {
-            if (isInboxKey(key)) {
-                return Optional.of(upperBound(parseInboxBucketPrefix(key)));
-            }
-            return Optional.empty();
-        }, "clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id)));
+        // load-based hinter only split range around up to the inbox bucket boundary
+        return Collections.singletonList(new MutationKVLoadBasedSplitHinter(loadEstWindow, key ->
+            Optional.ofNullable(upperBound(parseInboxBucketPrefix(key))),
+            "clusterId", clusterId, "storeId", storeId, "rangeId",
+            KVRangeIdUtil.toString(id)));
     }
 
     @Override
