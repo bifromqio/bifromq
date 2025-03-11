@@ -22,7 +22,9 @@ import java.io.File;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 class KVRangeStoreStatsCollector extends StatsCollector {
     private final KVRangeStoreOptions opt;
 
@@ -35,15 +37,31 @@ class KVRangeStoreStatsCollector extends StatsCollector {
     @Override
     protected void scrap(Map<String, Double> stats) {
         if (opt.getDataEngineConfigurator() instanceof RocksDBCPableKVEngineConfigurator conf) {
-            File dbRootDir = new File(conf.dbRootDir());
-            stats.put("db.usable", (double) dbRootDir.getUsableSpace());
-            stats.put("db.total", (double) dbRootDir.getTotalSpace());
+            try {
+                File dbRootDir = new File(conf.dbRootDir());
+                long total = dbRootDir.getTotalSpace();
+                if (total > 0) {
+                    stats.put("db.usage", roundUsage(dbRootDir.getUsableSpace() / (double) total));
+                }
+            } catch (Throwable e) {
+                log.error("Failed to calculate db usage", e);
+            }
         }
         if (opt.getWalEngineConfigurator() instanceof RocksDBWALableKVEngineConfigurator conf) {
-            File dbRootDir = new File(conf.dbRootDir());
-            stats.put("wal.usable", (double) dbRootDir.getUsableSpace());
-            stats.put("wal.total", (double) dbRootDir.getTotalSpace());
+            try {
+                File walRootDir = new File(conf.dbRootDir());
+                long total = walRootDir.getTotalSpace();
+                if (total > 0) {
+                    stats.put("wal.usage", roundUsage(walRootDir.getUsableSpace() / (double) total));
+                }
+            } catch (Throwable e) {
+                log.error("Failed to calculate wal usage", e);
+            }
         }
-        stats.put("cpu.usage", ProcessUtil.cpuLoad());
+        stats.put("cpu.usage", roundUsage(ProcessUtil.cpuLoad()));
+    }
+
+    private double roundUsage(double usage) {
+        return Math.round(usage * 100.0) / 100.0;
     }
 }

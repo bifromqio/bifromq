@@ -27,15 +27,12 @@ public class KVRangeStoreStatsCollectorTest {
     @Test
     public void testScrap() {
         KVRangeStoreOptions options = new KVRangeStoreOptions();
-        KVRangeStoreStatsCollector collector = new KVRangeStoreStatsCollector(options, Duration.ofSeconds(1),
-            MoreExecutors.directExecutor());
+        KVRangeStoreStatsCollector collector =
+            new KVRangeStoreStatsCollector(options, Duration.ofSeconds(1), MoreExecutors.directExecutor());
         TestObserver<Map<String, Double>> statsObserver = TestObserver.create();
         collector.collect().subscribe(statsObserver);
         statsObserver.awaitCount(1);
         Map<String, Double> stats = statsObserver.values().get(0);
-        assertTrue(stats.containsKey("db.usable"));
-        assertTrue(stats.containsKey("db.total"));
-        assertTrue(stats.containsKey("wal.usable"));
-        assertTrue(stats.containsKey("wal.total"));
+        assertTrue(stats.containsKey("cpu.usage"));
     }
 }

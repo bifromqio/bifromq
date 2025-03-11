@@ -85,38 +85,6 @@ import org.slf4j.Logger;
 
 public class KVRangeStore implements IKVRangeStore {
     private final Logger log;
-
-    private enum Status {
-        INIT, // store is created but cannot serve requests
-        STARTING, // store is starting
-        STARTED, // store can serve requests
-        FATAL_FAILURE, // fatal failure happened during starting
-        CLOSING, // store closing, no more outgoing messages
-        CLOSED, // store closed, no tasks running
-        TERMINATING, // releasing all resources
-        TERMINATED // resource released
-    }
-
-    private static class RangeFSMHolder {
-        record PinnedRange(long ver, Snapshot walSnapshot, KVRangeSnapshot fsmSnapshot) {
-
-        }
-
-        private final IKVRangeFSM fsm;
-        private PinnedRange pinned;
-
-        RangeFSMHolder(IKVRangeFSM fsm) {
-            this.fsm = fsm;
-        }
-
-        // if the range should be recreated after destroy using given snapshot state
-        void pin(long ver, Snapshot walSnapshot, KVRangeSnapshot fsmSnapshot) {
-            if (pinned == null || ver >= pinned.ver) {
-                this.pinned = new PinnedRange(ver, walSnapshot, fsmSnapshot);
-            }
-        }
-    }
-
     private final String clusterId;
     private final String id;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
@@ -130,13 +98,13 @@ public class KVRangeStore implements IKVRangeStore {
     private final CompositeDisposable disposable = new CompositeDisposable();
     private final Executor queryExecutor;
     private final ScheduledExecutorService tickExecutor;
-    private volatile ScheduledFuture<?> tickFuture;
     private final ScheduledExecutorService bgTaskExecutor;
     private final ScheduledExecutorService mgmtTaskExecutor;
     private final AsyncRunner mgmtTaskRunner;
     private final KVRangeStoreOptions opts;
     private final MetricsManager metricsManager;
     private final Map<String, String> attributes;
+    private volatile ScheduledFuture<?> tickFuture;
     private IStoreMessenger messenger;
 
     public KVRangeStore(String clusterId,
@@ -241,11 +209,8 @@ public class KVRangeStore implements IKVRangeStore {
     }
 
     private boolean validate(IKVRange range, IKVRangeWALStore walStore) {
-        if (range.lastAppliedIndex() > -1
-            && range.lastAppliedIndex() < walStore.latestSnapshot().getIndex()) {
-            return false;
-        }
-        return true;
+        return range.lastAppliedIndex() <= -1
+            || range.lastAppliedIndex() >= walStore.latestSnapshot().getIndex();
     }
 
     @Override
@@ -263,10 +228,6 @@ public class KVRangeStore implements IKVRangeStore {
                 }
 
                 CompletableFuture.allOf(closeFutures.toArray(CompletableFuture[]::new)).join();
-//                CompletableFuture.allOf(kvRangeMap.values().stream()
-//                        .map(IKVRangeFSM::close)
-//                        .toArray(CompletableFuture[]::new))
-//                    .join();
                 disposable.dispose();
                 storeStatsCollector.stop().toCompletableFuture().join();
                 mgmtTaskRunner.awaitDone().toCompletableFuture().join();
@@ -352,11 +313,12 @@ public class KVRangeStore implements IKVRangeStore {
         return descriptorListSubject
             .distinctUntilChanged()
             .switchMap(descriptorList -> {
-                Observable<List<KVRangeDescriptor>> descListObservable = descriptorList.isEmpty() ?
-                    BehaviorSubject.createDefault(emptyList()) :
+                Observable<List<KVRangeDescriptor>> descListObservable = descriptorList.isEmpty()
+                    ? BehaviorSubject.createDefault(emptyList()) :
                     Observable.combineLatest(descriptorList, descs ->
                         Arrays.stream(descs).map(desc -> (KVRangeDescriptor) desc).collect(Collectors.toList()));
-                return Observable.combineLatest(storeStatsCollector.collect(), descListObservable,
+                return Observable.combineLatest(storeStatsCollector.collect().distinctUntilChanged(),
+                    descListObservable,
                     (storeStats, descList) -> KVRangeStoreDescriptor.newBuilder()
                         .setId(id)
                         .putAllStatistics(storeStats)
@@ -646,6 +608,37 @@ public class KVRangeStore implements IKVRangeStore {
 
     private void checkStarted() {
         Preconditions.checkState(status.get() == Status.STARTED, "Store not running");
+    }
+
+    private enum Status {
+        INIT, // store is created but cannot serve requests
+        STARTING, // store is starting
+        STARTED, // store can serve requests
+        FATAL_FAILURE, // fatal failure happened during starting
+        CLOSING, // store closing, no more outgoing messages
+        CLOSED, // store closed, no tasks running
+        TERMINATING, // releasing all resources
+        TERMINATED // resource released
+    }
+
+    private static class RangeFSMHolder {
+        private final IKVRangeFSM fsm;
+        private PinnedRange pinned;
+
+        RangeFSMHolder(IKVRangeFSM fsm) {
+            this.fsm = fsm;
+        }
+
+        // if the range should be recreated after destroy using given snapshot state
+        void pin(long ver, Snapshot walSnapshot, KVRangeSnapshot fsmSnapshot) {
+            if (pinned == null || ver >= pinned.ver) {
+                this.pinned = new PinnedRange(ver, walSnapshot, fsmSnapshot);
+            }
+        }
+
+        record PinnedRange(long ver, Snapshot walSnapshot, KVRangeSnapshot fsmSnapshot) {
+
+        }
     }
 
     private static class MetricsManager {

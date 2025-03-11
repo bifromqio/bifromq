@@ -43,7 +43,7 @@ public class StatsCollectorTest extends MockableTest {
         collector.collect().subscribe(statsObserver);
         collector.tick();
         statsObserver.awaitCount(1);
-        assertEquals(0.0, 0.0d, statsObserver.values().get(0).get("stat1").doubleValue());
+        assertEquals(statsObserver.values().get(0).get("stat1"), 0.0);
     }
 
     @SneakyThrows
