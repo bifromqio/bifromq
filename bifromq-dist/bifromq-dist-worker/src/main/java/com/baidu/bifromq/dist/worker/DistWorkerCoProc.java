@@ -17,14 +17,14 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.intersect;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isNULLRange;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
+import static com.baidu.bifromq.dist.worker.Comparators.FilterLevelsComparator;
+import static com.baidu.bifromq.dist.worker.Comparators.RouteMatcherComparator;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.buildMatchRoute;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantBeginKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toGroupRouteKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toNormalRouteKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toReceiverUrl;
-import static com.baidu.bifromq.util.TopicUtil.isNormalTopicFilter;
-import static com.baidu.bifromq.util.TopicUtil.isOrderedShared;
-import static com.baidu.bifromq.util.TopicUtil.unescape;
+import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
@@ -49,8 +49,10 @@ import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcOutput;
+import com.baidu.bifromq.dist.rpc.proto.Fact;
 import com.baidu.bifromq.dist.rpc.proto.GCReply;
 import com.baidu.bifromq.dist.rpc.proto.GCRequest;
+import com.baidu.bifromq.dist.rpc.proto.GlobalFilterLevels;
 import com.baidu.bifromq.dist.rpc.proto.MatchRoute;
 import com.baidu.bifromq.dist.rpc.proto.RouteGroup;
 import com.baidu.bifromq.dist.rpc.proto.TopicFanout;
@@ -60,11 +62,13 @@ import com.baidu.bifromq.dist.worker.schema.KVSchemaUtil;
 import com.baidu.bifromq.dist.worker.schema.Matching;
 import com.baidu.bifromq.dist.worker.schema.NormalMatching;
 import com.baidu.bifromq.dist.worker.schema.RouteDetail;
-import com.baidu.bifromq.dist.worker.schema.SharedTopicFilter;
 import com.baidu.bifromq.plugin.subbroker.CheckRequest;
+import com.baidu.bifromq.type.RouteMatcher;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.baidu.bifromq.util.BSUtil;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.ArrayList;
@@ -72,8 +76,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
+import java.util.NavigableSet;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -89,6 +96,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
     private final ITenantsState tenantsState;
     private final IDeliverExecutorGroup deliverExecutorGroup;
     private final ISubscriptionCleaner subscriptionChecker;
+    private transient Fact fact;
     private transient Boundary boundary;
 
     public DistWorkerCoProc(KVRangeId id,
@@ -102,7 +110,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         this.tenantsState = tenantsState;
         this.deliverExecutorGroup = deliverExecutorGroup;
         this.subscriptionChecker = subscriptionChecker;
-        load();
     }
 
     @Override
@@ -136,23 +143,24 @@ class DistWorkerCoProc implements IKVRangeCoProc {
 
     @SneakyThrows
     @Override
-    public Supplier<RWCoProcOutput> mutate(RWCoProcInput input, IKVReader reader, IKVWriter writer) {
+    public Supplier<MutationResult> mutate(RWCoProcInput input, IKVReader reader, IKVWriter writer) {
         DistServiceRWCoProcInput coProcInput = input.getDistService();
         log.trace("Receive rw co-proc request\n{}", coProcInput);
-        // tenantId -> topicFilter -> if ordered shared subscription
-        Map<String, Map<String, Boolean>> updatedMatches = Maps.newHashMap();
+        // tenantId -> topicFilter
+        NavigableMap<String, NavigableSet<RouteMatcher>> updatedMatches = Maps.newTreeMap();
         DistServiceRWCoProcOutput.Builder outputBuilder = DistServiceRWCoProcOutput.newBuilder();
         AtomicReference<Runnable> afterMutate = new AtomicReference<>();
         switch (coProcInput.getTypeCase()) {
             case BATCHMATCH -> {
                 BatchMatchReply.Builder replyBuilder = BatchMatchReply.newBuilder();
-                afterMutate.set(batchMatch(coProcInput.getBatchMatch(), reader, writer, updatedMatches, replyBuilder));
+                afterMutate.set(
+                    batchAddRoute(coProcInput.getBatchMatch(), reader, writer, updatedMatches, replyBuilder));
                 outputBuilder.setBatchMatch(replyBuilder.build());
             }
             case BATCHUNMATCH -> {
                 BatchUnmatchReply.Builder replyBuilder = BatchUnmatchReply.newBuilder();
                 afterMutate.set(
-                    batchUnmatch(coProcInput.getBatchUnmatch(), reader, writer, updatedMatches, replyBuilder));
+                    batchRemoveRoute(coProcInput.getBatchUnmatch(), reader, writer, updatedMatches, replyBuilder));
                 outputBuilder.setBatchUnmatch(replyBuilder.build());
             }
             default -> {
@@ -161,22 +169,86 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         }
         RWCoProcOutput output = RWCoProcOutput.newBuilder().setDistService(outputBuilder.build()).build();
         return () -> {
-            routeCache.refresh(Maps.transformValues(updatedMatches, Map::keySet));
-            updatedMatches.forEach(
-                (tenantId, topicFilters) -> topicFilters.forEach((topicFilter, isOrderedShareSub) -> {
-                    if (isOrderedShareSub) {
-                        deliverExecutorGroup.refreshOrderedShareSubRoutes(tenantId, topicFilter);
-                    }
-                }));
+            routeCache.refresh(updatedMatches);
+            updatedMatches.forEach((tenantId, topicFilters) -> topicFilters.forEach((topicFilter) -> {
+                if (topicFilter.getType() == RouteMatcher.Type.OrderedShare) {
+                    deliverExecutorGroup.refreshOrderedShareSubRoutes(tenantId, topicFilter);
+                }
+            }));
             afterMutate.get().run();
-            return output;
+            refreshFact(reader, updatedMatches,
+                coProcInput.getTypeCase() == DistServiceRWCoProcInput.TypeCase.BATCHMATCH);
+            return new MutationResult(output, Optional.of(Any.pack(fact)));
         };
     }
 
+    private void refreshFact(IKVReader reader,
+                             NavigableMap<String, NavigableSet<RouteMatcher>> mutations,
+                             boolean isAdd) {
+        if (mutations.isEmpty()) {
+            return;
+        }
+        boolean needRefresh = false;
+        if (!fact.hasFirstGlobalFilterLevels() || !fact.hasLastGlobalFilterLevels()) {
+            needRefresh = true;
+        } else {
+            Map.Entry<String, NavigableSet<RouteMatcher>> firstMutation = mutations.firstEntry();
+            Map.Entry<String, NavigableSet<RouteMatcher>> lastMutation = mutations.lastEntry();
+            Iterable<String> firstRoute = toGlobalTopicLevels(firstMutation.getKey(), firstMutation.getValue().first());
+            Iterable<String> lastRoute = toGlobalTopicLevels(lastMutation.getKey(), lastMutation.getValue().last());
+            if (isAdd) {
+                if (FilterLevelsComparator
+                    .compare(firstRoute, fact.getFirstGlobalFilterLevels().getFilterLevelList()) < 0
+                    || FilterLevelsComparator
+                    .compare(lastRoute, fact.getLastGlobalFilterLevels().getFilterLevelList()) > 0) {
+                    needRefresh = true;
+                }
+            } else {
+                if (FilterLevelsComparator
+                    .compare(firstRoute, fact.getFirstGlobalFilterLevels().getFilterLevelList()) == 0
+                    || FilterLevelsComparator
+                    .compare(lastRoute, fact.getLastGlobalFilterLevels().getFilterLevelList()) == 0) {
+                    needRefresh = true;
+                }
+            }
+        }
+        if (needRefresh) {
+            reader.refresh();
+            IKVIterator itr = reader.iterator();
+            setFact(itr);
+        }
+    }
+
+    private Iterable<String> toGlobalTopicLevels(String tenantId, RouteMatcher routeMatcher) {
+        return Iterables.concat(singletonList(tenantId), routeMatcher.getFilterLevelList());
+    }
+
+    private void setFact(IKVIterator itr) {
+        Fact.Builder factBuilder = Fact.newBuilder();
+        itr.seekToFirst();
+        if (itr.isValid()) {
+            RouteDetail firstRouteDetail = KVSchemaUtil.parseRouteDetail(itr.key());
+            factBuilder.setFirstGlobalFilterLevels(GlobalFilterLevels.newBuilder()
+                .addFilterLevel(firstRouteDetail.tenantId())
+                .addAllFilterLevel(firstRouteDetail.matcher().getFilterLevelList())
+                .build());
+        }
+        itr.seekToLast();
+        if (itr.isValid()) {
+            RouteDetail lastRouteDetail = KVSchemaUtil.parseRouteDetail(itr.key());
+            factBuilder.setLastGlobalFilterLevels(GlobalFilterLevels.newBuilder()
+                .addFilterLevel(lastRouteDetail.tenantId())
+                .addAllFilterLevel(lastRouteDetail.matcher().getFilterLevelList())
+                .build());
+        }
+        fact = factBuilder.build();
+    }
+
     @Override
-    public void reset(Boundary boundary) {
+    public Any reset(Boundary boundary) {
         tenantsState.reset();
         load();
+        return Any.pack(fact);
     }
 
     public void close() {
@@ -185,11 +257,9 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         deliverExecutorGroup.shutdown();
     }
 
-    private Runnable batchMatch(BatchMatchRequest request,
-                                IKVReader reader,
-                                IKVWriter writer,
-                                Map<String, Map<String, Boolean>> newMatches,
-                                BatchMatchReply.Builder replyBuilder) {
+    private Runnable batchAddRoute(BatchMatchRequest request, IKVReader reader, IKVWriter writer,
+                                   Map<String, NavigableSet<RouteMatcher>> newMatches,
+                                   BatchMatchReply.Builder replyBuilder) {
         replyBuilder.setReqId(request.getReqId());
         Map<String, AtomicInteger> normalRoutesAdded = new HashMap<>();
         Map<String, AtomicInteger> sharedRoutesAdded = new HashMap<>();
@@ -202,9 +272,9 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             for (int i = 0; i < tenantMatchRequest.getRouteCount(); i++) {
                 MatchRoute route = tenantMatchRequest.getRoute(i);
                 long incarnation = route.getIncarnation();
-                String topicFilter = route.getTopicFilter();
-                if (isNormalTopicFilter(topicFilter)) {
-                    ByteString normalRouteKey = toNormalRouteKey(tenantId, topicFilter, toReceiverUrl(route));
+                RouteMatcher routeMatcher = route.getMatcher();
+                if (routeMatcher.getType() == RouteMatcher.Type.Normal) {
+                    ByteString normalRouteKey = toNormalRouteKey(tenantId, routeMatcher, toReceiverUrl(route));
                     Optional<Long> incarOpt = reader.get(normalRouteKey).map(BSUtil::toLong);
                     if (incarOpt.isEmpty() || incarOpt.get() < incarnation) {
                         writer.put(normalRouteKey, BSUtil.toByteString(incarnation));
@@ -212,34 +282,33 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                         if (!addedMatches.contains(normalRouteKey)) {
                             normalRoutesAdded.computeIfAbsent(tenantId, k -> new AtomicInteger()).incrementAndGet();
                         }
-                        newMatches.computeIfAbsent(tenantId, k -> new HashMap<>()).put(topicFilter, false);
+                        newMatches.computeIfAbsent(tenantId, k -> new TreeSet<>(RouteMatcherComparator))
+                            .add(routeMatcher);
                         addedMatches.add(normalRouteKey);
                     }
                     codes[i] = BatchMatchReply.TenantBatch.Code.OK;
                 } else {
-                    groupMatchRecords.computeIfAbsent(new GlobalTopicFilter(tenantId, topicFilter),
+                    groupMatchRecords.computeIfAbsent(new GlobalTopicFilter(tenantId, routeMatcher),
                         k -> new HashMap<>()).put(route, i);
                 }
             }
         });
         groupMatchRecords.forEach((globalTopicFilter, newGroupMembers) -> {
             String tenantId = globalTopicFilter.tenantId;
-            String origTopicFilter = globalTopicFilter.topicFilter;
-            ByteString groupMatchRecordKey = toGroupRouteKey(tenantId, origTopicFilter);
-            RouteGroup.Builder matchGroup = reader.get(groupMatchRecordKey)
-                .map(b -> {
-                    try {
-                        return RouteGroup.parseFrom(b).toBuilder();
-                    } catch (InvalidProtocolBufferException e) {
-                        log.error("Unable to parse GroupMatchRecord", e);
-                        return RouteGroup.newBuilder();
-                    }
-                })
-                .orElseGet(() -> {
-                    // new shared subscription
-                    sharedRoutesAdded.computeIfAbsent(tenantId, k -> new AtomicInteger()).incrementAndGet();
+            RouteMatcher origRouteMatcher = globalTopicFilter.routeMatcher;
+            ByteString groupMatchRecordKey = toGroupRouteKey(tenantId, origRouteMatcher);
+            RouteGroup.Builder matchGroup = reader.get(groupMatchRecordKey).map(b -> {
+                try {
+                    return RouteGroup.parseFrom(b).toBuilder();
+                } catch (InvalidProtocolBufferException e) {
+                    log.error("Unable to parse GroupMatchRecord", e);
                     return RouteGroup.newBuilder();
-                });
+                }
+            }).orElseGet(() -> {
+                // new shared subscription
+                sharedRoutesAdded.computeIfAbsent(tenantId, k -> new AtomicInteger()).incrementAndGet();
+                return RouteGroup.newBuilder();
+            });
             boolean updated = false;
             int maxMembers = request.getRequestsMap().get(tenantId).getOption().getMaxReceiversPerSharedSubGroup();
             for (MatchRoute route : newGroupMembers.keySet()) {
@@ -263,9 +332,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             }
             if (updated) {
                 writer.put(groupMatchRecordKey, matchGroup.build().toByteString());
-                SharedTopicFilter sharedTopicFilter = SharedTopicFilter.from(origTopicFilter);
-                newMatches.computeIfAbsent(tenantId, k -> new HashMap<>())
-                    .put(sharedTopicFilter.topicFilter, isOrderedShared(origTopicFilter));
+                newMatches.computeIfAbsent(tenantId, k -> new TreeSet<>(RouteMatcherComparator)).add(origRouteMatcher);
             }
         });
         resultMap.forEach((tenantId, codes) -> {
@@ -281,54 +348,54 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         };
     }
 
-    private Runnable batchUnmatch(BatchUnmatchRequest request,
-                                  IKVReader reader,
-                                  IKVWriter writer,
-                                  Map<String, Map<String, Boolean>> removedMatches,
-                                  BatchUnmatchReply.Builder replyBuilder) {
+    private Runnable batchRemoveRoute(BatchUnmatchRequest request,
+                                      IKVReader reader,
+                                      IKVWriter writer,
+                                      Map<String, NavigableSet<RouteMatcher>> removedMatches,
+                                      BatchUnmatchReply.Builder replyBuilder) {
         replyBuilder.setReqId(request.getReqId());
         Map<String, AtomicInteger> normalRoutesRemoved = new HashMap<>();
         Map<String, AtomicInteger> sharedRoutesRemoved = new HashMap<>();
         Map<GlobalTopicFilter, Map<MatchRoute, Integer>> delGroupMatchRecords = new HashMap<>();
         Map<String, BatchUnmatchReply.TenantBatch.Code[]> resultMap = new HashMap<>();
         request.getRequestsMap().forEach((tenantId, tenantUnmatchRequest) -> {
-            BatchUnmatchReply.TenantBatch.Code[] codes =
-                resultMap.computeIfAbsent(tenantId,
-                    k -> new BatchUnmatchReply.TenantBatch.Code[tenantUnmatchRequest.getRouteCount()]);
+            BatchUnmatchReply.TenantBatch.Code[] codes = resultMap.computeIfAbsent(tenantId,
+                k -> new BatchUnmatchReply.TenantBatch.Code[tenantUnmatchRequest.getRouteCount()]);
             Set<ByteString> delMatches = new HashSet<>();
             for (int i = 0; i < tenantUnmatchRequest.getRouteCount(); i++) {
                 MatchRoute route = tenantUnmatchRequest.getRoute(i);
-                String topicFilter = route.getTopicFilter();
-                if (isNormalTopicFilter(topicFilter)) {
-                    ByteString normalRouteKey = toNormalRouteKey(tenantId, topicFilter, toReceiverUrl(route));
+                RouteMatcher routeMatcher = route.getMatcher();
+                if (routeMatcher.getType() == RouteMatcher.Type.Normal) {
+                    ByteString normalRouteKey = toNormalRouteKey(tenantId, routeMatcher, toReceiverUrl(route));
                     Optional<Long> incarOpt = reader.get(normalRouteKey).map(BSUtil::toLong);
                     if (incarOpt.isPresent() && incarOpt.get() <= route.getIncarnation()) {
                         writer.delete(normalRouteKey);
                         if (!delMatches.contains(normalRouteKey)) {
                             normalRoutesRemoved.computeIfAbsent(tenantId, k -> new AtomicInteger()).incrementAndGet();
                         }
-                        removedMatches.computeIfAbsent(tenantId, k -> new HashMap<>()).put(topicFilter, false);
+                        removedMatches.computeIfAbsent(tenantId, k -> new TreeSet<>(RouteMatcherComparator))
+                            .add(routeMatcher);
                         delMatches.add(normalRouteKey);
                         codes[i] = BatchUnmatchReply.TenantBatch.Code.OK;
                     } else {
                         codes[i] = BatchUnmatchReply.TenantBatch.Code.NOT_EXISTED;
                     }
                 } else {
-                    delGroupMatchRecords.computeIfAbsent(new GlobalTopicFilter(tenantId, topicFilter),
+                    delGroupMatchRecords.computeIfAbsent(new GlobalTopicFilter(tenantId, routeMatcher),
                         k -> new HashMap<>()).put(route, i);
                 }
             }
         });
         delGroupMatchRecords.forEach((globalTopicFilter, delGroupMembers) -> {
             String tenantId = globalTopicFilter.tenantId;
-            String origTopicFilter = globalTopicFilter.topicFilter;
-            ByteString groupRouteKey = toGroupRouteKey(tenantId, origTopicFilter);
+            RouteMatcher origRouteMatcher = globalTopicFilter.routeMatcher;
+            ByteString groupRouteKey = toGroupRouteKey(tenantId, origRouteMatcher);
             Optional<ByteString> value = reader.get(groupRouteKey);
             if (value.isPresent()) {
                 Matching matching = buildMatchRoute(groupRouteKey, value.get());
                 assert matching instanceof GroupMatching;
                 GroupMatching groupMatching = (GroupMatching) matching;
-                Map<String, Long> existing = Maps.newHashMap(groupMatching.receivers);
+                Map<String, Long> existing = Maps.newHashMap(groupMatching.receivers());
                 delGroupMembers.forEach((route, resultIdx) -> {
                     String receiverUrl = toReceiverUrl(route);
                     if (existing.containsKey(receiverUrl) && existing.get(receiverUrl) <= route.getIncarnation()) {
@@ -338,7 +405,7 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                         resultMap.get(tenantId)[resultIdx] = BatchUnmatchReply.TenantBatch.Code.NOT_EXISTED;
                     }
                 });
-                if (existing.size() != groupMatching.receivers.size()) {
+                if (existing.size() != groupMatching.receivers().size()) {
                     if (existing.isEmpty()) {
                         writer.delete(groupRouteKey);
                         sharedRoutesRemoved.computeIfAbsent(tenantId, k -> new AtomicInteger()).incrementAndGet();
@@ -346,12 +413,12 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                         writer.put(groupRouteKey,
                             RouteGroup.newBuilder().putAllMembers(existing).build().toByteString());
                     }
-                    removedMatches.computeIfAbsent(tenantId, k -> new HashMap<>())
-                        .put(groupMatching.topicFilter(), isOrderedShared(origTopicFilter));
+                    removedMatches.computeIfAbsent(tenantId, k -> new TreeSet<>(RouteMatcherComparator))
+                        .add(origRouteMatcher);
                 }
             } else {
-                delGroupMembers.forEach((detail, resultIdx) ->
-                    resultMap.get(tenantId)[resultIdx] = BatchUnmatchReply.TenantBatch.Code.NOT_EXISTED);
+                delGroupMembers.forEach((detail, resultIdx) -> resultMap.get(tenantId)[resultIdx] =
+                    BatchUnmatchReply.TenantBatch.Code.NOT_EXISTED);
             }
         });
         resultMap.forEach((tenantId, codes) -> {
@@ -394,11 +461,10 @@ class DistWorkerCoProc implements IKVRangeCoProc {
                 // tenantId -> topic -> fanOut
                 Map<String, Map<String, Integer>> tenantFanOut = new HashMap<>();
                 fanoutMapList.forEach(fanoutMap -> fanoutMap.forEach(
-                    (tenantId, topicFanout) -> tenantFanOut.computeIfAbsent(tenantId, k -> new HashMap<>())
-                        .putAll(topicFanout)));
+                    (tenantId, topicFanOut) -> tenantFanOut.computeIfAbsent(tenantId, k -> new HashMap<>())
+                        .putAll(topicFanOut)));
                 return BatchDistReply.newBuilder().setReqId(request.getReqId()).putAllResult(
-                        Maps.transformValues(tenantFanOut, f -> TopicFanout.newBuilder().putAllFanout(f).build()))
-                    .build();
+                    Maps.transformValues(tenantFanOut, f -> TopicFanout.newBuilder().putAllFanout(f).build())).build();
             });
     }
 
@@ -411,24 +477,25 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             Matching matching = buildMatchRoute(itr.key(), itr.value());
             switch (matching.type()) {
                 case Normal -> {
-                    if (!routeCache.isCached(matching.tenantId, matching.originalTopicFilter())) {
+                    if (!routeCache.isCached(matching.tenantId(), matching.matcher.getFilterLevelList())) {
                         NormalMatching normalMatching = ((NormalMatching) matching);
                         checkRequestBuilders.computeIfAbsent(normalMatching.subBrokerId(), k -> new HashMap<>())
                             .computeIfAbsent(normalMatching.delivererKey(), k -> new HashMap<>())
-                            .computeIfAbsent(normalMatching.tenantId, k -> CheckRequest.newBuilder().setTenantId(k)
+                            .computeIfAbsent(normalMatching.tenantId(), k -> CheckRequest.newBuilder()
+                                .setTenantId(k)
                                 .setDelivererKey(normalMatching.delivererKey()))
                             .addMatchInfo(((NormalMatching) matching).matchInfo());
                     }
                 }
                 case Group -> {
                     GroupMatching groupMatching = ((GroupMatching) matching);
-                    if (!routeCache.isCached(groupMatching.tenantId, unescape(groupMatching.escapedTopicFilter))) {
+                    if (!routeCache.isCached(groupMatching.tenantId(), matching.matcher.getFilterLevelList())) {
                         for (NormalMatching normalMatching : groupMatching.receiverList) {
                             checkRequestBuilders.computeIfAbsent(normalMatching.subBrokerId(), k -> new HashMap<>())
                                 .computeIfAbsent(normalMatching.delivererKey(), k -> new HashMap<>())
-                                .computeIfAbsent(normalMatching.tenantId,
-                                    k -> CheckRequest.newBuilder().setTenantId(k)
-                                        .setDelivererKey(normalMatching.delivererKey()))
+                                .computeIfAbsent(normalMatching.tenantId(), k -> CheckRequest.newBuilder()
+                                    .setTenantId(k)
+                                    .setDelivererKey(normalMatching.delivererKey()))
                                 .addMatchInfo(normalMatching.matchInfo());
                         }
                     }
@@ -457,9 +524,10 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             boundary = reader.boundary();
             routeCache.reset(boundary);
             IKVIterator itr = reader.iterator();
+            setFact(itr);
             for (itr.seekToFirst(); itr.isValid(); ) {
-                RouteDetail routeDetail = KVSchemaUtil.parseRouteDetail(itr.value());
-                if (routeDetail.type() == RouteDetail.RouteType.NormalReceiver) {
+                RouteDetail routeDetail = KVSchemaUtil.parseRouteDetail(itr.key());
+                if (routeDetail.matcher().getType() == RouteMatcher.Type.Normal) {
                     tenantsState.incNormalRoutes(routeDetail.tenantId());
                 } else {
                     tenantsState.incSharedRoutes(routeDetail.tenantId());
@@ -469,6 +537,6 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         }
     }
 
-    private record GlobalTopicFilter(String tenantId, String topicFilter) {
+    private record GlobalTopicFilter(String tenantId, RouteMatcher routeMatcher) {
     }
 }

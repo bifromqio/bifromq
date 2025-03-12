@@ -136,6 +136,10 @@ public final class TopicIndex<V> extends TopicLevelTrie<V> {
     }
 
     public Set<V> match(String topicFilter) {
-        return lookup(TopicUtil.parse(topicFilter, false), TopicMatcher);
+        return match(TopicUtil.parse(topicFilter, false));
+    }
+
+    public Set<V> match(List<String> topicFilterLevels) {
+        return lookup(topicFilterLevels, TopicMatcher);
     }
 }

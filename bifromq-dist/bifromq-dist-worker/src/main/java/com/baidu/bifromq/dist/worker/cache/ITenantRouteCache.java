@@ -15,6 +15,9 @@ package com.baidu.bifromq.dist.worker.cache;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.dist.worker.schema.Matching;
+import com.baidu.bifromq.type.RouteMatcher;
+import java.util.List;
+import java.util.NavigableSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -22,9 +25,9 @@ import java.util.concurrent.CompletableFuture;
  * Cache for matched routes for given tenant.
  */
 public interface ITenantRouteCache {
-    boolean isCached(String topicFilter);
+    boolean isCached(List<String> filterLevels);
 
-    void refresh(Set<String> topicFilters);
+    void refresh(NavigableSet<RouteMatcher> routeMatchers);
 
     CompletableFuture<Set<Matching>> getMatch(String topic, Boundary currentTenantRange);
 

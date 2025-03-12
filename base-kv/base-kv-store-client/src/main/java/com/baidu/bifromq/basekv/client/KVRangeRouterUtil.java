@@ -18,10 +18,9 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.endKey;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.utils.BoundaryUtil;
-import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
@@ -41,29 +40,27 @@ public class KVRangeRouterUtil {
         return Optional.empty();
     }
 
-    public static List<KVRangeSetting> findByBoundary(Boundary boundary,
-                                                      NavigableMap<Boundary, KVRangeSetting> effectiveRouter) {
+    public static Collection<KVRangeSetting> findByBoundary(Boundary boundary,
+                                                            NavigableMap<Boundary, KVRangeSetting> effectiveRouter) {
         if (effectiveRouter.isEmpty()) {
             return Collections.emptyList();
         }
         if (!boundary.hasStartKey() && !boundary.hasEndKey()) {
-            return Lists.newArrayList(effectiveRouter.values());
+            return effectiveRouter.values();
         }
         if (!boundary.hasStartKey()) {
             Boundary boundaryEnd = Boundary.newBuilder()
                 .setStartKey(boundary.getEndKey())
                 .setEndKey(boundary.getEndKey()).build();
-            return Lists.newArrayList(effectiveRouter.headMap(boundaryEnd, false).values());
+            return effectiveRouter.headMap(boundaryEnd, false).values();
         }
         if (!boundary.hasEndKey()) {
             Boundary boundaryStart = Boundary.newBuilder()
                 .setStartKey(boundary.getStartKey())
                 .setEndKey(boundary.getStartKey()).build();
             Boundary floorBoundary = effectiveRouter.floorKey(boundaryStart);
-            return Lists.newArrayList(
-                effectiveRouter.tailMap(floorBoundary,
-                        compareEndKeys(endKey(floorBoundary), boundary.getStartKey()) > 0)
-                    .values());
+            return effectiveRouter.tailMap(floorBoundary,
+                compareEndKeys(endKey(floorBoundary), boundary.getStartKey()) > 0).values();
         }
         Boundary boundaryStart = Boundary.newBuilder()
             .setStartKey(boundary.getStartKey())
@@ -73,8 +70,7 @@ public class KVRangeRouterUtil {
             .setEndKey(boundary.getEndKey()).build();
         Boundary floorBoundary = effectiveRouter.floorKey(boundaryStart);
 
-        return Lists.newArrayList(
-            effectiveRouter.subMap(floorBoundary, compareEndKeys(endKey(floorBoundary), boundary.getStartKey()) > 0,
-                boundaryEnd, false).values());
+        return effectiveRouter.subMap(floorBoundary, compareEndKeys(endKey(floorBoundary), boundary.getStartKey()) > 0,
+            boundaryEnd, false).values();
     }
 }

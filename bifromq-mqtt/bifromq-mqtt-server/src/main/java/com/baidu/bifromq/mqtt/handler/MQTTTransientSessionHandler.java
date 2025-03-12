@@ -51,6 +51,7 @@ import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.baidu.bifromq.util.TopicUtil;
 import io.micrometer.core.instrument.Timer;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttMessage;
@@ -200,7 +201,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setMatchInfo(MatchInfo.newBuilder()
-                .setTopicFilter(topicFilter)
+                .setMatcher(TopicUtil.from(topicFilter))
                 // receive retain message via global channel
                 .setReceiverId(globalize(channelId()))
                 .setIncarnation(option.getIncarnation())

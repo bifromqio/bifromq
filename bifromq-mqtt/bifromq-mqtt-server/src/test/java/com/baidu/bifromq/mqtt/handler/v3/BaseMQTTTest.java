@@ -92,6 +92,7 @@ import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.sessiondict.client.ISessionRegistration;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
+import com.baidu.bifromq.util.TopicUtil;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Tags;
@@ -122,8 +123,6 @@ import org.testng.annotations.BeforeMethod;
 
 public abstract class BaseMQTTTest {
     @Mock
-    private IClientBalancer clientBalancer;
-    @Mock
     protected IAuthProvider authProvider;
     @Mock
     protected IEventCollector eventCollector;
@@ -143,7 +142,6 @@ public abstract class BaseMQTTTest {
     protected ISessionRegistration sessionRegister;
     @Mock
     protected IInboxClient.IInboxReader inboxReader;
-
     protected AtomicReference<ISessionDictClient.IKillListener> onKill = new AtomicReference<>();
     protected TestTicker testTicker;
     protected MQTTSessionContext sessionContext;
@@ -160,7 +158,8 @@ public abstract class BaseMQTTTest {
     protected long disconnectDelay = 5000;
     protected Consumer<Fetched> inboxFetchConsumer;
     protected List<Integer> fetchHints = new ArrayList<>();
-
+    @Mock
+    private IClientBalancer clientBalancer;
     private AutoCloseable closeable;
 
     @BeforeMethod
@@ -345,13 +344,14 @@ public abstract class BaseMQTTTest {
     }
 
     protected void mockDistMatch(QoS qos, boolean success) {
-        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+        when(distClient.addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
             anyLong()))
             .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
     }
 
     protected void mockDistMatch(String topic, boolean success) {
-        when(distClient.addTopicMatch(anyLong(), anyString(), eq(topic), anyString(), anyString(), anyInt(), anyLong()))
+        when(distClient.addRoute(anyLong(), anyString(), eq(TopicUtil.from(topic)), anyString(), anyString(), anyInt(),
+            anyLong()))
             .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
     }
 
@@ -370,7 +370,7 @@ public abstract class BaseMQTTTest {
                 : CompletableFuture.failedFuture(new RuntimeException("InternalError"));
         }
         OngoingStubbing<CompletableFuture<UnmatchResult>> ongoingStubbing =
-            when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+            when(distClient.removeRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
                 anyLong()));
         for (CompletableFuture<UnmatchResult> result : unsubResults) {
             ongoingStubbing = ongoingStubbing.thenReturn(result);

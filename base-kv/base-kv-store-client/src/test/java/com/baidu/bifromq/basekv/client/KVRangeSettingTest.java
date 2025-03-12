@@ -15,45 +15,41 @@ package com.baidu.bifromq.basekv.client;
 
 import static com.baidu.bifromq.basekv.InProcStores.regInProcStore;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
+import com.google.protobuf.Struct;
 import org.testng.annotations.Test;
 
 public class KVRangeSettingTest {
-    private String clusterId = "test_cluster";
-    private String localVoter = "localVoter";
-    private String remoteVoter1 = "remoteVoter1";
-    private String remoteVoter2 = "remoteVoter2";
-    private String remoteLearner1 = "remoteLearner1";
-    private String remoteLearner2 = "remoteLearner2";
+    private final String clusterId = "test_cluster";
+    private final String localVoter = "localVoter";
+    private final String remoteVoter1 = "remoteVoter1";
+    private final String remoteVoter2 = "remoteVoter2";
+    private final String remoteLearner1 = "remoteLearner1";
+    private final String remoteLearner2 = "remoteLearner2";
 
     @Test
     public void preferInProc() {
         regInProcStore(clusterId, localVoter);
-        KVRangeSetting setting = new KVRangeSetting(clusterId, remoteVoter1, KVRangeDescriptor.newBuilder()
-            .setId(KVRangeIdUtil.generate())
-            .setRole(RaftNodeStatus.Leader)
-            .setVer(1)
-            .setBoundary(FULL_BOUNDARY)
-            .putSyncState(localVoter, RaftNodeSyncState.Replicating)
-            .putSyncState(remoteVoter1, RaftNodeSyncState.Replicating)
-            .putSyncState(remoteVoter2, RaftNodeSyncState.Replicating)
-            .putSyncState(remoteLearner1, RaftNodeSyncState.Replicating)
-            .putSyncState(remoteLearner2, RaftNodeSyncState.Replicating)
-            .setConfig(ClusterConfig.newBuilder()
-                .addVoters(localVoter)
-                .addVoters(remoteVoter1)
-                .addVoters(remoteVoter2)
-                .addLearners(remoteLearner1)
-                .addLearners(remoteLearner2)
-                .build())
-            .build());
+        KVRangeSetting setting = new KVRangeSetting(clusterId, remoteVoter1,
+            KVRangeDescriptor.newBuilder().setId(KVRangeIdUtil.generate()).setRole(RaftNodeStatus.Leader).setVer(1)
+                .setBoundary(FULL_BOUNDARY).putSyncState(localVoter, RaftNodeSyncState.Replicating)
+                .putSyncState(remoteVoter1, RaftNodeSyncState.Replicating)
+                .putSyncState(remoteVoter2, RaftNodeSyncState.Replicating)
+                .putSyncState(remoteLearner1, RaftNodeSyncState.Replicating)
+                .putSyncState(remoteLearner2, RaftNodeSyncState.Replicating).setConfig(
+                    ClusterConfig.newBuilder().addVoters(localVoter).addVoters(remoteVoter1).addVoters(remoteVoter2)
+                        .addLearners(remoteLearner1).addLearners(remoteLearner2).build()).build());
 
         assertEquals(setting.randomReplica(), localVoter);
         assertEquals(setting.randomVoters(), localVoter);
@@ -61,25 +57,50 @@ public class KVRangeSettingTest {
 
     @Test
     public void skipNonReplicating() {
-        KVRangeSetting setting = new KVRangeSetting(clusterId, localVoter, KVRangeDescriptor.newBuilder()
-            .setId(KVRangeIdUtil.generate())
-            .setRole(RaftNodeStatus.Leader)
-            .setVer(1)
-            .setBoundary(FULL_BOUNDARY)
-            .putSyncState(localVoter, RaftNodeSyncState.Replicating)
-            .putSyncState(remoteVoter1, RaftNodeSyncState.Replicating)
-            .putSyncState(remoteVoter2, RaftNodeSyncState.Probing)
-            .putSyncState(remoteLearner1, RaftNodeSyncState.Replicating)
-            .putSyncState(remoteLearner2, RaftNodeSyncState.Probing)
-            .setConfig(ClusterConfig.newBuilder()
-                .addVoters(localVoter)
-                .addVoters(remoteVoter1)
-                .addVoters(remoteVoter2)
-                .addLearners(remoteLearner1)
-                .addLearners(remoteLearner2)
-                .build())
-            .build());
+        KVRangeSetting setting = new KVRangeSetting(clusterId, localVoter,
+            KVRangeDescriptor.newBuilder().setId(KVRangeIdUtil.generate()).setRole(RaftNodeStatus.Leader).setVer(1)
+                .setBoundary(FULL_BOUNDARY).putSyncState(localVoter, RaftNodeSyncState.Replicating)
+                .putSyncState(remoteVoter1, RaftNodeSyncState.Replicating)
+                .putSyncState(remoteVoter2, RaftNodeSyncState.Probing)
+                .putSyncState(remoteLearner1, RaftNodeSyncState.Replicating)
+                .putSyncState(remoteLearner2, RaftNodeSyncState.Probing).setConfig(
+                    ClusterConfig.newBuilder().addVoters(localVoter).addVoters(remoteVoter1).addVoters(remoteVoter2)
+                        .addLearners(remoteLearner1).addLearners(remoteLearner2).build()).build());
         assertFalse(setting.followers.contains(remoteVoter2));
         assertFalse(setting.allReplicas.contains(remoteLearner2));
+    }
+
+    @Test
+    public void getFact() {
+        Boundary fact = toBoundary(ByteString.copyFromUtf8("abc"), ByteString.copyFromUtf8("def"));
+        KVRangeSetting setting = new KVRangeSetting(clusterId, localVoter,
+            KVRangeDescriptor.newBuilder().setId(KVRangeIdUtil.generate()).setRole(RaftNodeStatus.Leader).setVer(1)
+                .setBoundary(FULL_BOUNDARY).putSyncState(localVoter, RaftNodeSyncState.Replicating)
+                .putSyncState(remoteVoter1, RaftNodeSyncState.Replicating)
+                .putSyncState(remoteVoter2, RaftNodeSyncState.Probing)
+                .putSyncState(remoteLearner1, RaftNodeSyncState.Replicating)
+                .putSyncState(remoteLearner2, RaftNodeSyncState.Probing).setConfig(
+                    ClusterConfig.newBuilder().addVoters(localVoter).addVoters(remoteVoter1).addVoters(remoteVoter2)
+                        .addLearners(remoteLearner1).addLearners(remoteLearner2).build())
+                .setFact(Any.pack(fact))
+                .build());
+        assertEquals(fact, setting.getFact(Boundary.class).get());
+    }
+
+    @Test
+    public void getFactWithWrongParser() {
+        Boundary fact = toBoundary(ByteString.copyFromUtf8("abc"), ByteString.copyFromUtf8("def"));
+        KVRangeSetting setting = new KVRangeSetting(clusterId, localVoter,
+            KVRangeDescriptor.newBuilder().setId(KVRangeIdUtil.generate()).setRole(RaftNodeStatus.Leader).setVer(1)
+                .setBoundary(FULL_BOUNDARY).putSyncState(localVoter, RaftNodeSyncState.Replicating)
+                .putSyncState(remoteVoter1, RaftNodeSyncState.Replicating)
+                .putSyncState(remoteVoter2, RaftNodeSyncState.Probing)
+                .putSyncState(remoteLearner1, RaftNodeSyncState.Replicating)
+                .putSyncState(remoteLearner2, RaftNodeSyncState.Probing).setConfig(
+                    ClusterConfig.newBuilder().addVoters(localVoter).addVoters(remoteVoter1).addVoters(remoteVoter2)
+                        .addLearners(remoteLearner1).addLearners(remoteLearner2).build())
+                .setFact(Any.pack(fact))
+                .build());
+        assertFalse(setting.getFact(Struct.class).isPresent());
     }
 }

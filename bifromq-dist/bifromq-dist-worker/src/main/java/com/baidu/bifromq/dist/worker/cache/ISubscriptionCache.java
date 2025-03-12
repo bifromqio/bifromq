@@ -15,16 +15,19 @@ package com.baidu.bifromq.dist.worker.cache;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.dist.worker.schema.Matching;
+import com.baidu.bifromq.type.RouteMatcher;
+import java.util.List;
 import java.util.Map;
+import java.util.NavigableSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 public interface ISubscriptionCache {
     CompletableFuture<Set<Matching>> get(String tenantId, String topic);
 
-    boolean isCached(String tenantId, String topicFilter);
+    boolean isCached(String tenantId, List<String> filterLevels);
 
-    void refresh(Map<String, Set<String>> topicFiltersByTenant);
+    void refresh(Map<String, NavigableSet<RouteMatcher>> topicFiltersByTenant);
 
     void reset(Boundary boundary);
 

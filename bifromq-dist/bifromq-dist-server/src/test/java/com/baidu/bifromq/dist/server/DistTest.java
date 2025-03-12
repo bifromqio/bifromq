@@ -15,6 +15,7 @@ package com.baidu.bifromq.dist.server;
 
 import static com.baidu.bifromq.plugin.subbroker.TypeUtil.to;
 import static com.baidu.bifromq.plugin.subbroker.TypeUtil.toResult;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -33,6 +34,7 @@ import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.baidu.bifromq.util.TopicUtil;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import java.util.HashMap;
@@ -70,19 +72,11 @@ public class DistTest extends DistServiceTest {
         CountDownLatch latch = new CountDownLatch(total);
 
         for (int i = 0; i < total; i++) {
-            clientInfo = ClientInfo.newBuilder()
-                .setTenantId("trafficA")
-                .putMetadata("userId", "user" + i)
-                .build();
+            clientInfo = ClientInfo.newBuilder().setTenantId("trafficA").putMetadata("userId", "user" + i).build();
             try {
                 PubResult result = distClient().pub(reqId, "/sport/tennis" + i,
-                        Message.newBuilder()
-                            .setPubQoS(QoS.AT_LEAST_ONCE)
-                            .setPayload(payload)
-                            .setExpiryInterval(Integer.MAX_VALUE)
-                            .build(),
-                        clientInfo)
-                    .join();
+                    Message.newBuilder().setPubQoS(QoS.AT_LEAST_ONCE).setPayload(payload)
+                        .setExpiryInterval(Integer.MAX_VALUE).build(), clientInfo).join();
                 assertEquals(result, PubResult.NO_MATCH);
             } catch (Throwable e) {
                 fail();
@@ -99,35 +93,30 @@ public class DistTest extends DistServiceTest {
         Mockito.lenient().when(inboxDeliverer.deliver(any())).thenAnswer(answer(DeliveryResult.Code.OK));
         long reqId = System.nanoTime();
         ByteString payload = ByteString.EMPTY;
-        ClientInfo clientInfo;
         int total = 1;
         for (int i = 0; i < total; i++) {
-            distClient()
-                .addTopicMatch(reqId, tenantId, "/sport/tennis" + i, "inbox" + i, "server1", 0, 1L)
+            distClient().addRoute(reqId, tenantId, TopicUtil.from("/sport/tennis" + i), "inbox" + i, "server1", 0, 1L)
                 .join();
         }
-        CountDownLatch latch = new CountDownLatch(total);
-        for (int i = 0; i < total; i++) {
-            clientInfo = ClientInfo.newBuilder()
-                .setTenantId(tenantId)
-                .putMetadata("userId", "user" + i)
-                .build();
-            try {
-                PubResult result = distClient().pub(reqId, "/sport/tennis" + i,
-                        Message.newBuilder()
-                            .setPubQoS(QoS.AT_LEAST_ONCE)
-                            .setPayload(payload)
-                            .setExpiryInterval(Integer.MAX_VALUE)
-                            .build(), clientInfo)
-                    .join();
-                assertEquals(result, PubResult.OK);
-            } catch (Throwable e) {
-                fail();
-            } finally {
-                latch.countDown();
+        await().until(() -> {
+            CountDownLatch latch = new CountDownLatch(total);
+            for (int i = 0; i < total; i++) {
+                ClientInfo clientInfo =
+                    ClientInfo.newBuilder().setTenantId(tenantId).putMetadata("userId", "user" + i).build();
+                try {
+                    PubResult result = distClient().pub(reqId, "/sport/tennis" + i,
+                        Message.newBuilder().setPubQoS(QoS.AT_LEAST_ONCE).setPayload(payload)
+                            .setExpiryInterval(Integer.MAX_VALUE).build(), clientInfo).join();
+                    assertEquals(result, PubResult.OK);
+                } catch (Throwable e) {
+                    return false;
+                } finally {
+                    latch.countDown();
+                }
             }
-        }
-        latch.await();
+            latch.await();
+            return true;
+        });
     }
 
     @SneakyThrows
@@ -136,82 +125,82 @@ public class DistTest extends DistServiceTest {
         Mockito.lenient().when(inboxDeliverer.deliver(any())).thenAnswer(answer(DeliveryResult.Code.OK));
         long reqId = System.nanoTime();
         ByteString payload = ByteString.EMPTY;
-        ClientInfo clientInfo;
         int totalSub = 5;
         int totalMsg = 1;
         for (int i = 0; i < totalSub; i++) {
             MatchResult subResult =
-                distClient().addTopicMatch(reqId, tenantId, "$share/g1/sport/tennis" + i, "inbox" + i,
-                    "server1", 0, 1L).join();
+                distClient().addRoute(reqId, tenantId, TopicUtil.from("$share/g1/sport/tennis" + i), "inbox" + i,
+                        "server1", 0, 1L)
+                    .join();
             assertEquals(subResult, MatchResult.OK);
         }
-        CountDownLatch latch = new CountDownLatch(totalMsg);
-        for (int i = 0; i < totalMsg; i++) {
-            clientInfo = ClientInfo.newBuilder().setTenantId(tenantId)
-                .putMetadata("userId", "user" + i)
-                .build();
-            try {
-                PubResult result = distClient().pub(reqId, "sport/tennis" + i, Message.newBuilder()
-                        .setPubQoS(QoS.AT_LEAST_ONCE)
-                        .setPayload(payload)
-                        .setTimestamp(HLC.INST.getPhysical())
-                        .setExpiryInterval(Integer.MAX_VALUE)
-                        .build(), clientInfo)
-                    .join();
-                assertEquals(result, PubResult.OK);
-            } catch (Throwable e) {
-                fail();
-            } finally {
-                latch.countDown();
+        await().until(() -> {
+            CountDownLatch latch = new CountDownLatch(totalMsg);
+            for (int i = 0; i < totalMsg; i++) {
+                ClientInfo clientInfo =
+                    ClientInfo.newBuilder().setTenantId(tenantId).putMetadata("userId", "user" + i).build();
+                try {
+                    PubResult result = distClient().pub(reqId, "sport/tennis" + i,
+                        Message.newBuilder().setPubQoS(QoS.AT_LEAST_ONCE).setPayload(payload)
+                            .setTimestamp(HLC.INST.getPhysical()).setExpiryInterval(Integer.MAX_VALUE).build(),
+                        clientInfo).join();
+                    assertEquals(result, PubResult.OK);
+                } catch (Throwable e) {
+                    return false;
+                } finally {
+                    latch.countDown();
+                }
             }
-        }
-        latch.await();
+            latch.await();
+            return true;
+        });
     }
 
     @SneakyThrows
     @Test(groups = "integration")
     public void distWithFanOutSub() {
         List<DeliveryRequest> capturedArguments = new CopyOnWriteArrayList<>();
-        when(inboxDeliverer.deliver(any()))
-            .thenAnswer((Answer<CompletableFuture<DeliveryReply>>) invocation -> {
-                DeliveryRequest request = invocation.getArgument(0);
-                // the argument object will be reused, so make a clone
-                capturedArguments.add(request);
-                Map<String, Map<MatchInfo, DeliveryResult.Code>> resultMap = new HashMap<>();
-                for (String tenantId : request.getPackageMap().keySet()) {
-                    Map<MatchInfo, DeliveryResult.Code> r = resultMap.computeIfAbsent(tenantId, k -> new HashMap<>());
-                    for (DeliveryPack inboxWrite : request.getPackageMap().get(tenantId).getPackList()) {
-                        for (MatchInfo matchInfo : inboxWrite.getMatchInfoList()) {
-                            r.put(matchInfo, DeliveryResult.Code.OK);
-                        }
+        when(inboxDeliverer.deliver(any())).thenAnswer((Answer<CompletableFuture<DeliveryReply>>) invocation -> {
+            DeliveryRequest request = invocation.getArgument(0);
+            // the argument object will be reused, so make a clone
+            capturedArguments.add(request);
+            Map<String, Map<MatchInfo, DeliveryResult.Code>> resultMap = new HashMap<>();
+            for (String tenantId : request.getPackageMap().keySet()) {
+                Map<MatchInfo, DeliveryResult.Code> r = resultMap.computeIfAbsent(tenantId, k -> new HashMap<>());
+                for (DeliveryPack inboxWrite : request.getPackageMap().get(tenantId).getPackList()) {
+                    for (MatchInfo matchInfo : inboxWrite.getMatchInfoList()) {
+                        r.put(matchInfo, DeliveryResult.Code.OK);
                     }
                 }
-                return CompletableFuture.completedFuture(DeliveryReply.newBuilder()
-                    .putAllResult(toResult(resultMap))
-                    .build());
-            });
+            }
+            return CompletableFuture.completedFuture(
+                DeliveryReply.newBuilder().putAllResult(toResult(resultMap)).build());
+        });
 
         long reqId = System.nanoTime();
         ByteString payload = ByteString.EMPTY;
         int totalInbox = 100;
         for (int i = 0; i < totalInbox; i++) {
-            distClient().addTopicMatch(reqId, tenantId, "/sport/tennis", "inbox" + i, "server1", 0, 1L)
+            distClient().addRoute(reqId, tenantId, TopicUtil.from("/sport/tennis"), "inbox" + i, "server1", 0, 1L)
                 .join();
         }
 
         int totalPub = 2;
-        ClientInfo pubClient = ClientInfo.newBuilder()
-            .setTenantId(tenantId)
-            .putMetadata("userId", "pubUser")
-            .build();
-        for (int i = 0; i < totalPub; i++) {
-            PubResult result = distClient().pub(reqId, "/sport/tennis", Message.newBuilder()
-                .setPubQoS(QoS.AT_LEAST_ONCE)
-                .setPayload(payload)
-                .setExpiryInterval(Integer.MAX_VALUE)
-                .build(), pubClient).join();
-            assertEquals(result, PubResult.OK);
-        }
+        await().until(() -> {
+            try {
+                ClientInfo pubClient =
+                    ClientInfo.newBuilder().setTenantId(tenantId).putMetadata("userId", "pubUser").build();
+                for (int i = 0; i < totalPub; i++) {
+                    PubResult result = distClient().pub(reqId, "/sport/tennis",
+                        Message.newBuilder().setPubQoS(QoS.AT_LEAST_ONCE).setPayload(payload)
+                            .setExpiryInterval(Integer.MAX_VALUE).build(), pubClient).join();
+                    assertEquals(result, PubResult.OK);
+                }
+                return true;
+            } catch (Throwable e) {
+                return false;
+            }
+        });
 
         Thread.sleep(100);
 
@@ -248,5 +237,4 @@ public class DistTest extends DistServiceTest {
             return CompletableFuture.completedFuture(replyBuilder.build());
         };
     }
-
 }

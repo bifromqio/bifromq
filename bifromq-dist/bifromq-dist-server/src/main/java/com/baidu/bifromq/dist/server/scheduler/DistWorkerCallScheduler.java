@@ -16,7 +16,6 @@ package com.baidu.bifromq.dist.server.scheduler;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
 import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
 import java.time.Duration;
@@ -32,29 +31,24 @@ public class DistWorkerCallScheduler
     extends BatchCallScheduler<DistServerCall, Map<String, Optional<Integer>>, DistServerCallBatcherKey>
     implements IDistWorkerCallScheduler {
 
-    private final ISettingProvider settingProvider;
     private final IBaseKVStoreClient distWorkerClient;
 
     /**
      * Constructor of DistWorkerCallScheduler.
      *
      * @param distWorkerClient the dist worker client
-     * @param settingProvider  the setting provider
      */
-    public DistWorkerCallScheduler(IBaseKVStoreClient distWorkerClient,
-                                   ISettingProvider settingProvider) {
+    public DistWorkerCallScheduler(IBaseKVStoreClient distWorkerClient) {
         super("dist_server_dist_batcher",
             Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
             Duration.ofMillis(DataPlaneBurstLatencyMillis.INSTANCE.get()));
-        this.settingProvider = settingProvider;
         this.distWorkerClient = distWorkerClient;
     }
 
     @Override
     protected Batcher<DistServerCall, Map<String, Optional<Integer>>, DistServerCallBatcherKey> newBatcher(
         String name, long tolerableLatencyNanos, long burstLatencyNanos, DistServerCallBatcherKey batchKey) {
-        return new DistServerCallBatcher(batchKey, name, tolerableLatencyNanos, burstLatencyNanos,
-            distWorkerClient, settingProvider);
+        return new DistServerCallBatcher(batchKey, name, tolerableLatencyNanos, burstLatencyNanos, distWorkerClient);
     }
 
     @Override

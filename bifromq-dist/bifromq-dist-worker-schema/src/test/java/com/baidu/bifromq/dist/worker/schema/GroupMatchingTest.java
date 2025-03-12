@@ -13,11 +13,12 @@
 
 package com.baidu.bifromq.dist.worker.schema;
 
-
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toReceiverUrl;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotEquals;
 
 import com.baidu.bifromq.dist.rpc.proto.RouteGroup;
+import com.baidu.bifromq.util.TopicUtil;
 import com.google.protobuf.ByteString;
 import org.testng.annotations.Test;
 
@@ -29,10 +30,25 @@ public class GroupMatchingTest {
         matchInfo("$oshare/group1/home/sensor/temperature");
     }
 
+    @Test
+    public void equality() {
+        String tenantId = "tenant1";
+        ByteString key1 =
+            KVSchemaUtil.toGroupRouteKey(tenantId, TopicUtil.from("$share/group1/home/sensor/temperature"));
+        ByteString key2 =
+            KVSchemaUtil.toGroupRouteKey(tenantId, TopicUtil.from("$share/group2/home/sensor/temperature"));
+        RouteGroup groupMembers = RouteGroup.newBuilder()
+            .putMembers(toReceiverUrl(1, "inbox1", "deliverer1"), 1)
+            .build();
+        GroupMatching matching1 = (GroupMatching) KVSchemaUtil.buildMatchRoute(key1, groupMembers.toByteString());
+        GroupMatching matching2 = (GroupMatching) KVSchemaUtil.buildMatchRoute(key2, groupMembers.toByteString());
+        assertNotEquals(matching1, matching2);
+    }
+
     private void matchInfo(String topicFilter) {
         String tenantId = "tenant1";
 
-        ByteString key = KVSchemaUtil.toGroupRouteKey(tenantId, topicFilter);
+        ByteString key = KVSchemaUtil.toGroupRouteKey(tenantId, TopicUtil.from(topicFilter));
         RouteGroup groupMembers = RouteGroup.newBuilder()
             .putMembers(toReceiverUrl(1, "inbox1", "deliverer1"), 1)
             .build();
@@ -40,7 +56,7 @@ public class GroupMatchingTest {
         GroupMatching matching = (GroupMatching) KVSchemaUtil.buildMatchRoute(key, groupMembers.toByteString());
 
         for (NormalMatching normalMatching : matching.receiverList) {
-            assertEquals(normalMatching.matchInfo().getTopicFilter(), topicFilter);
+            assertEquals(normalMatching.matchInfo().getMatcher().getMqttTopicFilter(), topicFilter);
         }
     }
 }

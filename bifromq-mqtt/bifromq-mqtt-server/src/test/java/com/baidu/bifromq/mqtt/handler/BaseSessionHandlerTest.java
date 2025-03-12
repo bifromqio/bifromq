@@ -93,6 +93,7 @@ import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessage;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.baidu.bifromq.util.TopicUtil;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
@@ -118,6 +119,23 @@ import org.mockito.stubbing.OngoingStubbing;
 
 public class BaseSessionHandlerTest extends MockableTest {
 
+    protected final String tenantId = "tenantId";
+    protected final String serverId = "serverId";
+    protected final String remoteIp = "127.0.0.1";
+    protected final int remotePort = 8888;
+    protected final ClientInfo clientInfo = ClientInfo.newBuilder()
+        .setTenantId(tenantId)
+        .setType(MQTT_TYPE_VALUE)
+        .putMetadata(MQTT_PROTOCOL_VER_KEY, MQTT_PROTOCOL_VER_3_1_1_VALUE)
+        .putMetadata(MQTT_USER_ID_KEY, "userId")
+        .putMetadata(MQTT_CLIENT_ID_KEY, "clientId")
+        .putMetadata(MQTT_CHANNEL_ID_KEY, "channelId")
+        .putMetadata(MQTT_CLIENT_ADDRESS_KEY, new InetSocketAddress(remoteIp, remotePort).toString())
+        .putMetadata(MQTT_CLIENT_BROKER_KEY, serverId)
+        .build();
+    protected final String topic = "topic";
+    protected final String topicFilter = "testTopicFilter";
+    protected final TestTicker testTicker = new TestTicker();
     protected EmbeddedChannel channel;
     @Mock
     protected ILocalDistService localDistService;
@@ -149,25 +167,7 @@ public class BaseSessionHandlerTest extends MockableTest {
     protected Condition oomCondition;
     @Mock
     protected IClientBalancer clientBalancer;
-
-    protected final String tenantId = "tenantId";
-    protected final String serverId = "serverId";
-    protected final String remoteIp = "127.0.0.1";
-    protected final int remotePort = 8888;
-    protected final ClientInfo clientInfo = ClientInfo.newBuilder()
-        .setTenantId(tenantId)
-        .setType(MQTT_TYPE_VALUE)
-        .putMetadata(MQTT_PROTOCOL_VER_KEY, MQTT_PROTOCOL_VER_3_1_1_VALUE)
-        .putMetadata(MQTT_USER_ID_KEY, "userId")
-        .putMetadata(MQTT_CLIENT_ID_KEY, "clientId")
-        .putMetadata(MQTT_CHANNEL_ID_KEY, "channelId")
-        .putMetadata(MQTT_CLIENT_ADDRESS_KEY, new InetSocketAddress(remoteIp, remotePort).toString())
-        .putMetadata(MQTT_CLIENT_BROKER_KEY, serverId)
-        .build();
     protected MQTTSessionContext sessionContext;
-    protected final String topic = "topic";
-    protected final String topicFilter = "testTopicFilter";
-    protected final TestTicker testTicker = new TestTicker();
     protected Consumer<Fetched> inboxFetchConsumer;
     protected List<Integer> fetchHints = new ArrayList<>();
     protected AtomicReference<ISessionDictClient.IKillListener> onKill = new AtomicReference<>();
@@ -267,7 +267,7 @@ public class BaseSessionHandlerTest extends MockableTest {
 
     protected MatchInfo matchInfo(String topicFilter) {
         return MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
+            .setMatcher(TopicUtil.from(topicFilter))
             .setReceiverId("testInboxId")
             .build();
     }
@@ -495,7 +495,7 @@ public class BaseSessionHandlerTest extends MockableTest {
         }
         OngoingStubbing<CompletableFuture<UnmatchResult>> ongoingStubbing =
             when(distClient
-                .removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong()));
+                .removeRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong()));
         for (CompletableFuture<UnmatchResult> result : unsubResults) {
             ongoingStubbing = ongoingStubbing.thenReturn(result);
         }

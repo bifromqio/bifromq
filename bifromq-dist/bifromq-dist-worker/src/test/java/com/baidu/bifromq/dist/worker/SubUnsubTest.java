@@ -18,6 +18,7 @@ import static org.testng.Assert.assertEquals;
 import com.baidu.bifromq.dist.rpc.proto.BatchMatchReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.MatchRoute;
+import com.baidu.bifromq.util.TopicUtil;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.testng.annotations.Test;
@@ -38,7 +39,7 @@ public class SubUnsubTest extends DistWorkerTest {
     public void duplicateSub() {
         String topicFilter = "/a/b/c";
         MatchRoute route1 = MatchRoute.newBuilder()
-            .setTopicFilter(topicFilter)
+            .setMatcher(TopicUtil.from(topicFilter))
             .setBrokerId(MqttBroker)
             .setReceiverId("inbox1")
             .setDelivererKey("server1")
@@ -46,13 +47,12 @@ public class SubUnsubTest extends DistWorkerTest {
             .build();
 
         MatchRoute route2 = MatchRoute.newBuilder()
-            .setTopicFilter(topicFilter)
+            .setMatcher(TopicUtil.from(topicFilter))
             .setBrokerId(MqttBroker)
             .setReceiverId("inbox1")
             .setDelivererKey("server1")
             .setIncarnation(2L)
             .build();
-
 
         List<BatchMatchReply.TenantBatch.Code> results = match("tenantA", 10, route1, route2);
         assertEquals(results.get(0), BatchMatchReply.TenantBatch.Code.OK);

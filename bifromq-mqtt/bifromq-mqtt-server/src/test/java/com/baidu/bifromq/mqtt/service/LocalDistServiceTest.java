@@ -43,6 +43,7 @@ import com.baidu.bifromq.plugin.subbroker.DeliveryResults;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.baidu.bifromq.util.TopicUtil;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -60,15 +61,14 @@ import org.testng.annotations.Test;
 public class LocalDistServiceTest extends MockableTest {
     private final String serverId = "serverId";
     @Mock
-    private ILocalSessionRegistry localSessionRegistry;
-    @Mock
-    private IDistClient distClient;
-    @Mock
     IResourceThrottler resourceThrottler;
     @Mock
     ILocalTopicRouter localTopicRouter;
-
     LocalDistService localDistService;
+    @Mock
+    private ILocalSessionRegistry localSessionRegistry;
+    @Mock
+    private IDistClient distClient;
 
     @BeforeMethod(alwaysRun = true)
     public void setup(Method method) {
@@ -84,9 +84,10 @@ public class LocalDistServiceTest extends MockableTest {
         String tenantId = "tenantId";
         String channelId = "channelId";
 
-        CheckReply.Code code = localDistService.checkMatchInfo(tenantId,
-            MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId(ILocalDistService.globalize(channelId))
-                .build());
+        CheckReply.Code code = localDistService.checkMatchInfo(tenantId, MatchInfo.newBuilder()
+            .setMatcher(TopicUtil.from(topicFilter))
+            .setReceiverId(ILocalDistService.globalize(channelId))
+            .build());
         assertEquals(code, CheckReply.Code.NO_RECEIVER);
 
         IMQTTTransientSession session = mock(IMQTTTransientSession.class);
@@ -97,9 +98,10 @@ public class LocalDistServiceTest extends MockableTest {
         when(localSessionRegistry.get(channelId)).thenReturn(session);
         long reqId = System.nanoTime();
         localDistService.match(reqId, topicFilter, 1, session);
-        code = localDistService.checkMatchInfo(tenantId,
-            MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId(ILocalDistService.globalize(channelId))
-                .build());
+        code = localDistService.checkMatchInfo(tenantId, MatchInfo.newBuilder()
+            .setMatcher(TopicUtil.from(topicFilter))
+            .setReceiverId(ILocalDistService.globalize(channelId))
+            .build());
         assertEquals(code, CheckReply.Code.OK);
     }
 
@@ -115,14 +117,14 @@ public class LocalDistServiceTest extends MockableTest {
 
         when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.empty());
         CheckReply.Code code = localDistService.checkMatchInfo(tenantId, MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
+            .setMatcher(TopicUtil.from(topicFilter))
             .setReceiverId(ILocalDistService.localize(channelId))
             .build());
         assertEquals(code, CheckReply.Code.NO_RECEIVER);
 
         when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.of(new CompletableFuture<>()));
         code = localDistService.checkMatchInfo(tenantId, MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
+            .setMatcher(TopicUtil.from(topicFilter))
             .setReceiverId(ILocalDistService.localize(channelId))
             .build());
         assertEquals(code, CheckReply.Code.OK);
@@ -132,7 +134,7 @@ public class LocalDistServiceTest extends MockableTest {
         when(localTopicRouter.getTopicRoutes(anyString(), any()))
             .thenReturn(Optional.of(CompletableFuture.completedFuture(localRoutes)));
         code = localDistService.checkMatchInfo(tenantId, MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
+            .setMatcher(TopicUtil.from(topicFilter))
             .setReceiverId(ILocalDistService.localize(channelId))
             .build());
         assertEquals(code, CheckReply.Code.NO_RECEIVER);
@@ -142,14 +144,14 @@ public class LocalDistServiceTest extends MockableTest {
         when(localTopicRouter.getTopicRoutes(anyString(), any()))
             .thenReturn(Optional.of(CompletableFuture.completedFuture(localRoutes)));
         code = localDistService.checkMatchInfo(tenantId, MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
+            .setMatcher(TopicUtil.from(topicFilter))
             .setReceiverId(ILocalDistService.localize(channelId))
             .build());
         assertEquals(code, CheckReply.Code.NO_RECEIVER);
 
         when(localRoutes.routesInfo()).thenReturn(Map.of(channelId, 1L));
         code = localDistService.checkMatchInfo(tenantId, MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
+            .setMatcher(TopicUtil.from(topicFilter))
             .setReceiverId(ILocalDistService.localize(channelId))
             .build());
         assertEquals(code, CheckReply.Code.OK);
@@ -168,7 +170,7 @@ public class LocalDistServiceTest extends MockableTest {
             long reqId = System.nanoTime();
             localDistService.match(reqId, topicFilter, 1L, session);
             verify(distClient)
-                .addTopicMatch(eq(reqId), eq(tenantId), eq(topicFilter),
+                .addRoute(eq(reqId), eq(tenantId), eq(TopicUtil.from(topicFilter)),
                     eq(ILocalDistService.globalize(channelId)),
                     eq(toDelivererKey(tenantId, ILocalDistService.globalize(channelId), serverId)), eq(0), eq(1L));
             reset(distClient);
@@ -189,12 +191,13 @@ public class LocalDistServiceTest extends MockableTest {
             when(localSessionRegistry.get(channelId)).thenReturn(session);
             long reqId = System.nanoTime();
             localDistService.unmatch(reqId, topicFilter, 1L, session);
-            verify(distClient).removeTopicMatch(eq(reqId), eq(tenantId), eq(topicFilter),
+            verify(distClient).removeRoute(eq(reqId), eq(tenantId), eq(TopicUtil.from(topicFilter)),
                 eq(ILocalDistService.globalize(channelId)),
                 eq(toDelivererKey(tenantId, ILocalDistService.globalize(channelId), serverId)), eq(0), eq(1L));
-            CheckReply.Code code = localDistService.checkMatchInfo(tenantId,
-                MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId(ILocalDistService.globalize(channelId))
-                    .build());
+            CheckReply.Code code = localDistService.checkMatchInfo(tenantId, MatchInfo.newBuilder()
+                .setMatcher(TopicUtil.from(topicFilter))
+                .setReceiverId(ILocalDistService.globalize(channelId))
+                .build());
             assertEquals(code, CheckReply.Code.NO_SUB);
             reset(distClient);
         }
@@ -253,9 +256,10 @@ public class LocalDistServiceTest extends MockableTest {
         }
 
         // Prepare delivery request and distribute messages
-        MatchInfo matchInfo =
-            MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId(ILocalDistService.globalize("channelId0"))
-                .build();
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setMatcher(TopicUtil.from(topicFilter))
+            .setReceiverId(ILocalDistService.globalize("channelId0"))
+            .build();
         DeliveryPack pack =
             DeliveryPack.newBuilder().setMessagePack(TopicMessagePack.newBuilder().build()).addMatchInfo(matchInfo)
                 .build();
@@ -281,7 +285,9 @@ public class LocalDistServiceTest extends MockableTest {
         String topic = "testTopic";
         String topicFilter = "testTopic/#";
         String channelId = "channel0";
-        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId("receiverId").build();
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setMatcher(TopicUtil.from(topicFilter))
+            .setReceiverId("receiverId").build();
         TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
         DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
             .addPack(DeliveryPack.newBuilder().setMessagePack(topicMessagePack).addMatchInfo(matchInfo).build())
@@ -321,7 +327,10 @@ public class LocalDistServiceTest extends MockableTest {
         String topic = "testTopic";
         String topicFilter = "testTopic/#";
         String channelId = "channel0";
-        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId("receiverIdA").build();
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setMatcher(TopicUtil.from(topicFilter))
+            .setReceiverId("receiverIdA")
+            .build();
         TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
         DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
             .addPack(DeliveryPack.newBuilder().setMessagePack(topicMessagePack).addMatchInfo(matchInfo).build())
@@ -356,7 +365,10 @@ public class LocalDistServiceTest extends MockableTest {
         String topic = "testTopic";
         String topicFilter = "testTopic/#";
         String channelId = "channel0";
-        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId("receiverId").build();
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setMatcher(TopicUtil.from(topicFilter))
+            .setReceiverId("receiverId")
+            .build();
         TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
         DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
             .addPack(DeliveryPack.newBuilder().setMessagePack(topicMessagePack).addMatchInfo(matchInfo).build())
@@ -387,7 +399,10 @@ public class LocalDistServiceTest extends MockableTest {
         String topic = "testTopic";
         String topicFilter = "testTopic/#";
         String channelId = "channel0";
-        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId("receiverId").build();
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setMatcher(TopicUtil.from(topicFilter))
+            .setReceiverId("receiverId")
+            .build();
         TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
         DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
             .addPack(DeliveryPack.newBuilder().setMessagePack(topicMessagePack).addMatchInfo(matchInfo).build())
@@ -418,7 +433,10 @@ public class LocalDistServiceTest extends MockableTest {
         String topic = "testTopic";
         String topicFilter = "testTopic/#";
         String channelId = "channel0";
-        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId("receiverId").build();
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setMatcher(TopicUtil.from(topicFilter))
+            .setReceiverId("receiverId")
+            .build();
         TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
         DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
             .addPack(DeliveryPack.newBuilder().setMessagePack(topicMessagePack).addMatchInfo(matchInfo).build())
@@ -451,7 +469,10 @@ public class LocalDistServiceTest extends MockableTest {
         String topicFilter = "testTopic/#";
         String channelId1 = "channel0";
         String channelId2 = "channel1";
-        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId("receiverId").build();
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setMatcher(TopicUtil.from(topicFilter))
+            .setReceiverId("receiverId")
+            .build();
         TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
         DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
             .addPack(DeliveryPack.newBuilder().setMessagePack(topicMessagePack).addMatchInfo(matchInfo).build())
@@ -502,7 +523,10 @@ public class LocalDistServiceTest extends MockableTest {
         String topicFilter = "testTopic/#";
         String channelId1 = "channel0";
         String channelId2 = "channel1";
-        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId("receiverId").build();
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setMatcher(TopicUtil.from(topicFilter))
+            .setReceiverId("receiverId")
+            .build();
         DeliveryPackage deliveryPack = DeliveryPackage.newBuilder().addPack(
             DeliveryPack.newBuilder().setMessagePack(TopicMessagePack.newBuilder().setTopic(topic1).build())
                 .addMatchInfo(matchInfo).build()).addPack(
@@ -552,7 +576,10 @@ public class LocalDistServiceTest extends MockableTest {
         String topic = "testTopic";
         String topicFilter = "testTopic/#";
         String channelId = "channel0";
-        MatchInfo matchInfo = MatchInfo.newBuilder().setTopicFilter(topicFilter).setReceiverId("receiverId").build();
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setMatcher(TopicUtil.from(topicFilter))
+            .setReceiverId("receiverId")
+            .build();
         TopicMessagePack topicMessagePack = TopicMessagePack.newBuilder().setTopic(topic).build();
         DeliveryPackage deliveryPack = DeliveryPackage.newBuilder()
             .addPack(DeliveryPack.newBuilder().setMessagePack(topicMessagePack).addMatchInfo(matchInfo).build())

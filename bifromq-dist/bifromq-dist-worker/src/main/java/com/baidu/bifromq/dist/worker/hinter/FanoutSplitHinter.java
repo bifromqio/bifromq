@@ -16,7 +16,6 @@ package com.baidu.bifromq.dist.worker.hinter;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toGroupRouteKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toNormalRouteKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toReceiverUrl;
-import static com.baidu.bifromq.util.TopicUtil.isNormalTopicFilter;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.SplitHint;
@@ -30,6 +29,7 @@ import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.dist.rpc.proto.BatchMatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchRequest;
+import com.baidu.bifromq.type.RouteMatcher;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Gauge;
@@ -92,16 +92,14 @@ public class FanoutSplitHinter implements IKVRangeSplitHinter {
                 Map<ByteString, RecordEstimation> routeKeyLoads = new HashMap<>();
                 request.getRequestsMap().forEach((tenantId, records) ->
                     records.getRouteList().forEach(route -> {
-                        String topicFilter = route.getTopicFilter();
-                        if (isNormalTopicFilter(topicFilter)) {
-                            ByteString routeKey = toNormalRouteKey(tenantId, topicFilter, toReceiverUrl(route));
+                        RouteMatcher routeMatcher = route.getMatcher();
+                        if (routeMatcher.getType() == RouteMatcher.Type.Normal) {
+                            ByteString routeKey = toNormalRouteKey(tenantId, routeMatcher, toReceiverUrl(route));
                             routeKeyLoads.computeIfAbsent(routeKey,
                                 k -> new RecordEstimation(false)).addRecordSize(routeKey.size());
                         } else {
-                            ByteString routeKey = toGroupRouteKey(tenantId, route.getTopicFilter());
-                            routeKeyLoads.computeIfAbsent(
-                                    toGroupRouteKey(tenantId, route.getTopicFilter()),
-                                    k -> new RecordEstimation(false))
+                            ByteString routeKey = toGroupRouteKey(tenantId, route.getMatcher());
+                            routeKeyLoads.computeIfAbsent(routeKey, k -> new RecordEstimation(false))
                                 .addRecordSize(routeKey.size());
                         }
                     }));
@@ -112,13 +110,13 @@ public class FanoutSplitHinter implements IKVRangeSplitHinter {
                 Map<ByteString, RecordEstimation> routeKeyLoads = new HashMap<>();
                 request.getRequestsMap().forEach((tenantId, records) ->
                     records.getRouteList().forEach(route -> {
-                        String topicFilter = route.getTopicFilter();
-                        if (isNormalTopicFilter(topicFilter)) {
-                            ByteString routeKey = toNormalRouteKey(tenantId, topicFilter, toReceiverUrl(route));
+                        RouteMatcher routeMatcher = route.getMatcher();
+                        if (routeMatcher.getType() == RouteMatcher.Type.Normal) {
+                            ByteString routeKey = toNormalRouteKey(tenantId, routeMatcher, toReceiverUrl(route));
                             routeKeyLoads.computeIfAbsent(routeKey,
                                 k -> new RecordEstimation(true)).addRecordSize(routeKey.size());
                         } else {
-                            ByteString routeKey = toGroupRouteKey(tenantId, route.getTopicFilter());
+                            ByteString routeKey = toGroupRouteKey(tenantId, route.getMatcher());
                             routeKeyLoads.computeIfAbsent(routeKey,
                                 k -> new RecordEstimation(true)).addRecordSize(routeKey.size());
                         }

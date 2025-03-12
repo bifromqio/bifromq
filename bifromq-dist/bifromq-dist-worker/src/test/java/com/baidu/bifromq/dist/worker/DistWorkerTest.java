@@ -25,7 +25,6 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_3
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
-import static com.baidu.bifromq.util.TopicUtil.isNormalTopicFilter;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -81,7 +80,9 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
+import com.baidu.bifromq.type.RouteMatcher;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.baidu.bifromq.util.TopicUtil;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Struct;
@@ -295,7 +296,7 @@ public abstract class DistWorkerTest {
                                                      int maxMembersPerSharedSubGroup) {
         long reqId = ThreadLocalRandom.current().nextInt();
         MatchRoute route = MatchRoute.newBuilder()
-            .setTopicFilter(topicFilter)
+            .setMatcher(TopicUtil.from(topicFilter))
             .setBrokerId(subBroker)
             .setReceiverId(inboxId)
             .setDelivererKey(delivererKey)
@@ -348,15 +349,16 @@ public abstract class DistWorkerTest {
                                                          String delivererKey,
                                                          long incarnation) {
         long reqId = ThreadLocalRandom.current().nextInt();
+        RouteMatcher filter = TopicUtil.from(topicFilter);
         MatchRoute route = MatchRoute.newBuilder()
-            .setTopicFilter(topicFilter)
+            .setMatcher(filter)
             .setBrokerId(subBroker)
             .setReceiverId(inboxId)
             .setDelivererKey(delivererKey)
             .setIncarnation(incarnation)
             .build();
-        ByteString routeKey = isNormalTopicFilter(topicFilter)
-            ? toNormalRouteKey(tenantId, topicFilter, toReceiverUrl(route)) : toGroupRouteKey(tenantId, topicFilter);
+        ByteString routeKey = filter.getType() == RouteMatcher.Type.Normal
+            ? toNormalRouteKey(tenantId, filter, toReceiverUrl(route)) : toGroupRouteKey(tenantId, filter);
         KVRangeSetting s = findByKey(routeKey, storeClient.latestEffectiveRouter()).get();
         DistServiceRWCoProcInput input = DistServiceRWCoProcInput.newBuilder()
             .setBatchUnmatch(BatchUnmatchRequest.newBuilder()

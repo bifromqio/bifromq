@@ -185,8 +185,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
     @AfterMethod(alwaysRun = true)
     public void tearDown(Method method) {
         if (shouldCleanSubs) {
-            when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
-                anyLong()))
+            when(distClient.removeRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong()))
                 .thenReturn(CompletableFuture.completedFuture(null));
             channel.close();
             verify(localDistService, atLeast(1)).unmatch(anyLong(), anyString(), anyLong(), any());

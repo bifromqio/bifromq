@@ -97,6 +97,7 @@ import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.collect.Maps;
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Metrics;
@@ -130,27 +131,9 @@ import org.slf4j.Logger;
  * The finite state machine of a KVRange.
  */
 public class KVRangeFSM implements IKVRangeFSM {
-    private final Logger log;
-
-    /**
-     * Callback for listening the quit signal which generated as the result of config change operation.
-     */
-    public interface QuitListener {
-        void onQuit(IKVRangeFSM rangeToQuit);
-    }
-
-    enum Lifecycle {
-        Init, // initialized but not open
-        Opening,
-        Open, // accepting operations, handling incoming messages, generate out-going messages
-        Closing,
-        Closed, // wait for tick activity stopped
-        Destroying,
-        Destroyed
-    }
-
     private static final Runnable NOOP = () -> {
     };
+    private final Logger log;
     private final KVRangeId id;
     private final String hostStoreId;
     private final IKVRange kvRange;
@@ -170,6 +153,7 @@ public class KVRangeFSM implements IKVRangeFSM {
     private final Subject<KVRangeDescriptor> descriptorSubject =
         BehaviorSubject.<KVRangeDescriptor>create().toSerialized();
     private final Subject<List<SplitHint>> splitHintsSubject = BehaviorSubject.<List<SplitHint>>create().toSerialized();
+    private final Subject<Any> factSubject = BehaviorSubject.create();
     private final KVRangeOptions opts;
     private final AtomicReference<Lifecycle> lifecycle = new AtomicReference<>(Lifecycle.Init);
     private final CompositeDisposable disposables = new CompositeDisposable();
@@ -261,6 +245,7 @@ public class KVRangeFSM implements IKVRangeFSM {
         mgmtTaskRunner.add(() -> {
             if (lifecycle.compareAndSet(Init, Lifecycle.Opening)) {
                 this.messenger = messenger;
+                factSubject.onNext(coProc.reset(kvRange.boundary()));
                 // start the wal
                 wal.start();
                 this.restorer = new KVRangeRestorer(wal.latestSnapshot(), kvRange, messenger,
@@ -287,7 +272,14 @@ public class KVRangeFSM implements IKVRangeFSM {
                         clusterConfigSubject.distinctUntilChanged(),
                         statsCollector.collect().distinctUntilChanged(),
                         splitHintsSubject.distinctUntilChanged(),
-                        (meta, role, syncStats, clusterConfig, rangeStats, splitHints) -> {
+                        factSubject.distinctUntilChanged(),
+                        (meta,
+                         role,
+                         syncStats,
+                         clusterConfig,
+                         rangeStats,
+                         splitHints,
+                         fact) -> {
                             log.trace("Split hints: \n{}", splitHints);
                             return KVRangeDescriptor.newBuilder()
                                 .setVer(meta.ver())
@@ -299,7 +291,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 .putAllSyncState(syncStats)
                                 .putAllStatistics(rangeStats)
                                 .addAllHints(splitHints)
-                                .setHlc(HLC.INST.get()).build();
+                                .setHlc(HLC.INST.get())
+                                .setFact(fact)
+                                .build();
                         })
                     .subscribe(descriptorSubject::onNext));
                 disposables.add(messenger.receive().subscribe(this::handleMessage));
@@ -1021,7 +1015,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                             log.debug("Range split completed[taskId={}]", taskId);
                             // reset hinter when boundary changed
                             splitHinters.forEach(hinter -> hinter.reset(leftBoundary));
-                            coProc.reset(leftBoundary);
+                            factSubject.onNext(coProc.reset(leftBoundary));
                         } catch (Throwable t) {
                             log.error("Failed to reset hinter or coProc", t);
                             finishCommandWithError(taskId, t);
@@ -1125,8 +1119,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                     "Merge canceled[term={}, index={}, taskId={}, ver={}, state={}]: mergerId={}, mergeeId={}",
                     logTerm, logIndex, taskId, ver, state,
                     KVRangeIdUtil.toString(id), KVRangeIdUtil.toString(command.getPrepareMergeWith().getMergeeId()));
-                assert state.getType() == PreparedMerging && state.hasTaskId()
-                    && taskId.equals(state.getTaskId());
+                assert state.getType() == PreparedMerging && state.hasTaskId() && taskId.equals(state.getTaskId());
                 rangeWriter.state(State.newBuilder()
                     .setType(Normal)
                     .setTaskId(taskId)
@@ -1250,21 +1243,22 @@ public class KVRangeFSM implements IKVRangeFSM {
                     readyToMerge = CompletableFuture.completedFuture(null);
                 } else {
                     // waiting for Merge command from local mergee committed in merger's WAL
-                    readyToMerge = wal.once(logIndex, l -> {
-                            if (l.hasData()) {
-                                try {
-                                    KVRangeCommand nextCmd = KVRangeCommand.parseFrom(l.getData());
-                                    if (nextCmd.hasMerge()
-                                        && nextCmd.getMerge().getStoreId().equals(hostStoreId)) {
-                                        return true;
+                    readyToMerge = wal.once(logIndex,
+                            l -> {
+                                if (l.hasData()) {
+                                    try {
+                                        KVRangeCommand nextCmd = KVRangeCommand.parseFrom(l.getData());
+                                        if (nextCmd.hasMerge()
+                                            && nextCmd.getMerge().getStoreId().equals(hostStoreId)) {
+                                            return true;
+                                        }
+                                    } catch (InvalidProtocolBufferException ex) {
+                                        throw new KVRangeException.InternalException("Unable to parse logEntry",
+                                            ex);
                                     }
-                                } catch (InvalidProtocolBufferException ex) {
-                                    throw new KVRangeException.InternalException("Unable to parse logEntry",
-                                        ex);
                                 }
-                            }
-                            return false;
-                        }, fsmExecutor)
+                                return false;
+                            }, fsmExecutor)
                         .thenAccept(v -> {
                         });
                     // cancel the future
@@ -1315,7 +1309,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                     try {
                                         // reset hinter when boundary changed
                                         splitHinters.forEach(hinter -> hinter.reset(mergedBoundary));
-                                        coProc.reset(mergedBoundary);
+                                        factSubject.onNext(coProc.reset(mergedBoundary));
                                     } catch (Throwable t) {
                                         log.error("Failed to reset hinter and coProc", t);
                                     } finally {
@@ -1360,7 +1354,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                     onDone.complete(() -> {
                         // reset hinter when boundary changed
                         splitHinters.forEach(hinter -> hinter.reset(NULL_BOUNDARY));
-                        coProc.reset(NULL_BOUNDARY);
+                        factSubject.onNext(coProc.reset(NULL_BOUNDARY));
                     });
                 } else {
                     Map<String, Boolean> waitingList = Maps.newHashMap(state.getWaitingListMap());
@@ -1405,9 +1399,13 @@ public class KVRangeFSM implements IKVRangeFSM {
                             onDone.complete(() -> finishCommand(taskId, value.orElse(ByteString.EMPTY)));
                         }
                         case RWCOPROC -> {
-                            Supplier<RWCoProcOutput> outputSupplier = coProc.mutate(command.getRwCoProc(),
-                                dataReader, rangeWriter.kvWriter());
-                            onDone.complete(() -> finishCommand(taskId, outputSupplier.get()));
+                            Supplier<IKVRangeCoProc.MutationResult> resultSupplier =
+                                coProc.mutate(command.getRwCoProc(), dataReader, rangeWriter.kvWriter());
+                            onDone.complete(() -> {
+                                IKVRangeCoProc.MutationResult result = resultSupplier.get();
+                                result.fact().ifPresent(factSubject::onNext);
+                                finishCommand(taskId, result.output());
+                            });
                         }
                     }
                 } catch (Throwable e) {
@@ -1450,7 +1448,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 .thenAccept(v -> {
                     linearizer.afterLogApplied(snapshot.getLastAppliedIndex());
                     // reset the co-proc
-                    coProc.reset(snapshot.getBoundary());
+                    factSubject.onNext(coProc.reset(snapshot.getBoundary()));
                     // finish all pending tasks
                     cmdFutures.keySet().forEach(taskId -> finishCommandWithError(taskId,
                         new KVRangeException.TryLater("Restored from snapshot, try again")));
@@ -1679,5 +1677,22 @@ public class KVRangeFSM implements IKVRangeFSM {
                         .build())
                     .build());
             }, fsmExecutor);
+    }
+
+    enum Lifecycle {
+        Init, // initialized but not open
+        Opening,
+        Open, // accepting operations, handling incoming messages, generate out-going messages
+        Closing,
+        Closed, // wait for tick activity stopped
+        Destroying,
+        Destroyed
+    }
+
+    /**
+     * Callback for listening the quit signal which generated as the result of config change operation.
+     */
+    public interface QuitListener {
+        void onQuit(IKVRangeFSM rangeToQuit);
     }
 }

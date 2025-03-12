@@ -215,9 +215,12 @@ public class MQTTRetainTest extends MQTTTest {
 
         MqttTestClient client = new MqttTestClient(BROKER_URI, clientId);
         client.connect(connOpts);
-        Observable<MqttMsg> topicSub = client.subscribe(topic, 1);
-        client.publish(topic, pubRetainQoS, payload, true);
-        assertEquals(topicSub.blockingFirst().payload, payload);
+        TestObserver<MqttMsg> topicSub = client.subscribe(topic, 1).test();
+        await().until(() -> {
+            client.publish(topic, pubRetainQoS, payload, true);
+            return !topicSub.values().isEmpty();
+        });
+
         log.info("Pub to clear retain");
         client.publish(topic, pubClearQoS, ByteString.EMPTY, true);
         log.info("Unsubscribe from topic");

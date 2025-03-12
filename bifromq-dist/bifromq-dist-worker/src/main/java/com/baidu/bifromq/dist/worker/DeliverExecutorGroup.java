@@ -15,7 +15,6 @@ package com.baidu.bifromq.dist.worker;
 
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentFanOutBytes;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
-import static com.baidu.bifromq.util.TopicUtil.escape;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersistentFanOutBytesPerSeconds;
 import static com.google.common.hash.Hashing.murmur3_128;
 
@@ -29,6 +28,7 @@ import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.sysprops.props.DistInlineFanOutThreshold;
 import com.baidu.bifromq.sysprops.props.DistTopicMatchExpirySeconds;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.RouteMatcher;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.baidu.bifromq.util.SizeUtil;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
@@ -40,6 +40,7 @@ import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.github.benmanes.caffeine.cache.Scheduler;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
@@ -48,9 +49,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class DeliverExecutorGroup implements IDeliverExecutorGroup {
-    private record OrderedSharedMatchingKey(String tenantId, String escapedTopicFilter) {
-    }
-
     // OuterCacheKey: OrderedSharedMatchingKey(<tenantId>, <escapedTopicFilter>)
     // InnerCacheKey: ClientInfo(<tenantId>, <type>, <metadata>)
     private final LoadingCache<OrderedSharedMatchingKey, Cache<ClientInfo, NormalMatching>> orderedSharedMatching;
@@ -99,7 +97,7 @@ class DeliverExecutorGroup implements IDeliverExecutorGroup {
             Matching matching = routes.iterator().next();
             prepareSend(matching, msgPack, true);
             if (isSendToInbox(matching)) {
-                ITenantMeter.get(matching.tenantId).recordSummary(MqttPersistentFanOutBytes, msgPackSize);
+                ITenantMeter.get(matching.tenantId()).recordSummary(MqttPersistentFanOutBytes, msgPackSize);
             }
         } else if (routes.size() > 1) {
             boolean inline = routes.size() > inlineFanOutThreshold;
@@ -151,9 +149,12 @@ class DeliverExecutorGroup implements IDeliverExecutorGroup {
     }
 
     @Override
-    public void refreshOrderedShareSubRoutes(String tenantId, String topicFilter) {
-        log.debug("Refresh ordered shared sub routes: tenantId={}, sharedTopicFilter={}", tenantId, topicFilter);
-        orderedSharedMatching.invalidate(new OrderedSharedMatchingKey(tenantId, escape(topicFilter)));
+    public void refreshOrderedShareSubRoutes(String tenantId, RouteMatcher routeMatcher) {
+        if (log.isDebugEnabled()) {
+            log.debug("Refresh ordered shared sub routes: tenantId={}, sharedTopicFilter={}", tenantId, routeMatcher);
+        }
+        orderedSharedMatching.invalidate(
+            new OrderedSharedMatchingKey(tenantId, routeMatcher.getFilterLevelList()));
     }
 
     private void prepareSend(Matching matching, TopicMessagePack msgPack, boolean inline) {
@@ -171,18 +172,19 @@ class DeliverExecutorGroup implements IDeliverExecutorGroup {
                     for (TopicMessagePack.PublisherPack publisherPack : msgPack.getMessageList()) {
                         ClientInfo sender = publisherPack.getPublisher();
                         NormalMatching matchedInbox = orderedSharedMatching
-                            .get(new OrderedSharedMatchingKey(groupMatching.tenantId, groupMatching.escapedTopicFilter))
+                            .get(new OrderedSharedMatchingKey(groupMatching.tenantId(),
+                                groupMatching.matcher.getFilterLevelList()))
                             .get(sender, senderInfo -> {
                                 RendezvousHash<ClientInfo, NormalMatching> hash = new RendezvousHash<>(murmur3_128(),
                                     (from, into) -> into.putInt(from.hashCode()),
-                                    (from, into) -> into.putBytes(from.receiverUrl.getBytes()),
-                                    Comparator.comparing(a -> a.receiverUrl));
+                                    (from, into) -> into.putBytes(from.receiverUrl().getBytes()),
+                                    Comparator.comparing(NormalMatching::receiverUrl));
                                 groupMatching.receiverList.forEach(hash::add);
                                 NormalMatching matchRecord = hash.get(senderInfo);
                                 log.debug(
                                     "Ordered shared matching: sender={}: topicFilter={}, receiverId={}, subBroker={}",
                                     senderInfo,
-                                    matchRecord.originalTopicFilter(),
+                                    matchRecord.mqttTopicFilter(),
                                     matchRecord.matchInfo().getReceiverId(),
                                     matchRecord.subBrokerId());
                                 return matchRecord;
@@ -204,5 +206,8 @@ class DeliverExecutorGroup implements IDeliverExecutorGroup {
             idx += fanoutExecutors.length;
         }
         fanoutExecutors[idx].submit(route, msgPack, inline);
+    }
+
+    private record OrderedSharedMatchingKey(String tenantId, List<String> filterLevels) {
     }
 }

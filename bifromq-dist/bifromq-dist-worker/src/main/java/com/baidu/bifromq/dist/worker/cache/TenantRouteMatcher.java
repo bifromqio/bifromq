@@ -19,9 +19,8 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.isNULLRange;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.buildMatchRoute;
-import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantRouteStartKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantBeginKey;
-import static com.baidu.bifromq.util.TopicConst.NUL;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantRouteStartKey;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
@@ -60,11 +59,7 @@ class TenantRouteMatcher implements ITenantRouteMatcher {
             matchedRoutes.put(topic, new HashSet<>());
         });
 
-        TopicFilterIterator<String> expansionSetItr = new TopicFilterIterator<>(topicTrieBuilder.build());
-
-        Map<String, Set<String>> matchedTopicFilters = new HashMap<>();
         int probe = 0;
-
         IKVReader rangeReader = kvReaderSupplier.get();
         rangeReader.refresh();
 
@@ -74,6 +69,9 @@ class TenantRouteMatcher implements ITenantRouteMatcher {
         if (isNULLRange(tenantBoundary)) {
             return matchedRoutes;
         }
+
+        TopicFilterIterator<String> expansionSetItr = new TopicFilterIterator<>(topicTrieBuilder.build());
+        Map<List<String>, Set<String>> matchedTopicFilters = new HashMap<>();
         IKVIterator itr = rangeReader.iterator();
         // track seek
         itr.seek(tenantBoundary.getStartKey());
@@ -81,9 +79,9 @@ class TenantRouteMatcher implements ITenantRouteMatcher {
             // track itr.key()
             Matching matching = buildMatchRoute(itr.key(), itr.value());
             // key: topic
-            Set<String> matchedTopics = matchedTopicFilters.get(matching.escapedTopicFilter);
+            Set<String> matchedTopics = matchedTopicFilters.get(matching.matcher.getFilterLevelList());
             if (matchedTopics == null) {
-                List<String> seekTopicFilter = TopicUtil.parse(matching.escapedTopicFilter, true);
+                List<String> seekTopicFilter = matching.matcher.getFilterLevelList();
                 expansionSetItr.seek(seekTopicFilter);
                 if (expansionSetItr.isValid()) {
                     List<String> topicFilterToMatch = expansionSetItr.key();
@@ -95,7 +93,7 @@ class TenantRouteMatcher implements ITenantRouteMatcher {
                                 backingTopics.add(topic);
                             }
                         }
-                        matchedTopicFilters.put(matching.escapedTopicFilter, backingTopics);
+                        matchedTopicFilters.put(matching.matcher.getFilterLevelList(), backingTopics);
                         itr.next();
                         probe = 0;
                     } else {
@@ -105,8 +103,7 @@ class TenantRouteMatcher implements ITenantRouteMatcher {
                             itr.next();
                         } else {
                             // seek to match next topic filter
-                            ByteString nextMatch =
-                                tenantRouteStartKey(tenantId, TopicUtil.fastJoin(NUL, topicFilterToMatch));
+                            ByteString nextMatch = tenantRouteStartKey(tenantId, topicFilterToMatch);
                             itr.seek(nextMatch);
                         }
                     }
@@ -123,5 +120,4 @@ class TenantRouteMatcher implements ITenantRouteMatcher {
         sample.stop(timer);
         return matchedRoutes;
     }
-
 }

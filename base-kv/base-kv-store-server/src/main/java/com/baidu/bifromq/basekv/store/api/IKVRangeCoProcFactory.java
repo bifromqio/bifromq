@@ -18,12 +18,19 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 
+/**
+ * The interface of range co-processor factory.
+ */
 public interface IKVRangeCoProcFactory {
-    default List<IKVRangeSplitHinter> createHinters(String clusterId, String storeId, KVRangeId id,
+    default List<IKVRangeSplitHinter> createHinters(String clusterId,
+                                                    String storeId,
+                                                    KVRangeId id,
                                                     Supplier<IKVCloseableReader> readerProvider) {
         return Collections.emptyList();
     }
 
-    IKVRangeCoProc createCoProc(String clusterId, String storeId, KVRangeId id,
+    IKVRangeCoProc createCoProc(String clusterId,
+                                String storeId,
+                                KVRangeId id,
                                 Supplier<IKVCloseableReader> readerProvider);
 }

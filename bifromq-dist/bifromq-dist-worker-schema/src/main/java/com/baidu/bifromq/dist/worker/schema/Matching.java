@@ -13,27 +13,38 @@
 
 package com.baidu.bifromq.dist.worker.schema;
 
+import com.baidu.bifromq.type.RouteMatcher;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
+/**
+ * The abstract class of matching route.
+ */
 @EqualsAndHashCode
 @ToString
 public abstract class Matching {
-    public enum Type {
-        Normal, Group
-    }
-
-    public final String tenantId;
-
     @EqualsAndHashCode.Exclude
-    public final String escapedTopicFilter;
+    public final RouteMatcher matcher;
+    private final String tenantId;
+    private final String mqttTopicFilter;
 
-    protected Matching(RouteDetail detail) {
-        this.tenantId = detail.tenantId();
-        this.escapedTopicFilter = detail.escapedTopicFilter();
+    protected Matching(String tenantId, RouteMatcher matcher) {
+        this.tenantId = tenantId;
+        this.matcher = matcher;
+        this.mqttTopicFilter = matcher.getMqttTopicFilter();
     }
 
     public abstract Type type();
 
-    public abstract String originalTopicFilter();
+    public final String tenantId() {
+        return tenantId;
+    }
+
+    public final String mqttTopicFilter() {
+        return mqttTopicFilter;
+    }
+
+    public enum Type {
+        Normal, Group
+    }
 }

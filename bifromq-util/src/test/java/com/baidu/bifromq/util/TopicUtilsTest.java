@@ -14,12 +14,14 @@
 package com.baidu.bifromq.util;
 
 import static com.baidu.bifromq.util.TopicUtil.escape;
+import static com.baidu.bifromq.util.TopicUtil.from;
 import static com.baidu.bifromq.util.TopicUtil.isWildcardTopicFilter;
 import static com.baidu.bifromq.util.TopicUtil.parse;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.type.RouteMatcher;
 import java.util.List;
 import org.testng.annotations.Test;
 
@@ -110,7 +112,6 @@ public class TopicUtilsTest {
         assertFalse(TopicUtil.isValidTopicFilter("+a", 40, 16, 255));
         assertFalse(TopicUtil.isValidTopicFilter("/a/+#", 40, 16, 255));
 
-
         assertFalse(TopicUtil.isValidTopicFilter("$share/", 5, 4, 10));
         assertFalse(TopicUtil.isValidTopicFilter("$share/a", 5, 4, 10));
         assertFalse(TopicUtil.isValidTopicFilter("$share/\u0000/", 5, 4, 10));
@@ -140,6 +141,49 @@ public class TopicUtilsTest {
         assertFalse(TopicUtil.isValidTopicFilter("$share/g//a+", 10, 4, 100));
         assertFalse(TopicUtil.isValidTopicFilter("$share/g/+a", 10, 4, 100));
         assertFalse(TopicUtil.isValidTopicFilter("$share/g/#/a", 10, 4, 100));
+    }
 
+    @Test
+    public void normalTopicFilterSerde() {
+        String tf = "a/b/c";
+        RouteMatcher filter = from(tf);
+        assertEquals(filter.getType(), RouteMatcher.Type.Normal);
+        assertEquals(filter.getFilterLevelList(), parse(tf, false));
+        assertFalse(filter.hasGroup());
+        assertEquals(filter.getMqttTopicFilter(), tf);
+    }
+
+    @Test
+    public void unorderedSharedTopicFilterSerde() {
+        String tf = "$share/group/a/b/c";
+        RouteMatcher filter = from(tf);
+        assertEquals(filter.getType(), RouteMatcher.Type.UnorderedShare);
+        assertEquals(filter.getFilterLevelList(), parse("a/b/c", false));
+        assertEquals(filter.getGroup(), "group");
+        assertEquals(filter.getMqttTopicFilter(), tf);
+
+        tf = "$share/group//a/b/c";
+        filter = from(tf);
+        assertEquals(filter.getType(), RouteMatcher.Type.UnorderedShare);
+        assertEquals(filter.getFilterLevelList(), parse("/a/b/c", false));
+        assertEquals(filter.getGroup(), "group");
+        assertEquals(filter.getMqttTopicFilter(), tf);
+    }
+
+    @Test
+    public void orderedSharedTopicFilterSerde() {
+        String tf = "$oshare/group/a/b/c";
+        RouteMatcher filter = from(tf);
+        assertEquals(filter.getType(), RouteMatcher.Type.OrderedShare);
+        assertEquals(filter.getFilterLevelList(), parse("a/b/c", false));
+        assertEquals(filter.getGroup(), "group");
+        assertEquals(filter.getMqttTopicFilter(), tf);
+
+        tf = "$oshare/group//a/b/c";
+        filter = from(tf);
+        assertEquals(filter.getType(), RouteMatcher.Type.OrderedShare);
+        assertEquals(filter.getFilterLevelList(), parse("/a/b/c", false));
+        assertEquals(filter.getGroup(), "group");
+        assertEquals(filter.getMqttTopicFilter(), tf);
     }
 }

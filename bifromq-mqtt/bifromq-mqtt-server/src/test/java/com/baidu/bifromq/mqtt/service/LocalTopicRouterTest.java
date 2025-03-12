@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.service;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -30,6 +31,7 @@ import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.mqtt.MockableTest;
 import com.baidu.bifromq.sysprops.props.DeliverersPerMqttServer;
 import com.baidu.bifromq.type.MatchInfo;
+import com.baidu.bifromq.util.TopicUtil;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -60,17 +62,17 @@ public class LocalTopicRouterTest extends MockableTest {
         String tenantId = "tenantId";
         String topicFilter = "topicFilter";
         when(distClient
-            .addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong()))
+            .addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong()))
             .thenReturn(new CompletableFuture<>());
         for (int i = 0; i < 10 * TOPIC_FILTER_BUCKET_NUM; i++) {
             String channelId = "channelId" + i;
             long reqId = System.nanoTime();
             router.addTopicRoute(reqId, tenantId, topicFilter, 1, channelId);
         }
-        verify(distClient, atMost(TOPIC_FILTER_BUCKET_NUM)).addTopicMatch(
+        verify(distClient, atMost(TOPIC_FILTER_BUCKET_NUM)).addRoute(
             anyLong(),
             eq(tenantId),
-            eq(topicFilter),
+            eq(TopicUtil.from(topicFilter)),
             argThat(receiverId -> !ILocalDistService.isGlobal(receiverId)),
             anyString(),
             eq(0),
@@ -81,7 +83,7 @@ public class LocalTopicRouterTest extends MockableTest {
     public void removeRoutes() {
         String topicFilter = "topicFilter";
         when(distClient
-            .addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong()))
+            .addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong()))
             .thenReturn(new CompletableFuture<>());
         String tenantId = "tenantId";
         List<String> sessions = new ArrayList<>();
@@ -95,10 +97,10 @@ public class LocalTopicRouterTest extends MockableTest {
             long reqId = System.nanoTime();
             router.removeTopicRoute(reqId, tenantId, topicFilter, 1L, channelId);
         }
-        verify(distClient, atMost(TOPIC_FILTER_BUCKET_NUM)).removeTopicMatch(
+        verify(distClient, atMost(TOPIC_FILTER_BUCKET_NUM)).removeRoute(
             anyLong(),
             eq(tenantId),
-            eq(topicFilter),
+            eq(TopicUtil.from(topicFilter)),
             argThat(receiverId -> !ILocalDistService.isGlobal(receiverId)),
             anyString(),
             eq(0),
@@ -111,16 +113,16 @@ public class LocalTopicRouterTest extends MockableTest {
         String topicFilter = "topicFilter";
         String channelId = "channelId";
         when(distClient
-            .addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong()))
+            .addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong()))
             .thenReturn(new CompletableFuture<>());
 
         router.addTopicRoute(System.nanoTime(), tenantId, topicFilter, 1L, channelId);
         router.addTopicRoute(System.nanoTime(), tenantId, topicFilter, 2L, channelId);
 
-        verify(distClient).addTopicMatch(
+        verify(distClient).addRoute(
             anyLong(),
             eq(tenantId),
-            eq(topicFilter),
+            eq(TopicUtil.from(topicFilter)),
             argThat(receiverId -> !ILocalDistService.isGlobal(receiverId)),
             anyString(),
             eq(0),
@@ -133,7 +135,7 @@ public class LocalTopicRouterTest extends MockableTest {
         String topicFilter = "topicFilter";
         CompletableFuture<MatchResult> matchFuture = new CompletableFuture<>();
         when(distClient
-            .addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong()))
+            .addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong()))
             .thenReturn(matchFuture);
         List<CompletableFuture<MatchResult>> matchFutures = new ArrayList<>();
         for (int i = 0; i < 10 * TOPIC_FILTER_BUCKET_NUM; i++) {
@@ -152,7 +154,7 @@ public class LocalTopicRouterTest extends MockableTest {
         String topicFilter = "topicFilter";
         CompletableFuture<MatchResult> matchFuture = new CompletableFuture<>();
         when(distClient
-            .addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong()))
+            .addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong()))
             .thenReturn(matchFuture);
         List<CompletableFuture<MatchResult>> matchFutures = new ArrayList<>();
         for (int i = 0; i < 10 * TOPIC_FILTER_BUCKET_NUM; i++) {
@@ -171,7 +173,7 @@ public class LocalTopicRouterTest extends MockableTest {
         String topicFilter = "topicFilter";
         CompletableFuture<MatchResult> matchFuture = new CompletableFuture<>();
         when(distClient
-            .addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong()))
+            .addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong()))
             .thenReturn(matchFuture);
         List<CompletableFuture<MatchResult>> matchFutures = new ArrayList<>();
         for (int i = 0; i < 10 * TOPIC_FILTER_BUCKET_NUM; i++) {
@@ -200,13 +202,13 @@ public class LocalTopicRouterTest extends MockableTest {
         String channelId = "channelId";
         ArgumentCaptor<String> receiverIdCaptor = ArgumentCaptor.forClass(String.class);
         when(distClient
-            .addTopicMatch(anyLong(), anyString(), anyString(), receiverIdCaptor.capture(), anyString(), anyInt(),
+            .addRoute(anyLong(), anyString(), any(), receiverIdCaptor.capture(), anyString(), anyInt(),
                 anyLong()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         router.addTopicRoute(System.nanoTime(), tenantId, topicFilter, 1L, channelId);
         String receiverId = receiverIdCaptor.getValue();
 
-        when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+        when(distClient.removeRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
             anyLong()))
             .thenReturn(CompletableFuture.completedFuture(UnmatchResult.ERROR));
         CompletableFuture<UnmatchResult> result =
@@ -216,7 +218,8 @@ public class LocalTopicRouterTest extends MockableTest {
         Optional<CompletableFuture<? extends ILocalTopicRouter.ILocalRoutes>> localRoutes =
             router.getTopicRoutes(tenantId, MatchInfo.newBuilder()
                 .setReceiverId(receiverId)
-                .setTopicFilter(topicFilter).build());
+                .setMatcher(TopicUtil.from(topicFilter))
+                .build());
         assertFalse(localRoutes.isPresent());
     }
 
@@ -226,12 +229,12 @@ public class LocalTopicRouterTest extends MockableTest {
         String tenantId = "tenantId";
         String channelId = "channelId";
         ArgumentCaptor<String> receiverIdCaptor = ArgumentCaptor.forClass(String.class);
-        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), receiverIdCaptor.capture(), anyString(),
+        when(distClient.addRoute(anyLong(), anyString(), any(), receiverIdCaptor.capture(), anyString(),
             anyInt(), anyLong()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         router.addTopicRoute(System.nanoTime(), tenantId, topicFilter, 1L, channelId);
         String receiverId = receiverIdCaptor.getValue();
-        when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+        when(distClient.removeRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
             anyLong()))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("unmatch failed")));
 
@@ -241,7 +244,8 @@ public class LocalTopicRouterTest extends MockableTest {
         Optional<CompletableFuture<? extends ILocalTopicRouter.ILocalRoutes>> localRoutes =
             router.getTopicRoutes(tenantId, MatchInfo.newBuilder()
                 .setReceiverId(receiverId)
-                .setTopicFilter(topicFilter).build());
+                .setMatcher(TopicUtil.from(topicFilter))
+                .build());
         assertFalse(localRoutes.isPresent());
     }
 
@@ -251,12 +255,12 @@ public class LocalTopicRouterTest extends MockableTest {
         String tenantId = "tenantId";
         String channelId = "channelId";
         ArgumentCaptor<String> receiverIdCaptor = ArgumentCaptor.forClass(String.class);
-        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), receiverIdCaptor.capture(), anyString(),
+        when(distClient.addRoute(anyLong(), anyString(), any(), receiverIdCaptor.capture(), anyString(),
             anyInt(), anyLong()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         router.addTopicRoute(System.nanoTime(), tenantId, topicFilter, 1L, channelId);
         String receiverId = receiverIdCaptor.getValue();
-        when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+        when(distClient.removeRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
             anyLong()))
             .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
 
@@ -266,7 +270,8 @@ public class LocalTopicRouterTest extends MockableTest {
         Optional<CompletableFuture<? extends ILocalTopicRouter.ILocalRoutes>> localRoutes =
             router.getTopicRoutes(tenantId, MatchInfo.newBuilder()
                 .setReceiverId(receiverId)
-                .setTopicFilter(topicFilter).build());
+                .setMatcher(TopicUtil.from(topicFilter))
+                .build());
         assertFalse(localRoutes.isPresent());
     }
 }

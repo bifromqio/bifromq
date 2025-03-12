@@ -17,14 +17,15 @@ import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.buildMatchRoute;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toGroupRouteKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toNormalRouteKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toReceiverUrl;
-import static com.baidu.bifromq.util.TopicUtil.escape;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.dist.rpc.proto.MatchRoute;
 import com.baidu.bifromq.dist.rpc.proto.RouteGroup;
 import com.baidu.bifromq.type.MatchInfo;
+import com.baidu.bifromq.type.RouteMatcher;
 import com.baidu.bifromq.util.BSUtil;
+import com.baidu.bifromq.util.TopicUtil;
 import com.google.protobuf.ByteString;
 import org.testng.annotations.Test;
 
@@ -37,25 +38,24 @@ public class KVSchemaUtilTest {
     public void testParseNormalMatchRecord() {
         String tenantId = "tenantId";
         String topicFilter = "/a/b/c";
+        RouteMatcher matcher = TopicUtil.from(topicFilter);
         String receiverUrl = toReceiverUrl(MqttBroker, "inbox1", "delivererKey1");
         MatchRoute route = MatchRoute.newBuilder()
-            .setTopicFilter(topicFilter)
+            .setMatcher(matcher)
             .setBrokerId(MqttBroker)
             .setReceiverId("inbox1")
             .setDelivererKey("delivererKey1")
             .setIncarnation(1L)
             .build();
-        ByteString key = toNormalRouteKey(tenantId, topicFilter, toReceiverUrl(route));
+        ByteString key = toNormalRouteKey(tenantId, matcher, toReceiverUrl(route));
         Matching matching = buildMatchRoute(key, BSUtil.toByteString(route.getIncarnation()));
-        assertEquals(matching.tenantId, tenantId);
-        assertEquals(matching.escapedTopicFilter, escape(topicFilter));
-        assertEquals(matching.originalTopicFilter(), topicFilter);
+        assertEquals(matching.tenantId(), tenantId);
+        assertEquals(matching.mqttTopicFilter(), topicFilter);
         assertTrue(matching instanceof NormalMatching);
-        assertEquals(((NormalMatching) matching).receiverUrl, receiverUrl);
+        assertEquals(((NormalMatching) matching).receiverUrl(), receiverUrl);
 
         MatchInfo matchInfo = ((NormalMatching) matching).matchInfo();
         assertEquals(matchInfo.getReceiverId(), route.getReceiverId());
-        assertEquals(matchInfo.getTopicFilter(), topicFilter);
         assertEquals(matchInfo.getIncarnation(), route.getIncarnation());
 
         assertEquals(((NormalMatching) matching).subBrokerId(), MqttBroker);
@@ -65,8 +65,9 @@ public class KVSchemaUtilTest {
     @Test
     public void testParseGroupMatchRecord() {
         String origTopicFilter = "$share/group//a/b/c";
+        RouteMatcher matcher = TopicUtil.from(origTopicFilter);
         MatchRoute route = MatchRoute.newBuilder()
-            .setTopicFilter(origTopicFilter)
+            .setMatcher(matcher)
             .setBrokerId(MqttBroker)
             .setReceiverId("inbox1")
             .setDelivererKey("server1")
@@ -74,17 +75,17 @@ public class KVSchemaUtilTest {
             .build();
 
         String scopedReceiverId = toReceiverUrl(MqttBroker, "inbox1", "server1");
-        ByteString key = toGroupRouteKey("tenantId", origTopicFilter);
+        ByteString key = toGroupRouteKey("tenantId", matcher);
         RouteGroup groupMembers = RouteGroup.newBuilder()
             .putMembers(scopedReceiverId, route.getIncarnation())
             .build();
         Matching matching = buildMatchRoute(key, groupMembers.toByteString());
-        assertEquals(matching.tenantId, "tenantId");
-        assertEquals(matching.escapedTopicFilter, escape("/a/b/c"));
-        assertEquals(matching.originalTopicFilter(), origTopicFilter);
+        assertEquals(matching.tenantId(), "tenantId");
+        assertEquals(matching.matcher.getFilterLevelList(), TopicUtil.parse("/a/b/c", false));
+        assertEquals(matching.mqttTopicFilter(), origTopicFilter);
         assertTrue(matching instanceof GroupMatching);
-        assertEquals(((GroupMatching) matching).receivers.get(scopedReceiverId), 1);
-        assertEquals(((GroupMatching) matching).receiverList.get(0).receiverUrl, scopedReceiverId);
+        assertEquals(((GroupMatching) matching).receivers().get(scopedReceiverId), 1);
+        assertEquals(((GroupMatching) matching).receiverList.get(0).receiverUrl(), scopedReceiverId);
         assertEquals(((GroupMatching) matching).receiverList.get(0).incarnation(), route.getIncarnation());
 
         MatchInfo matchInfo = ((GroupMatching) matching).receiverList.get(0).matchInfo();

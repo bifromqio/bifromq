@@ -30,14 +30,20 @@ import static org.testng.Assert.assertTrue;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
+import com.baidu.bifromq.dist.worker.Comparators;
 import com.baidu.bifromq.dist.worker.schema.Matching;
+import com.baidu.bifromq.type.RouteMatcher;
+import com.baidu.bifromq.util.TopicUtil;
 import com.github.benmanes.caffeine.cache.Ticker;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.NavigableSet;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -89,7 +95,8 @@ public class SubscriptionCacheTest {
     public void isCached() {
         String tenantId = "tenant1";
         String topic = "home/sensor/temperature";
-        assertFalse(cache.isCached(tenantId, topic));
+        List<String> filterLevels = TopicUtil.from(topic).getFilterLevelList();
+        assertFalse(cache.isCached(tenantId, filterLevels));
 
         Set<Matching> mockMatchings = new HashSet<>();
         when(tenantRouteCacheMock.getMatch(eq(topic), any(Boundary.class))).thenReturn(
@@ -98,23 +105,23 @@ public class SubscriptionCacheTest {
         // load cache
         cache.get(tenantId, topic).join();
 
-        assertFalse(cache.isCached(tenantId, topic));
+        assertFalse(cache.isCached(tenantId, TopicUtil.from(topic).getFilterLevelList()));
 
-        when(tenantRouteCacheMock.isCached(eq(topic))).thenReturn(true);
-        assertTrue(cache.isCached(tenantId, topic));
+        when(tenantRouteCacheMock.isCached(eq(filterLevels))).thenReturn(true);
+        assertTrue(cache.isCached(tenantId, filterLevels));
     }
 
     @Test
     public void refresh() {
         String tenantId = "tenant1";
-        Set<String> topicFilters = new HashSet<>();
-        Map<String, Set<String>> matchesByTenant = new HashMap<>();
-        matchesByTenant.put(tenantId, topicFilters);
+        NavigableSet<RouteMatcher> routeMatchers = new TreeSet<>(Comparators.RouteMatcherComparator);
+        Map<String, NavigableSet<RouteMatcher>> matchesByTenant = new HashMap<>();
+        matchesByTenant.put(tenantId, routeMatchers);
 
         when(tenantRouteCacheFactoryMock.create(tenantId)).thenReturn(tenantRouteCacheMock);
         cache.refresh(matchesByTenant);
 
-        verify(tenantRouteCacheMock, never()).refresh(topicFilters);
+        verify(tenantRouteCacheMock, never()).refresh(routeMatchers);
     }
 
     @Test

@@ -31,6 +31,7 @@ import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.baidu.bifromq.util.TopicUtil;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.mockito.Mock;
@@ -100,7 +101,7 @@ public class DeliverySchedulerTest {
     @Test
     public void writeNoSub() {
         MatchInfo matchInfo = MatchInfo.newBuilder()
-            .setTopicFilter("topic")
+            .setMatcher(TopicUtil.from("topic"))
             .setReceiverId("receiverInfo")
             .setIncarnation(1)
             .build();
@@ -117,15 +118,15 @@ public class DeliverySchedulerTest {
                 .build()));
         DeliveryResult.Code result = testDeliverer.schedule(request).join();
         assertEquals(result, DeliveryResult.Code.NO_SUB);
-        verify(distClient).removeTopicMatch(anyLong(),
-            eq(tenantId), eq(matchInfo.getTopicFilter()), eq(matchInfo.getReceiverId()),
+        verify(distClient).removeRoute(anyLong(),
+            eq(tenantId), eq(matchInfo.getMatcher()), eq(matchInfo.getReceiverId()),
             eq("group1"), eq(0), eq(matchInfo.getIncarnation()));
     }
 
     @Test
     public void writeNoReceiver() {
         MatchInfo matchInfo = MatchInfo.newBuilder()
-            .setTopicFilter("topic")
+            .setMatcher(TopicUtil.from("topic"))
             .setReceiverId("receiverInfo")
             .setIncarnation(1)
             .build();
@@ -142,8 +143,8 @@ public class DeliverySchedulerTest {
                 .build()));
         DeliveryResult.Code result = testDeliverer.schedule(request).join();
         assertEquals(result, DeliveryResult.Code.NO_RECEIVER);
-        verify(distClient).removeTopicMatch(anyLong(),
-            eq(tenantId), eq(matchInfo.getTopicFilter()), eq(matchInfo.getReceiverId()),
+        verify(distClient).removeRoute(anyLong(),
+            eq(tenantId), eq(matchInfo.getMatcher()), eq(matchInfo.getReceiverId()),
             eq("group1"), eq(0), eq(matchInfo.getIncarnation()));
     }
 

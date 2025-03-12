@@ -86,6 +86,7 @@ import com.baidu.bifromq.plugin.subbroker.CheckRequest;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.util.TopicUtil;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import io.grpc.stub.StreamObserver;
 import java.time.Duration;
@@ -319,9 +320,9 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         response(tenantId -> subScheduler.schedule(request)
             .thenCompose(subReply -> {
                 if (subReply.getCode() == SubReply.Code.OK || subReply.getCode() == SubReply.Code.EXISTS) {
-                    return distClient.addTopicMatch(request.getReqId(),
+                    return distClient.addRoute(request.getReqId(),
                             request.getTenantId(),
-                            request.getTopicFilter(),
+                            TopicUtil.from(request.getTopicFilter()),
                             receiverId(request.getInboxId(), request.getIncarnation()),
                             getDelivererKey(request.getTenantId(), request.getInboxId()),
                             inboxClient.id(),
@@ -436,7 +437,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                                      long incarnation,
                                                      String topicFilter,
                                                      TopicFilterOption option) {
-        return distClient.removeTopicMatch(reqId, tenantId, topicFilter, receiverId(inboxId, incarnation),
+        return distClient.removeRoute(reqId, tenantId, TopicUtil.from(topicFilter), receiverId(inboxId, incarnation),
             getDelivererKey(tenantId, inboxId), inboxClient.id(), option.getIncarnation());
     }
 

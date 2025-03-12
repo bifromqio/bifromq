@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.dist.worker;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -29,6 +30,8 @@ import com.baidu.bifromq.plugin.subbroker.CheckRequest;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.baidu.bifromq.type.MatchInfo;
+import com.baidu.bifromq.type.RouteMatcher;
+import com.baidu.bifromq.util.TopicUtil;
 import java.util.concurrent.CompletableFuture;
 import org.mockito.Mock;
 import org.testng.annotations.AfterMethod;
@@ -60,12 +63,12 @@ public class SubscriptionCleanerTest {
     void testSweepNoSub() {
         int subBrokerId = 1;
         String tenantId = "tenant1";
-        String topicFilter = "topic1";
+        RouteMatcher matcher = TopicUtil.from("topic1");
         String receiverId = "receiver1";
         String delivererKey = "deliverer1";
 
         MatchInfo matchInfo = MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
+            .setMatcher(matcher)
             .setReceiverId(receiverId)
             .setIncarnation(1)
             .build();
@@ -82,7 +85,7 @@ public class SubscriptionCleanerTest {
         when(subBrokerManager.get(subBrokerId)).thenReturn(subBroker);
         when(subBroker.check(request)).thenReturn(
             CompletableFuture.completedFuture(checkReply));
-        when(distClient.removeTopicMatch(anyLong(), eq(tenantId), eq(topicFilter), eq(receiverId), eq(delivererKey),
+        when(distClient.removeRoute(anyLong(), eq(tenantId), eq(matcher), eq(receiverId), eq(delivererKey),
             eq(subBrokerId), eq(matchInfo.getIncarnation())))
             .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
 
@@ -90,7 +93,7 @@ public class SubscriptionCleanerTest {
 
         verify(subBrokerManager, times(1)).get(subBrokerId);
         verify(subBroker, times(1)).check(request);
-        verify(distClient, times(1)).removeTopicMatch(anyLong(), eq(tenantId), eq(topicFilter), eq(receiverId),
+        verify(distClient, times(1)).removeRoute(anyLong(), eq(tenantId), eq(matcher), eq(receiverId),
             eq(delivererKey), eq(subBrokerId), eq(matchInfo.getIncarnation()));
     }
 
@@ -98,12 +101,12 @@ public class SubscriptionCleanerTest {
     void testSweepNoReceiver() {
         int subBrokerId = 1;
         String tenantId = "tenant1";
-        String topicFilter = "topic1";
+        RouteMatcher matcher = TopicUtil.from("topic1");
         String receiverId = "receiver1";
         String delivererKey = "deliverer1";
 
         MatchInfo matchInfo = MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
+            .setMatcher(matcher)
             .setReceiverId(receiverId)
             .setIncarnation(1)
             .build();
@@ -120,7 +123,7 @@ public class SubscriptionCleanerTest {
         when(subBrokerManager.get(subBrokerId)).thenReturn(subBroker);
         when(subBroker.check(request)).thenReturn(
             CompletableFuture.completedFuture(checkReply));
-        when(distClient.removeTopicMatch(anyLong(), eq(tenantId), eq(topicFilter), eq(receiverId), eq(delivererKey),
+        when(distClient.removeRoute(anyLong(), eq(tenantId), eq(matcher), eq(receiverId), eq(delivererKey),
             eq(subBrokerId), eq(matchInfo.getIncarnation())))
             .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
 
@@ -128,7 +131,7 @@ public class SubscriptionCleanerTest {
 
         verify(subBrokerManager, times(1)).get(subBrokerId);
         verify(subBroker, times(1)).check(request);
-        verify(distClient, times(1)).removeTopicMatch(anyLong(), eq(tenantId), eq(topicFilter), eq(receiverId),
+        verify(distClient, times(1)).removeRoute(anyLong(), eq(tenantId), eq(matcher), eq(receiverId),
             eq(delivererKey), eq(subBrokerId), eq(matchInfo.getIncarnation()));
     }
 
@@ -136,12 +139,12 @@ public class SubscriptionCleanerTest {
     void testSweepNoAction() {
         int subBrokerId = 1;
         String tenantId = "tenant1";
-        String topicFilter = "topic1";
+        RouteMatcher matcher = TopicUtil.from("topic1");
         String receiverId = "receiver1";
         String delivererKey = "deliverer1";
 
         MatchInfo matchInfo = MatchInfo.newBuilder()
-            .setTopicFilter(topicFilter)
+            .setMatcher(matcher)
             .setReceiverId(receiverId)
             .setIncarnation(1)
             .build();
@@ -163,7 +166,7 @@ public class SubscriptionCleanerTest {
 
         verify(subBrokerManager, times(1)).get(subBrokerId);
         verify(subBroker, times(1)).check(request);
-        verify(distClient, times(0)).removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(),
+        verify(distClient, times(0)).removeRoute(anyLong(), anyString(), any(), anyString(), anyString(),
             anyInt(), anyLong());
     }
 }

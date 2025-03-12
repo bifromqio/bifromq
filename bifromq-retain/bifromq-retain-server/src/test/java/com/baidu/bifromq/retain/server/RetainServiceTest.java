@@ -39,6 +39,7 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
+import com.baidu.bifromq.util.TopicUtil;
 import com.google.protobuf.ByteString;
 import io.grpc.Context;
 import io.grpc.stub.StreamObserver;
@@ -58,11 +59,15 @@ import org.testng.annotations.Test;
 
 @Slf4j
 public class RetainServiceTest {
-    private String serviceName = "retainService";
-    private String methodName = "testMethod";
-    private String tenantId = "testTenantId";
+    private final String serviceName = "retainService";
+    private final String methodName = "testMethod";
+    private final String tenantId = "testTenantId";
     @Mock
     IRetainStoreGCProcessor gcProcessor;
+    @Mock
+    StreamObserver<RetainReply> retainResponseObserver;
+    @Mock
+    StreamObserver<MatchReply> matchResponseObserver;
     @Mock
     private IMessageDeliverer messageDeliverer;
     @Mock
@@ -71,10 +76,6 @@ public class RetainServiceTest {
     private IRetainCallScheduler retainCallScheduler;
     @Mock
     private IRetainCallScheduler deleteCallScheduler;
-    @Mock
-    StreamObserver<RetainReply> retainResponseObserver;
-    @Mock
-    StreamObserver<MatchReply> matchResponseObserver;
     private AutoCloseable closeable;
     private RetainService service;
 
@@ -107,7 +108,7 @@ public class RetainServiceTest {
             .attach();
         closeable = MockitoAnnotations.openMocks(this);
         service = new RetainService(gcProcessor, messageDeliverer,
-                matchCallScheduler, retainCallScheduler, deleteCallScheduler);
+            matchCallScheduler, retainCallScheduler, deleteCallScheduler);
     }
 
     @AfterMethod
@@ -119,11 +120,11 @@ public class RetainServiceTest {
     @Test
     public void testDeleteWithException() {
         when(deleteCallScheduler.schedule(any())).thenReturn(
-                CompletableFuture.failedFuture(new RuntimeException("Mocked")));
+            CompletableFuture.failedFuture(new RuntimeException("Mocked")));
         long reqId = 1;
         service.retain(RetainRequest.newBuilder().setReqId(reqId).build(), retainResponseObserver);
         verify(retainResponseObserver)
-                .onNext(argThat(r -> r.getReqId() == reqId && r.getResult() == RetainReply.Result.ERROR));
+            .onNext(argThat(r -> r.getReqId() == reqId && r.getResult() == RetainReply.Result.ERROR));
     }
 
     @Test
@@ -132,9 +133,9 @@ public class RetainServiceTest {
             CompletableFuture.failedFuture(new RuntimeException("Mocked")));
         long reqId = 1;
         service.retain(RetainRequest.newBuilder().setReqId(reqId)
-                .setMessage(Message.newBuilder().setPayload(ByteString.copyFromUtf8("mock"))
-                        .build())
-                .build(), retainResponseObserver);
+            .setMessage(Message.newBuilder().setPayload(ByteString.copyFromUtf8("mock"))
+                .build())
+            .build(), retainResponseObserver);
         verify(retainResponseObserver)
             .onNext(argThat(r -> r.getReqId() == reqId && r.getResult() == RetainReply.Result.ERROR));
     }
@@ -169,7 +170,7 @@ public class RetainServiceTest {
             .setReqId(1)
             .setTenantId("tenant")
             .setMatchInfo(MatchInfo.newBuilder()
-                .setTopicFilter("#")
+                .setMatcher(TopicUtil.from("#"))
                 .setReceiverId("inbox")
                 .build())
             .setDelivererKey("delivererKey")
@@ -184,7 +185,8 @@ public class RetainServiceTest {
         DeliveryCall req1 = requestList.get(0);
         assertEquals(req1.tenantId, matchRequest.getTenantId());
         assertEquals(req1.matchInfo.getReceiverId(), matchRequest.getMatchInfo().getReceiverId());
-        assertEquals(req1.matchInfo.getTopicFilter(), matchRequest.getMatchInfo().getTopicFilter());
+        assertEquals(req1.matchInfo.getMatcher().getMqttTopicFilter(),
+            matchRequest.getMatchInfo().getMatcher().getMqttTopicFilter());
 
         assertEquals(req1.msgPackWrapper.messagePack.getTopic(), retainMsg1.getTopic());
         assertEquals(req1.msgPackWrapper.messagePack.getMessage(0).getPublisher(), retainMsg1.getPublisher());
@@ -213,7 +215,7 @@ public class RetainServiceTest {
             .setReqId(1)
             .setTenantId("tenant")
             .setMatchInfo(MatchInfo.newBuilder()
-                .setTopicFilter("#")
+                .setMatcher(TopicUtil.from("#"))
                 .setReceiverId("inbox")
                 .build())
             .setDelivererKey("delivererKey")
@@ -244,7 +246,7 @@ public class RetainServiceTest {
             .setReqId(1)
             .setTenantId("tenant")
             .setMatchInfo(MatchInfo.newBuilder()
-                .setTopicFilter("#")
+                .setMatcher(TopicUtil.from("#"))
                 .setReceiverId("inbox")
                 .build())
             .setDelivererKey("delivererKey")

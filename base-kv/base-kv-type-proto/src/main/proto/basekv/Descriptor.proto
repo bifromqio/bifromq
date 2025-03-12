@@ -1,4 +1,5 @@
 syntax = "proto3";
+import "google/protobuf/any.proto";
 import "basekv/Type.proto";
 import "basekv/Snapshot.proto";
 import "basekv/raft/ClusterConfig.proto";
@@ -25,7 +26,8 @@ message KVRangeDescriptor {
   map<string, raft.RaftNodeSyncState> syncState = 7;
   map<string, double> statistics = 8;
   repeated SplitHint hints = 9;
-  uint64 hlc = 10;
+  google.protobuf.Any fact = 10;
+  uint64 hlc = 11;
 }
 
 message KVRangeStoreDescriptor {

@@ -49,7 +49,7 @@ class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchReply> {
             UnmatchRequest unmatchReq = reqIterator.next();
             builders.computeIfAbsent(unmatchReq.getTenantId(), k -> BatchUnmatchRequest.TenantBatch.newBuilder())
                 .addRoute(MatchRoute.newBuilder()
-                    .setTopicFilter(unmatchReq.getTopicFilter())
+                    .setMatcher(unmatchReq.getMatcher())
                     .setReceiverId(unmatchReq.getReceiverId())
                     .setDelivererKey(unmatchReq.getDelivererKey())
                     .setBrokerId(unmatchReq.getBrokerId())

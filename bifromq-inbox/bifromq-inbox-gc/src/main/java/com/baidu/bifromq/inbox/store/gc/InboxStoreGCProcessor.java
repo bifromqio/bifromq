@@ -33,6 +33,7 @@ import com.baidu.bifromq.inbox.storage.proto.GCRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.google.protobuf.ByteString;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import javax.annotation.Nullable;
@@ -59,7 +60,7 @@ public class InboxStoreGCProcessor implements IInboxStoreGCProcessor {
                                               @Nullable String tenantId,
                                               @Nullable Integer expirySeconds,
                                               long now) {
-        List<KVRangeSetting> rangeSettingList;
+        Collection<KVRangeSetting> rangeSettingList;
         if (tenantId != null) {
             ByteString tenantBeginKey = tenantBeginKeyPrefix(tenantId);
             rangeSettingList = findByBoundary(toBoundary(tenantBeginKey, upperBound(tenantBeginKey)),

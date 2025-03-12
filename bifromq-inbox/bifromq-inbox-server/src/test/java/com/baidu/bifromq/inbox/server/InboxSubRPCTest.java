@@ -15,6 +15,7 @@ package com.baidu.bifromq.inbox.server;
 
 import static com.baidu.bifromq.inbox.util.InboxServiceUtil.getDelivererKey;
 import static com.baidu.bifromq.inbox.util.InboxServiceUtil.receiverId;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -38,6 +39,7 @@ import com.baidu.bifromq.plugin.subbroker.CheckRequest;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.QoS;
+import com.baidu.bifromq.util.TopicUtil;
 import java.util.concurrent.CompletableFuture;
 import org.testng.annotations.Test;
 
@@ -72,13 +74,13 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setDelivererKey(getDelivererKey(inboxId, receiverId(inboxId, incarnation)))
             .addMatchInfo(MatchInfo.newBuilder()
                 .setReceiverId(receiverId(inboxId, incarnation))
-                .setTopicFilter(topicFilter)
+                .setMatcher(TopicUtil.from(topicFilter))
                 .build())
             .build()).join();
         assertEquals(checkReply.getCode(0), CheckReply.Code.NO_RECEIVER);
 
         verify(distClient, times(0))
-            .addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), eq(1L));
+            .addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), eq(1L));
 
     }
 
@@ -118,7 +120,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
         assertEquals(subReply2.getReqId(), reqId);
         assertEquals(subReply2.getCode(), SubReply.Code.CONFLICT);
 
-        verify(distClient, times(0)).addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(),
+        verify(distClient, times(0)).addRoute(anyLong(), anyString(), any(), anyString(), anyString(),
             anyInt(), anyLong());
     }
 
@@ -152,13 +154,12 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setDelivererKey(getDelivererKey(inboxId, receiverId(inboxId, incarnation)))
             .addMatchInfo(MatchInfo.newBuilder()
                 .setReceiverId(receiverId(inboxId, incarnation))
-                .setTopicFilter(topicFilter)
+                .setMatcher(TopicUtil.from(topicFilter))
                 .build())
             .build()).join();
         assertEquals(checkReply.getCode(0), CheckReply.Code.NO_SUB);
 
-        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
-            anyLong()))
+        when(distClient.addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         SubReply subReply2 = inboxClient.sub(SubRequest.newBuilder()
             .setReqId(reqId)
@@ -178,12 +179,13 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setDelivererKey(getDelivererKey(inboxId, receiverId(inboxId, incarnation)))
             .addMatchInfo(MatchInfo.newBuilder()
                 .setReceiverId(receiverId(inboxId, incarnation))
-                .setTopicFilter(topicFilter)
+                .setMatcher(TopicUtil.from(topicFilter))
                 .build())
             .build()).join();
         assertEquals(checkReply.getCode(0), CheckReply.Code.OK);
         verify(distClient, times(1))
-            .addTopicMatch(anyLong(), eq(tenantId), eq(topicFilter), anyString(), anyString(), anyInt(), anyLong());
+            .addRoute(anyLong(), eq(tenantId), eq(TopicUtil.from(topicFilter)), anyString(), anyString(), anyInt(),
+                anyLong());
     }
 
     @Test(groups = "integration")
@@ -223,8 +225,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
         assertEquals(subReply2.getReqId(), reqId);
         assertEquals(subReply2.getCode(), SubReply.Code.OK);
 
-        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
-            anyLong()))
+        when(distClient.addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         subReply2 = inboxClient.sub(SubRequest.newBuilder()
             .setReqId(reqId)
@@ -239,7 +240,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
         assertEquals(subReply2.getCode(), SubReply.Code.EXISTS);
 
         verify(distClient, times(2))
-            .addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong());
+            .addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong());
     }
 
     @Test(groups = "integration")
@@ -267,8 +268,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .build()).join();
 
         when(settingProvider.provide(Setting.MaxTopicFiltersPerInbox, tenantId)).thenReturn(1);
-        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
-            anyLong()))
+        when(distClient.addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         SubReply subReply2 = inboxClient.sub(SubRequest.newBuilder()
             .setReqId(reqId)
@@ -295,7 +295,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
         assertEquals(subReply2.getCode(), SubReply.Code.EXCEED_LIMIT);
 
         verify(distClient, times(1))
-            .addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong());
+            .addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong());
     }
 
     @Test(groups = "integration")
@@ -321,8 +321,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setNow(now)
             .build()).join();
 
-        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
-            anyLong()))
+        when(distClient.addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.EXCEED_LIMIT));
 
         String topicFilter = "/a/b/c";
@@ -362,8 +361,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setNow(now)
             .build()).join();
 
-        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
-            anyLong()))
+        when(distClient.addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.ERROR));
 
         String topicFilter = "/a/b/c";

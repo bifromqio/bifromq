@@ -60,7 +60,7 @@ class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> {
                             settingProvider.provide(Setting.MaxSharedGroupMembers, matchReq.getTenantId()))
                         .build()))
                 .addRoute(MatchRoute.newBuilder()
-                    .setTopicFilter(matchReq.getTopicFilter())
+                    .setMatcher(matchReq.getMatcher())
                     .setReceiverId(matchReq.getReceiverId())
                     .setDelivererKey(matchReq.getDelivererKey())
                     .setBrokerId(matchReq.getBrokerId())

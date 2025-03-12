@@ -23,6 +23,7 @@ import static com.baidu.bifromq.util.TopicConst.ORDERED_SHARE;
 import static com.baidu.bifromq.util.TopicConst.SINGLE_WILDCARD_CHAR;
 import static com.baidu.bifromq.util.TopicConst.UNORDERED_SHARE;
 
+import com.baidu.bifromq.type.RouteMatcher;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -240,5 +241,27 @@ public class TopicUtil {
             }
         }
         return sb.toString();
+    }
+
+    public static RouteMatcher from(String topicFilter) {
+        if (isNormalTopicFilter(topicFilter)) {
+            return RouteMatcher.newBuilder()
+                .setType(RouteMatcher.Type.Normal)
+                .addAllFilterLevel(TopicUtil.parse(topicFilter, false))
+                .setMqttTopicFilter(topicFilter)
+                .build();
+        } else {
+            String sharePrefix = topicFilter.startsWith(UNORDERED_SHARE) ? UNORDERED_SHARE : ORDERED_SHARE;
+            boolean ordered = !topicFilter.startsWith(UNORDERED_SHARE);
+            String rest = topicFilter.substring((sharePrefix + DELIMITER_CHAR).length());
+            int firstTopicSeparatorIndex = rest.indexOf(DELIMITER_CHAR);
+            String shareGroup = rest.substring(0, firstTopicSeparatorIndex);
+            return RouteMatcher.newBuilder()
+                .setType(ordered ? RouteMatcher.Type.OrderedShare : RouteMatcher.Type.UnorderedShare)
+                .addAllFilterLevel(TopicUtil.parse(rest.substring(firstTopicSeparatorIndex + 1), false))
+                .setGroup(shareGroup)
+                .setMqttTopicFilter(topicFilter)
+                .build();
+        }
     }
 }

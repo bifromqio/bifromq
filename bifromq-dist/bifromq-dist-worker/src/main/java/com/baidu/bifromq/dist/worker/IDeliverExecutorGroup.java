@@ -14,6 +14,7 @@
 package com.baidu.bifromq.dist.worker;
 
 import com.baidu.bifromq.dist.worker.schema.Matching;
+import com.baidu.bifromq.type.RouteMatcher;
 import com.baidu.bifromq.type.TopicMessagePack;
 import java.util.Set;
 
@@ -22,5 +23,5 @@ public interface IDeliverExecutorGroup {
 
     void submit(String tenantId, Set<Matching> routes, TopicMessagePack msgPack);
 
-    void refreshOrderedShareSubRoutes(String tenantId, String topicFilter);
+    void refreshOrderedShareSubRoutes(String tenantId, RouteMatcher routeMatcher);
 }

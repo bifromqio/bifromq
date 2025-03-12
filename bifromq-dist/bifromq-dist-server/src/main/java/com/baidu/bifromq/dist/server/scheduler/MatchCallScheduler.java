@@ -16,7 +16,6 @@ package com.baidu.bifromq.dist.server.scheduler;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toGroupRouteKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toNormalRouteKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toReceiverUrl;
-import static com.baidu.bifromq.util.TopicUtil.isNormalTopicFilter;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
@@ -27,6 +26,7 @@ import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.sysprops.props.ControlPlaneBurstLatencyMillis;
 import com.baidu.bifromq.sysprops.props.ControlPlaneTolerableLatencyMillis;
+import com.baidu.bifromq.type.RouteMatcher;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
@@ -55,11 +55,11 @@ public class MatchCallScheduler extends MutationCallScheduler<MatchRequest, Matc
     }
 
     protected ByteString rangeKey(MatchRequest call) {
-        if (isNormalTopicFilter(call.getTopicFilter())) {
-            return toNormalRouteKey(call.getTenantId(), call.getTopicFilter(),
+        if (call.getMatcher().getType() == RouteMatcher.Type.Normal) {
+            return toNormalRouteKey(call.getTenantId(), call.getMatcher(),
                 toReceiverUrl(call.getBrokerId(), call.getReceiverId(), call.getDelivererKey()));
         } else {
-            return toGroupRouteKey(call.getTenantId(), call.getTopicFilter());
+            return toGroupRouteKey(call.getTenantId(), call.getMatcher());
         }
     }
 }

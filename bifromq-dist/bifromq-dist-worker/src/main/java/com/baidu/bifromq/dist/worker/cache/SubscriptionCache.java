@@ -26,6 +26,7 @@ import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.dist.worker.schema.Matching;
 import com.baidu.bifromq.sysprops.props.DistTopicMatchExpirySeconds;
+import com.baidu.bifromq.type.RouteMatcher;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Expiry;
 import com.github.benmanes.caffeine.cache.LoadingCache;
@@ -33,7 +34,9 @@ import com.github.benmanes.caffeine.cache.Scheduler;
 import com.github.benmanes.caffeine.cache.Ticker;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
+import java.util.NavigableSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -100,16 +103,16 @@ public class SubscriptionCache implements ISubscriptionCache {
     }
 
     @Override
-    public boolean isCached(String tenantId, String topicFilter) {
+    public boolean isCached(String tenantId, List<String> filterLevels) {
         ITenantRouteCache cache = tenantCache.getIfPresent(noRefreshExpiry(tenantId));
         if (cache != null) {
-            return cache.isCached(topicFilter);
+            return cache.isCached(filterLevels);
         }
         return false;
     }
 
     @Override
-    public void refresh(Map<String, Set<String>> topicFiltersByTenant) {
+    public void refresh(Map<String, NavigableSet<RouteMatcher>> topicFiltersByTenant) {
         topicFiltersByTenant.forEach((tenantId, topicFilters) -> {
             ITenantRouteCache cache = tenantCache.getIfPresent(noRefreshExpiry(tenantId));
             if (cache != null) {

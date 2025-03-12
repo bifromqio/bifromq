@@ -14,11 +14,12 @@
 package com.baidu.bifromq.dist.worker.cache;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
-import com.baidu.bifromq.dist.worker.schema.Matching;
 import com.baidu.bifromq.dist.worker.TopicIndex;
+import com.baidu.bifromq.dist.worker.schema.Matching;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.metrics.TenantMetric;
 import com.baidu.bifromq.sysprops.props.DistMaxCachedRoutesPerTenant;
+import com.baidu.bifromq.type.RouteMatcher;
 import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
 import com.github.benmanes.caffeine.cache.CacheLoader;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -28,7 +29,9 @@ import com.github.benmanes.caffeine.cache.Weigher;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.NavigableSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -36,9 +39,6 @@ import org.checkerframework.checker.index.qual.NonNegative;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 class TenantRouteCache implements ITenantRouteCache {
-    private record RouteCacheKey(String topic, Boundary matchRecordBoundary) {
-    }
-
     private final String tenantId;
     private final AsyncLoadingCache<RouteCacheKey, Set<Matching>> routesCache;
     private final TopicIndex<RouteCacheKey> index;
@@ -108,14 +108,14 @@ class TenantRouteCache implements ITenantRouteCache {
     }
 
     @Override
-    public boolean isCached(String topicFilter) {
-        return !index.match(topicFilter).isEmpty();
+    public boolean isCached(List<String> filterLevels) {
+        return !index.match(filterLevels).isEmpty();
     }
 
     @Override
-    public void refresh(Set<String> topicFilters) {
-        topicFilters.forEach(topicFilter -> {
-            for (RouteCacheKey cacheKey : index.match(topicFilter)) {
+    public void refresh(NavigableSet<RouteMatcher> routeMatchers) {
+        routeMatchers.forEach(topicFilter -> {
+            for (RouteCacheKey cacheKey : index.match(topicFilter.getFilterLevelList())) {
                 routesCache.synchronous().refresh(cacheKey);
             }
         });
@@ -129,5 +129,8 @@ class TenantRouteCache implements ITenantRouteCache {
     @Override
     public void destroy() {
         ITenantMeter.stopGauging(tenantId, TenantMetric.MqttRouteCacheSize);
+    }
+
+    private record RouteCacheKey(String topic, Boundary matchRecordBoundary) {
     }
 }

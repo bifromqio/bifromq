@@ -28,7 +28,6 @@ import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.google.protobuf.ByteString;
-import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.observers.TestObserver;
 import java.lang.reflect.Method;
 import java.time.Duration;
@@ -81,15 +80,14 @@ public class MQTTFanInTest extends MQTTTest {
         MqttTestClient subClient = new MqttTestClient(BROKER_URI, "subClient");
         subClient.connect(connOpts);
 
-        Observable<MqttMsg> topicSub = subClient.subscribe("#", subQoS);
-        TestObserver<MqttMsg> testObserver = TestObserver.create();
-        topicSub.subscribe(testObserver);
+        TestObserver<MqttMsg> testObserver = subClient.subscribe("#", subQoS).test();
 
-        pubClient1.publish("/" + subQoS, 0, ByteString.copyFromUtf8("hello"), false);
-        pubClient2.publish("/a/" + subQoS, 1, ByteString.copyFromUtf8("world"), false);
-        pubClient3.publish("/a/b" + subQoS, 2, ByteString.copyFromUtf8("greeting"), false);
-
-        await().atMost(Duration.ofSeconds(10)).until(() -> testObserver.values().size() >= 2);
+        await().atMost(Duration.ofSeconds(10)).until(() -> {
+            pubClient1.publish("/" + subQoS, 0, ByteString.copyFromUtf8("hello"), false);
+            pubClient2.publish("/a/" + subQoS, 1, ByteString.copyFromUtf8("world"), false);
+            pubClient3.publish("/a/b" + subQoS, 2, ByteString.copyFromUtf8("greeting"), false);
+            return testObserver.values().size() >= 2;
+        });
 
         for (MqttMsg m : testObserver.values()) {
             if (m.topic.equals("/" + subQoS)) {

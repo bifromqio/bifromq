@@ -30,6 +30,7 @@ import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.UnmatchError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.Unmatched;
+import com.baidu.bifromq.util.TopicUtil;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import org.testng.annotations.BeforeMethod;
@@ -53,7 +54,7 @@ public class UnmatchReqHandlerTest {
             .setReqId(1)
             .setTenantId("tenant123")
             .setReceiverId("receiver456")
-            .setTopicFilter("topic")
+            .setMatcher(TopicUtil.from("topic"))
             .setBrokerId(10)
             .setDelivererKey("key123")
             .setIncarnation(1L)
@@ -77,7 +78,7 @@ public class UnmatchReqHandlerTest {
             .setReqId(3)
             .setTenantId("tenant456")
             .setReceiverId("receiver789")
-            .setTopicFilter("errorTopic")
+            .setMatcher(TopicUtil.from("errorTopic"))
             .setBrokerId(20)
             .setDelivererKey("keyError")
             .setIncarnation(1L)

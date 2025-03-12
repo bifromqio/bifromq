@@ -13,60 +13,14 @@
 
 package com.baidu.bifromq.dist.worker.schema;
 
-import static com.baidu.bifromq.util.TopicConst.DELIMITER_CHAR;
-import static com.baidu.bifromq.util.TopicConst.NUL;
-import static com.baidu.bifromq.util.TopicConst.ORDERED_SHARE;
-import static com.baidu.bifromq.util.TopicConst.UNORDERED_SHARE;
-import static com.baidu.bifromq.util.TopicUtil.unescape;
+import com.baidu.bifromq.type.RouteMatcher;
 
 /**
  * RouteDetail parsed from a match record key.
  *
- * @param tenantId           the tenantId
- * @param escapedTopicFilter the topic filter in escaped form
- * @param type               the route type
- * @param receiverInfo       the receiverUrl or receiverGroup
+ * @param tenantId    the tenantId
+ * @param matcher     the matcher for the route
+ * @param receiverUrl the receiverUrl if the matcher type is normal
  */
-public record RouteDetail(String tenantId,
-                          String escapedTopicFilter,
-                          RouteDetail.RouteType type,
-                          String receiverInfo) { // receiverUrl or receiverGroup depends on RouteType
-    public enum RouteType {
-        NormalReceiver,
-        OrderedReceiverGroup,
-        UnorderedReceiverGroup
-    }
-
-    /**
-     * The topic filter in unescaped form.
-     *
-     * @return the topic filter
-     */
-    public String topicFilter() {
-        return unescape(escapedTopicFilter);
-    }
-
-    /**
-     * The original topic filter.
-     *
-     * @return the original topic filter
-     */
-    public String originalTopicFilter() {
-        switch (type) {
-            case NormalReceiver -> {
-                return unescape(escapedTopicFilter);
-            }
-            case UnorderedReceiverGroup -> {
-                return UNORDERED_SHARE + DELIMITER_CHAR + receiverInfo + DELIMITER_CHAR + unescape(escapedTopicFilter);
-            }
-            case OrderedReceiverGroup -> {
-                return ORDERED_SHARE + DELIMITER_CHAR + receiverInfo + DELIMITER_CHAR + unescape(escapedTopicFilter);
-            }
-            default -> throw new UnsupportedOperationException("Unknown route type: " + type);
-        }
-    }
-
-    public String globalEscapedTopicFilter() {
-        return tenantId + NUL + escapedTopicFilter;
-    }
+public record RouteDetail(String tenantId, RouteMatcher matcher, String receiverUrl) {
 }

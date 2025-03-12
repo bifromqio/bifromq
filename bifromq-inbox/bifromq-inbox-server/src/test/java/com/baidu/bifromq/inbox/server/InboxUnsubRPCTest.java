@@ -42,6 +42,7 @@ import com.baidu.bifromq.plugin.subbroker.CheckRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
+import com.baidu.bifromq.util.TopicUtil;
 import java.util.concurrent.CompletableFuture;
 import org.testng.annotations.Test;
 
@@ -56,19 +57,13 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
         long incarnation = System.nanoTime();
         String topicFilter = "/a/b/c";
 
-        UnsubReply unsubReply = inboxClient.unsub(UnsubRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(1)
-            .setTopicFilter(topicFilter)
-            .setNow(now)
-            .build()).join();
+        UnsubReply unsubReply = inboxClient.unsub(
+            UnsubRequest.newBuilder().setReqId(reqId).setTenantId(tenantId).setInboxId(inboxId)
+                .setIncarnation(incarnation).setVersion(1).setTopicFilter(topicFilter).setNow(now).build()).join();
         assertEquals(unsubReply.getReqId(), reqId);
         assertEquals(unsubReply.getCode(), UnsubReply.Code.NO_INBOX);
-        verify(distClient, never())
-            .removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong());
+        verify(distClient, never()).removeRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
+            anyLong());
     }
 
     @Test(groups = "integration")
@@ -82,33 +77,18 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
-        inboxClient.create(CreateRequest.newBuilder()
-            .setReqId(reqId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setKeepAliveSeconds(5)
-            .setExpirySeconds(5)
-            .setLimit(10)
-            .setDropOldest(true)
-            .setLwt(lwt)
-            .setClient(clientInfo)
-            .setNow(now)
-            .build()).join();
+        inboxClient.create(CreateRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).setIncarnation(incarnation)
+            .setKeepAliveSeconds(5).setExpirySeconds(5).setLimit(10).setDropOldest(true).setLwt(lwt)
+            .setClient(clientInfo).setNow(now).build()).join();
 
         String topicFilter = "/a/b/c";
-        UnsubReply unsubReply = inboxClient.unsub(UnsubRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(1)
-            .setTopicFilter(topicFilter)
-            .setNow(now)
-            .build()).join();
+        UnsubReply unsubReply = inboxClient.unsub(
+            UnsubRequest.newBuilder().setReqId(reqId).setTenantId(tenantId).setInboxId(inboxId)
+                .setIncarnation(incarnation).setVersion(1).setTopicFilter(topicFilter).setNow(now).build()).join();
         assertEquals(unsubReply.getReqId(), reqId);
         assertEquals(unsubReply.getCode(), UnsubReply.Code.CONFLICT);
-        verify(distClient, never())
-            .removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong());
+        verify(distClient, never()).removeRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
+            anyLong());
     }
 
     @Test(groups = "integration")
@@ -122,64 +102,37 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
-        inboxClient.create(CreateRequest.newBuilder()
-            .setReqId(reqId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setKeepAliveSeconds(5)
-            .setExpirySeconds(5)
-            .setLimit(10)
-            .setDropOldest(true)
-            .setLwt(lwt)
-            .setClient(clientInfo)
-            .setNow(now)
-            .build()).join();
+        inboxClient.create(CreateRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).setIncarnation(incarnation)
+            .setKeepAliveSeconds(5).setExpirySeconds(5).setLimit(10).setDropOldest(true).setLwt(lwt)
+            .setClient(clientInfo).setNow(now).build()).join();
 
-        when(distClient
-            .addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong()))
-            .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
-        when(distClient
-            .removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong()))
-            .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
-        when(retainClient.match(any())).thenReturn(CompletableFuture.completedFuture(MatchReply.newBuilder()
-            .setResult(MatchReply.Result.OK).build()));
+        when(distClient.addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
+            anyLong())).thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
+        when(distClient.removeRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
+            anyLong())).thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
+        when(retainClient.match(any())).thenReturn(
+            CompletableFuture.completedFuture(MatchReply.newBuilder().setResult(MatchReply.Result.OK).build()));
 
         String topicFilter = "/a/b/c";
-        SubReply subReply2 = inboxClient.sub(SubRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
-            .setTopicFilter(topicFilter)
-            .setNow(now)
-            .build()).join();
+        SubReply subReply2 = inboxClient.sub(
+            SubRequest.newBuilder().setReqId(reqId).setTenantId(tenantId).setInboxId(inboxId)
+                .setIncarnation(incarnation).setVersion(0).setTopicFilter(topicFilter).setNow(now).build()).join();
         assertEquals(subReply2.getReqId(), reqId);
         assertEquals(subReply2.getCode(), SubReply.Code.OK);
 
-        UnsubReply unsubReply2 = inboxClient.unsub(UnsubRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
-            .setTopicFilter(topicFilter)
-            .setNow(now)
-            .build()).join();
+        UnsubReply unsubReply2 = inboxClient.unsub(
+            UnsubRequest.newBuilder().setReqId(reqId).setTenantId(tenantId).setInboxId(inboxId)
+                .setIncarnation(incarnation).setVersion(0).setTopicFilter(topicFilter).setNow(now).build()).join();
         assertEquals(unsubReply2.getReqId(), reqId);
         assertEquals(unsubReply2.getCode(), UnsubReply.Code.OK);
 
-        CheckReply checkReply = inboxClient.check(CheckRequest.newBuilder()
-            .setTenantId(tenantId)
-            .setDelivererKey(getDelivererKey(inboxId, receiverId(inboxId, incarnation)))
-            .addMatchInfo(MatchInfo.newBuilder()
-                .setReceiverId(receiverId(inboxId, incarnation))
-                .setTopicFilter(topicFilter)
-                .build())
-            .build()).join();
+        CheckReply checkReply = inboxClient.check(CheckRequest.newBuilder().setTenantId(tenantId)
+            .setDelivererKey(getDelivererKey(inboxId, receiverId(inboxId, incarnation))).addMatchInfo(
+                MatchInfo.newBuilder().setReceiverId(receiverId(inboxId, incarnation))
+                    .setMatcher(TopicUtil.from(topicFilter)).build()).build()).join();
         assertEquals(checkReply.getCode(0), CheckReply.Code.NO_SUB);
-        verify(distClient, times(1))
-            .removeTopicMatch(anyLong(), eq(tenantId), eq(topicFilter), anyString(), anyString(), anyInt(), anyLong());
+        verify(distClient, times(1)).removeRoute(anyLong(), eq(tenantId), eq(TopicUtil.from(topicFilter)), anyString(),
+            anyString(), anyInt(), anyLong());
     }
 
     @Test(groups = "integration")
@@ -193,33 +146,18 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
-        inboxClient.create(CreateRequest.newBuilder()
-            .setReqId(reqId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setKeepAliveSeconds(5)
-            .setExpirySeconds(5)
-            .setLimit(10)
-            .setDropOldest(true)
-            .setLwt(lwt)
-            .setClient(clientInfo)
-            .setNow(now)
-            .build()).join();
+        inboxClient.create(CreateRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).setIncarnation(incarnation)
+            .setKeepAliveSeconds(5).setExpirySeconds(5).setLimit(10).setDropOldest(true).setLwt(lwt)
+            .setClient(clientInfo).setNow(now).build()).join();
 
         String topicFilter = "/a/b/c";
-        UnsubReply unsubReply = inboxClient.unsub(UnsubRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
-            .setTopicFilter(topicFilter)
-            .setNow(now)
-            .build()).join();
+        UnsubReply unsubReply = inboxClient.unsub(
+            UnsubRequest.newBuilder().setReqId(reqId).setTenantId(tenantId).setInboxId(inboxId)
+                .setIncarnation(incarnation).setVersion(0).setTopicFilter(topicFilter).setNow(now).build()).join();
         assertEquals(unsubReply.getReqId(), reqId);
         assertEquals(unsubReply.getCode(), UnsubReply.Code.NO_SUB);
-        verify(distClient, never())
-            .removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong());
+        verify(distClient, never()).removeRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
+            anyLong());
     }
 
     @Test(groups = "integration")
@@ -233,73 +171,36 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
-        inboxClient.create(CreateRequest.newBuilder()
-            .setReqId(reqId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setKeepAliveSeconds(5)
-            .setExpirySeconds(5)
-            .setLimit(10)
-            .setDropOldest(true)
-            .setLwt(lwt)
-            .setClient(clientInfo)
-            .setNow(now)
-            .build()).join();
+        inboxClient.create(CreateRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).setIncarnation(incarnation)
+            .setKeepAliveSeconds(5).setExpirySeconds(5).setLimit(10).setDropOldest(true).setLwt(lwt)
+            .setClient(clientInfo).setNow(now).build()).join();
 
         when(settingProvider.provide(Setting.MaxTopicFiltersPerInbox, tenantId)).thenReturn(1);
-        when(distClient
-            .addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong()))
-            .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
-        when(distClient
-            .removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong()))
-            .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
-        when(retainClient.match(any())).thenReturn(CompletableFuture.completedFuture(MatchReply.newBuilder()
-            .setResult(MatchReply.Result.OK).build()));
-        SubReply subReply = inboxClient.sub(SubRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
-            .setTopicFilter("/a/b/c")
-            .setNow(now)
-            .build()).join();
+        when(distClient.addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
+            anyLong())).thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
+        when(distClient.removeRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
+            anyLong())).thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
+        when(retainClient.match(any())).thenReturn(
+            CompletableFuture.completedFuture(MatchReply.newBuilder().setResult(MatchReply.Result.OK).build()));
+        SubReply subReply = inboxClient.sub(
+            SubRequest.newBuilder().setReqId(reqId).setTenantId(tenantId).setInboxId(inboxId)
+                .setIncarnation(incarnation).setVersion(0).setTopicFilter("/a/b/c").setNow(now).build()).join();
         assertEquals(subReply.getReqId(), reqId);
         assertEquals(subReply.getCode(), SubReply.Code.OK);
 
-        subReply = inboxClient.sub(SubRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
-            .setTopicFilter("/a/b")
-            .setNow(now)
-            .build()).join();
+        subReply = inboxClient.sub(SubRequest.newBuilder().setReqId(reqId).setTenantId(tenantId).setInboxId(inboxId)
+            .setIncarnation(incarnation).setVersion(0).setTopicFilter("/a/b").setNow(now).build()).join();
         assertEquals(subReply.getReqId(), reqId);
         assertEquals(subReply.getCode(), SubReply.Code.EXCEED_LIMIT);
 
-        UnsubReply unsubReply = inboxClient.unsub(UnsubRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
-            .setTopicFilter("/a/b/c")
-            .setNow(now)
-            .build()).join();
+        UnsubReply unsubReply = inboxClient.unsub(
+            UnsubRequest.newBuilder().setReqId(reqId).setTenantId(tenantId).setInboxId(inboxId)
+                .setIncarnation(incarnation).setVersion(0).setTopicFilter("/a/b/c").setNow(now).build()).join();
         assertEquals(unsubReply.getReqId(), reqId);
         assertEquals(unsubReply.getCode(), UnsubReply.Code.OK);
 
-        subReply = inboxClient.sub(SubRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
-            .setTopicFilter("/a/b")
-            .setNow(now)
-            .build()).join();
+        subReply = inboxClient.sub(SubRequest.newBuilder().setReqId(reqId).setTenantId(tenantId).setInboxId(inboxId)
+            .setIncarnation(incarnation).setVersion(0).setTopicFilter("/a/b").setNow(now).build()).join();
         assertEquals(subReply.getReqId(), reqId);
         assertEquals(subReply.getCode(), SubReply.Code.OK);
     }
@@ -315,49 +216,26 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
-        inboxClient.create(CreateRequest.newBuilder()
-            .setReqId(reqId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setKeepAliveSeconds(5)
-            .setExpirySeconds(5)
-            .setLimit(10)
-            .setDropOldest(true)
-            .setLwt(lwt)
-            .setClient(clientInfo)
-            .setNow(now)
-            .build()).join();
-        when(distClient
-            .addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong()))
-            .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
-        when(retainClient.match(any())).thenReturn(CompletableFuture.completedFuture(MatchReply.newBuilder()
-            .setResult(MatchReply.Result.OK).build()));
+        inboxClient.create(CreateRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).setIncarnation(incarnation)
+            .setKeepAliveSeconds(5).setExpirySeconds(5).setLimit(10).setDropOldest(true).setLwt(lwt)
+            .setClient(clientInfo).setNow(now).build()).join();
+        when(distClient.addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
+            anyLong())).thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
+        when(retainClient.match(any())).thenReturn(
+            CompletableFuture.completedFuture(MatchReply.newBuilder().setResult(MatchReply.Result.OK).build()));
 
         String topicFilter = "/a/b/c";
-        SubReply subReply2 = inboxClient.sub(SubRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
-            .setTopicFilter(topicFilter)
-            .setNow(now)
-            .build()).join();
+        SubReply subReply2 = inboxClient.sub(
+            SubRequest.newBuilder().setReqId(reqId).setTenantId(tenantId).setInboxId(inboxId)
+                .setIncarnation(incarnation).setVersion(0).setTopicFilter(topicFilter).setNow(now).build()).join();
         assertEquals(subReply2.getReqId(), reqId);
         assertEquals(subReply2.getCode(), SubReply.Code.OK);
 
-        when(distClient
-            .removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong()))
-            .thenReturn(CompletableFuture.completedFuture(UnmatchResult.ERROR));
-        UnsubReply unsubReply2 = inboxClient.unsub(UnsubRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
-            .setTopicFilter(topicFilter)
-            .setNow(now)
-            .build()).join();
+        when(distClient.removeRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
+            anyLong())).thenReturn(CompletableFuture.completedFuture(UnmatchResult.ERROR));
+        UnsubReply unsubReply2 = inboxClient.unsub(
+            UnsubRequest.newBuilder().setReqId(reqId).setTenantId(tenantId).setInboxId(inboxId)
+                .setIncarnation(incarnation).setVersion(0).setTopicFilter(topicFilter).setNow(now).build()).join();
         assertEquals(unsubReply2.getReqId(), reqId);
         assertEquals(unsubReply2.getCode(), UnsubReply.Code.ERROR);
     }

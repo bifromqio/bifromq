@@ -50,6 +50,7 @@ import com.baidu.bifromq.retain.store.index.RetainTopicIndex;
 import com.baidu.bifromq.retain.store.index.RetainedMsgInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.time.Duration;
@@ -80,7 +81,6 @@ class RetainStoreCoProc implements IKVRangeCoProc {
         this.tags = new String[] {"clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id)};
         this.rangeReaderProvider = rangeReaderProvider;
         this.tenantsState = new TenantsState(rangeReaderProvider.get(), tags);
-        load();
     }
 
     @Override
@@ -101,7 +101,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
 
     @SneakyThrows
     @Override
-    public Supplier<RWCoProcOutput> mutate(RWCoProcInput input, IKVReader reader, IKVWriter writer) {
+    public Supplier<MutationResult> mutate(RWCoProcInput input, IKVReader reader, IKVWriter writer) {
         RetainServiceRWCoProcInput coProcInput = input.getRetainService();
         RetainServiceRWCoProcOutput.Builder outputBuilder = RetainServiceRWCoProcOutput.newBuilder();
         AtomicReference<Runnable> afterMutate = new AtomicReference<>();
@@ -120,13 +120,14 @@ class RetainStoreCoProc implements IKVRangeCoProc {
         RWCoProcOutput output = RWCoProcOutput.newBuilder().setRetainService(outputBuilder.build()).build();
         return () -> {
             afterMutate.get().run();
-            return output;
+            return new MutationResult(output, Optional.empty());
         };
     }
 
     @Override
-    public void reset(Boundary boundary) {
+    public Any reset(Boundary boundary) {
         load();
+        return Any.getDefaultInstance();
     }
 
     @Override

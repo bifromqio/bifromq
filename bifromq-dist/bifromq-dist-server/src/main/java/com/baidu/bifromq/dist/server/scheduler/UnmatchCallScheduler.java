@@ -16,7 +16,6 @@ package com.baidu.bifromq.dist.server.scheduler;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toGroupRouteKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toNormalRouteKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toReceiverUrl;
-import static com.baidu.bifromq.util.TopicUtil.isNormalTopicFilter;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
@@ -26,6 +25,7 @@ import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
 import com.baidu.bifromq.sysprops.props.ControlPlaneBurstLatencyMillis;
 import com.baidu.bifromq.sysprops.props.ControlPlaneTolerableLatencyMillis;
+import com.baidu.bifromq.type.RouteMatcher;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
@@ -50,11 +50,12 @@ public class UnmatchCallScheduler extends MutationCallScheduler<UnmatchRequest, 
     }
 
     protected ByteString rangeKey(UnmatchRequest call) {
-        if (isNormalTopicFilter(call.getTopicFilter())) {
-            return toNormalRouteKey(call.getTenantId(), call.getTopicFilter(),
+        RouteMatcher matcher = call.getMatcher();
+        if (matcher.getType() == RouteMatcher.Type.Normal) {
+            return toNormalRouteKey(call.getTenantId(), matcher,
                 toReceiverUrl(call.getBrokerId(), call.getReceiverId(), call.getDelivererKey()));
         } else {
-            return toGroupRouteKey(call.getTenantId(), call.getTopicFilter());
+            return toGroupRouteKey(call.getTenantId(), matcher);
         }
     }
 }

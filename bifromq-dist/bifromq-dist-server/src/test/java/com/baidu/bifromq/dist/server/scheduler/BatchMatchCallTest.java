@@ -33,6 +33,7 @@ import com.baidu.bifromq.dist.rpc.proto.MatchReply;
 import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.util.TopicUtil;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -63,7 +64,7 @@ public class BatchMatchCallTest {
         MatchRequest request1 = MatchRequest.newBuilder()
             .setReqId(1)
             .setTenantId("tenant1")
-            .setTopicFilter("filter1")
+            .setMatcher(TopicUtil.from("filter1"))
             .setReceiverId("receiver1")
             .setBrokerId(1)
             .setDelivererKey("key1")
@@ -73,7 +74,7 @@ public class BatchMatchCallTest {
         MatchRequest request2 = MatchRequest.newBuilder()
             .setReqId(2)
             .setTenantId("tenant2")
-            .setTopicFilter("filter2")
+            .setMatcher(TopicUtil.from("filter2"))
             .setReceiverId("receiver2")
             .setBrokerId(2)
             .setDelivererKey("key2")
@@ -101,7 +102,7 @@ public class BatchMatchCallTest {
         MatchRequest request = MatchRequest.newBuilder()
             .setReqId(1)
             .setTenantId("tenant1")
-            .setTopicFilter("filter1")
+            .setMatcher(TopicUtil.from("filter1"))
             .setReceiverId("receiver1")
             .setBrokerId(1)
             .setDelivererKey("key1")

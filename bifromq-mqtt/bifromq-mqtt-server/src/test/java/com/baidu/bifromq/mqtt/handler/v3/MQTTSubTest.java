@@ -21,6 +21,7 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATI
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_ACTION_DISALLOW;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.TOO_LARGE_SUBSCRIPTION;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -49,12 +50,12 @@ public class MQTTSubTest extends BaseMQTTTest {
     @AfterMethod
     public void clean() {
         if (shouldCleanSubs) {
-            when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+            when(distClient.removeRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
                 anyLong()))
                 .thenReturn(CompletableFuture.completedFuture(null));
             channel.close();
             verify(distClient, atLeast(1))
-                .removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(), anyLong());
+                .removeRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong());
         } else {
             channel.close();
         }

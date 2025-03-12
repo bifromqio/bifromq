@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.integration.v3;
 
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -27,7 +28,7 @@ import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.google.protobuf.ByteString;
-import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.observers.TestObserver;
 import java.lang.reflect.Method;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
@@ -76,27 +77,30 @@ public class MQTTFanOutTest extends MQTTTest {
         MqttTestClient subClient3 = new MqttTestClient(BROKER_URI, "subClient3");
         subClient3.connect(connOpts);
 
-        Observable<MqttMsg> topicSub1 = subClient1.subscribe("#", 0);
-        Observable<MqttMsg> topicSub2 = subClient2.subscribe(topic, 1);
-        Observable<MqttMsg> topicSub3 = subClient3.subscribe("/a/+", 2);
+        TestObserver<MqttMsg> topicSub1 = subClient1.subscribe("#", 0).test();
+        TestObserver<MqttMsg> topicSub2 = subClient2.subscribe(topic, 1).test();
+        TestObserver<MqttMsg> topicSub3 = subClient3.subscribe("/a/+", 2).test();
 
-        pubClient.publish(topic, pubQoS, ByteString.copyFromUtf8("hello"), false);
+        await().until(() -> {
+            pubClient.publish(topic, pubQoS, ByteString.copyFromUtf8("hello"), false);
+            return !topicSub1.values().isEmpty() && !topicSub2.values().isEmpty() && !topicSub3.values().isEmpty();
+        });
 
-        MqttMsg msg1 = topicSub1.blockingFirst();
+        MqttMsg msg1 = topicSub1.values().get(0);
         assertEquals(msg1.topic, topic);
         assertEquals(msg1.qos, Math.min(0, pubQoS));
         assertFalse(msg1.isDup);
         assertFalse(msg1.isRetain);
         assertEquals(msg1.payload, ByteString.copyFromUtf8("hello"));
 
-        MqttMsg msg2 = topicSub2.blockingFirst();
+        MqttMsg msg2 = topicSub2.values().get(0);
         assertEquals(msg2.topic, topic);
         assertEquals(msg2.qos, Math.min(1, pubQoS));
         assertFalse(msg2.isDup);
         assertFalse(msg2.isRetain);
         assertEquals(msg2.payload, ByteString.copyFromUtf8("hello"));
 
-        MqttMsg msg3 = topicSub3.blockingFirst();
+        MqttMsg msg3 = topicSub3.values().get(0);
         assertEquals(msg3.topic, topic);
         assertEquals(msg3.qos, Math.min(2, pubQoS));
         assertFalse(msg3.isDup);

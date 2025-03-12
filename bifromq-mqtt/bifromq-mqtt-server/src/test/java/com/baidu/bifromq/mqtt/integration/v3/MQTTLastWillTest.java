@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.integration.v3;
 
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
@@ -31,8 +32,8 @@ import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.observers.TestObserver;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.testng.annotations.Test;
@@ -71,12 +72,18 @@ public class MQTTLastWillTest extends MQTTTest {
 
         MqttTestClient lwtSubClient = new MqttTestClient(BROKER_URI, "lwtSubClient");
         lwtSubClient.connect(lwtSubConnOpts);
-        Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 1);
+        TestObserver<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 1).test();
+        await().until(() -> {
+            // make sure route is ready
+            lwtPubClient.publish(willTopic, 1, ByteString.copyFromUtf8("test"), false);
+            return !topicSub.values().isEmpty();
+        });
 
         log.info("Kill client");
         kill(deviceKey, "lwtPubclient").join();
 
-        MqttMsg msg = topicSub.blockingFirst();
+        topicSub.awaitCount(2);
+        MqttMsg msg = topicSub.values().get(topicSub.values().size() - 1);
         assertEquals(msg.topic, willTopic);
         assertEquals(msg.qos, 1);
         assertEquals(msg.payload, willPayload);
@@ -122,9 +129,9 @@ public class MQTTLastWillTest extends MQTTTest {
 
         MqttTestClient lwtSubClient = new MqttTestClient(BROKER_URI, "lwtSubClient");
         lwtSubClient.connect(lwtSubConnOpts);
-        Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 1);
+        TestObserver<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 1).test();
 
-        MqttMsg msg = topicSub.blockingFirst();
+        MqttMsg msg = topicSub.values().get(0);
         assertEquals(msg.topic, willTopic);
         assertEquals(msg.qos, 1);
         assertEquals(msg.payload, willPayload);
@@ -173,11 +180,17 @@ public class MQTTLastWillTest extends MQTTTest {
 
         MqttTestClient lwtSubClient = new MqttTestClient(BROKER_URI, "lwtSubClient");
         lwtSubClient.connect(lwtSubConnOpts);
-        Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 2);
+        TestObserver<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 2).test();
+        await().until(() -> {
+            // make sure route is ready
+            lwtPubClient.publish(willTopic, 2, ByteString.copyFromUtf8("test"), false);
+            return !topicSub.values().isEmpty();
+        });
 
         kill(deviceKey, "lwtPubclient").join();
 
-        MqttMsg msg = topicSub.timeout(5, TimeUnit.SECONDS).blockingFirst();
+        topicSub.awaitCount(2);
+        MqttMsg msg = topicSub.values().get(topicSub.values().size() - 1);
         assertEquals(msg.topic, willTopic);
         assertEquals(msg.qos, 2);
         assertEquals(msg.payload, willPayload);

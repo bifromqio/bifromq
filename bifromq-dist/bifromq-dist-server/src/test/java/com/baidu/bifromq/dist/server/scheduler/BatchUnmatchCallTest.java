@@ -30,6 +30,7 @@ import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
+import com.baidu.bifromq.util.TopicUtil;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -57,7 +58,7 @@ public class BatchUnmatchCallTest {
         UnmatchRequest request1 = UnmatchRequest.newBuilder()
             .setReqId(1)
             .setTenantId("tenant1")
-            .setTopicFilter("filter1")
+            .setMatcher(TopicUtil.from("filter1"))
             .setReceiverId("receiver1")
             .setBrokerId(1)
             .setDelivererKey("key1")
@@ -67,7 +68,7 @@ public class BatchUnmatchCallTest {
         UnmatchRequest request2 = UnmatchRequest.newBuilder()
             .setReqId(2)
             .setTenantId("tenant2")
-            .setTopicFilter("filter2")
+            .setMatcher(TopicUtil.from("filter2"))
             .setReceiverId("receiver2")
             .setBrokerId(2)
             .setDelivererKey("key2")
@@ -89,7 +90,7 @@ public class BatchUnmatchCallTest {
         UnmatchRequest request = UnmatchRequest.newBuilder()
             .setReqId(1)
             .setTenantId("tenant1")
-            .setTopicFilter("filter1")
+            .setMatcher(TopicUtil.from("filter1"))
             .setReceiverId("receiver1")
             .setBrokerId(1)
             .setDelivererKey("key1")

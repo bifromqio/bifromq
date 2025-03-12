@@ -42,10 +42,11 @@ class BatchCheckSubCall extends BatchQueryCall<IInboxCheckSubScheduler.CheckMatc
         BatchCheckSubRequest.Builder reqBuilder = BatchCheckSubRequest.newBuilder().setNow(HLC.INST.getPhysical());
         reqIterator.forEachRemaining(request -> {
             TenantInboxInstance tenantInboxInstance = TenantInboxInstance.from(request.tenantId(), request.matchInfo());
-            reqBuilder.addParams(BatchCheckSubRequest.Params.newBuilder().setTenantId(tenantInboxInstance.tenantId())
+            reqBuilder.addParams(BatchCheckSubRequest.Params.newBuilder()
+                .setTenantId(tenantInboxInstance.tenantId())
                 .setInboxId(tenantInboxInstance.instance().inboxId())
                 .setIncarnation(tenantInboxInstance.instance().incarnation())
-                .setTopicFilter(request.matchInfo().getTopicFilter())
+                .setTopicFilter(request.matchInfo().getMatcher().getMqttTopicFilter())
                 .build());
         });
         long reqId = System.nanoTime();

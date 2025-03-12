@@ -61,10 +61,6 @@ import org.testng.annotations.BeforeMethod;
 @Slf4j
 public abstract class InboxServiceTest {
     protected IInboxClient inboxClient;
-    private IAgentHost agentHost;
-    private ICRDTService crdtService;
-    private IRPCServiceTrafficService trafficService;
-    private IBaseKVMetaService metaService;
     @Mock
     protected IEventCollector eventCollector;
     @Mock
@@ -75,11 +71,15 @@ public abstract class InboxServiceTest {
     protected IDistClient distClient;
     @Mock
     protected IRetainClient retainClient;
+    private IAgentHost agentHost;
+    private ICRDTService crdtService;
+    private IRPCServiceTrafficService trafficService;
+    private IBaseKVMetaService metaService;
     private IBaseKVStoreClient inboxStoreClient;
     private IInboxStore inboxStore;
     private IInboxServer inboxServer;
     private IRPCServer rpcServer;
-    private int tickerThreads = 2;
+    private final int tickerThreads = 2;
     private ScheduledExecutorService bgTaskExecutor;
     private AutoCloseable closeable;
 
@@ -89,10 +89,10 @@ public abstract class InboxServiceTest {
         when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
         when(settingProvider.provide(any(), anyString())).thenAnswer(
             invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
-        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+        when(distClient.addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
             anyLong()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
-        when(distClient.removeTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+        when(distClient.removeRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
             anyLong()))
             .thenReturn(CompletableFuture.completedFuture(UnmatchResult.OK));
         AgentHostOptions agentHostOpts = AgentHostOptions.builder()

@@ -13,22 +13,23 @@
 
 package com.baidu.bifromq.dist.worker.schema;
 
-import static com.baidu.bifromq.dist.worker.schema.RouteDetail.RouteType.NormalReceiver;
-import static com.baidu.bifromq.dist.worker.schema.RouteDetail.RouteType.OrderedReceiverGroup;
-import static com.baidu.bifromq.dist.worker.schema.RouteDetail.RouteType.UnorderedReceiverGroup;
 import static com.baidu.bifromq.util.BSUtil.toByteString;
 import static com.baidu.bifromq.util.BSUtil.toShort;
 import static com.baidu.bifromq.util.TopicConst.DELIMITER;
 import static com.baidu.bifromq.util.TopicConst.NUL;
-import static com.baidu.bifromq.util.TopicUtil.escape;
-import static com.baidu.bifromq.util.TopicUtil.isNormalTopicFilter;
+import static com.baidu.bifromq.util.TopicConst.ORDERED_SHARE;
+import static com.baidu.bifromq.util.TopicConst.UNORDERED_SHARE;
+import static com.baidu.bifromq.util.TopicUtil.parse;
+import static com.baidu.bifromq.util.TopicUtil.unescape;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 
 import com.baidu.bifromq.dist.rpc.proto.MatchRoute;
 import com.baidu.bifromq.dist.rpc.proto.RouteGroup;
+import com.baidu.bifromq.type.RouteMatcher;
 import com.baidu.bifromq.util.BSUtil;
 import com.google.protobuf.ByteString;
+import java.util.List;
 
 /**
  * Utility for working with the data stored in dist worker.
@@ -39,7 +40,7 @@ public class KVSchemaUtil {
     private static final byte FLAG_NORMAL = 0x01;
     private static final byte FLAG_UNORDERED = 0x02;
     private static final byte FLAG_ORDERED = 0x03;
-    private static final ByteString SEPARATOR_BYTES = ByteString.copyFrom(new byte[] {0x00, 0x00});
+    private static final ByteString SEPARATOR_BYTE = ByteString.copyFrom(new byte[] {0x00});
     private static final ByteString FLAG_NORMAL_VAL = ByteString.copyFrom(new byte[] {FLAG_NORMAL});
     private static final ByteString FLAG_UNORDERED_VAL = ByteString.copyFrom(new byte[] {FLAG_UNORDERED});
     private static final ByteString FLAG_ORDERED_VAL = ByteString.copyFrom(new byte[] {FLAG_ORDERED});
@@ -60,10 +61,15 @@ public class KVSchemaUtil {
     public static Matching buildMatchRoute(ByteString routeKey, ByteString routeValue) {
         RouteDetail routeDetail = parseRouteDetail(routeKey);
         try {
-            if (routeDetail.type() == NormalReceiver) {
-                return new NormalMatching(routeDetail, BSUtil.toLong(routeValue));
+            if (routeDetail.matcher().getType() == RouteMatcher.Type.Normal) {
+                return new NormalMatching(routeDetail.tenantId(),
+                    routeDetail.matcher(),
+                    routeDetail.receiverUrl(),
+                    BSUtil.toLong(routeValue));
             }
-            return new GroupMatching(routeDetail, RouteGroup.parseFrom(routeValue).getMembersMap());
+            return new GroupMatching(routeDetail.tenantId(),
+                routeDetail.matcher(),
+                RouteGroup.parseFrom(routeValue).getMembersMap());
         } catch (Exception e) {
             throw new IllegalStateException("Unable to parse matching record", e);
         }
@@ -74,28 +80,31 @@ public class KVSchemaUtil {
         return SCHEMA_VER.concat(toByteString((short) tenantIdBytes.size()).concat(tenantIdBytes));
     }
 
-    public static ByteString tenantRouteStartKey(String tenantId, String escapedTopicFilter) {
-        assert !escapedTopicFilter.contains(DELIMITER);
-        return tenantBeginKey(tenantId).concat(copyFromUtf8(escapedTopicFilter)).concat(SEPARATOR_BYTES);
+    public static ByteString tenantRouteStartKey(String tenantId, List<String> filterLevels) {
+        ByteString key = tenantBeginKey(tenantId);
+        for (String filterLevel : filterLevels) {
+            key = key.concat(copyFromUtf8(filterLevel)).concat(SEPARATOR_BYTE);
+        }
+        return key.concat(SEPARATOR_BYTE);
     }
 
-    public static ByteString tenantRouteBucketStartKey(String tenantId, String escapedTopicFilter, byte bucket) {
-        return tenantRouteStartKey(tenantId, escapedTopicFilter).concat(unsafeWrap(new byte[] {bucket}));
+    private static ByteString tenantRouteBucketStartKey(String tenantId, List<String> filterLevels, byte bucket) {
+        return tenantRouteStartKey(tenantId, filterLevels).concat(unsafeWrap(new byte[] {bucket}));
     }
 
-    public static ByteString toNormalRouteKey(String tenantId, String topicFilter, String receiverUrl) {
-        assert isNormalTopicFilter(topicFilter);
-        return tenantRouteBucketStartKey(tenantId, escape(topicFilter), bucket(receiverUrl))
+    public static ByteString toNormalRouteKey(String tenantId, RouteMatcher routeMatcher, String receiverUrl) {
+        assert routeMatcher.getType() == RouteMatcher.Type.Normal;
+        return tenantRouteBucketStartKey(tenantId, routeMatcher.getFilterLevelList(), bucket(receiverUrl))
             .concat(FLAG_NORMAL_VAL)
             .concat(toReceiverBytes(receiverUrl));
     }
 
-    public static ByteString toGroupRouteKey(String tenantId, String topicFilter) {
-        assert !isNormalTopicFilter(topicFilter);
-        SharedTopicFilter stf = SharedTopicFilter.from(topicFilter);
-        return tenantRouteBucketStartKey(tenantId, escape(stf.topicFilter), bucket(stf.shareGroup))
-            .concat(stf.ordered ? FLAG_ORDERED_VAL : FLAG_UNORDERED_VAL)
-            .concat(toReceiverBytes(stf.shareGroup));
+    public static ByteString toGroupRouteKey(String tenantId, RouteMatcher routeMatcher) {
+        assert routeMatcher.getType() != RouteMatcher.Type.Normal;
+        return tenantRouteBucketStartKey(tenantId, routeMatcher.getFilterLevelList(),
+            bucket(routeMatcher.getGroup()))
+            .concat(routeMatcher.getType() == RouteMatcher.Type.OrderedShare ? FLAG_ORDERED_VAL : FLAG_UNORDERED_VAL)
+            .concat(toReceiverBytes(routeMatcher.getGroup()));
     }
 
     public static RouteDetail parseRouteDetail(ByteString routeKey) {
@@ -107,7 +116,7 @@ public class KVSchemaUtil {
         int receiverBytesStartIdx = routeKey.size() - Short.BYTES - receiverBytesLen;
         int receiverBytesEndIdx = routeKey.size() - Short.BYTES;
         int flagByteIdx = receiverBytesStartIdx - 1;
-        int separatorBytesIdx = flagByteIdx - 1 - SEPARATOR_BYTES.size();
+        int separatorBytesIdx = flagByteIdx - 1 - 2; // 2 bytes separator
         String receiverInfo = routeKey.substring(receiverBytesStartIdx, receiverBytesEndIdx).toStringUtf8();
         byte flag = routeKey.byteAt(flagByteIdx);
 
@@ -116,13 +125,32 @@ public class KVSchemaUtil {
             routeKey.substring(escapedTopicFilterStartIdx, separatorBytesIdx).toStringUtf8();
         switch (flag) {
             case FLAG_NORMAL -> {
-                return new RouteDetail(tenantId, escapedTopicFilter, NormalReceiver, receiverInfo);
+                RouteMatcher matcher = RouteMatcher.newBuilder()
+                    .setType(RouteMatcher.Type.Normal)
+                    .addAllFilterLevel(parse(escapedTopicFilter, true))
+                    .setMqttTopicFilter(unescape(escapedTopicFilter))
+                    .build();
+                return new RouteDetail(tenantId, matcher, receiverInfo);
             }
             case FLAG_UNORDERED -> {
-                return new RouteDetail(tenantId, escapedTopicFilter, UnorderedReceiverGroup, receiverInfo);
+                RouteMatcher matcher = RouteMatcher.newBuilder()
+                    .setType(RouteMatcher.Type.UnorderedShare)
+                    .addAllFilterLevel(parse(escapedTopicFilter, true))
+                    .setGroup(receiverInfo)
+                    .setMqttTopicFilter(
+                        UNORDERED_SHARE + DELIMITER + receiverInfo + DELIMITER + unescape(escapedTopicFilter))
+                    .build();
+                return new RouteDetail(tenantId, matcher, null);
             }
             case FLAG_ORDERED -> {
-                return new RouteDetail(tenantId, escapedTopicFilter, OrderedReceiverGroup, receiverInfo);
+                RouteMatcher matcher = RouteMatcher.newBuilder()
+                    .setType(RouteMatcher.Type.OrderedShare)
+                    .addAllFilterLevel(parse(escapedTopicFilter, true))
+                    .setGroup(receiverInfo)
+                    .setMqttTopicFilter(
+                        ORDERED_SHARE + DELIMITER + receiverInfo + DELIMITER + unescape(escapedTopicFilter))
+                    .build();
+                return new RouteDetail(tenantId, matcher, null);
             }
             default -> throw new UnsupportedOperationException("Unknown route type: " + flag);
         }

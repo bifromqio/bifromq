@@ -15,13 +15,11 @@ package com.baidu.bifromq.dist.worker.spi;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
-import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantRouteStartKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantBeginKey;
-import static com.baidu.bifromq.util.TopicUtil.escape;
-import static com.baidu.bifromq.util.TopicUtil.isNormalTopicFilter;
+import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantRouteStartKey;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
-import com.baidu.bifromq.dist.worker.schema.SharedTopicFilter;
+import com.baidu.bifromq.util.TopicUtil;
 import com.google.protobuf.ByteString;
 
 /**
@@ -47,13 +45,7 @@ public final class SplitKey {
      * @return the boundary
      */
     public static Boundary routeBoundary(String tenantId, String topicFilter) {
-        ByteString routeStartKey;
-        if (isNormalTopicFilter(topicFilter)) {
-            routeStartKey = tenantRouteStartKey(tenantId, escape(topicFilter));
-        } else {
-            SharedTopicFilter stf = SharedTopicFilter.from(topicFilter);
-            routeStartKey = tenantRouteStartKey(tenantId, escape(stf.topicFilter));
-        }
+        ByteString routeStartKey = tenantRouteStartKey(tenantId, TopicUtil.from(topicFilter).getFilterLevelList());
         return toBoundary(routeStartKey, upperBound(routeStartKey));
     }
 }

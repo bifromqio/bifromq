@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.integration.v5;
 
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -29,8 +30,10 @@ import com.baidu.bifromq.plugin.authprovider.type.Success;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import java.lang.reflect.Method;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import lombok.SneakyThrows;
 import org.eclipse.paho.mqttv5.client.MqttConnectionOptions;
 import org.testng.annotations.Test;
 
@@ -39,17 +42,11 @@ public class PubSubTest extends MQTTTest {
     private final String userId = "userId";
 
     protected void doSetup(Method method) {
-        when(authProvider.auth(any(MQTT5AuthData.class)))
-            .thenReturn(CompletableFuture.completedFuture(MQTT5AuthResult.newBuilder()
-                .setSuccess(Success.newBuilder()
-                    .setTenantId(tenantId)
-                    .setUserId(userId)
-                    .build())
-                .build()));
-        when(authProvider.checkPermission(any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
-                .setGranted(Granted.newBuilder().build())
-                .build()));
+        when(authProvider.auth(any(MQTT5AuthData.class))).thenReturn(CompletableFuture.completedFuture(
+            MQTT5AuthResult.newBuilder()
+                .setSuccess(Success.newBuilder().setTenantId(tenantId).setUserId(userId).build()).build()));
+        when(authProvider.checkPermission(any(), any())).thenReturn(CompletableFuture.completedFuture(
+            CheckResult.newBuilder().setGranted(Granted.newBuilder().build()).build()));
     }
 
     @Test(groups = "integration")
@@ -148,6 +145,7 @@ public class PubSubTest extends MQTTTest {
     }
 
 
+    @SneakyThrows
     private void pubSub(String topic, int pubQoS, String topicFilter, int subQoS, boolean cleanSession) {
         MqttConnectionOptions connOpts = new MqttConnectionOptions();
         connOpts.setCleanStart(cleanSession);
@@ -157,8 +155,15 @@ public class PubSubTest extends MQTTTest {
         MqttTestClient client = new MqttTestClient(BROKER_URI);
         client.connect(connOpts);
         Observable<MqttMsg> topicSub = client.subscribe(topicFilter, subQoS);
+        MqttMsg msg = await().until(() -> {
+            try {
+                client.publish(topic, pubQoS, ByteString.copyFromUtf8("hello"), false);
+                return topicSub.timeout(100, TimeUnit.MILLISECONDS).blockingFirst();
+            } catch (Throwable e) {
+                return null;
+            }
+        }, Objects::nonNull);
         client.publish(topic, pubQoS, ByteString.copyFromUtf8("hello"), false);
-        MqttMsg msg = topicSub.timeout(10, TimeUnit.SECONDS).blockingFirst();
         assertEquals(msg.topic, topic);
         assertEquals(msg.qos, Math.min(pubQoS, subQoS));
         assertFalse(msg.isDup);

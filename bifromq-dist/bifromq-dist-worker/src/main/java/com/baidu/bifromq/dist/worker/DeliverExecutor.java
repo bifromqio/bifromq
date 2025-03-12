@@ -86,7 +86,7 @@ public class DeliverExecutor {
         int subBrokerId = matched.subBrokerId();
         String delivererKey = matched.delivererKey();
         MatchInfo sub = matched.matchInfo();
-        DeliveryCall request = new DeliveryCall(matched.tenantId, sub, subBrokerId, delivererKey, msgPack);
+        DeliveryCall request = new DeliveryCall(matched.tenantId(), sub, subBrokerId, delivererKey, msgPack);
         deliverer.schedule(request).whenComplete((result, e) -> {
             if (e != null) {
                 log.debug("Failed to deliver", e);

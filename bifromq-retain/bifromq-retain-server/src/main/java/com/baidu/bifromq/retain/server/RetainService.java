@@ -37,12 +37,9 @@ import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import io.grpc.stub.StreamObserver;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiFunction;
-
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -72,21 +69,21 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
             CompletionStage<RetainReply> completionStage;
             if (request.getMessage().getPayload().isEmpty()) {
                 completionStage = deleteCallScheduler.schedule(request);
-            }else {
+            } else {
                 completionStage = retainCallScheduler.schedule(request);
             }
             return completionStage.exceptionally(e -> {
                 if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
                     return RetainReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setResult(RetainReply.Result.BACK_PRESSURE_REJECTED)
-                            .build();
+                        .setReqId(request.getReqId())
+                        .setResult(RetainReply.Result.BACK_PRESSURE_REJECTED)
+                        .build();
                 }
                 log.debug("Retain failed", e);
                 return RetainReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setResult(RetainReply.Result.ERROR)
-                        .build();
+                    .setReqId(request.getReqId())
+                    .setResult(RetainReply.Result.ERROR)
+                    .build();
 
             });
         }, responseObserver);
@@ -96,7 +93,7 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
     public void match(MatchRequest request, StreamObserver<MatchReply> responseObserver) {
         log.trace("Handling match request:\n{}", request);
         response((tenantId, metadata) -> matchCallScheduler
-            .schedule(new MatchCall(request.getTenantId(), request.getMatchInfo().getTopicFilter(),
+            .schedule(new MatchCall(request.getTenantId(), request.getMatchInfo().getMatcher().getMqttTopicFilter(),
                 request.getLimit()))
             .thenCompose(matchCallResult -> {
                 if (matchCallResult.result() == MatchReply.Result.OK) {

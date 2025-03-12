@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.inbox.server;
 
+import static com.baidu.bifromq.inbox.util.InboxServiceUtil.receiverId;
+
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
@@ -24,9 +26,8 @@ import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.StringPair;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.baidu.bifromq.type.UserProperties;
+import com.baidu.bifromq.util.TopicUtil;
 import com.google.protobuf.ByteString;
-
-import static com.baidu.bifromq.inbox.util.InboxServiceUtil.receiverId;
 
 public class Fixtures {
 
@@ -75,7 +76,7 @@ public class Fixtures {
 
     static MatchInfo matchInfo() {
         return MatchInfo.newBuilder()
-            .setTopicFilter("/foo/+")
+            .setMatcher(TopicUtil.from("/foo/+"))
             .setIncarnation(1L)
             .setReceiverId(receiverId("foo", 1L))
             .build();

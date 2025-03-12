@@ -19,18 +19,21 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.dist.worker.schema.Matching;
+import com.baidu.bifromq.dist.worker.Comparators;
 import com.baidu.bifromq.dist.worker.MeterTest;
+import com.baidu.bifromq.dist.worker.schema.Matching;
 import com.baidu.bifromq.metrics.TenantMetric;
+import com.baidu.bifromq.type.RouteMatcher;
+import com.baidu.bifromq.util.TopicUtil;
 import com.github.benmanes.caffeine.cache.Ticker;
 import com.google.common.collect.Sets;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
+import java.util.NavigableSet;
 import java.util.Set;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -78,7 +81,7 @@ public class TenantRouteCacheTest extends MeterTest {
         when(mockMatcher.matchAll(eq(Set.of(topic)))).thenReturn(Map.of(topic, Set.of(normalMatching)));
         cache.getMatch(topic, FULL_BOUNDARY).join();
 
-        assertTrue(cache.isCached(topic));
+        assertTrue(cache.isCached(TopicUtil.from(topic).getFilterLevelList()));
     }
 
     @Test
@@ -100,7 +103,9 @@ public class TenantRouteCacheTest extends MeterTest {
         when(mockMatcher.matchAll(eq(Set.of(topic)))).thenReturn(
             Map.of(topic, Set.of(normalMatching, normalMatching1, normalMatching2)));
 
-        cache.refresh(Set.of("#"));
+        NavigableSet<RouteMatcher> routeMatchers = Sets.newTreeSet(Comparators.RouteMatcherComparator);
+        routeMatchers.add(TopicUtil.from("#"));
+        cache.refresh(routeMatchers);
 
         await().until(() -> cache.getMatch(topic, FULL_BOUNDARY).join().size() == 3);
     }
@@ -123,7 +128,9 @@ public class TenantRouteCacheTest extends MeterTest {
 
         when(mockMatcher.matchAll(eq(Set.of(topic)))).thenReturn(Map.of(topic, Collections.emptySet()));
 
-        cache.refresh(Set.of("#"));
+        NavigableSet<RouteMatcher> routeMatchers = Sets.newTreeSet(Comparators.RouteMatcherComparator);
+        routeMatchers.add(TopicUtil.from("#"));
+        cache.refresh(routeMatchers);
 
         await().until(() -> cache.getMatch(topic, FULL_BOUNDARY).join().isEmpty());
     }

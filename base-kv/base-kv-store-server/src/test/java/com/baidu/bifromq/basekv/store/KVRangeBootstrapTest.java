@@ -35,6 +35,7 @@ import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.google.protobuf.Any;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.PublishSubject;
 import java.io.File;
@@ -63,11 +64,11 @@ public class KVRangeBootstrapTest extends MockableTest {
     private final String DB_WAL_CHECKPOINT_DIR = "testWAL_cp";
     private final KVRangeStoreOptions options = new KVRangeStoreOptions();
     private final PublishSubject<StoreMessage> incomingStoreMessage = PublishSubject.create();
+    private final int tickerThreads = 2;
+    public Path dbRootDir;
     private IKVRangeStore rangeStore;
     private ExecutorService queryExecutor;
-    private final int tickerThreads = 2;
     private ScheduledExecutorService bgTaskExecutor;
-    public Path dbRootDir;
 
     @SneakyThrows
     protected void doSetup(Method method) {
@@ -159,6 +160,7 @@ public class KVRangeBootstrapTest extends MockableTest {
             .setBoundary(FULL_BOUNDARY)
             .setConfig(ClusterConfig.newBuilder().addVoters(rangeStore.id()).build())
             .putSyncState(rangeStore.id(), RaftNodeSyncState.Replicating)
+            .setFact(Any.getDefaultInstance())
             .build());
     }
 

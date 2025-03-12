@@ -13,39 +13,36 @@
 
 package com.baidu.bifromq.dist.worker.schema;
 
-
-import static com.baidu.bifromq.util.TopicUtil.unescape;
-
 import com.baidu.bifromq.type.MatchInfo;
+import com.baidu.bifromq.type.RouteMatcher;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
+/**
+ * Represent a normal matching route.
+ */
 @EqualsAndHashCode(callSuper = true)
 @ToString
 public class NormalMatching extends Matching {
-    public final String receiverUrl;
-    private final String originalTopicFilter;
+    private final String receiverUrl;
+
     private final long incarnation;
 
     @EqualsAndHashCode.Exclude
-    private final KVSchemaUtil.Receiver receiver;
+    private final MatchInfo matchInfo;
+
     @EqualsAndHashCode.Exclude
-    public final MatchInfo matchInfo;
+    private final KVSchemaUtil.Receiver receiver;
 
-    NormalMatching(RouteDetail routeDetail, long incarnation) {
-        this(routeDetail, unescape(routeDetail.escapedTopicFilter()), routeDetail.receiverInfo(), incarnation);
-    }
-
-    NormalMatching(RouteDetail routeDetail, String originalTopicFilter, String receiverUrl, long incarnation) {
-        super(routeDetail);
+    NormalMatching(String tenantId, RouteMatcher matcher, String receiverUrl, long incarnation) {
+        super(tenantId, matcher);
         this.receiverUrl = receiverUrl;
-        receiver = KVSchemaUtil.parseReceiver(receiverUrl);
-        this.originalTopicFilter = originalTopicFilter;
+        this.receiver = KVSchemaUtil.parseReceiver(receiverUrl);
         this.incarnation = incarnation;
 
         matchInfo = MatchInfo.newBuilder()
+            .setMatcher(matcher)
             .setReceiverId(receiver.receiverId())
-            .setTopicFilter(originalTopicFilter)
             .setIncarnation(incarnation)
             .build();
     }
@@ -55,13 +52,12 @@ public class NormalMatching extends Matching {
         return Type.Normal;
     }
 
-    @Override
-    public String originalTopicFilter() {
-        return originalTopicFilter;
-    }
-
     public MatchInfo matchInfo() {
         return matchInfo;
+    }
+
+    public String receiverUrl() {
+        return receiverUrl;
     }
 
     public int subBrokerId() {

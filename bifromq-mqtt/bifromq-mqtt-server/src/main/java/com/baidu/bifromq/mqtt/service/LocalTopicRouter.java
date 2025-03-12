@@ -29,67 +29,14 @@ import java.util.concurrent.ConcurrentMap;
 
 public class LocalTopicRouter implements ILocalTopicRouter {
     private static final int TOPIC_FILTER_BUCKET_NUM = DeliverersPerMqttServer.INSTANCE.get();
-
-    private record TopicFilter(String tenantId, String topicFilter, int bucketId) {
-    }
-
-    private static class LocalRoutes implements ILocalRoutes {
-        private final String localReceiverId;
-        private final Map<String, Long> routesInfo = new ConcurrentHashMap<>();
-        private final long incarnation = System.nanoTime();
-
-        private LocalRoutes(int bucketId) {
-            this.localReceiverId = ILocalDistService.localize(bucketId + "_" + incarnation);
-        }
-
-        public String localReceiverId() {
-            return localReceiverId;
-        }
-
-        @Override
-        public Map<String, Long> routesInfo() {
-            return routesInfo;
-        }
-
-        @Override
-        public long incarnation() {
-            return incarnation;
-        }
-
-        public static int parseBucketId(String localReceiverId) {
-            String receiverId = ILocalDistService.parseReceiverId(localReceiverId);
-            return Integer.parseInt(receiverId.substring(0, receiverId.indexOf('_')));
-        }
-    }
-
-    private static class AddRouteException extends RuntimeException {
-        final MatchResult matchResult;
-
-        private AddRouteException(MatchResult matchResult) {
-            this.matchResult = matchResult;
-        }
-    }
-
-    private static class RemoveRouteException extends RuntimeException {
-        final UnmatchResult unmatchResult;
-
-        private RemoveRouteException(UnmatchResult unmatchResult) {
-            this.unmatchResult = unmatchResult;
-        }
-    }
-
-
     private final String serverId;
-
     private final IDistClient distClient;
-
     private final ConcurrentMap<TopicFilter, CompletableFuture<LocalRoutes>> routeMap = new ConcurrentHashMap<>();
 
     public LocalTopicRouter(String serverId, IDistClient distClient) {
         this.serverId = serverId;
         this.distClient = distClient;
     }
-
 
     @Override
     public CompletableFuture<MatchResult> addTopicRoute(long reqId,
@@ -103,9 +50,9 @@ public class LocalTopicRouter implements ILocalTopicRouter {
             routeMap.compute(new TopicFilter(tenantId, topicFilter, bucketId), (k, v) -> {
                 if (v == null || v.isCompletedExceptionally()) {
                     LocalRoutes localRoutes = new LocalRoutes(k.bucketId);
-                    return distClient.addTopicMatch(reqId,
+                    return distClient.addRoute(reqId,
                             k.tenantId,
-                            k.topicFilter,
+                            TopicUtil.from(k.topicFilter),
                             localRoutes.localReceiverId(),
                             toDelivererKey(k.tenantId, localRoutes.localReceiverId(), serverId),
                             0,
@@ -161,9 +108,9 @@ public class LocalTopicRouter implements ILocalTopicRouter {
                     } else {
                         localRoutes.routesInfo.remove(channelId, incarnation);
                         if (localRoutes.routesInfo.isEmpty()) {
-                            distClient.removeTopicMatch(reqId,
+                            distClient.removeRoute(reqId,
                                     k.tenantId,
-                                    k.topicFilter,
+                                    TopicUtil.from(k.topicFilter),
                                     localRoutes.localReceiverId(),
                                     toDelivererKey(k.tenantId, localRoutes.localReceiverId(), serverId),
                                     0,
@@ -207,7 +154,7 @@ public class LocalTopicRouter implements ILocalTopicRouter {
     public Optional<CompletableFuture<? extends ILocalRoutes>> getTopicRoutes(String tenantId, MatchInfo matchInfo) {
         int bucketId = LocalRoutes.parseBucketId(matchInfo.getReceiverId());
         CompletableFuture<? extends ILocalRoutes> routesFuture =
-            routeMap.get(new TopicFilter(tenantId, matchInfo.getTopicFilter(), bucketId));
+            routeMap.get(new TopicFilter(tenantId, matchInfo.getMatcher().getMqttTopicFilter(), bucketId));
         return Optional.ofNullable(routesFuture);
     }
 
@@ -217,5 +164,53 @@ public class LocalTopicRouter implements ILocalTopicRouter {
             bucketId = (bucketId + TOPIC_FILTER_BUCKET_NUM) % TOPIC_FILTER_BUCKET_NUM;
         }
         return bucketId;
+    }
+
+    private record TopicFilter(String tenantId, String topicFilter, int bucketId) {
+    }
+
+    private static class LocalRoutes implements ILocalRoutes {
+        private final String localReceiverId;
+        private final Map<String, Long> routesInfo = new ConcurrentHashMap<>();
+        private final long incarnation = System.nanoTime();
+
+        private LocalRoutes(int bucketId) {
+            this.localReceiverId = ILocalDistService.localize(bucketId + "_" + incarnation);
+        }
+
+        public static int parseBucketId(String localReceiverId) {
+            String receiverId = ILocalDistService.parseReceiverId(localReceiverId);
+            return Integer.parseInt(receiverId.substring(0, receiverId.indexOf('_')));
+        }
+
+        public String localReceiverId() {
+            return localReceiverId;
+        }
+
+        @Override
+        public Map<String, Long> routesInfo() {
+            return routesInfo;
+        }
+
+        @Override
+        public long incarnation() {
+            return incarnation;
+        }
+    }
+
+    private static class AddRouteException extends RuntimeException {
+        final MatchResult matchResult;
+
+        private AddRouteException(MatchResult matchResult) {
+            this.matchResult = matchResult;
+        }
+    }
+
+    private static class RemoveRouteException extends RuntimeException {
+        final UnmatchResult unmatchResult;
+
+        private RemoveRouteException(UnmatchResult unmatchResult) {
+            this.unmatchResult = unmatchResult;
+        }
     }
 }

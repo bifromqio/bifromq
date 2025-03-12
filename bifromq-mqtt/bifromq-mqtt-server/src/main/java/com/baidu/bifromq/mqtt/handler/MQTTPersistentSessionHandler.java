@@ -61,6 +61,7 @@ import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
+import com.baidu.bifromq.util.TopicUtil;
 import io.micrometer.core.instrument.Timer;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttMessage;
@@ -249,7 +250,8 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     }
 
     @Override
-    protected final CompletableFuture<IMQTTProtocolHelper.SubResult> subTopicFilter(long reqId, String topicFilter,
+    protected final CompletableFuture<IMQTTProtocolHelper.SubResult> subTopicFilter(long reqId,
+                                                                                    String topicFilter,
                                                                                     TopicFilterOption option) {
         if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalPersistentSubscriptions)) {
             eventCollector.report(getLocal(OutOfTenantResource.class)
@@ -309,7 +311,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setMatchInfo(MatchInfo.newBuilder()
-                .setTopicFilter(topicFilter)
+                .setMatcher(TopicUtil.from(topicFilter))
                 .setReceiverId(receiverId(userSessionId, incarnation))
                 .setIncarnation(option.getIncarnation())
                 .build())

@@ -22,6 +22,7 @@ import com.baidu.bifromq.dist.rpc.proto.MatchRoute;
 import com.baidu.bifromq.dist.trie.TopicFilterIterator;
 import com.baidu.bifromq.dist.trie.TopicTrieNode;
 import com.baidu.bifromq.dist.worker.schema.KVSchemaUtil;
+import com.baidu.bifromq.util.TopicUtil;
 import com.google.protobuf.ByteString;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -50,7 +51,7 @@ public class KeyLayoutTest {
             for (int i = 0; i < 10; i++) {
                 routes.computeIfAbsent(tf, k -> new ArrayList<>())
                     .add(MatchRoute.newBuilder()
-                        .setTopicFilter(tf)
+                        .setMatcher(TopicUtil.from(tf))
                         .setReceiverId(UUID.randomUUID().toString())
                         .setDelivererKey(UUID.randomUUID().toString())
                         .setIncarnation(System.nanoTime())
@@ -61,9 +62,10 @@ public class KeyLayoutTest {
         SortedSet<ByteString> keys = new TreeSet<>(BoundaryUtil::compare);
         routes.forEach((tf, routeList) ->
             routeList.forEach(
-                route -> keys.add(KVSchemaUtil.toNormalRouteKey("t", tf, KVSchemaUtil.toReceiverUrl(route)))));
+                route -> keys.add(
+                    KVSchemaUtil.toNormalRouteKey("t", TopicUtil.from(tf), KVSchemaUtil.toReceiverUrl(route)))));
         LinkedHashSet<String> parsed = new LinkedHashSet<>();
-        keys.forEach(k -> parsed.add(KVSchemaUtil.parseRouteDetail(k).topicFilter()));
+        keys.forEach(k -> parsed.add(KVSchemaUtil.parseRouteDetail(k).matcher().getMqttTopicFilter()));
         assertEquals(generated, new ArrayList<>(parsed));
     }
 }

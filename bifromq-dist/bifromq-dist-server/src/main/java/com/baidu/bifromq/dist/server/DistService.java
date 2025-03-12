@@ -52,7 +52,7 @@ public class DistService extends DistServiceGrpc.DistServiceImplBase {
         IUnmatchCallScheduler unmatchCallScheduler = new UnmatchCallScheduler(distWorkerClient);
         unmatchReqHandler = new UnmatchReqHandler(eventCollector, unmatchCallScheduler);
 
-        this.distCallScheduler = new DistWorkerCallScheduler(distWorkerClient, settingProvider);
+        this.distCallScheduler = new DistWorkerCallScheduler(distWorkerClient);
     }
 
     @Override

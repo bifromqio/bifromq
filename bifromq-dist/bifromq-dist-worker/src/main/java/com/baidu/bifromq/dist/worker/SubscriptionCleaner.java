@@ -48,19 +48,19 @@ class SubscriptionCleaner implements ISubscriptionCleaner {
                     switch (code) {
                         case NO_SUB -> {
                             log.debug("No sub found: tenantId={}, topicFilter={}, receiverId={}, subBrokerId={}",
-                                request.getTenantId(), matchInfo.getTopicFilter(),
+                                request.getTenantId(), matchInfo.getMatcher().getMqttTopicFilter(),
                                 matchInfo.getReceiverId(), subBrokerId);
-                            futures.add(distClient.removeTopicMatch(reqId, request.getTenantId(),
-                                matchInfo.getTopicFilter(), matchInfo.getReceiverId(),
+                            futures.add(distClient.removeRoute(reqId, request.getTenantId(),
+                                matchInfo.getMatcher(), matchInfo.getReceiverId(),
                                 request.getDelivererKey(), subBrokerId, matchInfo.getIncarnation()));
                         }
                         case NO_RECEIVER -> {
                             log.debug(
                                 "No receiverInfo found: tenantId={}, topicFilter={}, receiverId={}, subBrokerId={}",
-                                request.getTenantId(), matchInfo.getTopicFilter(),
+                                request.getTenantId(), matchInfo.getMatcher().getMqttTopicFilter(),
                                 matchInfo.getReceiverId(), subBrokerId);
-                            futures.add(distClient.removeTopicMatch(reqId, request.getTenantId(),
-                                matchInfo.getTopicFilter(), matchInfo.getReceiverId(),
+                            futures.add(distClient.removeRoute(reqId, request.getTenantId(),
+                                matchInfo.getMatcher(), matchInfo.getReceiverId(),
                                 request.getDelivererKey(), subBrokerId, matchInfo.getIncarnation()));
                         }
                         default -> {

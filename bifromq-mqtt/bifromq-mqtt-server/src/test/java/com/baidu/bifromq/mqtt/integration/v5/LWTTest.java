@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.integration.v5;
 
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -32,10 +33,10 @@ import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.baidu.bifromq.plugin.authprovider.type.Success;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillReply;
 import com.google.protobuf.ByteString;
-import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.observers.TestObserver;
 import java.lang.reflect.Method;
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.mqttv5.client.MqttConnectionOptions;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
@@ -118,39 +119,43 @@ public class LWTTest extends MQTTTest {
         MqttConnectionOptions lwtPubConnOpts = new MqttConnectionOptions();
         lwtPubConnOpts.setCleanStart(true);
         lwtPubConnOpts.setSessionExpiryInterval((long) sessionExpiryInterval);
-        lwtPubConnOpts.setWill(willTopic, new MqttMessage(willPayload.toByteArray()) {{
-            setQos(willQoS);
-            setRetained(willRetain);
-            setProperties(new MqttProperties() {{
-                setWillDelayInterval((long) willDelayInterval);
-            }});
-        }});
+        lwtPubConnOpts.setWill(willTopic, new MqttMessage(willPayload.toByteArray()) {
+            {
+                setQos(willQoS);
+                setRetained(willRetain);
+                setProperties(new MqttProperties() {
+                    {
+                        setWillDelayInterval((long) willDelayInterval);
+                    }
+                });
+            }
+        });
         lwtPubConnOpts.setUserName(userId);
-        MqttTestClient lwtPubClient = new MqttTestClient(BROKER_URI, "lwtPubclient");
+        MqttTestClient lwtPubClient = new MqttTestClient(BROKER_URI, "lwtPubClient");
         lwtPubClient.connect(lwtPubConnOpts);
 
         MqttConnectionOptions lwtSubConnOpts = new MqttConnectionOptions();
         lwtSubConnOpts.setCleanStart(true);
         lwtSubConnOpts.setUserName(userId);
-
         MqttTestClient lwtSubClient = new MqttTestClient(BROKER_URI, "lwtSubClient");
         lwtSubClient.connect(lwtSubConnOpts);
-        Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, willQoS);
+        // Subscribe to the will topic
+        TestObserver<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, willQoS).test();
+        // make sure the subscription is active
+        await().until(() -> {
+            lwtPubClient.publish(willTopic, 1, ByteString.EMPTY, false);
+            return !topicSub.values().isEmpty();
+        });
 
         log.info("Kill client");
-        assertSame(kill(userId, "lwtPubclient").join(), KillReply.Result.OK);
+        assertSame(kill(userId, "lwtPubClient").join(), KillReply.Result.OK);
 
-        try {
-            MqttMsg msg =
-                topicSub.timeout(Math.min(sessionExpiryInterval, willDelayInterval) + 1, TimeUnit.SECONDS)
-                    .blockingFirst();
-            assertEquals(msg.topic, willTopic);
-            assertEquals(msg.qos, willQoS);
-            assertEquals(msg.payload, willPayload);
-            assertFalse(msg.isRetain);
-        } catch (Throwable e) {
-            log.error("TimeoutException", e);
-        }
+        await().atMost(Duration.ofSeconds(30)).until(() -> topicSub.values().size() >= 2);
+        MqttMsg msg = topicSub.values().get(topicSub.values().size() - 1);
+        assertEquals(msg.topic, willTopic);
+        assertEquals(msg.qos, willQoS);
+        assertEquals(msg.payload, willPayload);
+        assertFalse(msg.isRetain);
         lwtSubClient.disconnect();
         lwtSubClient.close();
     }

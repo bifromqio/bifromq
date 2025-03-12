@@ -42,6 +42,7 @@ import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
+import com.baidu.bifromq.util.TopicUtil;
 import com.google.protobuf.ByteString;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -259,7 +260,7 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setClient(clientInfo)
             .setNow(now)
             .build()).join();
-        when(distClient.addTopicMatch(anyLong(), anyString(), anyString(), anyString(), anyString(), anyInt(),
+        when(distClient.addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
             anyLong()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         String topicFilter = "/a/b/c";
@@ -278,7 +279,8 @@ public class InboxExpiryTest extends InboxServiceTest {
 
         verify(distClient, timeout(5000).times(0)).pub(anyLong(), anyString(), any(), any());
         verify(distClient, timeout(5000).times(1))
-            .removeTopicMatch(anyLong(), eq(tenantId), eq(topicFilter), anyString(), anyString(), anyInt(), eq(1L));
+            .removeRoute(anyLong(), eq(tenantId), eq(TopicUtil.from(topicFilter)), anyString(), anyString(), anyInt(),
+                eq(1L));
         await().until(() -> {
             GetReply getReply = inboxClient.get(GetRequest.newBuilder()
                 .setReqId(reqId)

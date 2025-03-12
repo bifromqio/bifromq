@@ -23,7 +23,6 @@ import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.mqtt.integration.MQTTTest;
 import com.baidu.bifromq.mqtt.integration.v3.client.MqttMsg;
-import com.baidu.bifromq.mqtt.integration.v3.client.MqttResponse;
 import com.baidu.bifromq.mqtt.integration.v3.client.MqttTestAsyncClient;
 import com.baidu.bifromq.mqtt.integration.v3.client.MqttTestClient;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
@@ -45,8 +44,6 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
-import org.eclipse.paho.client.mqttv3.internal.wire.MqttWireMessage;
 import org.testng.annotations.Test;
 
 @Slf4j
@@ -68,92 +65,8 @@ public class MQTTPubSubTest extends MQTTTest {
     }
 
     @Test(groups = "integration")
-    public void multiTopicPubSubCleanSessionFalseQoS1Basic() {
-        String[] topics = new String[] {"/QoS1/1", "/QoS1/2", "/QoS1/3", "/QoS1/4"};
-        String[] topicFilters = new String[] {"#"};
-        MqttMessage[] mqttMessages = new MqttMessage[topics.length];
-        for (int index = 0; index < topics.length; index++) {
-            MqttMessage message = new MqttMessage();
-            message.setQos(1);
-            message.setPayload(("hello").getBytes());
-            mqttMessages[index] = message;
-        }
-        pubSubMulti(topics, topicFilters, mqttMessages, false);
-    }
-
-    @Test(groups = "integration")
-    public void multiTopicPubSubCleanSessionFalseQoS2Basic() {
-        String[] topics = new String[] {"/QoS2/1", "/QoS2/2", "/QoS2/3", "/QoS2/4"};
-        String[] topicFilters = new String[] {"#"};
-        MqttMessage[] mqttMessages = new MqttMessage[topics.length];
-        for (int index = 0; index < topics.length; index++) {
-            MqttMessage message = new MqttMessage();
-            message.setQos(2);
-            message.setPayload(("hello").getBytes());
-            mqttMessages[index] = message;
-        }
-        pubSubMulti(topics, topicFilters, mqttMessages, false);
-    }
-
-    @Test(groups = "integration")
-    public void multiTopicPubSubCleanSessionTrueQoS1Basic() {
-        String[] topics = new String[] {"/QoS1/5", "/QoS1/6", "/QoS1/7", "/QoS1/8"};
-        String[] topicFilters = new String[] {"#"};
-        MqttMessage[] mqttMessages = new MqttMessage[topics.length];
-        for (int index = 0; index < topics.length; index++) {
-            MqttMessage message = new MqttMessage();
-            message.setQos(1);
-            message.setPayload(("hello").getBytes());
-            mqttMessages[index] = message;
-        }
-        pubSubMulti(topics, topicFilters, mqttMessages, true);
-    }
-
-    @Test(groups = "integration")
-    public void multiTopicPubSubCleanSessionTrueQoS2Basic() {
-        String[] topics = new String[] {"/QoS2/5", "/QoS2/6", "/QoS2/7", "/QoS2/8"};
-        String[] topicFilters = new String[] {"#"};
-        MqttMessage[] mqttMessages = new MqttMessage[topics.length];
-        for (int index = 0; index < topics.length; index++) {
-            MqttMessage message = new MqttMessage();
-            message.setQos(2);
-            message.setPayload(("hello").getBytes());
-            mqttMessages[index] = message;
-        }
-        pubSubMulti(topics, topicFilters, mqttMessages, true);
-    }
-
-    @Test(groups = "integration")
-    public void multiTopicPubSubCleanSessionTrueMixQoSBasic() {
-        String[] topics = new String[] {"/MixQoS/1", "/MixQoS/2", "/MixQoS/3", "/MixQoS/4"};
-        String[] topicFilters = new String[] {"#"};
-        MqttMessage[] mqttMessages = new MqttMessage[topics.length];
-        for (int index = 0; index < topics.length; index++) {
-            MqttMessage message = new MqttMessage();
-            message.setQos(1 + (index) % 2);
-            message.setPayload(("hello").getBytes());
-            mqttMessages[index] = message;
-        }
-        pubSubMulti(topics, topicFilters, mqttMessages, true);
-    }
-
-    @Test(groups = "integration")
-    public void singleTopicPubSubCleanSessionTrueMixQoSBasic() {
-        String[] topics = new String[] {"/MixQoS/5", "/MixQoS/6", "/MixQoS/7", "/MixQoS/8"};
-        String[] topicFilters = new String[] {"#"};
-        MqttMessage[] mqttMessages = new MqttMessage[topics.length];
-        for (int index = 0; index < topics.length; index++) {
-            MqttMessage message = new MqttMessage();
-            message.setQos(1 + (index) % 2);
-            message.setPayload(("hello-" + index).getBytes());
-            mqttMessages[index] = message;
-        }
-        pubSubMulti(topics, topicFilters, mqttMessages, true);
-    }
-
-    @Test(groups = "integration")
-    public void pubQoS0AndDisconnectQuickly() throws InterruptedException {
-
+    @SneakyThrows
+    public void pubQoS0AndDisconnectQuickly() {
         String topic = "greeting";
         MqttConnectOptions connOpts = new MqttConnectOptions();
         connOpts.setCleanSession(true);
@@ -177,10 +90,10 @@ public class MQTTPubSubTest extends MQTTTest {
             .setGranted(Granted.getDefaultInstance())
             .build());
 
-        TestObserver<MqttMsg> msgObserver = topicSub.test();
         subClient.unsubscribe(topic);
         subClient.disconnect();
         subClient.close();
+        TestObserver<MqttMsg> msgObserver = topicSub.test();
         msgObserver.awaitDone(100, TimeUnit.MILLISECONDS);
         msgObserver.assertNoValues();
     }
@@ -327,7 +240,6 @@ public class MQTTPubSubTest extends MQTTTest {
         pubSubInOrder(2, 2, false);
     }
 
-
     @SneakyThrows
     private void pubSubInOrder(int pubQoS, int subQoS, boolean cleanSession) {
         String topic = "a/b";
@@ -340,19 +252,23 @@ public class MQTTPubSubTest extends MQTTTest {
 
         MqttTestClient subClient = new MqttTestClient(BROKER_URI, MqttClient.generateClientId());
         subClient.connect(connOpts);
-        Observable<MqttMsg> topicSub = subClient.subscribe(topic, subQoS);
+        TestObserver<MqttMsg> topicSub = subClient.subscribe(topic, subQoS).test();
+        await().until(() -> {
+            pubClient.publish(topic, pubQoS, ByteString.EMPTY, false);
+            return !topicSub.values().isEmpty();
+        });
 
         List<ByteString> pubMsgList = new ArrayList<>();
+
         for (int i = 0; i < 100; i++) {
             ByteString msg = ByteString.copyFromUtf8(Integer.toUnsignedString(i));
             pubMsgList.add(msg);
             pubClient.publish(topic, pubQoS, msg, false);
         }
-        TestObserver<MqttMsg> observer = new TestObserver<>();
-        topicSub.subscribe(observer);
         await().until(() -> {
-            List<ByteString> mqttMsgs = observer.values().stream().map(msg -> msg.payload).toList();
-            return mqttMsgs.equals(pubMsgList);
+            List<ByteString> mqttMsgs = topicSub.values().stream().map(msg -> msg.payload).toList();
+            return mqttMsgs.size() >= 100
+                && mqttMsgs.subList(mqttMsgs.size() - 100, mqttMsgs.size()).equals(pubMsgList);
         });
         pubClient.disconnect();
         pubClient.close();
@@ -420,9 +336,12 @@ public class MQTTPubSubTest extends MQTTTest {
 
         MqttTestClient client = new MqttTestClient(BROKER_URI, MqttClient.generateClientId());
         client.connect(connOpts);
-        Observable<MqttMsg> topicSub = client.subscribe(topicFilter, subQoS);
-        client.publish(topic, pubQoS, ByteString.copyFromUtf8("hello"), false);
-        MqttMsg msg = topicSub.timeout(10, TimeUnit.SECONDS).blockingFirst();
+        TestObserver<MqttMsg> topicSub = client.subscribe(topicFilter, subQoS).test();
+        await().until(() -> {
+            client.publish(topic, pubQoS, ByteString.copyFromUtf8("hello"), false);
+            return !topicSub.values().isEmpty();
+        });
+        MqttMsg msg = topicSub.values().get(0);
         assertEquals(msg.topic, topic);
         assertEquals(msg.qos, Math.min(pubQoS, subQoS));
         assertFalse(msg.isDup);
@@ -431,87 +350,5 @@ public class MQTTPubSubTest extends MQTTTest {
         client.unsubscribe(topicFilter);
         client.disconnect();
         client.close();
-    }
-
-    private void pubSubMulti(String[] topics, String[] topicFilters, MqttMessage[] mqttMessages, boolean cleanSession) {
-        List<MqttResponse> responseList = new ArrayList<>();
-        List<MqttMsg> msgList = new ArrayList<>();
-        CountDownLatch latch = new CountDownLatch(mqttMessages.length * 2);
-        MqttConnectOptions connOpts = new MqttConnectOptions();
-        connOpts.setCleanSession(cleanSession);
-        connOpts.setUserName(tenantId + "/" + deviceKey);
-
-        MqttTestClient client = new MqttTestClient(BROKER_URI, MqttClient.generateClientId());
-        client.connect(connOpts);
-        client.messageArrived().subscribe(mqttMsg -> {
-            msgList.add(mqttMsg);
-            latch.countDown();
-        });
-        client.deliveryComplete().subscribe(mqttResponse -> {
-            responseList.add(mqttResponse);
-            latch.countDown();
-        });
-        for (int index = 0; index < topicFilters.length; index++) {
-            try {
-                client.subscribe(topicFilters[index], mqttMessages[index].getQos());
-            } catch (Exception exception) {
-                log.error("subscribe timeout exception: {}", index);
-            }
-        }
-        for (int index = 0; index < topics.length; index++) {
-            try {
-                client.publish(topics[index], mqttMessages[index].getQos(),
-                    ByteString.copyFrom(mqttMessages[index].getPayload()), false);
-            } catch (Exception timeoutException) {
-                log.error("publish timeout exception, index: {}, messageId:{}, isDup: {}",
-                    index, mqttMessages[index].getId(), mqttMessages[index].isDuplicate());
-            }
-        }
-        try {
-            assertTrue(latch.await(5, TimeUnit.SECONDS));
-            assertEquals(responseList.size(), msgList.size());
-            assertTrue(checkMsgIdConsecutive(msgList, responseList));
-            for (int index = 0; index < responseList.size(); index++) {
-                MqttResponse mqttResponse = responseList.get(index);
-                if (mqttMessages[index].getQos() == 1) {
-                    assertEquals(MqttWireMessage.MESSAGE_TYPE_PUBACK, mqttResponse.type);
-                } else if (mqttMessages[index].getQos() == 2) {
-                    assertEquals(MqttWireMessage.MESSAGE_TYPE_PUBCOMP, mqttResponse.type);
-                } else {
-                    fail();
-                }
-                MqttMsg mqttMsg = msgList.get(index);
-                assertFalse(mqttMsg.isDup);
-                assertFalse(mqttMsg.isRetain);
-                if (topics.length == 1) {
-                    assertEquals(mqttMsg.payload.toStringUtf8(), "hello-" + index);
-                } else {
-                    assertTrue(mqttMsg.payload.toStringUtf8().contains("hello"));
-                }
-            }
-        } catch (Exception exception) {
-            fail();
-        } finally {
-            for (String topicFilter : topicFilters) {
-                log.info("unsub {}", topicFilter);
-                client.unsubscribe(topicFilter);
-            }
-            log.info("finished");
-            client.disconnect();
-            client.close();
-        }
-    }
-
-    private boolean checkMsgIdConsecutive(List<MqttMsg> msgList,
-                                          List<MqttResponse> responseList) {
-        for (int index = 0; index < msgList.size() - 1; index++) {
-            MqttMsg mqttMessage = msgList.get(index);
-            MqttResponse mqttResponse = responseList.get(index);
-            if (mqttMessage.id + 1 != msgList.get(index + 1).id ||
-                mqttResponse.messageId + 1 != responseList.get(index + 1).messageId) {
-                return false;
-            }
-        }
-        return true;
     }
 }

@@ -228,7 +228,8 @@ public class RetainStoreTest {
 
     protected GCReply requestGC(long now, String tenantId, Integer expirySeconds) {
         long reqId = ThreadLocalRandom.current().nextInt();
-        KVRangeSetting s = findByBoundary(FULL_BOUNDARY, storeClient.latestEffectiveRouter()).get(0);
+        KVRangeSetting s =
+            findByBoundary(FULL_BOUNDARY, storeClient.latestEffectiveRouter()).stream().findFirst().get();
         RetainServiceRWCoProcInput input = buildGCRequest(reqId, now, tenantId, expirySeconds);
         KVRangeRWReply reply = storeClient.execute(s.leader,
             KVRangeRWRequest.newBuilder().setReqId(reqId).setVer(s.ver).setKvRangeId(s.id)

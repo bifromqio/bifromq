@@ -72,9 +72,9 @@ public class LocalDistService implements ILocalDistService {
                                                 IMQTTTransientSession session) {
         String tenantId = session.clientInfo().getTenantId();
         if (TopicUtil.isSharedSubscription(topicFilter)) {
-            return distClient.addTopicMatch(reqId,
+            return distClient.addRoute(reqId,
                 tenantId,
-                topicFilter,
+                TopicUtil.from(topicFilter),
                 ILocalDistService.globalize(session.channelId()),
                 toDelivererKey(tenantId, ILocalDistService.globalize(session.channelId()), serverId),
                 0,
@@ -91,9 +91,9 @@ public class LocalDistService implements ILocalDistService {
                                                     IMQTTTransientSession session) {
         String tenantId = session.clientInfo().getTenantId();
         if (TopicUtil.isSharedSubscription(topicFilter)) {
-            return distClient.removeTopicMatch(reqId,
+            return distClient.removeRoute(reqId,
                 tenantId,
-                topicFilter,
+                TopicUtil.from(topicFilter),
                 ILocalDistService.globalize(session.channelId()),
                 toDelivererKey(tenantId, ILocalDistService.globalize(session.channelId()), serverId),
                 0,
@@ -127,7 +127,7 @@ public class LocalDistService implements ILocalDistService {
                                 sessionRegistry.get(ILocalDistService.parseReceiverId(matchInfo.getReceiverId()));
                             if (session instanceof IMQTTTransientSession) {
                                 boolean success = ((IMQTTTransientSession) session)
-                                    .publish(matchInfo.getTopicFilter(),
+                                    .publish(matchInfo.getMatcher().getMqttTopicFilter(),
                                         matchInfo.getIncarnation(),
                                         singletonList(topicMsgPack));
                                 if (success) {
@@ -172,7 +172,7 @@ public class LocalDistService implements ILocalDistService {
                                         IMQTTSession session = sessionRegistry.get(sessionId);
                                         if (session instanceof IMQTTTransientSession) {
                                             if (((IMQTTTransientSession) session)
-                                                .publish(matchInfo.getTopicFilter(),
+                                                .publish(matchInfo.getMatcher().getMqttTopicFilter(),
                                                     incarnation,
                                                     singletonList(topicMsgPack))) {
                                                 published = true;
@@ -188,7 +188,7 @@ public class LocalDistService implements ILocalDistService {
                                         IMQTTSession session = sessionRegistry.get(sessionId);
                                         if (session instanceof IMQTTTransientSession) {
                                             if (((IMQTTTransientSession) session)
-                                                .publish(matchInfo.getTopicFilter(),
+                                                .publish(matchInfo.getMatcher().getMqttTopicFilter(),
                                                     incarnation,
                                                     singletonList(topicMsgPack))) {
                                                 published = true;
@@ -238,7 +238,7 @@ public class LocalDistService implements ILocalDistService {
                 return CheckReply.Code.NO_RECEIVER;
             }
             if (session instanceof IMQTTTransientSession transientSession) {
-                return transientSession.isSubscribing(matchInfo.getTopicFilter())
+                return transientSession.isSubscribing(matchInfo.getMatcher().getMqttTopicFilter())
                     ? CheckReply.Code.OK : CheckReply.Code.NO_SUB;
             } else {
                 // should not be here

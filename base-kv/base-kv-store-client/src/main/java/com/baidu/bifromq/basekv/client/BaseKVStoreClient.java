@@ -27,7 +27,6 @@ import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getTra
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.toLeaderRanges;
 import static java.util.Collections.emptyMap;
-import static java.util.Collections.emptyNavigableMap;
 
 import com.baidu.bifromq.basekv.RPCBluePrint;
 import com.baidu.bifromq.basekv.exception.BaseKVException;
@@ -84,10 +83,6 @@ import java.util.stream.IntStream;
 import org.slf4j.Logger;
 
 final class BaseKVStoreClient implements IBaseKVStoreClient {
-    private record ClusterInfo(Map<String, KVRangeStoreDescriptor> storeDescriptors,
-                               Map<String, String> serverToStoreMap) {
-    }
-
     private final Logger log;
     private final String clusterId;
     private final IRPCClient rpcClient;
@@ -109,7 +104,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     private final Observable<ClusterInfo> clusterInfoObservable;
     private final BehaviorSubject<NavigableMap<Boundary, KVRangeSetting>> effectiveRouterSubject =
         BehaviorSubject.createDefault(new TreeMap<>(BoundaryUtil::compare));
-
+    // key: storeId
+    private final Map<String, List<IQueryPipeline>> lnrQueryPplns = Maps.newHashMap();
     // key: serverId, val: storeId
     private volatile Map<String, String> serverToStoreMap = Maps.newHashMap();
     // key: storeId, value serverId
@@ -118,8 +114,6 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     private volatile Map<String, Map<KVRangeId, IMutationPipeline>> mutPplns = Maps.newHashMap();
     // key: storeId
     private volatile Map<String, List<IQueryPipeline>> queryPplns = Maps.newHashMap();
-    // key: storeId
-    private volatile Map<String, List<IQueryPipeline>> lnrQueryPplns = Maps.newHashMap();
 
     BaseKVStoreClient(BaseKVStoreClientBuilder builder) {
         this.clusterId = builder.clusterId;
@@ -468,8 +462,11 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         Map<String, Map<KVRangeId, KVRangeDescriptor>> leaderRanges =
             toLeaderRanges(effectiveEpoch.get().storeDescriptors());
         KeySpaceDAG dag = new KeySpaceDAG(leaderRanges);
-        NavigableMap<Boundary, KVRangeSetting> router = Maps.transformValues(dag.getEffectiveFullCoveredRoute(),
-            leaderRange -> new KVRangeSetting(clusterId, leaderRange.storeId(), leaderRange.descriptor()));
+        NavigableMap<Boundary, KVRangeSetting> router = new TreeMap<>(BoundaryUtil::compare);
+        for (Map.Entry<Boundary, KeySpaceDAG.LeaderRange> entry : dag.getEffectiveFullCoveredRoute().entrySet()) {
+            router.put(entry.getKey(),
+                new KVRangeSetting(clusterId, entry.getValue().storeId(), entry.getValue().descriptor()));
+        }
         if (router.isEmpty()) {
             return false;
         }
@@ -538,5 +535,9 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         for (String storeId : Sets.difference(currentQueryPplns.keySet(), allStoreIds)) {
             currentQueryPplns.get(storeId).forEach(IQueryPipeline::close);
         }
+    }
+
+    private record ClusterInfo(Map<String, KVRangeStoreDescriptor> storeDescriptors,
+                               Map<String, String> serverToStoreMap) {
     }
 }

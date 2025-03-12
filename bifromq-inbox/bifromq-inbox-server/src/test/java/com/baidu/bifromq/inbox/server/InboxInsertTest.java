@@ -13,6 +13,11 @@
 
 package com.baidu.bifromq.inbox.server;
 
+import static com.baidu.bifromq.inbox.util.InboxServiceUtil.getDelivererKey;
+import static com.baidu.bifromq.inbox.util.InboxServiceUtil.receiverId;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
+
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
@@ -32,16 +37,12 @@ import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.baidu.bifromq.util.TopicUtil;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.testng.annotations.Test;
-
-import static com.baidu.bifromq.inbox.util.InboxServiceUtil.getDelivererKey;
-import static com.baidu.bifromq.inbox.util.InboxServiceUtil.receiverId;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 
 public class InboxInsertTest extends InboxServiceTest {
     @Test(groups = "integration")
@@ -66,8 +67,10 @@ public class InboxInsertTest extends InboxServiceTest {
         TopicMessagePack.PublisherPack publisherPack =
             TopicMessagePack.PublisherPack.newBuilder().addMessage(msg).build();
         TopicMessagePack pack = TopicMessagePack.newBuilder().setTopic("topic").addMessage(publisherPack).build();
-        MatchInfo matchInfo =
-            MatchInfo.newBuilder().setReceiverId(receiverId(inboxId, incarnation)).setTopicFilter("topic").build();
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setReceiverId(receiverId(inboxId, incarnation))
+            .setMatcher(TopicUtil.from("topic"))
+            .build();
         reqBuilder.putPackage(tenantId, DeliveryPackage.newBuilder()
             .addPack(DeliveryPack.newBuilder().setMessagePack(pack).addMatchInfo(matchInfo).build()).build());
 
@@ -125,8 +128,10 @@ public class InboxInsertTest extends InboxServiceTest {
             TopicMessagePack.PublisherPack.newBuilder().addMessage(msg).build();
         TopicMessagePack pack1 = TopicMessagePack.newBuilder().setTopic("topic").addMessage(publisherPack).build();
         TopicMessagePack pack2 = TopicMessagePack.newBuilder().setTopic("topic").addMessage(publisherPack).build();
-        MatchInfo matchInfo =
-            MatchInfo.newBuilder().setReceiverId(receiverId(inboxId, incarnation)).setTopicFilter("topic").build();
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setReceiverId(receiverId(inboxId, incarnation))
+            .setMatcher(TopicUtil.from("topic"))
+            .build();
         DeliveryRequest req1 = DeliveryRequest.newBuilder().putPackage(tenantId, DeliveryPackage.newBuilder()
             .addPack(DeliveryPack.newBuilder().setMessagePack(pack1).addMatchInfo(matchInfo).build()).build()).build();
         DeliveryRequest req2 = DeliveryRequest.newBuilder().putPackage(tenantId, DeliveryPackage.newBuilder()

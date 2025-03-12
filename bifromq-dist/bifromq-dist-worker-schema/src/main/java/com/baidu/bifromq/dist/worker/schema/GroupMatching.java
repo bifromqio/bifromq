@@ -13,33 +13,33 @@
 
 package com.baidu.bifromq.dist.worker.schema;
 
-import static com.baidu.bifromq.util.TopicUtil.unescape;
-
+import com.baidu.bifromq.type.RouteMatcher;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
+/**
+ * Represent a group matching route.
+ */
 @EqualsAndHashCode(callSuper = true)
 @ToString
-public class GroupMatching extends Matching {
+public final class GroupMatching extends Matching {
     @EqualsAndHashCode.Exclude
     public final boolean ordered;
     @EqualsAndHashCode.Exclude
     public final List<NormalMatching> receiverList;
+    private final Map<String, Long> receivers;
 
-    public final Map<String, Long> receivers;
-    private final String origTopicFilter;
 
-    GroupMatching(RouteDetail detail, Map<String, Long> members) {
-        super(detail);
-        assert detail.type() != RouteDetail.RouteType.NormalReceiver;
-        this.ordered = detail.type() == RouteDetail.RouteType.OrderedReceiverGroup;
+    GroupMatching(String tenantId, RouteMatcher matcher, Map<String, Long> members) {
+        super(tenantId, matcher);
+        assert matcher.getType() != RouteMatcher.Type.Normal;
+        this.ordered = matcher.getType() == RouteMatcher.Type.OrderedShare;
         this.receivers = members;
-        this.origTopicFilter = detail.originalTopicFilter();
         this.receiverList = members.entrySet().stream()
-            .map(e -> new NormalMatching(detail, origTopicFilter, e.getKey(), e.getValue()))
+            .map(e -> new NormalMatching(tenantId, matcher, e.getKey(), e.getValue()))
             .collect(Collectors.toList());
     }
 
@@ -48,12 +48,7 @@ public class GroupMatching extends Matching {
         return Type.Group;
     }
 
-    @Override
-    public String originalTopicFilter() {
-        return origTopicFilter;
-    }
-
-    public String topicFilter() {
-        return unescape(escapedTopicFilter);
+    public Map<String, Long> receivers() {
+        return receivers;
     }
 }

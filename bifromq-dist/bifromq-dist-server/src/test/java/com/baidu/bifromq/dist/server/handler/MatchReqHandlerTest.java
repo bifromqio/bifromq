@@ -61,7 +61,7 @@ public class MatchReqHandlerTest {
 
         CompletableFuture<MatchReply> result = handler.handle(request);
         assertNotNull(result);
-        assertEquals(MatchReply.Result.OK, result.get().getResult());
+        assertEquals(result.get().getResult(), MatchReply.Result.OK);
         verify(eventCollector, times(1)).report(any(Matched.class));
     }
 
@@ -79,7 +79,7 @@ public class MatchReqHandlerTest {
 
         CompletableFuture<MatchReply> result = handler.handle(request);
         assertNotNull(result);
-        assertEquals(MatchReply.Result.EXCEED_LIMIT, result.get().getResult());
+        assertEquals(result.get().getResult(), MatchReply.Result.EXCEED_LIMIT);
         verify(eventCollector, times(1)).report(argThat(e ->
             e.type() == EventType.MATCH_ERROR && ((MatchError) e).reason().contains("EXCEED_LIMIT")));
     }
@@ -98,7 +98,7 @@ public class MatchReqHandlerTest {
 
         CompletableFuture<MatchReply> result = handler.handle(request);
         assertNotNull(result);
-        assertEquals(MatchReply.Result.ERROR, result.get().getResult());
+        assertEquals(result.get().getResult(), MatchReply.Result.ERROR);
         verify(eventCollector, times(1)).report(argThat(e ->
             e.type() == EventType.MATCH_ERROR && ((MatchError) e).reason().contains("Internal Error")));
     }
@@ -112,7 +112,7 @@ public class MatchReqHandlerTest {
         when(matchCallScheduler.schedule(request)).thenReturn(failedFuture);
 
         MatchReply result = handler.handle(request).join();
-        assertEquals(MatchReply.Result.BACK_PRESSURE_REJECTED, result.getResult());
+        assertEquals(result.getResult(), MatchReply.Result.BACK_PRESSURE_REJECTED);
         verify(eventCollector, times(1)).report(argThat(e ->
             e.type() == EventType.MATCH_ERROR && ((MatchError) e).reason().contains("Back pressure")));
     }

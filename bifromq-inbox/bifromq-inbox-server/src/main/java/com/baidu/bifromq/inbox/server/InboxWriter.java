@@ -27,6 +27,7 @@ import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.baidu.bifromq.util.TopicUtil;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -61,7 +62,7 @@ class InboxWriter implements InboxWriterPipeline.ISendRequestHandler {
             entry -> insertScheduler.schedule(InboxSubMessagePack.newBuilder().setTenantId(entry.getKey().tenantId())
                 .setInboxId(entry.getKey().instance().inboxId()).setIncarnation(entry.getKey().instance().incarnation())
                 .addAllMessagePack(entry.getValue().entrySet().stream().map(
-                    e -> SubMessagePack.newBuilder().setTopicFilter(e.getKey().getTopicFilter())
+                    e -> SubMessagePack.newBuilder().setTopicFilter(e.getKey().getMatcher().getMqttTopicFilter())
                         .setIncarnation(e.getKey().getIncarnation()).addAllMessages(e.getValue()).build()).toList())
                 .build()).exceptionally(e -> {
                 log.debug("Failed to insert", e);
@@ -85,7 +86,7 @@ class InboxWriter implements InboxWriterPipeline.ISendRequestHandler {
                                 DeliveryResult.Code code =
                                     insertionResult.getRejected() ? DeliveryResult.Code.NO_SUB : DeliveryResult.Code.OK;
                                 matchResultMap.putIfAbsent(MatchInfo.newBuilder().setReceiverId(receiverId)
-                                    .setTopicFilter(insertionResult.getTopicFilter())
+                                    .setMatcher(TopicUtil.from(insertionResult.getTopicFilter()))
                                     .setIncarnation(insertionResult.getIncarnation()).build(), code);
                             });
                         }

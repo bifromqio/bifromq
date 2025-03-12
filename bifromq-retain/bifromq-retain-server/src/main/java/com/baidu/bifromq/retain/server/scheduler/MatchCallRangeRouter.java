@@ -37,6 +37,7 @@ import com.baidu.bifromq.retain.store.schema.KVSchemaUtil;
 import com.baidu.bifromq.retain.store.schema.LevelHash;
 import com.google.protobuf.ByteString;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -57,7 +58,7 @@ class MatchCallRangeRouter {
                 List<String> filterLevels = parse(topicFilter, false);
                 List<String> filterPrefix = filterPrefix(filterLevels);
                 short levels = (short) (isFixedLevelMatch ? filterLevels.size() : filterLevels.size() - 1);
-                List<KVRangeSetting> rangeSettingList;
+                Collection<KVRangeSetting> rangeSettingList;
                 if (isFixedLevelMatch) {
                     ByteString startKey = retainKeyPrefix(tenantId, levels, filterPrefix);
                     Boundary topicBoundary = toBoundary(startKey, upperBound(startKey));
@@ -104,7 +105,7 @@ class MatchCallRangeRouter {
             .setStartKey(retainKeyPrefixBegin)
             .setEndKey(retainKeyPrefixEnd)
             .build();
-        List<KVRangeSetting> allCandidates = findByBoundary(topicBoundary, effectiveRouter);
+        Collection<KVRangeSetting> allCandidates = findByBoundary(topicBoundary, effectiveRouter);
         List<KVRangeSetting> candidates = new ArrayList<>(allCandidates.size());
         for (KVRangeSetting rangeSetting : allCandidates) {
             Boundary candidateBoundary = rangeSetting.boundary;

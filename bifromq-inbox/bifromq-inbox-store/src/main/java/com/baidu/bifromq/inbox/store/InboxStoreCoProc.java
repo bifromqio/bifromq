@@ -87,6 +87,7 @@ import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessage;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.time.Duration;
@@ -131,8 +132,6 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         this.rangeReaderProvider = rangeReaderProvider;
         this.tenantStates = new TenantsState(eventCollector, rangeReaderProvider.get(),
             "clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id));
-        log.debug("Loading tenant states: rangeId={}", KVRangeIdUtil.toString(id));
-        load();
     }
 
     @Override
@@ -158,7 +157,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     }
 
     @Override
-    public Supplier<RWCoProcOutput> mutate(RWCoProcInput input, IKVReader reader, IKVWriter writer) {
+    public Supplier<MutationResult> mutate(RWCoProcInput input, IKVReader reader, IKVWriter writer) {
         InboxServiceRWCoProcInput coProcInput = input.getInboxService();
         InboxServiceRWCoProcOutput.Builder outputBuilder =
             InboxServiceRWCoProcOutput.newBuilder().setReqId(coProcInput.getReqId());
@@ -213,15 +212,16 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         RWCoProcOutput output = RWCoProcOutput.newBuilder().setInboxService(outputBuilder.build()).build();
         return () -> {
             afterMutate.get().run();
-            return output;
+            return new MutationResult(output, Optional.empty());
         };
     }
 
     @Override
-    public void reset(Boundary boundary) {
+    public Any reset(Boundary boundary) {
         tenantStates.reset();
-        log.debug("Reloading tenant states: rangeId={}", KVRangeIdUtil.toString(id));
+        log.debug("Loading tenant states: rangeId={}", KVRangeIdUtil.toString(id));
         load();
+        return Any.getDefaultInstance();
     }
 
     @Override

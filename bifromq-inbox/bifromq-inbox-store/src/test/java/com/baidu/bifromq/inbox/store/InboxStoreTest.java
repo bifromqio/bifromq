@@ -13,6 +13,21 @@
 
 package com.baidu.bifromq.inbox.store;
 
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.inboxStartKeyPrefix;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionNumGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionSpaceGauge;
+import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCountGauge;
+import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
+
 import com.baidu.bifromq.basecluster.AgentHostOptions;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
@@ -86,6 +101,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -106,21 +122,6 @@ import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
-
-import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
-import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByKey;
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
-import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.inboxStartKeyPrefix;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionNumGauge;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSessionSpaceGauge;
-import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentSubCountGauge;
-import static org.awaitility.Awaitility.await;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.when;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 
 @Slf4j
 abstract class InboxStoreTest {
@@ -296,9 +297,9 @@ abstract class InboxStoreTest {
             .setReqId(reqId)
             .setGc(request)
             .build();
-        List<KVRangeSetting> rangeSettings = findByBoundary(FULL_BOUNDARY, storeClient.latestEffectiveRouter());
+        Collection<KVRangeSetting> rangeSettings = findByBoundary(FULL_BOUNDARY, storeClient.latestEffectiveRouter());
         assert !rangeSettings.isEmpty();
-        InboxServiceROCoProcOutput output = query(rangeSettings.get(0), input);
+        InboxServiceROCoProcOutput output = query(rangeSettings.stream().findFirst().get(), input);
         assertTrue(output.hasGc());
         assertEquals(output.getReqId(), reqId);
         return output.getGc();

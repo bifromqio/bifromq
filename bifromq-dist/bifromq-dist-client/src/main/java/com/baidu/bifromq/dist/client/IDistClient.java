@@ -16,6 +16,7 @@ package com.baidu.bifromq.dist.client;
 import com.baidu.bifromq.baserpc.client.IConnectable;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
+import com.baidu.bifromq.type.RouteMatcher;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -43,40 +44,40 @@ public interface IDistClient extends IConnectable, AutoCloseable {
      *
      * @param reqId        the caller supplied request id for event tracing
      * @param tenantId     the id of caller tenant
-     * @param topicFilter  the topic filter to apply
+     * @param matcher      the route matcher
      * @param receiverId   the id of the receiverInfo hosted by the subbroker
      * @param delivererKey the key of the deliverer via which the message will be sent to the receiverInfo
      * @param subBrokerId  the hosting subbroker of the receiverInfo
      * @param incarnation  the incarnation of the receiverInfo
      * @return correspond to Mqtt Sub QoS
      */
-    CompletableFuture<MatchResult> addTopicMatch(long reqId,
-                                                 String tenantId,
-                                                 String topicFilter,
-                                                 String receiverId,
-                                                 String delivererKey,
-                                                 int subBrokerId,
-                                                 long incarnation);
+    CompletableFuture<MatchResult> addRoute(long reqId,
+                                            String tenantId,
+                                            RouteMatcher matcher,
+                                            String receiverId,
+                                            String delivererKey,
+                                            int subBrokerId,
+                                            long incarnation);
 
     /**
      * Remove a topic match.
      *
      * @param reqId        the caller supplied request id for event tracing
      * @param tenantId     the id of caller tenant
-     * @param topicFilter  the topic filter to remove
+     * @param matcher      the topic filter to remove
      * @param receiverId   the id of the receiverInfo hosted by the subbroker
      * @param delivererKey the key of the deliverer via which the message will be sent to the receiverInfo
      * @param subBrokerId  the hosting subbroker of the receiverInfo
      * @param incarnation  the incarnation of the receiverInfo
      * @return true for remove successfully, false for match not found
      */
-    CompletableFuture<UnmatchResult> removeTopicMatch(long reqId,
-                                                      String tenantId,
-                                                      String topicFilter,
-                                                      String receiverId,
-                                                      String delivererKey,
-                                                      int subBrokerId,
-                                                      long incarnation);
+    CompletableFuture<UnmatchResult> removeRoute(long reqId,
+                                                 String tenantId,
+                                                 RouteMatcher matcher,
+                                                 String receiverId,
+                                                 String delivererKey,
+                                                 int subBrokerId,
+                                                 long incarnation);
 
     void close();
 }

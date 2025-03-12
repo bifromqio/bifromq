@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package commontype;
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.type";
+option java_outer_classname = "RouteMatcherProtos";
+
+message RouteMatcher{
+  enum Type{
+    Normal = 0;
+    UnorderedShare = 1;
+    OrderedShare = 2;
+  }
+  Type type = 1;
+  repeated string filterLevel = 2;
+  optional string group = 3; // only available for shared subscription
+  string mqttTopicFilter = 4;
+}

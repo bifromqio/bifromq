@@ -18,12 +18,17 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
+import com.google.protobuf.Any;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
+/**
+ * The interface of range co-processor.
+ */
 public interface IKVRangeCoProc {
     /**
-     * Execute a query co-proc
+     * Execute a query co-proc.
      *
      * @param input the query input
      * @return the future of query result
@@ -39,18 +44,28 @@ public interface IKVRangeCoProc {
      * @param writer the range data writer
      * @return the future of mutation result
      */
-    Supplier<RWCoProcOutput> mutate(RWCoProcInput input, IKVReader reader, IKVWriter writer);
+    Supplier<MutationResult> mutate(RWCoProcInput input, IKVReader reader, IKVWriter writer);
 
     /**
      * This method will be called whenever owner range is restored from a snapshot or boundary changed via split/merge.
+     * The returned fact will be included in the KVRangeDescriptor.
      *
      * @param boundary the boundary of the owner KVRange
+     * @return the current fact about the data within the range replica.
      */
-    default void reset(Boundary boundary) {
+    default Any reset(Boundary boundary) {
+        return Any.getDefaultInstance();
     }
 
     /**
-     * Close the coproc instance, and release all related resources
+     * Close the co-proc instance, and release all related resources.
      */
     void close();
+
+    /**
+     * The result of mutation co-proc. The output will be returned as the reply to the client, and the fact(if present)
+     * will be included in the next KVRangeDescriptor.
+     */
+    record MutationResult(RWCoProcOutput output, Optional<Any> fact) {
+    }
 }

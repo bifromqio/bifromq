@@ -1,4 +1,5 @@
 syntax = "proto3";
+import "commontype/RouteMatcher.proto";
 import "commontype/TopicMessage.proto";
 
 option java_multiple_files = true;
@@ -16,7 +17,7 @@ service DistService {
 message MatchRequest {
   uint64 reqId = 1;
   string tenantId = 2;
-  string topicFilter = 3;
+  commontype.RouteMatcher matcher = 3;
   uint32 brokerId = 4;
   string receiverId = 5;
   string delivererKey = 6;
@@ -37,7 +38,7 @@ message MatchReply {
 message UnmatchRequest {
   uint64 reqId = 1;
   string tenantId = 2;
-  string topicFilter = 3;
+  commontype.RouteMatcher matcher = 3;
   uint32 brokerId = 4;
   string receiverId = 5;
   string delivererKey = 6;

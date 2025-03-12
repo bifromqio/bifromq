@@ -22,6 +22,7 @@ import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
+import com.baidu.bifromq.type.RouteMatcher;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -53,17 +54,17 @@ final class DistClient implements IDistClient {
     }
 
     @Override
-    public CompletableFuture<MatchResult> addTopicMatch(long reqId,
-                                                        String tenantId,
-                                                        String topicFilter,
-                                                        String receiverId,
-                                                        String delivererKey,
-                                                        int subBrokerId,
-                                                        long incarnation) {
+    public CompletableFuture<MatchResult> addRoute(long reqId,
+                                                   String tenantId,
+                                                   RouteMatcher matcher,
+                                                   String receiverId,
+                                                   String delivererKey,
+                                                   int subBrokerId,
+                                                   long incarnation) {
         MatchRequest request = MatchRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
-            .setTopicFilter(topicFilter)
+            .setMatcher(matcher)
             .setReceiverId(receiverId)
             .setDelivererKey(delivererKey)
             .setBrokerId(subBrokerId)
@@ -84,17 +85,17 @@ final class DistClient implements IDistClient {
     }
 
     @Override
-    public CompletableFuture<UnmatchResult> removeTopicMatch(long reqId,
-                                                             String tenantId,
-                                                             String topicFilter,
-                                                             String receiverId,
-                                                             String delivererKey,
-                                                             int subBrokerId,
-                                                             long incarnation) {
+    public CompletableFuture<UnmatchResult> removeRoute(long reqId,
+                                                        String tenantId,
+                                                        RouteMatcher matcher,
+                                                        String receiverId,
+                                                        String delivererKey,
+                                                        int subBrokerId,
+                                                        long incarnation) {
         UnmatchRequest request = UnmatchRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
-            .setTopicFilter(topicFilter)
+            .setMatcher(matcher)
             .setReceiverId(receiverId)
             .setDelivererKey(delivererKey)
             .setBrokerId(subBrokerId)

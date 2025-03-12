@@ -27,6 +27,7 @@ import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.GCReply;
 import com.baidu.bifromq.dist.rpc.proto.GCRequest;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
@@ -77,7 +78,8 @@ class DistWorkerCleaner {
     }
 
     private CompletableFuture<Void> doGC(String storeId) {
-        List<KVRangeSetting> rangeSettingList = findByBoundary(FULL_BOUNDARY, distWorkerClient.latestEffectiveRouter());
+        Collection<KVRangeSetting> rangeSettingList =
+            findByBoundary(FULL_BOUNDARY, distWorkerClient.latestEffectiveRouter());
         rangeSettingList.removeIf(rangeSetting -> !rangeSetting.leader.equals(storeId));
         long reqId = HLC.INST.getPhysical();
         List<CompletableFuture<GCReply>> replyFutures =

@@ -37,20 +37,20 @@ public class TestCoProc implements IKVRangeCoProc {
     @Override
     public CompletableFuture<ROCoProcOutput> query(ROCoProcInput input, IKVReader reader) {
         // get
-        return CompletableFuture.completedFuture(ROCoProcOutput.newBuilder()
-            .setRaw(reader.get(input.getRaw()).orElse(ByteString.EMPTY))
-            .build());
+        return CompletableFuture.completedFuture(
+            ROCoProcOutput.newBuilder().setRaw(reader.get(input.getRaw()).orElse(ByteString.EMPTY)).build());
     }
 
     @Override
-    public Supplier<RWCoProcOutput> mutate(RWCoProcInput input, IKVReader reader, IKVWriter client) {
+    public Supplier<MutationResult> mutate(RWCoProcInput input, IKVReader reader, IKVWriter client) {
         String[] str = input.getRaw().toStringUtf8().split("_");
         ByteString key = ByteString.copyFromUtf8(str[0]);
         ByteString value = ByteString.copyFromUtf8(str[1]);
         // update
         Optional<ByteString> existing = reader.get(key);
         client.put(key, value);
-        return () -> RWCoProcOutput.newBuilder().setRaw(existing.orElse(ByteString.EMPTY)).build();
+        return () -> new MutationResult(RWCoProcOutput.newBuilder().setRaw(existing.orElse(ByteString.EMPTY)).build(),
+            Optional.empty());
     }
 
     @Override
