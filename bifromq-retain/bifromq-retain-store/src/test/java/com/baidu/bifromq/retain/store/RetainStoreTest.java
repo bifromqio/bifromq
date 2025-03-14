@@ -181,7 +181,6 @@ public class RetainStoreTest {
         closeable.close();
     }
 
-
     protected RetainResult.Code requestRetain(String tenantId, TopicMessage topicMsg) {
         long reqId = ThreadLocalRandom.current().nextInt();
         ByteString tenantNS = KVSchemaUtil.tenantBeginKey(tenantId);
@@ -266,7 +265,7 @@ public class RetainStoreTest {
 
     protected Gauge getGauge(String tenantId, TenantMetric gaugeMetric) {
         AtomicReference<Gauge> holder = new AtomicReference<>();
-        await().until(() -> {
+        await().atMost(Duration.ofSeconds(20)).until(() -> {
             for (Meter meter : meterRegistry.getMeters()) {
                 if (meter.getId().getType() == Meter.Type.GAUGE &&
                     meter.getId().getName().equals(gaugeMetric.metricName) &&

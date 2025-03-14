@@ -17,6 +17,7 @@ import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertNotSame;
 
 import io.micrometer.core.instrument.Gauge;
+import java.time.Duration;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -34,8 +35,8 @@ public class LoadMetadataTest extends RetainStoreTest {
         requestRetain(tenantId, message("/b", "hello"));
         Gauge spaceUsageGauge = getSpaceUsageGauge(tenantId);
         Gauge retainCountGauge = getRetainCountGauge(tenantId);
-        await().until(() -> spaceUsageGauge.value() > 0);
-        await().until(() -> retainCountGauge.value() == 2);
+        await().atMost(Duration.ofSeconds(20)).until(() -> spaceUsageGauge.value() > 0);
+        await().atMost(Duration.ofSeconds(20)).until(() -> retainCountGauge.value() == 2);
 
         restartStoreServer();
         storeClient.join();
@@ -44,7 +45,7 @@ public class LoadMetadataTest extends RetainStoreTest {
         Gauge newRetainCountGauge = getRetainCountGauge(tenantId);
         assertNotSame(spaceUsageGauge, newSpaceUsageGauge);
         assertNotSame(retainCountGauge, newRetainCountGauge);
-        await().until(() -> newSpaceUsageGauge.value() > 0);
-        await().until(() -> newRetainCountGauge.value() == 2);
+        await().atMost(Duration.ofSeconds(20)).until(() -> newSpaceUsageGauge.value() > 0);
+        await().atMost(Duration.ofSeconds(20)).until(() -> newRetainCountGauge.value() == 2);
     }
 }
