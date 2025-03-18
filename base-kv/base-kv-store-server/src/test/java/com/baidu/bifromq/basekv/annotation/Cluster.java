@@ -21,7 +21,9 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.METHOD})
 public @interface Cluster {
-    int initNodes() default 3;
+    int initVoters() default 3;
+
+    int initLearners() default 0;
 
     int installSnapshotTimeoutTick() default 2000;
 

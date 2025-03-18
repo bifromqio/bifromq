@@ -31,7 +31,7 @@ import org.testng.annotations.Test;
 @Slf4j
 public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemplate {
 
-    @Cluster(initNodes = 2)
+    @Cluster(initVoters = 2)
     @Test(groups = "integration")
     public void recoverNonExist() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
@@ -46,7 +46,7 @@ public class KVRangeStoreClusterRecoveryTest extends KVRangeStoreClusterTestTemp
         }
     }
 
-    @Cluster(initNodes = 2)
+    @Cluster(initVoters = 2)
     @Test(groups = "integration")
     public void recoveryFromTwoToOne() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();

@@ -1171,7 +1171,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 .setTaskId(taskId)
                                 .setVer(request.getMergerVer())
                                 .setRequester(id)
-                                .build()).build());
+                                .build())
+                            .build());
                     } else {
                         // ignore duplicated requests from same merger
                         onDone.complete(NOOP);
@@ -1225,7 +1226,10 @@ public class KVRangeFSM implements IKVRangeFSM {
                 }
                 assert state.getType() == PreparedMerging;
                 Map<String, Boolean> waitingList = Maps.newHashMap(state.getWaitingListMap());
-                waitingList.put(request.getStoreId(), true);
+                // waiting list only track voter's progress
+                if (waitingList.containsKey(request.getStoreId())) {
+                    waitingList.put(request.getStoreId(), true);
+                }
                 int quorumSize = waitingList.size() / 2 + 1;
                 int readyNum = Maps.filterValues(waitingList, v -> v).size();
                 if (readyNum < quorumSize) {
@@ -1238,8 +1242,10 @@ public class KVRangeFSM implements IKVRangeFSM {
                     onDone.complete(NOOP);
                     break;
                 }
+                // quorum meets
                 CompletableFuture<Void> readyToMerge;
-                if (readyNum == quorumSize && waitingList.get(hostStoreId)) {
+                if (waitingList.containsKey(hostStoreId) && waitingList.get(hostStoreId)) {
+                    // if local merger is a voter and is ready to merge
                     readyToMerge = CompletableFuture.completedFuture(null);
                 } else {
                     // waiting for Merge command from local mergee committed in merger's WAL
@@ -1516,10 +1522,17 @@ public class KVRangeFSM implements IKVRangeFSM {
     }
 
     private boolean isCompatible(ClusterConfig config1, ClusterConfig config2) {
-        return new HashSet<>(config1.getVotersList()).containsAll(config2.getVotersList())
-            && new HashSet<>(config1.getLearnersList()).containsAll(config2.getLearnersList())
-            && new HashSet<>(config2.getVotersList()).containsAll(config1.getVotersList())
-            && new HashSet<>(config2.getLearnersList()).containsAll(config1.getLearnersList());
+        // both merger and mergee are not in config change process
+        Set<String> voterSet1 = new HashSet<>(config1.getVotersList());
+        Set<String> voterSet2 = new HashSet<>(config2.getVotersList());
+        Set<String> learnerSet1 = new HashSet<>(config1.getLearnersList());
+        Set<String> learnerSet2 = new HashSet<>(config2.getLearnersList());
+        return voterSet1.equals(voterSet2)
+            && learnerSet1.equals(learnerSet2)
+            && config1.getNextVotersList().isEmpty()
+            && config2.getNextVotersList().isEmpty()
+            && config1.getNextLearnersList().isEmpty()
+            && config2.getNextLearnersList().isEmpty();
     }
 
     private void handleMessage(KVRangeMessage message) {

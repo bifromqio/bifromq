@@ -157,7 +157,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         });
     }
 
-    @Cluster(initNodes = 1)
+    @Cluster(initVoters = 1)
     @Test(groups = "integration")
     public void addReplicaFromLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
@@ -173,7 +173,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         });
     }
 
-    @Cluster(initNodes = 2)
+    @Cluster(initVoters = 2)
     @Test(groups = "integration")
     public void addReplicaFromNonLeaderStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
@@ -220,7 +220,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
         log.info("Test done");
     }
 
-    @Cluster(initNodes = 1)
+    @Cluster(initVoters = 1)
     @Test(groups = "integration")
     public void moveHostingStore() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
@@ -272,7 +272,7 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
 
     }
 
-    @Cluster(initNodes = 1)
+    @Cluster(initVoters = 1)
     @Test(groups = "integration")
     public void gracefulQuit() {
         KVRangeId rangeId = cluster.genesisKVRangeId();

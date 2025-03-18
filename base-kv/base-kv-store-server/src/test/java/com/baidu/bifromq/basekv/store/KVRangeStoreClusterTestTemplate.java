@@ -33,23 +33,26 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public abstract class KVRangeStoreClusterTestTemplate extends MockableTest {
     protected KVRangeStoreTestCluster cluster;
-    private int initNodes = 3;
+    private int initVoters = 3;
+    private int initLearners = 0;
     private KVRangeStoreOptions options;
 
     private void createClusterByAnnotation(Method testMethod) {
         Cluster cluster = testMethod.getAnnotation(Cluster.class);
         options = new KVRangeStoreOptions();
         if (cluster != null) {
-            Preconditions.checkArgument(cluster.initNodes() > 0,
+            Preconditions.checkArgument(cluster.initVoters() > 0,
                 "Init nodes number must be greater than zero");
-            initNodes = cluster.initNodes();
+            initVoters = cluster.initVoters();
+            initLearners = cluster.initLearners();
             KVRangeOptions rangeOptions = new KVRangeOptions();
             rangeOptions.setWalRaftConfig(rangeOptions.getWalRaftConfig().setAsyncAppend(cluster.asyncAppend()));
             rangeOptions.setWalRaftConfig(rangeOptions.getWalRaftConfig()
                 .setInstallSnapshotTimeoutTick(cluster.installSnapshotTimeoutTick()));
             options.setKvRangeOptions(rangeOptions);
         } else {
-            initNodes = 3;
+            initVoters = 3;
+            initLearners = 0;
         }
     }
 
@@ -65,16 +68,21 @@ public abstract class KVRangeStoreClusterTestTemplate extends MockableTest {
             Thread.sleep(100);
 
             Set<String> voters = Sets.newHashSet(store0);
-            for (int i = 1; i < initNodes; i++) {
+            for (int i = 1; i < initVoters; i++) {
                 voters.add(cluster.addStore());
+            }
+            Set<String> learners = Sets.newHashSet();
+            for (int i = 0; i < initLearners; i++) {
+                learners.add(cluster.addStore());
             }
             long start = System.currentTimeMillis();
             log.info("Preparing replica config for testing");
             KVRangeConfig setting = cluster.kvRangeSetting(rangeId);
             String leader = setting.leader;
-            if (!setting.clusterConfig.getVotersList().containsAll(voters)) {
-                cluster.changeReplicaConfig(leader, setting.ver, rangeId, voters, Sets.newHashSet())
-                        .toCompletableFuture().join();
+            if (!setting.clusterConfig.getVotersList().containsAll(voters)
+                || !setting.clusterConfig.getLearnersList().containsAll(learners)) {
+                cluster.changeReplicaConfig(leader, setting.ver, rangeId, voters, learners)
+                    .toCompletableFuture().join();
 
                 await().ignoreExceptions().atMost(40, TimeUnit.SECONDS).until(() -> {
                     KVRangeConfig newSetting = cluster.kvRangeSetting(rangeId);

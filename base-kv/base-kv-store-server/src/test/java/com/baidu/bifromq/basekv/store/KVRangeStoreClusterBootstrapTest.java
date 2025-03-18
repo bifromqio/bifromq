@@ -24,7 +24,7 @@ import org.testng.annotations.Test;
 @Slf4j
 public class KVRangeStoreClusterBootstrapTest extends KVRangeStoreClusterTestTemplate {
 
-    @Cluster(initNodes = 1)
+    @Cluster(initVoters = 1)
     @Test(groups = "integration")
     public void testBootstrap1StoreCluster() {
         KVRangeId rangeId = cluster.genesisKVRangeId();
@@ -37,7 +37,7 @@ public class KVRangeStoreClusterBootstrapTest extends KVRangeStoreClusterTestTem
         });
     }
 
-    @Cluster(initNodes = 2)
+    @Cluster(initVoters = 2)
     @Test(groups = "integration")
     public void testBootstrap2StoreCluster() {
         KVRangeId rangeId = cluster.genesisKVRangeId();

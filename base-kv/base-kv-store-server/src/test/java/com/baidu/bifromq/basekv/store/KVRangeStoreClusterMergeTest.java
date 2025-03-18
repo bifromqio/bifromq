@@ -13,20 +13,6 @@
 
 package com.baidu.bifromq.basekv.store;
 
-import com.baidu.bifromq.basekv.annotation.Cluster;
-import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
-import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.google.common.collect.Sets;
-import lombok.extern.slf4j.Slf4j;
-import org.testng.annotations.Test;
-
-import java.time.Duration;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
-
 import static com.baidu.bifromq.basekv.proto.State.StateType.Merged;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compare;
@@ -34,9 +20,22 @@ import static com.google.protobuf.ByteString.copyFromUtf8;
 import static java.util.Collections.emptySet;
 import static org.awaitility.Awaitility.await;
 
+import com.baidu.bifromq.basekv.annotation.Cluster;
+import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
+import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.google.common.collect.Sets;
+import java.time.Duration;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
+import org.testng.annotations.Test;
+
 @Slf4j
 public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplate {
-    @Cluster(initNodes = 1)
+    @Cluster(initVoters = 1)
     @Test(groups = "integration")
     public void mergeSingleNodeCluster() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
@@ -114,6 +113,16 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
 
     @Test(groups = "integration")
     public void mergeFromLeaderStore() {
+        merge();
+    }
+
+    @Cluster(initLearners = 1)
+    @Test(groups = "integration")
+    public void mergeWithLearner() {
+        merge();
+    }
+
+    private void merge() {
         KVRangeId genesisKVRangeId = cluster.genesisKVRangeId();
         KVRangeConfig genesisKVRangeSettings = cluster.awaitAllKVRangeReady(genesisKVRangeId, 1, 40);
         log.info("Splitting range");
@@ -266,6 +275,7 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
             .until(() -> cluster.kvRangeSetting(merger.get().id).boundary.equals(FULL_BOUNDARY));
         log.info("Merge done");
     }
+
 
     @Cluster(installSnapshotTimeoutTick = 10)
     @Test(groups = "integration")
