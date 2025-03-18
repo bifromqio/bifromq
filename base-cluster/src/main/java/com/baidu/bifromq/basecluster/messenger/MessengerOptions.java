@@ -29,9 +29,14 @@ import lombok.experimental.Accessors;
 @NoArgsConstructor
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class MessengerOptions {
+    @Builder.Default
     private int maxFanout = 4;
+    @Builder.Default
     private int maxFanoutGossips = 60;
+    @Builder.Default
     private int maxHealthScore = 4;
+    @Builder.Default
     private int retransmitMultiplier = 4;
+    @Builder.Default
     private Duration spreadPeriod = Duration.ofMillis(500);
 }

@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
 import com.baidu.bifromq.basekv.localengine.IWALableKVEngineConfigurator;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Accessors;
@@ -29,7 +30,9 @@ import org.rocksdb.PrepopulateBlobCache;
 public final class RocksDBWALableKVEngineConfigurator
     extends RocksDBKVEngineConfigurator<RocksDBWALableKVEngineConfigurator>
     implements IWALableKVEngineConfigurator {
+    @Builder.Default
     private boolean asyncWALFlush = false;
+    @Builder.Default
     private boolean fsyncWAL = false;
 
     @Override

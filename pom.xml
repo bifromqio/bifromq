@@ -114,20 +114,20 @@
         <jmh.version>1.37</jmh.version>
 
         <!-- maven.plugin.version-->
-        <maven.compiler.plugin.version>3.10.1</maven.compiler.plugin.version>
-        <maven.archetype.plugin.version>3.3.0</maven.archetype.plugin.version>
-        <maven.jar.plugin.version>3.2.2</maven.jar.plugin.version>
-        <maven.javadoc.plugin.version>3.4.0</maven.javadoc.plugin.version>
-        <maven.release.plugin.version>2.5.3</maven.release.plugin.version>
-        <maven.resources.plugin.version>3.2.0</maven.resources.plugin.version>
-        <maven.source.plugin.version>3.2.1</maven.source.plugin.version>
-        <maven.dependency.plugin.version>3.3.0</maven.dependency.plugin.version>
-        <maven.assembly.plugin.version>3.4.1</maven.assembly.plugin.version>
-        <maven.surefire.plugin.version>3.0.0-M5</maven.surefire.plugin.version>
+        <maven.compiler.plugin.version>3.14.0</maven.compiler.plugin.version>
+        <maven.archetype.plugin.version>3.3.1</maven.archetype.plugin.version>
+        <maven.jar.plugin.version>3.4.2</maven.jar.plugin.version>
+        <maven.javadoc.plugin.version>3.11.2</maven.javadoc.plugin.version>
+        <maven.release.plugin.version>3.1.1</maven.release.plugin.version>
+        <maven.resources.plugin.version>3.3.1</maven.resources.plugin.version>
+        <maven.source.plugin.version>3.3.1</maven.source.plugin.version>
+        <maven.dependency.plugin.version>3.8.1</maven.dependency.plugin.version>
+        <maven.assembly.plugin.version>3.7.1</maven.assembly.plugin.version>
+        <maven.surefire.plugin.version>3.5.2</maven.surefire.plugin.version>
         <maven.jacoco.plugin.version>0.8.12</maven.jacoco.plugin.version>
-        <maven.checkstyle.plugin.version>3.2.2</maven.checkstyle.plugin.version>
-        <maven.wrapper.plugin.version>3.1.1</maven.wrapper.plugin.version>
-        <maven.gpg.plugin.version>1.6</maven.gpg.plugin.version>
+        <maven.checkstyle.plugin.version>3.6.0</maven.checkstyle.plugin.version>
+        <maven.wrapper.plugin.version>3.3.2</maven.wrapper.plugin.version>
+        <maven.gpg.plugin.version>3.2.7</maven.gpg.plugin.version>
         <nexus.staging.maven.plugin.version>1.6.13</nexus.staging.maven.plugin.version>
         <protobuf.plugin.version>0.6.1</protobuf.plugin.version>
         <os.plugin.version>1.6.2</os.plugin.version>
@@ -135,8 +135,8 @@
         <maven.bos.plugin.version>0.0.2</maven.bos.plugin.version>
 
         <!-- build properties -->
-        <java.source.version>17</java.source.version>
-        <java.target.version>17</java.target.version>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
         <source.encoding>UTF-8</source.encoding>
         <release.version>${project.version}</release.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -771,8 +771,8 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>${maven.compiler.plugin.version}</version>
                     <configuration>
-                        <source>${java.source.version}</source>
-                        <target>${java.target.version}</target>
+                        <source>${maven.compiler.source}</source>
+                        <target>${maven.compiler.target}</target>
                         <encoding>${source.encoding}</encoding>
                     </configuration>
                 </plugin>
@@ -786,7 +786,7 @@
                     <artifactId>maven-javadoc-plugin</artifactId>
                     <version>${maven.javadoc.plugin.version}</version>
                     <configuration>
-                        <source>${java.source.version}</source>
+                        <source>${maven.compiler.source}</source>
                         <!--  keep only errors and warnings  -->
                         <quiet>true</quiet>
                         <failOnError>false</failOnError>

@@ -29,14 +29,23 @@ import lombok.experimental.Accessors;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Builder(toBuilder = true)
 public class KVRangeOptions {
+    @Builder.Default
     private boolean enableLoadEstimation = false;
+    @Builder.Default
     private int snapshotSyncBytesPerSec = 128 * 1024 * 1024; // 128MB
+    @Builder.Default
     private int compactWALThreshold = 10000; // the max number of logs before compaction
+    @Builder.Default
     private long tickUnitInMS = 100;
+    @Builder.Default
     private int maxWALFatchBatchSize = 5 * 1024 * 1024; // 5MB
+    @Builder.Default
     private int snapshotSyncIdleTimeoutSec = 30;
+    @Builder.Default
     private int statsCollectIntervalSec = 5;
+    @Builder.Default
     private int zombieTimeoutSec = 300; // 5min
+    @Builder.Default
     private RaftConfig walRaftConfig = new RaftConfig()
         .setPreVote(true)
         .setInstallSnapshotTimeoutTick(300)

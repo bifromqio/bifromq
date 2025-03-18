@@ -28,23 +28,9 @@ import lombok.Setter;
 import lombok.experimental.Accessors;
 
 public final class Transport implements ITransport {
-    @Builder(toBuilder = true)
-    @Accessors(chain = true, fluent = true)
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor(access = AccessLevel.PRIVATE)
-    public static class TransportOptions {
-        private long mtu = 1400;
-        private TCPTransport.TCPTransportOptions tcpTransportOptions = new TCPTransport.TCPTransportOptions();
-    }
-
     private final ITransport tcpTransport;
-
     private final ITransport udpTransport;
-
     private final TransportOptions options;
-
     private final Observable<PacketEnvelope> sink;
 
     @Builder
@@ -101,5 +87,18 @@ public final class Transport implements ITransport {
             tcpTransport.shutdown().exceptionally(e -> null),
             udpTransport.shutdown().exceptionally(e -> null)
         );
+    }
+
+    @Builder(toBuilder = true)
+    @Accessors(chain = true, fluent = true)
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor(access = AccessLevel.PRIVATE)
+    public static class TransportOptions {
+        @Builder.Default
+        private long mtu = 1400;
+        @Builder.Default
+        private TCPTransport.TCPTransportOptions tcpTransportOptions = new TCPTransport.TCPTransportOptions();
     }
 }

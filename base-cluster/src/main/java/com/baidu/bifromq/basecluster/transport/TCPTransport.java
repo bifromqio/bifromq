@@ -64,83 +64,11 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public final class TCPTransport extends AbstractTransport {
-    @Builder(toBuilder = true)
-    @Accessors(chain = true, fluent = true)
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor(access = AccessLevel.PRIVATE)
-    public static class TCPTransportOptions {
-        private int connTimeoutInMS = 5000;
-        private int idleTimeoutInSec = 5;
-        private int maxChannelsPerHost = 5;
-        private int maxBufferSizeInBytes = WriteBufferWaterMark.DEFAULT.high();
-    }
-
-    @ChannelHandler.Sharable
-    private static class ClientBridger extends ChannelInboundHandlerAdapter {
-
-        public ClientBridger() {
-            super();
-        }
-
-        @Override
-        public void channelActive(ChannelHandlerContext ctx) {
-            trace("Outbound channel active: remote={}", ctx.channel().remoteAddress());
-        }
-
-        @Override
-        public void channelInactive(ChannelHandlerContext ctx) {
-            trace("Outbound channel inactive: remote={}", ctx.channel().remoteAddress());
-        }
-
-        @Override
-        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-            log.warn("Outbound channel failure: remote={}, cause={}", ctx.channel().remoteAddress(),
-                cause.getMessage());
-            ctx.close();
-        }
-    }
-
-    @ChannelHandler.Sharable
-    private class ServerBridger extends SimpleChannelInboundHandler<Packet> {
-
-        public ServerBridger() {
-            super();
-        }
-
-        @Override
-        protected void channelRead0(ChannelHandlerContext ctx, Packet packet) {
-            trace("Received message: remote={}", ctx.channel().remoteAddress());
-            recvBytes.increment(packet.getSerializedSize());
-            transportLatency.record(HLC.INST.getPhysical(packet.getHlc() - HLC.INST.get()));
-            doReceive(packet, (InetSocketAddress) ctx.channel().remoteAddress(),
-                (InetSocketAddress) ctx.channel().localAddress());
-        }
-
-        @Override
-        public void channelActive(ChannelHandlerContext ctx) {
-            trace("Inbound channel active: remote={}", ctx.channel().remoteAddress());
-        }
-
-        @Override
-        public void channelInactive(ChannelHandlerContext ctx) {
-            trace("Inbound channel inactive: remote={}", ctx.channel().remoteAddress());
-        }
-
-        @Override
-        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-            log.warn("Inbound channel failure: remote={}, cause={}", ctx.channel().remoteAddress(), cause.getMessage());
-            ctx.close();
-        }
-    }
-
     private final Counter sendBytes;
     private final Counter recvBytes;
     private final DistributionSummary transportLatency;
     private final ClientBridger clientBridger = new ClientBridger();
     private final ServerBridger serverBridger = new ServerBridger();
-
     private final ConcurrentMap<InetSocketAddress, LoadingCache<Integer, ChannelFuture>> channelMaps =
         new ConcurrentHashMap<>();
     private final ThreadLocal<Integer> threadChannelKey = new ThreadLocal<>();
@@ -149,7 +77,6 @@ public final class TCPTransport extends AbstractTransport {
     private final AtomicInteger nextChannelKey = new AtomicInteger(0);
     private final Bootstrap clientBootstrap;
     private final ChannelFuture tcpListeningChannel;
-
     @Builder
     TCPTransport(@NonNull String env, InetSocketAddress bindAddr, SslContext serverSslContext,
                  SslContext clientSslContext, TCPTransportOptions opts) {
@@ -178,6 +105,12 @@ public final class TCPTransport extends AbstractTransport {
             log.debug("Creating tcp transport: bindAddr={}", localAddress);
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize tcp transport", e);
+        }
+    }
+
+    private static void trace(String format, Object... args) {
+        if (log.isTraceEnabled()) {
+            log.trace(format, args);
         }
     }
 
@@ -331,9 +264,78 @@ public final class TCPTransport extends AbstractTransport {
         }
     }
 
-    private static void trace(String format, Object... args) {
-        if (log.isTraceEnabled()) {
-            log.trace(format, args);
+    @Builder(toBuilder = true)
+    @Accessors(chain = true, fluent = true)
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor(access = AccessLevel.PRIVATE)
+    public static class TCPTransportOptions {
+        @Builder.Default
+        private int connTimeoutInMS = 5000;
+        @Builder.Default
+        private int idleTimeoutInSec = 5;
+        @Builder.Default
+        private int maxChannelsPerHost = 5;
+        @Builder.Default
+        private int maxBufferSizeInBytes = WriteBufferWaterMark.DEFAULT.high();
+    }
+
+    @ChannelHandler.Sharable
+    private static class ClientBridger extends ChannelInboundHandlerAdapter {
+
+        public ClientBridger() {
+            super();
+        }
+
+        @Override
+        public void channelActive(ChannelHandlerContext ctx) {
+            trace("Outbound channel active: remote={}", ctx.channel().remoteAddress());
+        }
+
+        @Override
+        public void channelInactive(ChannelHandlerContext ctx) {
+            trace("Outbound channel inactive: remote={}", ctx.channel().remoteAddress());
+        }
+
+        @Override
+        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+            log.warn("Outbound channel failure: remote={}, cause={}", ctx.channel().remoteAddress(),
+                cause.getMessage());
+            ctx.close();
+        }
+    }
+
+    @ChannelHandler.Sharable
+    private class ServerBridger extends SimpleChannelInboundHandler<Packet> {
+
+        public ServerBridger() {
+            super();
+        }
+
+        @Override
+        protected void channelRead0(ChannelHandlerContext ctx, Packet packet) {
+            trace("Received message: remote={}", ctx.channel().remoteAddress());
+            recvBytes.increment(packet.getSerializedSize());
+            transportLatency.record(HLC.INST.getPhysical(packet.getHlc() - HLC.INST.get()));
+            doReceive(packet, (InetSocketAddress) ctx.channel().remoteAddress(),
+                (InetSocketAddress) ctx.channel().localAddress());
+        }
+
+        @Override
+        public void channelActive(ChannelHandlerContext ctx) {
+            trace("Inbound channel active: remote={}", ctx.channel().remoteAddress());
+        }
+
+        @Override
+        public void channelInactive(ChannelHandlerContext ctx) {
+            trace("Inbound channel inactive: remote={}", ctx.channel().remoteAddress());
+        }
+
+        @Override
+        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+            log.warn("Inbound channel failure: remote={}, cause={}", ctx.channel().remoteAddress(), cause.getMessage());
+            ctx.close();
         }
     }
 }

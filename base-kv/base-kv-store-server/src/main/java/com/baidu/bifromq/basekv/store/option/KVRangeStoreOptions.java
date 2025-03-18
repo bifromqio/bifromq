@@ -37,9 +37,12 @@ import lombok.experimental.Accessors;
 @Builder(toBuilder = true)
 public class KVRangeStoreOptions {
     private String overrideIdentity;
+    @Builder.Default
     private KVRangeOptions kvRangeOptions = new KVRangeOptions();
+    @Builder.Default
     private int statsCollectIntervalSec = 5;
 
+    @Builder.Default
     private ICPableKVEngineConfigurator dataEngineConfigurator = RocksDBCPableKVEngineConfigurator.builder()
         .dbRootDir(Paths.get(System.getProperty("java.io.tmpdir"), "basekv",
             ProcessUtil.processId(), "data").toString())
@@ -47,6 +50,7 @@ public class KVRangeStoreOptions {
             ProcessUtil.processId(), "data").toString())
         .build();
 
+    @Builder.Default
     private IWALableKVEngineConfigurator walEngineConfigurator = RocksDBWALableKVEngineConfigurator.builder()
         .dbRootDir(Paths.get(System.getProperty("java.io.tmpdir"), "basekv",
             ProcessUtil.processId(), "wal").toString())

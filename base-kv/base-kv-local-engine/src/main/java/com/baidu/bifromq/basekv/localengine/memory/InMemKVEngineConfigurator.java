@@ -17,6 +17,7 @@ import com.baidu.bifromq.basekv.localengine.ICPableKVEngineConfigurator;
 import com.baidu.bifromq.basekv.localengine.IWALableKVEngineConfigurator;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -30,5 +31,6 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @SuperBuilder(toBuilder = true)
 public final class InMemKVEngineConfigurator implements ICPableKVEngineConfigurator, IWALableKVEngineConfigurator {
+    @Builder.Default
     private long gcIntervalInSec = 300; // ms
 }

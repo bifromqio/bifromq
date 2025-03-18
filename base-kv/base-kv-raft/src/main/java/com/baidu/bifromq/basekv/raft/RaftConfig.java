@@ -28,18 +28,29 @@ import lombok.experimental.Accessors;
 @NoArgsConstructor
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public final class RaftConfig {
+    @Builder.Default
     private int electionTimeoutTick = 10;
+    @Builder.Default
     private int heartbeatTimeoutTick = 1;
+    @Builder.Default
     private int installSnapshotTimeoutTick = 2000;
+    @Builder.Default
     private long maxSizePerAppend = 1024;
     // max inflight appends during replicating
+    @Builder.Default
     private int maxInflightAppends = 1024;
     // the max number of uncommitted proposals before rejection
+    @Builder.Default
     private int maxUncommittedProposals = 1024;
+    @Builder.Default
     private boolean preVote = true;
+    @Builder.Default
     private boolean readOnlyLeaderLeaseMode = true;
+    @Builder.Default
     private int readOnlyBatch = 10;
+    @Builder.Default
     private boolean disableForwardProposal = false;
     // if append log entries asynchronously which is an optimization described in $10.2.1 section of raft thesis
+    @Builder.Default
     private boolean asyncAppend = true;
 }

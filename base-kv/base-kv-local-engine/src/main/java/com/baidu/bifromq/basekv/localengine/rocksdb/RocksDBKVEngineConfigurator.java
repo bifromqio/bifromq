@@ -18,6 +18,7 @@ import static java.lang.Math.max;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.localengine.IKVEngineConfigurator;
+import lombok.Builder;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 import org.rocksdb.BlockBasedTableConfig;
@@ -42,9 +43,13 @@ import org.rocksdb.util.SizeUnit;
 public abstract class RocksDBKVEngineConfigurator<T extends RocksDBKVEngineConfigurator<T>>
     implements IKVEngineConfigurator {
     private String dbRootDir;
+    @Builder.Default
     private boolean heuristicCompaction = false;
+    @Builder.Default
     private int compactMinTombstoneKeys = 50000;
+    @Builder.Default
     private int compactMinTombstoneRanges = 10000;
+    @Builder.Default
     private double compactTombstoneKeysRatio = 0.3;
 
     public DBOptions dbOptions() {
