@@ -17,6 +17,7 @@ import com.baidu.bifromq.baserpc.BluePrint;
 import com.baidu.bifromq.baserpc.client.exception.RequestAbortException;
 import com.baidu.bifromq.baserpc.client.exception.RequestRejectedException;
 import com.baidu.bifromq.baserpc.client.exception.RequestThrottledException;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.baserpc.client.exception.ServiceUnavailableException;
 import com.baidu.bifromq.baserpc.metrics.IRPCMeter;
 import com.baidu.bifromq.baserpc.metrics.RPCMetric;
@@ -105,7 +106,13 @@ public class ManagedRequestPipeline<ReqT, RespT> extends ManagedBiDiStream<ReqT,
     @Override
     void onNoServerAvailable() {
         // no server available, abort all requests
-        cancelPreflightTasks(new ServiceUnavailableException("No Server Available"));
+        cancelPreflightTasks(new ServerNotFoundException("No Server Available"));
+    }
+
+    @Override
+    void onServiceUnavailable() {
+        // service unavailable, abort all requests
+        cancelPreflightTasks(new ServiceUnavailableException("Service unavailable"));
     }
 
     @Override
@@ -152,7 +159,13 @@ public class ManagedRequestPipeline<ReqT, RespT> extends ManagedBiDiStream<ReqT,
                 meter.recordCount(RPCMetric.PipelineReqAcceptCount);
                 meter.recordSummary(RPCMetric.ReqPipelineDepth, currentCount);
             }
-            case NoServerAvailable -> newRequest.finish(new ServiceUnavailableException("No server available"));
+            case NoServerAvailable -> {
+                if (balanceMode == BluePrint.BalanceMode.DDBalanced) {
+                    newRequest.finish(new ServerNotFoundException("No server available"));
+                } else {
+                    newRequest.finish(new ServiceUnavailableException("Service unavailable"));
+                }
+            }
         }
         return newRequest.future;
     }
@@ -237,8 +250,7 @@ public class ManagedRequestPipeline<ReqT, RespT> extends ManagedBiDiStream<ReqT,
                     methodDescriptor.getBareMethodName(),
                     request, throwable.getMessage());
             }
-            if (throwable instanceof RequestRejectedException
-                || throwable instanceof RequestThrottledException) {
+            if (throwable instanceof RequestRejectedException || throwable instanceof RequestThrottledException) {
                 meter.recordCount(RPCMetric.PipelineReqDropCount);
             } else if (throwable instanceof RequestAbortException) {
                 meter.recordCount(RPCMetric.PipelineReqAbortCount);

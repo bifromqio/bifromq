@@ -29,7 +29,6 @@ import static com.baidu.bifromq.basekv.utils.DescriptorUtil.toLeaderRanges;
 import static java.util.Collections.emptyMap;
 
 import com.baidu.bifromq.basekv.RPCBluePrint;
-import com.baidu.bifromq.basekv.exception.BaseKVException;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.proto.Boundary;
@@ -297,7 +296,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     public CompletableFuture<KVRangeRWReply> execute(String storeId, KVRangeRWRequest request, String orderKey) {
         IMutationPipeline mutPpln = mutPplns.getOrDefault(storeId, emptyMap()).get(request.getKvRangeId());
         if (mutPpln == null) {
-            return CompletableFuture.failedFuture(BaseKVException.serverNotFound());
+            return CompletableFuture.failedFuture(
+                new ServerNotFoundException("BaseKVStore Server not available for storeId: " + storeId));
         }
         return mutPpln.execute(request);
     }
@@ -311,7 +311,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     public CompletableFuture<KVRangeROReply> query(String storeId, KVRangeRORequest request, String orderKey) {
         List<IQueryPipeline> pipelines = queryPplns.get(storeId);
         if (pipelines == null) {
-            return CompletableFuture.failedFuture(BaseKVException.serverNotFound());
+            return CompletableFuture.failedFuture(
+                new ServerNotFoundException("BaseKVStore Server not available for storeId: " + storeId));
         }
         return pipelines.get((orderKey.hashCode() % pipelines.size() + pipelines.size()) % pipelines.size())
             .query(request);
@@ -327,7 +328,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                                                              String orderKey) {
         List<IQueryPipeline> pipelines = lnrQueryPplns.get(storeId);
         if (pipelines == null) {
-            return CompletableFuture.failedFuture(BaseKVException.serverNotFound());
+            return CompletableFuture.failedFuture(
+                new ServerNotFoundException("BaseKVStore Server not available for storeId: " + storeId));
         }
         return pipelines.get((orderKey.hashCode() % pipelines.size() + pipelines.size()) % pipelines.size())
             .query(request);
@@ -349,7 +351,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                         @Override
                         public CompletableFuture<KVRangeRWReply> invoke(KVRangeRWRequest req) {
                             return CompletableFuture.failedFuture(
-                                new ServerNotFoundException("No hosting server found for store: " + storeId));
+                                new ServerNotFoundException(
+                                    "BaseKVStore Server not available for storeId: " + storeId));
                         }
 
                         @Override
@@ -387,7 +390,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                         @Override
                         public CompletableFuture<KVRangeROReply> invoke(KVRangeRORequest req) {
                             return CompletableFuture.failedFuture(
-                                new ServerNotFoundException("No hosting server found for store: " + storeId));
+                                new ServerNotFoundException(
+                                    "BaseKVStore Server not available for storeId: " + storeId));
                         }
 
                         @Override

@@ -17,10 +17,6 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 
 public class ExceptionUtil {
-    public static final Status TRANSIENT_FAILURE = Status.UNAVAILABLE.withDescription("transient failure");
-    public static final Status SERVICE_UNAVAILABLE = Status.UNAVAILABLE.withDescription("service unavailable");
-    public static final Status REQUEST_THROTTLED =
-        Status.RESOURCE_EXHAUSTED.withDescription("request dropped due to downstream overloaded");
     public static final Status SERVER_NOT_FOUND =
         Status.UNAVAILABLE.withDescription("direct targeted server not found");
     public static final Status SERVER_UNREACHABLE =
@@ -28,20 +24,11 @@ public class ExceptionUtil {
 
     public static Throwable toConcreteException(Throwable throwable) {
         if (throwable instanceof StatusRuntimeException statusRuntimeException) {
-            if (statusRuntimeException.getStatus().equals(TRANSIENT_FAILURE)) {
-                return new TransientFailureException(throwable);
-            }
-            if (statusRuntimeException.getStatus().equals(REQUEST_THROTTLED)) {
-                return new RequestThrottledException(throwable);
-            }
-            if (statusRuntimeException.getStatus().equals(SERVICE_UNAVAILABLE)) {
-                return new ServiceUnavailableException(throwable);
-            }
             if (statusRuntimeException.getStatus().equals(SERVER_NOT_FOUND)) {
                 return new ServerNotFoundException(throwable);
             }
             if (statusRuntimeException.getStatus().equals(SERVER_UNREACHABLE)) {
-                return new ServerUnreachableException(throwable);
+                return new ServerNotFoundException(throwable);
             }
             if (statusRuntimeException.getStatus().equals(Status.CANCELLED)) {
                 return new RequestCanceledException(throwable);

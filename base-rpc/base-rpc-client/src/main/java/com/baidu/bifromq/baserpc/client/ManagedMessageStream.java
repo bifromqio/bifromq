@@ -141,6 +141,11 @@ class ManagedMessageStream<MsgT, AckT> extends ManagedBiDiStream<AckT, MsgT>
     }
 
     @Override
+    void onServiceUnavailable() {
+        // do nothing for now
+    }
+
+    @Override
     void onReceive(MsgT out) {
         msgSubject.onNext(out);
         meter.recordCount(RPCMetric.StreamMsgReceiveCount);

@@ -20,6 +20,7 @@ import static io.grpc.stub.ClientCalls.asyncUnaryCall;
 
 import com.baidu.bifromq.baserpc.BluePrint;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
+import com.baidu.bifromq.baserpc.client.exception.ServiceUnavailableException;
 import com.baidu.bifromq.baserpc.client.loadbalancer.IServerGroupRouter;
 import com.baidu.bifromq.baserpc.client.loadbalancer.IServerSelector;
 import com.baidu.bifromq.baserpc.metrics.IRPCMeter;
@@ -75,7 +76,7 @@ class UnaryCaller<ReqT, RespT> implements IUnaryCaller<ReqT, RespT> {
                                            Map<String, String> metadata) {
         IServerSelector serverSelector = serverSelectorSupplier.get();
         IServerGroupRouter router = serverSelector.get(tenantId);
-        String finalServerId = null;
+        String finalServerId;
         switch (semantic.mode()) {
             case DDBalanced -> {
                 assert targetServerId != null;
@@ -96,7 +97,7 @@ class UnaryCaller<ReqT, RespT> implements IUnaryCaller<ReqT, RespT> {
                     finalServerId = selectedServerId.get();
                 } else {
                     return CompletableFuture.failedFuture(
-                        new ServerNotFoundException("Server not found: " + targetServerId));
+                        new ServiceUnavailableException("Service unavailable for " + methodDesc.getFullMethodName()));
                 }
             }
             case WRBalanced -> {
@@ -106,7 +107,7 @@ class UnaryCaller<ReqT, RespT> implements IUnaryCaller<ReqT, RespT> {
                     finalServerId = selectedServerId.get();
                 } else {
                     return CompletableFuture.failedFuture(
-                        new ServerNotFoundException("Server not found: " + targetServerId));
+                        new ServiceUnavailableException("Service unavailable for " + methodDesc.getFullMethodName()));
                 }
             }
             case WRRBalanced -> {
@@ -116,7 +117,7 @@ class UnaryCaller<ReqT, RespT> implements IUnaryCaller<ReqT, RespT> {
                     finalServerId = selectedServerId.get();
                 } else {
                     return CompletableFuture.failedFuture(
-                        new ServerNotFoundException("Server not found: " + targetServerId));
+                        new ServiceUnavailableException("Service unavailable for " + methodDesc.getFullMethodName()));
                 }
             }
             default -> {

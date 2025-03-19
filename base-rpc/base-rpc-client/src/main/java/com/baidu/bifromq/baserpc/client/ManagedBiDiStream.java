@@ -42,21 +42,12 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 abstract class ManagedBiDiStream<InT, OutT> {
 
-    enum State {
-        Init,
-        Normal,
-        PendingRetarget,
-        Retargeting,
-        StreamDisconnect,
-        NoServerAvailable
-    }
-
+    protected final BluePrint.BalanceMode balanceMode;
     private final AtomicReference<State> state = new AtomicReference<>(State.Init);
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final String tenantId;
     private final String wchKey;
     private final String targetServerId;
-    private final BluePrint.BalanceMode balanceMode;
     private final Supplier<Map<String, String>> metadataSupplier;
     private final Channel channel;
     private final CallOptions callOptions;
@@ -66,7 +57,6 @@ abstract class ManagedBiDiStream<InT, OutT> {
         new AtomicReference<>(BidiStreamContext.from(new DummyBiDiStream<>(this)));
     private final AtomicBoolean retargetScheduled = new AtomicBoolean();
     private volatile IServerSelector serverSelector = DummyServerSelector.INSTANCE;
-
     ManagedBiDiStream(String tenantId,
                       @Nullable String wchKey,
                       @Nullable String targetServerId,
@@ -114,10 +104,18 @@ abstract class ManagedBiDiStream<InT, OutT> {
 
     abstract void onNoServerAvailable();
 
+    abstract void onServiceUnavailable();
+
     private void reportNoServerAvailable() {
         log.debug("Stream@{} no server available to target: method={}",
             this.hashCode(), methodDescriptor.getBareMethodName());
         onNoServerAvailable();
+    }
+
+    private void reportServiceUnavailable() {
+        log.debug("Stream@{} service unavailable to target: method={}",
+            this.hashCode(), methodDescriptor.getBareMethodName());
+        onServiceUnavailable();
     }
 
     abstract void onReceive(OutT out);
@@ -293,7 +291,7 @@ abstract class ManagedBiDiStream<InT, OutT> {
                     Optional<String> selectedServer = router.hashing(wchKey);
                     if (selectedServer.isEmpty()) {
                         state.set(State.NoServerAvailable);
-                        reportNoServerAvailable();
+                        reportServiceUnavailable();
                     } else {
                         target(selectedServer.get());
                     }
@@ -303,7 +301,7 @@ abstract class ManagedBiDiStream<InT, OutT> {
                     Optional<String> selectedServer = router.random();
                     if (selectedServer.isEmpty()) {
                         state.set(State.NoServerAvailable);
-                        reportNoServerAvailable();
+                        reportServiceUnavailable();
                     } else {
                         target(selectedServer.get());
                     }
@@ -314,7 +312,7 @@ abstract class ManagedBiDiStream<InT, OutT> {
                     Optional<String> selectedServer = router.roundRobin();
                     if (selectedServer.isEmpty()) {
                         state.set(State.NoServerAvailable);
-                        reportNoServerAvailable();
+                        reportServiceUnavailable();
                     } else {
                         target(selectedServer.get());
                     }
@@ -382,6 +380,15 @@ abstract class ManagedBiDiStream<InT, OutT> {
         state.compareAndSet(State.Normal, State.StreamDisconnect);
         onStreamError(new CancellationException("server close the bidi-stream"));
         scheduleRetargetWithRandomDelay();
+    }
+
+    enum State {
+        Init,
+        Normal,
+        PendingRetarget,
+        Retargeting,
+        StreamDisconnect,
+        NoServerAvailable
     }
 
     private record DummyBiDiStream<InT, OutT>(ManagedBiDiStream<InT, OutT> managedBiDiStream)
