@@ -75,10 +75,8 @@ public class InboxWriterPipelineTest {
     private void setupContext() {
         Map<String, String> metaData = new HashMap<>();
         metaData.put(PipelineUtil.PIPELINE_ATTR_KEY_ID, "id");
-        Context.current()
-            .withValue(RPCContext.METER_KEY_CTX_KEY, createMockMeter())
-            .withValue(RPCContext.TENANT_ID_CTX_KEY, "tenantId")
-            .withValue(RPCContext.CUSTOM_METADATA_CTX_KEY, metaData)
+        Context.current().withValue(RPCContext.METER_KEY_CTX_KEY, createMockMeter())
+            .withValue(RPCContext.TENANT_ID_CTX_KEY, "tenantId").withValue(RPCContext.CUSTOM_METADATA_CTX_KEY, metaData)
             .attach();
     }
 
@@ -116,7 +114,13 @@ public class InboxWriterPipelineTest {
 
     @Test
     public void handleRequestDeliveryError() {
-        testHandleRequest(DeliveryResult.Code.ERROR);
+        SendReply mockSendReply = SendReply.newBuilder().setReqId(1)
+            .setReply(DeliveryReply.newBuilder().setCode(DeliveryReply.Code.ERROR).build()).build();
+        when(inboxWriter.handle(any())).thenReturn(CompletableFuture.completedFuture(mockSendReply));
+        doNothing().when(fetcherSignaler).afterWrite(any(), any());
+        InboxWriterPipeline writerPipeline = new InboxWriterPipeline(fetcherSignaler, inboxWriter, responseObserver);
+        SendReply sendReply = writerPipeline.handleRequest("_", sendRequest()).join();
+        assertEquals(sendReply, mockSendReply);
     }
 
     private void testHandleRequest(DeliveryResult.Code code) {
@@ -129,37 +133,29 @@ public class InboxWriterPipelineTest {
     }
 
     private SendReply createSendReply(DeliveryResult.Code code) {
-        return SendReply.newBuilder()
-            .setReqId(1)
-            .setReply(DeliveryReply.newBuilder()
-                .putResult("tenantId", DeliveryResults.newBuilder()
-                    .addResult(DeliveryResult.newBuilder()
-                        .setMatchInfo(matchInfo())
-                        .setCode(code).build()).build())
-                .build())
-            .build();
+        return SendReply.newBuilder().setReqId(1).setReply(DeliveryReply.newBuilder().setCode(DeliveryReply.Code.OK)
+            .putResult("tenantId", DeliveryResults.newBuilder()
+                .addResult(DeliveryResult.newBuilder().setMatchInfo(matchInfo()).setCode(code).build()).build())
+            .build()).build();
     }
 
     @Test
     public void testConstructorDirectMemoryUsageCatch() {
-        when(memUsage.nettyDirectMemoryUsage())
-            .thenReturn(IngressSlowDownDirectMemoryUsage.INSTANCE.get() + 0.1f);
+        when(memUsage.nettyDirectMemoryUsage()).thenReturn(IngressSlowDownDirectMemoryUsage.INSTANCE.get() + 0.1f);
         when(memUsage.heapMemoryUsage()).thenReturn(IngressSlowDownHeapMemoryUsage.INSTANCE.get() - 0.1f);
         testMemoryUsageThresholdExceed();
     }
 
     @Test
     public void testConstructorHeapMemoryUsageCatch() {
-        when(memUsage.nettyDirectMemoryUsage())
-            .thenReturn(IngressSlowDownDirectMemoryUsage.INSTANCE.get() - 0.1f);
+        when(memUsage.nettyDirectMemoryUsage()).thenReturn(IngressSlowDownDirectMemoryUsage.INSTANCE.get() - 0.1f);
         when(memUsage.heapMemoryUsage()).thenReturn(IngressSlowDownHeapMemoryUsage.INSTANCE.get() + 0.1f);
         testMemoryUsageThresholdExceed();
     }
 
     @Test
     public void testConstructorHeapMemoryUsageAllNotCatch() {
-        when(memUsage.nettyDirectMemoryUsage())
-            .thenReturn(IngressSlowDownDirectMemoryUsage.INSTANCE.get() - 0.1f);
+        when(memUsage.nettyDirectMemoryUsage()).thenReturn(IngressSlowDownDirectMemoryUsage.INSTANCE.get() - 0.1f);
         when(memUsage.heapMemoryUsage()).thenReturn(IngressSlowDownHeapMemoryUsage.INSTANCE.get() - 0.1f);
         testMemoryUsageThresholdExceed();
     }

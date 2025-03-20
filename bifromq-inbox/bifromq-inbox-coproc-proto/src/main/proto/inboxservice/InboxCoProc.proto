@@ -261,23 +261,22 @@ message BatchInsertRequest{
   repeated InboxSubMessagePack inboxSubMsgPack = 1;
 }
 
-
-message BatchInsertReply{
+message InboxInsertResult{
   enum Code{
     OK = 0;
     NO_INBOX = 1;
-    ERROR = 2;
   }
-  message InsertionResult{
+  message PackInsertResult{
     string topicFilter = 1;
     uint64 incarnation = 2;
     bool rejected = 3;
   }
-  message Result{
-    Code code = 1;
-    repeated InsertionResult insertionResult = 2; // same order as messagePack
-  }
-  repeated Result result = 1; // same order as inboxSubMsgPack
+  Code code = 1;
+  repeated PackInsertResult result = 2; // same order as messagePack
+}
+
+message BatchInsertReply{
+  repeated InboxInsertResult result = 2; // same order as inboxSubMsgPack when code is OK
 }
 
 message BatchCommitRequest{

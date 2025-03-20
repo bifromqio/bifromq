@@ -445,7 +445,7 @@ public abstract class DistWorkerTest {
                         resultMap.put(subInfo, code);
                     }
                 }
-                replyBuilder.putResult(tenantId, to(resultMap));
+                replyBuilder.setCode(DeliveryReply.Code.OK).putResult(tenantId, to(resultMap));
             }
             return CompletableFuture.completedFuture(replyBuilder.build());
         };

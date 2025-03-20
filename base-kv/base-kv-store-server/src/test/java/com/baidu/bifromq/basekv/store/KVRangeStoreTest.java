@@ -15,8 +15,8 @@ package com.baidu.bifromq.basekv.store;
 
 import static com.baidu.bifromq.basekv.proto.State.StateType.Merged;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Normal;
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.NULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.NULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.combine;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static java.util.Collections.emptyMap;
@@ -79,11 +79,11 @@ public class KVRangeStoreTest extends MockableTest {
     private final String DB_WAL_CHECKPOINT_DIR = "testWAL_cp";
     private final KVRangeStoreOptions options = new KVRangeStoreOptions();
     private final PublishSubject<StoreMessage> incomingStoreMessage = PublishSubject.create();
+    private final int tickerThreads = 2;
+    public Path dbRootDir;
     private IKVRangeStore rangeStore;
     private ExecutorService queryExecutor;
-    private final int tickerThreads = 2;
     private ScheduledExecutorService bgTaskExecutor;
-    public Path dbRootDir;
 
     @SneakyThrows
     protected void doSetup(Method method) {

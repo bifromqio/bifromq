@@ -63,7 +63,6 @@ import com.baidu.bifromq.inbox.storage.proto.BatchDetachRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchGetReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchGetRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchInsertReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
@@ -74,6 +73,7 @@ import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.GCReply;
 import com.baidu.bifromq.inbox.storage.proto.GCRequest;
+import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
@@ -422,7 +422,7 @@ abstract class InboxStoreTest {
         return output.getBatchTouch().getCodeList();
     }
 
-    protected List<BatchInsertReply.Result> requestInsert(InboxSubMessagePack... inboxSubMessagePack) {
+    protected List<InboxInsertResult> requestInsert(InboxSubMessagePack... inboxSubMessagePack) {
         assert inboxSubMessagePack.length > 0;
         long reqId = ThreadLocalRandom.current().nextInt();
         ByteString routeKey =

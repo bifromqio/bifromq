@@ -25,7 +25,6 @@ import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toGroupRouteKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toNormalRouteKey;
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toReceiverUrl;
 import static java.util.Collections.singletonList;
-import static java.util.Collections.singletonMap;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -74,6 +73,7 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -82,10 +82,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
@@ -439,7 +440,8 @@ class DistWorkerCoProc implements IKVRangeCoProc {
         if (distPackList.isEmpty()) {
             return CompletableFuture.completedFuture(BatchDistReply.newBuilder().setReqId(request.getReqId()).build());
         }
-        List<CompletableFuture<Map<String, Map<String, Integer>>>> distFanOutFutures = new ArrayList<>();
+        List<CompletableFuture<Void>> distFutures = new LinkedList<>();
+        ConcurrentMap<String, TopicFanout.Builder> tenantTopicFanOuts = new ConcurrentHashMap<>();
         for (DistPack distPack : distPackList) {
             String tenantId = distPack.getTenantId();
             ByteString tenantStartKey = tenantBeginKey(tenantId);
@@ -449,22 +451,27 @@ class DistWorkerCoProc implements IKVRangeCoProc {
             }
             for (TopicMessagePack topicMsgPack : distPack.getMsgPackList()) {
                 String topic = topicMsgPack.getTopic();
-                distFanOutFutures.add(routeCache.get(tenantId, topic).thenApply(routes -> {
-                    deliverExecutorGroup.submit(tenantId, routes, topicMsgPack);
-                    return singletonMap(tenantId, singletonMap(topic, routes.size()));
-                }));
+                distFutures.add(routeCache.get(tenantId, topic)
+                    .thenAccept(routes -> {
+                        deliverExecutorGroup.submit(tenantId, routes, topicMsgPack);
+                        tenantTopicFanOuts.compute(tenantId, (k, v) -> {
+                            if (v == null) {
+                                v = TopicFanout.newBuilder();
+                            }
+                            v.putFanout(topic, routes.size());
+                            return v;
+                        });
+                    }));
             }
         }
-        return CompletableFuture.allOf(distFanOutFutures.toArray(CompletableFuture[]::new))
-            .thenApply(v -> distFanOutFutures.stream().map(CompletableFuture::join).collect(Collectors.toList()))
-            .thenApply(fanoutMapList -> {
+        return CompletableFuture.allOf(distFutures.toArray(new CompletableFuture[distFutures.size()]))
+            .thenApply(v -> {
                 // tenantId -> topic -> fanOut
-                Map<String, Map<String, Integer>> tenantFanOut = new HashMap<>();
-                fanoutMapList.forEach(fanoutMap -> fanoutMap.forEach(
-                    (tenantId, topicFanOut) -> tenantFanOut.computeIfAbsent(tenantId, k -> new HashMap<>())
-                        .putAll(topicFanOut)));
-                return BatchDistReply.newBuilder().setReqId(request.getReqId()).putAllResult(
-                    Maps.transformValues(tenantFanOut, f -> TopicFanout.newBuilder().putAllFanout(f).build())).build();
+                BatchDistReply.Builder replyBuilder = BatchDistReply.newBuilder().setReqId(request.getReqId());
+                tenantTopicFanOuts.forEach((k, f) -> {
+                    replyBuilder.putResult(k, f.build());
+                });
+                return replyBuilder.build();
             });
     }
 

@@ -16,6 +16,7 @@ package com.baidu.bifromq.dist.client.scheduler;
 import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.basescheduler.ICallTask;
+import com.baidu.bifromq.basescheduler.exception.NeedRetryException;
 import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
@@ -61,33 +62,55 @@ class BatchPubCall implements IBatchCall<PubCall, PubResult, PubCallBatcherKey> 
             }
             requestBuilder.addMessages(senderMsgPackBuilder.build());
         });
-        DistRequest request = requestBuilder.build();
-        return ppln.invoke(request).handle((v, e) -> {
-            if (e != null) {
-                ICallTask<PubCall, PubResult, PubCallBatcherKey> task;
-                while ((task = tasks.poll()) != null) {
-                    task.resultPromise().completeExceptionally(e);
-                }
-            } else {
-                Map<ClientInfo, Map<String, DistReply.Code>> resultMap = new HashMap<>();
-                for (int i = 0; i < request.getMessagesCount(); i++) {
-                    PublisherMessagePack pubMsgPack = request.getMessages(i);
-                    DistReply.Result result = v.getResults(i);
-                    resultMap.put(pubMsgPack.getPublisher(), result.getTopicMap());
-                }
-                ICallTask<PubCall, PubResult, PubCallBatcherKey> task;
-                while ((task = tasks.poll()) != null) {
-                    ClientInfo publisher = task.call().publisher;
-                    String topic = task.call().topic;
-                    switch (resultMap.get(publisher).get(topic)) {
-                        case OK -> task.resultPromise().complete(PubResult.OK);
-                        case NO_MATCH -> task.resultPromise().complete(PubResult.NO_MATCH);
-                        case BACK_PRESSURE_REJECTED -> task.resultPromise().complete(PubResult.BACK_PRESSURE_REJECTED);
-                        case ERROR -> task.resultPromise().complete(PubResult.ERROR);
+        CompletableFuture<Void> onDone = new CompletableFuture<>();
+        execute(requestBuilder.build(), onDone);
+        return onDone;
+    }
+
+    private void execute(DistRequest request, CompletableFuture<Void> onDone) {
+        ppln.invoke(request)
+            .whenComplete((reply, e) -> {
+                if (e != null) {
+                    ICallTask<PubCall, PubResult, PubCallBatcherKey> task;
+                    while ((task = tasks.poll()) != null) {
+                        task.resultPromise().complete(PubResult.ERROR);
+                    }
+                    onDone.complete(null);
+                } else {
+                    switch (reply.getCode()) {
+                        case OK -> {
+                            Map<ClientInfo, Map<String, Integer>> fanoutResultMap = new HashMap<>();
+                            for (int i = 0; i < request.getMessagesCount(); i++) {
+                                PublisherMessagePack pubMsgPack = request.getMessages(i);
+                                DistReply.DistResult result = reply.getResults(i);
+                                fanoutResultMap.put(pubMsgPack.getPublisher(), result.getTopicMap());
+                            }
+
+                            ICallTask<PubCall, PubResult, PubCallBatcherKey> task;
+                            while ((task = tasks.poll()) != null) {
+                                Integer fanOut = fanoutResultMap.get(task.call().publisher).get(task.call().topic);
+                                task.resultPromise().complete(fanOut > 0 ? PubResult.OK : PubResult.NO_MATCH);
+                            }
+                            onDone.complete(null);
+                        }
+                        case BACK_PRESSURE_REJECTED -> {
+                            ICallTask<PubCall, PubResult, PubCallBatcherKey> task;
+                            while ((task = tasks.poll()) != null) {
+                                task.resultPromise().complete(PubResult.BACK_PRESSURE_REJECTED);
+                            }
+                            onDone.complete(null);
+                        }
+                        case TRY_LATER -> onDone.completeExceptionally(new NeedRetryException("Retry later"));
+                        default -> {
+                            assert reply.getCode() == DistReply.Code.ERROR;
+                            ICallTask<PubCall, PubResult, PubCallBatcherKey> task;
+                            while ((task = tasks.poll()) != null) {
+                                task.resultPromise().complete(PubResult.ERROR);
+                            }
+                            onDone.complete(null);
+                        }
                     }
                 }
-            }
-            return null;
-        });
+            });
     }
 }

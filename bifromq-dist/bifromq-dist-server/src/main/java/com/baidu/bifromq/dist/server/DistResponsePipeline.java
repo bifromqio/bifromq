@@ -23,6 +23,7 @@ import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
 import com.baidu.bifromq.dist.server.scheduler.DistServerCall;
+import com.baidu.bifromq.dist.server.scheduler.DistServerCallResult;
 import com.baidu.bifromq.dist.server.scheduler.IDistWorkerCallScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DistError;
@@ -34,7 +35,6 @@ import com.baidu.bifromq.sysprops.props.MaxSlowDownTimeoutSeconds;
 import com.baidu.bifromq.type.PublisherMessagePack;
 import io.grpc.stub.StreamObserver;
 import java.time.Duration;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
@@ -60,58 +60,52 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
     @Override
     protected CompletableFuture<DistReply> handleRequest(String tenantId, DistRequest request) {
         return distCallScheduler.schedule(new DistServerCall(tenantId, request.getMessagesList(), callQueueIdx))
-            .handle((v, e) -> {
+            .handle((result, e) -> {
                 DistReply.Builder replyBuilder = DistReply.newBuilder().setReqId(request.getReqId());
                 if (e != null) {
                     if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
-                        for (PublisherMessagePack publisherMsgPack : request.getMessagesList()) {
-                            DistReply.Result.Builder resultBuilder = DistReply.Result.newBuilder();
-                            for (PublisherMessagePack.TopicPack topicPack : publisherMsgPack.getMessagePackList()) {
-                                resultBuilder.putTopic(topicPack.getTopic(), DistReply.Code.BACK_PRESSURE_REJECTED);
-                            }
-                            replyBuilder.addResults(resultBuilder.build());
-                        }
+                        replyBuilder.setCode(DistReply.Code.BACK_PRESSURE_REJECTED);
                         eventCollector.report(getLocal(DistError.class)
                             .reqId(request.getReqId())
                             .messages(request.getMessagesList())
                             .code(DROP_EXCEED_LIMIT));
                     } else {
-                        for (PublisherMessagePack publisherMsgPack : request.getMessagesList()) {
-                            DistReply.Result.Builder resultBuilder = DistReply.Result.newBuilder();
-                            for (PublisherMessagePack.TopicPack topicPack : publisherMsgPack.getMessagePackList()) {
-                                resultBuilder.putTopic(topicPack.getTopic(), DistReply.Code.ERROR);
-                            }
-                            replyBuilder.addResults(resultBuilder.build());
-                        }
+                        replyBuilder.setCode(DistReply.Code.ERROR);
+                        log.debug("Dist worker call failed", e);
                         eventCollector.report(getLocal(DistError.class)
                             .reqId(request.getReqId())
                             .messages(request.getMessagesList())
                             .code(RPC_FAILURE));
                     }
                 } else {
-                    int totalFanout = 0;
-                    for (PublisherMessagePack publisherMsgPack : request.getMessagesList()) {
-                        DistReply.Result.Builder resultBuilder = DistReply.Result.newBuilder();
-                        for (PublisherMessagePack.TopicPack topicPack : publisherMsgPack.getMessagePackList()) {
-                            Optional<Integer> fanout = v.get(topicPack.getTopic());
-                            if (fanout == null) {
-                                log.warn("Illegal state: no fanout for topic: {}", topicPack.getTopic());
-                                resultBuilder.putTopic(topicPack.getTopic(), DistReply.Code.ERROR);
-                            } else if (fanout.isPresent()) {
-                                resultBuilder.putTopic(topicPack.getTopic(),
-                                    fanout.get() > 0 ? DistReply.Code.OK : DistReply.Code.NO_MATCH);
-                                totalFanout += fanout.get();
-                            } else {
-                                log.warn("No fanout for topic: {}", topicPack.getTopic());
-                                resultBuilder.putTopic(topicPack.getTopic(), DistReply.Code.ERROR);
+                    switch (result.code()) {
+                        case OK -> {
+                            int totalFanout = 0;
+                            for (PublisherMessagePack publisherMsgPack : request.getMessagesList()) {
+                                DistReply.DistResult.Builder resultBuilder = DistReply.DistResult.newBuilder();
+                                for (PublisherMessagePack.TopicPack topicPack : publisherMsgPack.getMessagePackList()) {
+                                    Integer fanOut = result.fanOut().get(topicPack.getTopic());
+                                    if (fanOut == null) {
+                                        log.warn("Illegal state: no result for topic: {}", topicPack.getTopic());
+                                        resultBuilder.putTopic(topicPack.getTopic(), 0);
+                                    } else {
+                                        resultBuilder.putTopic(topicPack.getTopic(), fanOut);
+                                        totalFanout += fanOut;
+                                    }
+                                }
+                                replyBuilder.setCode(DistReply.Code.OK).addResults(resultBuilder.build());
                             }
+                            eventCollector.report(getLocal(Disted.class)
+                                .reqId(request.getReqId())
+                                .messages(request.getMessagesList())
+                                .fanout(totalFanout));
                         }
-                        replyBuilder.addResults(resultBuilder.build());
+                        case TryLater -> replyBuilder.setCode(DistReply.Code.TRY_LATER);
+                        default -> {
+                            assert result.code() == DistServerCallResult.Code.Error;
+                            replyBuilder.setCode(DistReply.Code.ERROR);
+                        }
                     }
-                    eventCollector.report(getLocal(Disted.class)
-                        .reqId(request.getReqId())
-                        .messages(request.getMessagesList())
-                        .fanout(totalFanout));
                 }
                 return replyBuilder.build();
             });

@@ -25,7 +25,6 @@ message DeliveryResult{
     OK = 0;
     NO_SUB = 1;
     NO_RECEIVER = 2;
-    ERROR = 3;
   }
   commontype.MatchInfo matchInfo = 1;
   Code code = 2;
@@ -36,6 +35,12 @@ message DeliveryResults{
 }
 
 message DeliveryReply{
+  enum Code{
+    OK = 0;
+    TRY_LATER = 1;
+    ERROR = 2;
+  }
+  Code code = 1;
   map<string, DeliveryResults> result = 2; // key: tenantId
 }
 

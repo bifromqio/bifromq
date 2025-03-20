@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023. The BifroMQ Authors. All Rights Reserved.
+ * Copyright (c) 2025. The BifroMQ Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -11,18 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.exception;
+package com.baidu.bifromq.basekv.client.exception;
 
-public class BaseKVException extends RuntimeException {
-    public static BaseKVException serverNotFound() {
-        return new BaseKVException("Server not found");
-    }
-
-    public BaseKVException(String message) {
-        super(message);
-    }
-
-    public BaseKVException(String message, Throwable cause) {
-        super(message, cause);
-    }
+public class BadRequestException extends RuntimeException {
 }

@@ -174,7 +174,7 @@ public class DistTest extends DistServiceTest {
                 }
             }
             return CompletableFuture.completedFuture(
-                DeliveryReply.newBuilder().putAllResult(toResult(resultMap)).build());
+                DeliveryReply.newBuilder().setCode(DeliveryReply.Code.OK).putAllResult(toResult(resultMap)).build());
         });
 
         long reqId = System.nanoTime();
@@ -232,7 +232,7 @@ public class DistTest extends DistServiceTest {
                         resultMap.put(subInfo, code);
                     }
                 }
-                replyBuilder.putResult(tenantId, to(resultMap));
+                replyBuilder.setCode(DeliveryReply.Code.OK).putResult(tenantId, to(resultMap));
             }
             return CompletableFuture.completedFuture(replyBuilder.build());
         };

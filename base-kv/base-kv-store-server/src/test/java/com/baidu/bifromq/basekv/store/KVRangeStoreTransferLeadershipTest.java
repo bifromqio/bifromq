@@ -43,9 +43,9 @@ public class KVRangeStoreTransferLeadershipTest extends KVRangeStoreClusterTestT
                 return true;
             }
             cluster.transferLeader(oldLeader, setting.ver, rangeId, newLeader)
-                    .toCompletableFuture()
-                    .orTimeout(30, TimeUnit.SECONDS)
-                    .join();
+                .toCompletableFuture()
+                .orTimeout(30, TimeUnit.SECONDS)
+                .join();
             setting = cluster.kvRangeSetting(rangeId);
             return setting.leader.equals(newLeader);
         });
@@ -59,9 +59,9 @@ public class KVRangeStoreTransferLeadershipTest extends KVRangeStoreClusterTestT
 
         try {
             cluster.transferLeader(oldLeader, rangeSetting.ver, rangeId, "FakeLeader")
-                    .toCompletableFuture()
-                    .orTimeout(30, TimeUnit.SECONDS)
-                    .join();
+                .toCompletableFuture()
+                .orTimeout(30, TimeUnit.SECONDS)
+                .join();
             fail();
         } catch (Throwable e) {
             assertTrue(e.getCause() instanceof KVRangeException.BadRequest);

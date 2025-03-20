@@ -82,33 +82,30 @@ public class RetainServiceTest {
     @BeforeMethod
     public void setup(Method method) {
         log.info("Test case[{}.{}] start", method.getDeclaringClass().getName(), method.getName());
-        Context.current()
-            .withValue(RPCContext.METER_KEY_CTX_KEY, new IRPCMeter.IRPCMethodMeter() {
-                @Override
-                public void recordCount(RPCMetric metric) {
+        Context.current().withValue(RPCContext.METER_KEY_CTX_KEY, new IRPCMeter.IRPCMethodMeter() {
+            @Override
+            public void recordCount(RPCMetric metric) {
 
-                }
+            }
 
-                @Override
-                public void recordCount(RPCMetric metric, double inc) {
+            @Override
+            public void recordCount(RPCMetric metric, double inc) {
 
-                }
+            }
 
-                @Override
-                public Timer timer(RPCMetric metric) {
-                    return Timer.builder("dummy").register(new SimpleMeterRegistry());
-                }
+            @Override
+            public Timer timer(RPCMetric metric) {
+                return Timer.builder("dummy").register(new SimpleMeterRegistry());
+            }
 
-                @Override
-                public void recordSummary(RPCMetric metric, int depth) {
+            @Override
+            public void recordSummary(RPCMetric metric, int depth) {
 
-                }
-            })
-            .withValue(RPCContext.TENANT_ID_CTX_KEY, tenantId)
-            .attach();
+            }
+        }).withValue(RPCContext.TENANT_ID_CTX_KEY, tenantId).attach();
         closeable = MockitoAnnotations.openMocks(this);
-        service = new RetainService(gcProcessor, messageDeliverer,
-            matchCallScheduler, retainCallScheduler, deleteCallScheduler);
+        service = new RetainService(gcProcessor, messageDeliverer, matchCallScheduler, retainCallScheduler,
+            deleteCallScheduler);
     }
 
     @AfterMethod
@@ -123,8 +120,8 @@ public class RetainServiceTest {
             CompletableFuture.failedFuture(new RuntimeException("Mocked")));
         long reqId = 1;
         service.retain(RetainRequest.newBuilder().setReqId(reqId).build(), retainResponseObserver);
-        verify(retainResponseObserver)
-            .onNext(argThat(r -> r.getReqId() == reqId && r.getResult() == RetainReply.Result.ERROR));
+        verify(retainResponseObserver).onNext(
+            argThat(r -> r.getReqId() == reqId && r.getResult() == RetainReply.Result.ERROR));
     }
 
     @Test
@@ -133,11 +130,10 @@ public class RetainServiceTest {
             CompletableFuture.failedFuture(new RuntimeException("Mocked")));
         long reqId = 1;
         service.retain(RetainRequest.newBuilder().setReqId(reqId)
-            .setMessage(Message.newBuilder().setPayload(ByteString.copyFromUtf8("mock"))
-                .build())
-            .build(), retainResponseObserver);
-        verify(retainResponseObserver)
-            .onNext(argThat(r -> r.getReqId() == reqId && r.getResult() == RetainReply.Result.ERROR));
+                .setMessage(Message.newBuilder().setPayload(ByteString.copyFromUtf8("mock")).build()).build(),
+            retainResponseObserver);
+        verify(retainResponseObserver).onNext(
+            argThat(r -> r.getReqId() == reqId && r.getResult() == RetainReply.Result.ERROR));
     }
 
     @Test
@@ -146,39 +142,26 @@ public class RetainServiceTest {
             CompletableFuture.completedFuture(new MatchCallResult(MatchReply.Result.OK, Collections.emptyList())));
         long reqId = 1;
         service.match(MatchRequest.newBuilder().setReqId(reqId).build(), matchResponseObserver);
-        verify(matchResponseObserver)
-            .onNext(argThat(r -> r.getReqId() == reqId && r.getResult() == MatchReply.Result.OK));
+        verify(matchResponseObserver).onNext(
+            argThat(r -> r.getReqId() == reqId && r.getResult() == MatchReply.Result.OK));
         verify(messageDeliverer, never()).schedule(any());
     }
 
     @Test
     public void testDeliverRetainMessages() {
-        TopicMessage retainMsg1 = TopicMessage.newBuilder()
-            .setTopic("topic1")
-            .setMessage(Message.newBuilder().build())
-            .setPublisher(ClientInfo.newBuilder().build())
-            .build();
-        TopicMessage retainMsg2 = TopicMessage.newBuilder()
-            .setTopic("topic2")
-            .setMessage(Message.newBuilder().build())
-            .setPublisher(ClientInfo.newBuilder().build())
-            .build();
+        TopicMessage retainMsg1 = TopicMessage.newBuilder().setTopic("topic1").setMessage(Message.newBuilder().build())
+            .setPublisher(ClientInfo.newBuilder().build()).build();
+        TopicMessage retainMsg2 = TopicMessage.newBuilder().setTopic("topic2").setMessage(Message.newBuilder().build())
+            .setPublisher(ClientInfo.newBuilder().build()).build();
         when(matchCallScheduler.schedule(any())).thenReturn(CompletableFuture.completedFuture(
             new MatchCallResult(MatchReply.Result.OK, List.of(retainMsg1, retainMsg2))));
         when(messageDeliverer.schedule(any())).thenReturn(CompletableFuture.completedFuture(DeliveryResult.Code.OK));
-        MatchRequest matchRequest = MatchRequest.newBuilder()
-            .setReqId(1)
-            .setTenantId("tenant")
-            .setMatchInfo(MatchInfo.newBuilder()
-                .setMatcher(TopicUtil.from("#"))
-                .setReceiverId("inbox")
-                .build())
-            .setDelivererKey("delivererKey")
-            .setBrokerId(1)
-            .build();
+        MatchRequest matchRequest = MatchRequest.newBuilder().setReqId(1).setTenantId("tenant")
+            .setMatchInfo(MatchInfo.newBuilder().setMatcher(TopicUtil.from("#")).setReceiverId("inbox").build())
+            .setDelivererKey("delivererKey").setBrokerId(1).build();
         service.match(matchRequest, matchResponseObserver);
-        verify(matchResponseObserver)
-            .onNext(argThat(r -> r.getReqId() == matchRequest.getReqId() && r.getResult() == MatchReply.Result.OK));
+        verify(matchResponseObserver).onNext(
+            argThat(r -> r.getReqId() == matchRequest.getReqId() && r.getResult() == MatchReply.Result.OK));
         ArgumentCaptor<DeliveryCall> reqCaptor = ArgumentCaptor.forClass(DeliveryCall.class);
         verify(messageDeliverer, times(2)).schedule(reqCaptor.capture());
         List<DeliveryCall> requestList = reqCaptor.getAllValues();
@@ -197,64 +180,38 @@ public class RetainServiceTest {
 
     @Test
     public void testDeliverToNoInbox() {
-        TopicMessage retainMsg1 = TopicMessage.newBuilder()
-            .setTopic("topic1")
-            .setMessage(Message.newBuilder().build())
-            .setPublisher(ClientInfo.newBuilder().build())
-            .build();
-        TopicMessage retainMsg2 = TopicMessage.newBuilder()
-            .setTopic("topic2")
-            .setMessage(Message.newBuilder().build())
-            .setPublisher(ClientInfo.newBuilder().build())
-            .build();
+        TopicMessage retainMsg1 = TopicMessage.newBuilder().setTopic("topic1").setMessage(Message.newBuilder().build())
+            .setPublisher(ClientInfo.newBuilder().build()).build();
+        TopicMessage retainMsg2 = TopicMessage.newBuilder().setTopic("topic2").setMessage(Message.newBuilder().build())
+            .setPublisher(ClientInfo.newBuilder().build()).build();
         when(matchCallScheduler.schedule(any())).thenReturn(CompletableFuture.completedFuture(
             new MatchCallResult(MatchReply.Result.OK, List.of(retainMsg1, retainMsg2))));
         when(messageDeliverer.schedule(any())).thenReturn(
             CompletableFuture.completedFuture(DeliveryResult.Code.NO_SUB));
-        MatchRequest matchRequest = MatchRequest.newBuilder()
-            .setReqId(1)
-            .setTenantId("tenant")
-            .setMatchInfo(MatchInfo.newBuilder()
-                .setMatcher(TopicUtil.from("#"))
-                .setReceiverId("inbox")
-                .build())
-            .setDelivererKey("delivererKey")
-            .setBrokerId(1)
-            .build();
+        MatchRequest matchRequest = MatchRequest.newBuilder().setReqId(1).setTenantId("tenant")
+            .setMatchInfo(MatchInfo.newBuilder().setMatcher(TopicUtil.from("#")).setReceiverId("inbox").build())
+            .setDelivererKey("delivererKey").setBrokerId(1).build();
         service.match(matchRequest, matchResponseObserver);
-        verify(matchResponseObserver)
-            .onNext(argThat(r -> r.getReqId() == matchRequest.getReqId() && r.getResult() == MatchReply.Result.ERROR));
+        verify(matchResponseObserver).onNext(
+            argThat(r -> r.getReqId() == matchRequest.getReqId() && r.getResult() == MatchReply.Result.ERROR));
         verify(messageDeliverer, times(2)).schedule(any());
     }
 
     @Test
     public void testDeliverFailed() {
-        TopicMessage retainMsg1 = TopicMessage.newBuilder()
-            .setTopic("topic1")
-            .setMessage(Message.newBuilder().build())
-            .setPublisher(ClientInfo.newBuilder().build())
-            .build();
-        TopicMessage retainMsg2 = TopicMessage.newBuilder()
-            .setTopic("topic2")
-            .setMessage(Message.newBuilder().build())
-            .setPublisher(ClientInfo.newBuilder().build())
-            .build();
+        TopicMessage retainMsg1 = TopicMessage.newBuilder().setTopic("topic1").setMessage(Message.newBuilder().build())
+            .setPublisher(ClientInfo.newBuilder().build()).build();
+        TopicMessage retainMsg2 = TopicMessage.newBuilder().setTopic("topic2").setMessage(Message.newBuilder().build())
+            .setPublisher(ClientInfo.newBuilder().build()).build();
         when(matchCallScheduler.schedule(any())).thenReturn(CompletableFuture.completedFuture(
             new MatchCallResult(MatchReply.Result.OK, List.of(retainMsg1, retainMsg2))));
-        when(messageDeliverer.schedule(any())).thenReturn(CompletableFuture.completedFuture(DeliveryResult.Code.ERROR));
-        MatchRequest matchRequest = MatchRequest.newBuilder()
-            .setReqId(1)
-            .setTenantId("tenant")
-            .setMatchInfo(MatchInfo.newBuilder()
-                .setMatcher(TopicUtil.from("#"))
-                .setReceiverId("inbox")
-                .build())
-            .setDelivererKey("delivererKey")
-            .setBrokerId(1)
-            .build();
+        when(messageDeliverer.schedule(any())).thenReturn(CompletableFuture.failedFuture(new RuntimeException()));
+        MatchRequest matchRequest = MatchRequest.newBuilder().setReqId(1).setTenantId("tenant")
+            .setMatchInfo(MatchInfo.newBuilder().setMatcher(TopicUtil.from("#")).setReceiverId("inbox").build())
+            .setDelivererKey("delivererKey").setBrokerId(1).build();
         service.match(matchRequest, matchResponseObserver);
-        verify(matchResponseObserver)
-            .onNext(argThat(r -> r.getReqId() == matchRequest.getReqId() && r.getResult() == MatchReply.Result.ERROR));
+        verify(matchResponseObserver).onNext(
+            argThat(r -> r.getReqId() == matchRequest.getReqId() && r.getResult() == MatchReply.Result.ERROR));
         verify(messageDeliverer, times(2)).schedule(any());
     }
 
@@ -264,8 +221,8 @@ public class RetainServiceTest {
             CompletableFuture.completedFuture(new MatchCallResult(MatchReply.Result.ERROR, Collections.emptyList())));
         long reqId = 1;
         service.match(MatchRequest.newBuilder().setReqId(reqId).build(), matchResponseObserver);
-        verify(matchResponseObserver)
-            .onNext(argThat(r -> r.getReqId() == reqId && r.getResult() == MatchReply.Result.ERROR));
+        verify(matchResponseObserver).onNext(
+            argThat(r -> r.getReqId() == reqId && r.getResult() == MatchReply.Result.ERROR));
         verify(messageDeliverer, never()).schedule(any());
     }
 
@@ -275,8 +232,8 @@ public class RetainServiceTest {
             CompletableFuture.failedFuture(new RuntimeException("Mocked")));
         long reqId = 1;
         service.match(MatchRequest.newBuilder().setReqId(reqId).build(), matchResponseObserver);
-        verify(matchResponseObserver)
-            .onNext(argThat(r -> r.getReqId() == reqId && r.getResult() == MatchReply.Result.ERROR));
+        verify(matchResponseObserver).onNext(
+            argThat(r -> r.getReqId() == reqId && r.getResult() == MatchReply.Result.ERROR));
         verify(messageDeliverer, never()).schedule(any());
     }
 }

@@ -31,57 +31,17 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MemUsage {
-    private static final double INLINE_REFRESH_THRESHOLD = 0.6;
     private static final long UPDATE_INTERVAL = Duration.ofMillis(10).toNanos();
-    private static final boolean MAY_BE_BLOCKING = maybeBlocking();
     private static final long JVM_MAX_DIRECT_MEMORY = PlatformDependent.estimateMaxDirectMemory();
+    private static final MemoryMXBean memoryMXBean = ManagementFactory.getMemoryMXBean();
     private static final ThreadLocal<MemUsage> THREAD_LOCAL = ThreadLocal.withInitial(MemUsage::new);
-
-    public static MemUsage local() {
-        return THREAD_LOCAL.get();
-    }
-
-    private final MemoryMXBean memoryMXBean = ManagementFactory.getMemoryMXBean();
     private double nettyDirectMemoryUsage = 0;
     private double heapMemoryUsage = 0;
     private long refreshNettyDirectMemoryUsageAt = 0;
     private long refreshHeapMemoryUsageAt = 0;
 
-    public double nettyDirectMemoryUsage() {
-        scheduleNettyDirectMemoryUsage();
-        return nettyDirectMemoryUsage;
-    }
-
-    public double heapMemoryUsage() {
-        scheduleHeapMemoryUsage();
-        return heapMemoryUsage;
-    }
-
-    private void scheduleNettyDirectMemoryUsage() {
-        long now = System.nanoTime();
-        if (now - refreshNettyDirectMemoryUsageAt > UPDATE_INTERVAL) {
-            if (MAY_BE_BLOCKING && nettyDirectMemoryUsage > INLINE_REFRESH_THRESHOLD) {
-                // if netty direct memory usage is high, reading pool allocator stats directly may be blocking
-                // we read it in a separate thread
-                nettyDirectMemoryUsage = NonblockingNettyDirectMemoryUsage.usage();
-            } else {
-                // calculating inline
-                nettyDirectMemoryUsage = calculateNettyDirectMemoryUsage();
-            }
-            refreshNettyDirectMemoryUsageAt = System.nanoTime();
-        }
-    }
-
-    private static boolean maybeBlocking() {
-        return !PlatformDependent.useDirectBufferNoCleaner() && ByteBufAllocator.DEFAULT.isDirectBufferPooled();
-    }
-
-    private void scheduleHeapMemoryUsage() {
-        long now = System.nanoTime();
-        if (now - refreshHeapMemoryUsageAt > UPDATE_INTERVAL) {
-            heapMemoryUsage = calculateHeapMemoryUsage();
-            refreshHeapMemoryUsageAt = System.nanoTime();
-        }
+    public static MemUsage local() {
+        return THREAD_LOCAL.get();
     }
 
     private static double calculateNettyDirectMemoryUsage() {
@@ -105,18 +65,6 @@ public class MemUsage {
             } else {
                 return usedDirectMemory / (double) Math.min(PlatformDependent.maxDirectMemory(), JVM_MAX_DIRECT_MEMORY);
             }
-        }
-    }
-
-    private double calculateHeapMemoryUsage() {
-        try {
-            MemoryUsage memoryUsage = memoryMXBean.getHeapMemoryUsage();
-            long usedHeapMemory = memoryUsage.getUsed();
-            long maxHeapMemory = memoryUsage.getMax();
-            return (double) usedHeapMemory / maxHeapMemory;
-        } catch (IllegalArgumentException e) {
-            // there is an unresolved issue in open jdk17: https://bugs.openjdk.org/browse/JDK-8207200
-            return 0;
         }
     }
 
@@ -161,44 +109,42 @@ public class MemUsage {
         return 100;
     }
 
-    private static double maxPooledMemoryUsage() {
-        PooledByteBufAllocatorMetric allocatorMetric =
-            (PooledByteBufAllocatorMetric) ((ByteBufAllocatorMetricProvider) ByteBufAllocator.DEFAULT).metric();
-        int maxUsage = 0;
-        for (PoolArenaMetric arenaMetric : allocatorMetric.directArenas()) {
-            maxUsage = Math.max(maxUsage, pooledArenaUsage(arenaMetric));
-        }
-        return maxUsage / 100.0;
+    public double nettyDirectMemoryUsage() {
+        scheduleNettyDirectMemoryUsage();
+        return nettyDirectMemoryUsage;
     }
 
-    private static int pooledArenaUsage(PoolArenaMetric arenaMetric) {
-        int maxUsage = 0;
-        for (PoolChunkListMetric chunkListMetric : arenaMetric.chunkLists()) {
-            for (PoolChunkMetric chunkMetric : chunkListMetric) {
-                maxUsage = Math.max(chunkMetric.usage(), maxUsage);
-            }
-        }
-        return maxUsage;
+    public double heapMemoryUsage() {
+        scheduleHeapMemoryUsage();
+        return heapMemoryUsage;
     }
 
-    private static long calculateTotalFreeBytes() {
-        PooledByteBufAllocatorMetric allocatorMetric =
-            (PooledByteBufAllocatorMetric) ((ByteBufAllocatorMetricProvider) ByteBufAllocator.DEFAULT).metric();
-        long totalFreeBytes = 0;
-        for (PoolArenaMetric arenaMetric : allocatorMetric.directArenas()) {
-            totalFreeBytes += getFreeBytesFromArena(arenaMetric);
+    private void scheduleNettyDirectMemoryUsage() {
+        long now = System.nanoTime();
+        if (now - refreshNettyDirectMemoryUsageAt > UPDATE_INTERVAL) {
+            nettyDirectMemoryUsage = NonblockingNettyDirectMemoryUsage.usage();
+            refreshNettyDirectMemoryUsageAt = System.nanoTime();
         }
-        return totalFreeBytes;
     }
 
-    private static long getFreeBytesFromArena(PoolArenaMetric arenaMetric) {
-        long freeBytes = 0;
-        for (PoolChunkListMetric chunkListMetric : arenaMetric.chunkLists()) {
-            for (PoolChunkMetric chunkMetric : chunkListMetric) {
-                freeBytes += chunkMetric.freeBytes();
-            }
+    private void scheduleHeapMemoryUsage() {
+        long now = System.nanoTime();
+        if (now - refreshHeapMemoryUsageAt > UPDATE_INTERVAL) {
+            heapMemoryUsage = calculateHeapMemoryUsage();
+            refreshHeapMemoryUsageAt = System.nanoTime();
         }
-        return freeBytes;
+    }
+
+    private double calculateHeapMemoryUsage() {
+        try {
+            MemoryUsage memoryUsage = memoryMXBean.getHeapMemoryUsage();
+            long usedHeapMemory = memoryUsage.getUsed();
+            long maxHeapMemory = memoryUsage.getMax();
+            return (double) usedHeapMemory / maxHeapMemory;
+        } catch (IllegalArgumentException e) {
+            // there is an unresolved issue in open jdk17: https://bugs.openjdk.org/browse/JDK-8207200
+            return 0;
+        }
     }
 
     private static class NonblockingNettyDirectMemoryUsage {

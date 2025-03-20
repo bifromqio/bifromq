@@ -14,7 +14,7 @@
 package com.baidu.bifromq.mqtt.inbox;
 
 import com.baidu.bifromq.baserpc.client.IRPCClient;
-import com.baidu.bifromq.baserpc.client.exception.ServiceUnavailableException;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
@@ -48,29 +48,24 @@ class DeliveryPipeline implements IDeliverer {
             .thenApply(WriteReply::getReply)
             .exceptionally(e -> {
                 log.debug("Failed to deliver request: {}", request, e);
-                DeliveryResult.Code finalCode = DeliveryResult.Code.ERROR;
-                if (e instanceof ServiceUnavailableException
-                    || e.getCause() instanceof ServiceUnavailableException) {
-                    // treat service unavailable as no receiver
-                    finalCode = DeliveryResult.Code.NO_RECEIVER;
-                }
-                DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder();
-                Set<MatchInfo> allMatchInfos = new HashSet<>();
-                for (String tenantId : request.getPackageMap().keySet()) {
-                    DeliveryResults.Builder resultsBuilder = DeliveryResults.newBuilder();
-                    DeliveryPackage deliveryPackage = request.getPackageMap().get(tenantId);
-                    for (DeliveryPack pack : deliveryPackage.getPackList()) {
-                        allMatchInfos.addAll(pack.getMatchInfoList());
+                if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+                    DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder().setCode(DeliveryReply.Code.OK);
+                    Set<MatchInfo> allMatchInfos = new HashSet<>();
+                    for (String tenantId : request.getPackageMap().keySet()) {
+                        DeliveryResults.Builder resultsBuilder = DeliveryResults.newBuilder();
+                        DeliveryPackage deliveryPackage = request.getPackageMap().get(tenantId);
+                        for (DeliveryPack pack : deliveryPackage.getPackList()) {
+                            allMatchInfos.addAll(pack.getMatchInfoList());
+                        }
+                        for (MatchInfo matchInfo : allMatchInfos) {
+                            resultsBuilder.addResult(DeliveryResult.newBuilder().setMatchInfo(matchInfo)
+                                .setCode(DeliveryResult.Code.NO_RECEIVER).build());
+                        }
+                        replyBuilder.putResult(tenantId, resultsBuilder.build());
                     }
-                    for (MatchInfo matchInfo : allMatchInfos) {
-                        resultsBuilder.addResult(DeliveryResult.newBuilder()
-                            .setMatchInfo(matchInfo)
-                            .setCode(finalCode)
-                            .build());
-                    }
-                    replyBuilder.putResult(tenantId, resultsBuilder.build());
+                    return replyBuilder.build();
                 }
-                return replyBuilder.build();
+                return DeliveryReply.newBuilder().setCode(DeliveryReply.Code.ERROR).build();
             });
     }
 

@@ -170,17 +170,19 @@ public class LocalTopicRouter implements ILocalTopicRouter {
     }
 
     private static class LocalRoutes implements ILocalRoutes {
+        private static final int BUCKET_ID_LENGTH = 5;
         private final String localReceiverId;
         private final Map<String, Long> routesInfo = new ConcurrentHashMap<>();
         private final long incarnation = System.nanoTime();
 
         private LocalRoutes(int bucketId) {
-            this.localReceiverId = ILocalDistService.localize(bucketId + "_" + incarnation);
+            this.localReceiverId =
+                ILocalDistService.localize(String.format("%0" + BUCKET_ID_LENGTH + "d", bucketId) + incarnation);
         }
 
         public static int parseBucketId(String localReceiverId) {
             String receiverId = ILocalDistService.parseReceiverId(localReceiverId);
-            return Integer.parseInt(receiverId.substring(0, receiverId.indexOf('_')));
+            return Integer.parseInt(receiverId.substring(0, BUCKET_ID_LENGTH));
         }
 
         public String localReceiverId() {

@@ -20,9 +20,7 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
 import com.baidu.bifromq.basekv.store.IKVRangeStore;
 import com.baidu.bifromq.basekv.store.KVRangeStore;
-import com.baidu.bifromq.basekv.store.exception.KVRangeException.BadRequest;
-import com.baidu.bifromq.basekv.store.exception.KVRangeException.BadVersion;
-import com.baidu.bifromq.basekv.store.exception.KVRangeException.TryLater;
+import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
 import com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc;
 import com.baidu.bifromq.basekv.store.proto.BootstrapReply;
@@ -216,13 +214,13 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
     }
 
     private ReplyCode convertKVRangeException(Throwable e) {
-        if (e instanceof BadVersion || e.getCause() instanceof BadVersion) {
+        if (e instanceof KVRangeException.BadVersion || e.getCause() instanceof KVRangeException.BadVersion) {
             return ReplyCode.BadVersion;
         }
-        if (e instanceof TryLater || e.getCause() instanceof TryLater) {
+        if (e instanceof KVRangeException.TryLater || e.getCause() instanceof KVRangeException.TryLater) {
             return ReplyCode.TryLater;
         }
-        if (e instanceof BadRequest || e.getCause() instanceof BadRequest) {
+        if (e instanceof KVRangeException.BadRequest || e.getCause() instanceof KVRangeException.BadRequest) {
             return ReplyCode.BadRequest;
         }
         log.error("Internal Error", e);

@@ -76,6 +76,7 @@ public class DeliverySchedulerTest {
 
         when(groupWriter.deliver(any())).thenReturn(
             CompletableFuture.completedFuture(DeliveryReply.newBuilder()
+                .setCode(DeliveryReply.Code.OK)
                 .putResult(tenantId, DeliveryResults.newBuilder()
                     .addResult(DeliveryResult.newBuilder()
                         .setMatchInfo(matchInfo)
@@ -109,6 +110,7 @@ public class DeliverySchedulerTest {
             new DeliveryCall(tenantId, matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
         when(groupWriter.deliver(any())).thenReturn(
             CompletableFuture.completedFuture(DeliveryReply.newBuilder()
+                .setCode(DeliveryReply.Code.OK)
                 .putResult(tenantId, DeliveryResults.newBuilder()
                     .addResult(DeliveryResult.newBuilder()
                         .setMatchInfo(matchInfo)
@@ -134,6 +136,7 @@ public class DeliverySchedulerTest {
             new DeliveryCall(tenantId, matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
         when(groupWriter.deliver(any())).thenReturn(
             CompletableFuture.completedFuture(DeliveryReply.newBuilder()
+                .setCode(DeliveryReply.Code.OK)
                 .putResult(tenantId, DeliveryResults.newBuilder()
                     .addResult(DeliveryResult.newBuilder()
                         .setMatchInfo(matchInfo)

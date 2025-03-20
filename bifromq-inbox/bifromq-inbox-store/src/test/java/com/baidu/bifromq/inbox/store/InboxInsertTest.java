@@ -25,9 +25,9 @@ import com.baidu.bifromq.inbox.storage.proto.BatchCommitReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchInsertReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
+import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
 import com.baidu.bifromq.inbox.storage.proto.SubMessagePack;
@@ -49,7 +49,7 @@ public class InboxInsertTest extends InboxStoreTest {
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         String topicFilter = "/a/b/c";
-        BatchInsertReply.Result insertResult = requestInsert(InboxSubMessagePack.newBuilder()
+        InboxInsertResult insertResult = requestInsert(InboxSubMessagePack.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
@@ -61,7 +61,7 @@ public class InboxInsertTest extends InboxStoreTest {
                     .build())
                 .build())
             .build()).get(0);
-        assertEquals(insertResult.getCode(), BatchInsertReply.Code.NO_INBOX);
+        assertEquals(insertResult.getCode(), InboxInsertResult.Code.NO_INBOX);
     }
 
     @Test(groups = "integration")
@@ -110,7 +110,7 @@ public class InboxInsertTest extends InboxStoreTest {
 
         TopicMessagePack.PublisherPack msg1 = message(qos, "hello");
         TopicMessagePack.PublisherPack msg2 = message(qos, "world");
-        BatchInsertReply.Result insertResult = requestInsert(InboxSubMessagePack.newBuilder()
+        InboxInsertResult insertResult = requestInsert(InboxSubMessagePack.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
@@ -124,9 +124,9 @@ public class InboxInsertTest extends InboxStoreTest {
                     .build())
                 .build())
             .build()).get(0);
-        assertEquals(insertResult.getCode(), BatchInsertReply.Code.OK);
-        assertEquals(insertResult.getInsertionResult(0).getTopicFilter(), topicFilter);
-        assertEquals(insertResult.getInsertionResult(0).getIncarnation(), 1L);
+        assertEquals(insertResult.getCode(), InboxInsertResult.Code.OK);
+        assertEquals(insertResult.getResult(0).getTopicFilter(), topicFilter);
+        assertEquals(insertResult.getResult(0).getIncarnation(), 1L);
 
         Fetched fetched = requestFetch(
             BatchFetchRequest.Params.newBuilder()
@@ -180,7 +180,7 @@ public class InboxInsertTest extends InboxStoreTest {
             .build());
         TopicMessagePack.PublisherPack msg1 = message(qos, "hello");
         TopicMessagePack.PublisherPack msg2 = message(qos, "world");
-        BatchInsertReply.Result insertResult = requestInsert(InboxSubMessagePack.newBuilder()
+        InboxInsertResult insertResult = requestInsert(InboxSubMessagePack.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
@@ -194,9 +194,9 @@ public class InboxInsertTest extends InboxStoreTest {
                     .build())
                 .build())
             .build()).get(0);
-        assertEquals(insertResult.getCode(), BatchInsertReply.Code.OK);
-        assertEquals(insertResult.getInsertionResult(0).getTopicFilter(), topicFilter);
-        assertEquals(insertResult.getInsertionResult(0).getIncarnation(), 1L);
+        assertEquals(insertResult.getCode(), InboxInsertResult.Code.OK);
+        assertEquals(insertResult.getResult(0).getTopicFilter(), topicFilter);
+        assertEquals(insertResult.getResult(0).getIncarnation(), 1L);
 
         Fetched fetched = requestFetch(BatchFetchRequest.Params.newBuilder()
             .setTenantId(tenantId)
@@ -812,7 +812,7 @@ public class InboxInsertTest extends InboxStoreTest {
             .setOption(TopicFilterOption.newBuilder().setQos(QoS.EXACTLY_ONCE).build())
             .setNow(now)
             .build());
-        BatchInsertReply.Result insertResult = requestInsert(InboxSubMessagePack.newBuilder()
+        InboxInsertResult insertResult = requestInsert(InboxSubMessagePack.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
@@ -838,7 +838,7 @@ public class InboxInsertTest extends InboxStoreTest {
                     .build())
                 .build())
             .build()).get(0);
-        assertEquals(insertResult.getCode(), BatchInsertReply.Code.OK);
+        assertEquals(insertResult.getCode(), InboxInsertResult.Code.OK);
         Fetched fetched = requestFetch(
             BatchFetchRequest.Params.newBuilder()
                 .setTenantId(tenantId)

@@ -191,6 +191,7 @@ public class KVRangeStoreTestCluster {
                 for (KVRangeDescriptor rangeDescriptor : storeDescriptor.getRangesList()) {
                     if (rangeDescriptor.getId().equals(kvRangeId) && rangeDescriptor.getVer() >= atLeastVer) {
                         ready = true;
+                        break;
                     }
                 }
                 allReady &= ready;

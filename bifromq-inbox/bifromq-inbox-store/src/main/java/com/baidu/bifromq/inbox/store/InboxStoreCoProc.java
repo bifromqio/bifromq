@@ -66,6 +66,7 @@ import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.GCReply;
 import com.baidu.bifromq.inbox.storage.proto.GCRequest;
+import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessageList;
 import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
@@ -714,87 +715,79 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             Optional<InboxMetadata> metadataOpt =
                 tenantStates.get(params.getTenantId(), params.getInboxId(), params.getIncarnation());
             if (metadataOpt.isEmpty()) {
-                replyBuilder.addResult(BatchInsertReply.Result.newBuilder()
-                    .setCode(BatchInsertReply.Code.NO_INBOX)
+                replyBuilder.addResult(InboxInsertResult.newBuilder()
+                    .setCode(InboxInsertResult.Code.NO_INBOX)
                     .build());
                 continue;
             }
-            try {
-                InboxMetadata metadata = metadataOpt.get();
-                BatchInsertReply.Result.Builder resBuilder = BatchInsertReply.Result.newBuilder()
-                    .setCode(BatchInsertReply.Code.OK);
-                List<SubMessage> qos0MsgList = new ArrayList<>();
-                List<SubMessage> bufferMsgList = new ArrayList<>();
-                for (SubMessagePack messagePack : params.getMessagePackList()) {
-                    TopicFilterOption tfOption = metadata.getTopicFiltersMap().get(messagePack.getTopicFilter());
-                    if (tfOption == null) {
-                        resBuilder.addInsertionResult(BatchInsertReply.InsertionResult.newBuilder()
-                            .setTopicFilter(messagePack.getTopicFilter())
-                            .setIncarnation(messagePack.getIncarnation())
-                            .setRejected(true)
-                            .build());
-                    } else {
-                        if (tfOption.getIncarnation() > messagePack.getIncarnation()) {
-                            // messages from old sub incarnation
-                            log.debug("Receive message from previous subscription: topicFilter={}, inc={}, prevInc={}",
-                                messagePack.getTopicFilter(), tfOption.getIncarnation(), messagePack.getIncarnation());
-                        }
-                        for (TopicMessagePack topicMsgPack : messagePack.getMessagesList()) {
-                            String topic = topicMsgPack.getTopic();
-                            for (TopicMessagePack.PublisherPack publisherPack : topicMsgPack.getMessageList()) {
-                                for (Message message : publisherPack.getMessageList()) {
-                                    SubMessage subMessage = new SubMessage(
-                                        messagePack.getTopicFilter(),
-                                        tfOption,
-                                        topic,
-                                        publisherPack.getPublisher(),
-                                        message
-                                    );
-                                    QoS finalQoS = QoS.forNumber(
-                                        Math.min(message.getPubQoS().getNumber(), tfOption.getQos().getNumber()));
-                                    assert finalQoS != null;
-                                    switch (finalQoS) {
-                                        case AT_MOST_ONCE -> qos0MsgList.add(subMessage);
-                                        case AT_LEAST_ONCE, EXACTLY_ONCE -> bufferMsgList.add(subMessage);
-                                        default -> {
-                                            // never happen, do nothing
-                                        }
+            InboxMetadata metadata = metadataOpt.get();
+            InboxInsertResult.Builder resBuilder = InboxInsertResult.newBuilder()
+                .setCode(InboxInsertResult.Code.OK);
+            List<SubMessage> qos0MsgList = new ArrayList<>();
+            List<SubMessage> bufferMsgList = new ArrayList<>();
+            for (SubMessagePack messagePack : params.getMessagePackList()) {
+                TopicFilterOption tfOption = metadata.getTopicFiltersMap().get(messagePack.getTopicFilter());
+                if (tfOption == null) {
+                    resBuilder.addResult(InboxInsertResult.PackInsertResult.newBuilder()
+                        .setTopicFilter(messagePack.getTopicFilter())
+                        .setIncarnation(messagePack.getIncarnation())
+                        .setRejected(true)
+                        .build());
+                } else {
+                    if (tfOption.getIncarnation() > messagePack.getIncarnation()) {
+                        // messages from old sub incarnation
+                        log.debug("Receive message from previous subscription: topicFilter={}, inc={}, prevInc={}",
+                            messagePack.getTopicFilter(), tfOption.getIncarnation(), messagePack.getIncarnation());
+                    }
+                    for (TopicMessagePack topicMsgPack : messagePack.getMessagesList()) {
+                        String topic = topicMsgPack.getTopic();
+                        for (TopicMessagePack.PublisherPack publisherPack : topicMsgPack.getMessageList()) {
+                            for (Message message : publisherPack.getMessageList()) {
+                                SubMessage subMessage = new SubMessage(
+                                    messagePack.getTopicFilter(),
+                                    tfOption,
+                                    topic,
+                                    publisherPack.getPublisher(),
+                                    message
+                                );
+                                QoS finalQoS = QoS.forNumber(
+                                    Math.min(message.getPubQoS().getNumber(), tfOption.getQos().getNumber()));
+                                assert finalQoS != null;
+                                switch (finalQoS) {
+                                    case AT_MOST_ONCE -> qos0MsgList.add(subMessage);
+                                    case AT_LEAST_ONCE, EXACTLY_ONCE -> bufferMsgList.add(subMessage);
+                                    default -> {
+                                        // never happen, do nothing
                                     }
                                 }
                             }
                         }
-                        resBuilder.addInsertionResult(BatchInsertReply.InsertionResult.newBuilder()
-                            .setTopicFilter(messagePack.getTopicFilter())
-                            .setIncarnation(messagePack.getIncarnation())
-                            .setRejected(false)
-                            .build());
                     }
+                    resBuilder.addResult(InboxInsertResult.PackInsertResult.newBuilder()
+                        .setTopicFilter(messagePack.getTopicFilter())
+                        .setIncarnation(messagePack.getIncarnation())
+                        .setRejected(false)
+                        .build());
                 }
-                InboxMetadata.Builder metadataBuilder = metadata.toBuilder();
-                dropOldestMap.put(metadata.getClient(), metadata.getDropOldest());
-                ByteString inboxInstStartKey =
-                    inboxInstanceStartKey(params.getTenantId(), params.getInboxId(), params.getIncarnation());
-                Map<QoS, Integer> dropCounts = insertInbox(inboxInstStartKey, qos0MsgList, bufferMsgList,
-                    metadataBuilder, reader, writer);
-                metadata = metadataBuilder.build();
-                replyBuilder.addResult(resBuilder.build());
-                writer.put(inboxInstStartKey, metadata.toByteString());
-                toBeCached.computeIfAbsent(params.getTenantId(), k -> new HashSet<>()).add(metadata);
-                Map<QoS, Integer> aggregated =
-                    dropCountMap.computeIfAbsent(metadata.getClient(), k -> new HashMap<>());
-                dropCounts.forEach((qos, count) -> aggregated.compute(qos, (k, v) -> {
-                    if (v == null) {
-                        return count;
-                    }
-                    return v + count;
-                }));
-            } catch (Throwable e) {
-                log.error("Failed to insert:tenantId={}, inbox={}, inc={}",
-                    params.getTenantId(), params.getInboxId(), params.getIncarnation(), e);
-                replyBuilder.addResult(BatchInsertReply.Result.newBuilder()
-                    .setCode(BatchInsertReply.Code.ERROR)
-                    .build());
             }
+            InboxMetadata.Builder metadataBuilder = metadata.toBuilder();
+            dropOldestMap.put(metadata.getClient(), metadata.getDropOldest());
+            ByteString inboxInstStartKey =
+                inboxInstanceStartKey(params.getTenantId(), params.getInboxId(), params.getIncarnation());
+            Map<QoS, Integer> dropCounts = insertInbox(inboxInstStartKey, qos0MsgList, bufferMsgList,
+                metadataBuilder, reader, writer);
+            metadata = metadataBuilder.build();
+            replyBuilder.addResult(resBuilder.build());
+            writer.put(inboxInstStartKey, metadata.toByteString());
+            toBeCached.computeIfAbsent(params.getTenantId(), k -> new HashSet<>()).add(metadata);
+            Map<QoS, Integer> aggregated =
+                dropCountMap.computeIfAbsent(metadata.getClient(), k -> new HashMap<>());
+            dropCounts.forEach((qos, count) -> aggregated.compute(qos, (k, v) -> {
+                if (v == null) {
+                    return count;
+                }
+                return v + count;
+            }));
         }
         return () -> {
             toBeCached.forEach(
@@ -817,7 +810,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                           List<SubMessage> bufferedMsgList,
                                           InboxMetadata.Builder metaBuilder,
                                           IKVReader reader,
-                                          IKVWriter writer) throws InvalidProtocolBufferException {
+                                          IKVWriter writer) {
         Map<QoS, Integer> dropCounts = new HashMap<>();
         if (!qos0MsgList.isEmpty()) {
             long startSeq = metaBuilder.getQos0StartSeq();
@@ -843,6 +836,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         return dropCounts;
     }
 
+    @SneakyThrows
     private int insertToInbox(ByteString inboxKeyPrefix,
                               long startSeq,
                               long nextSeq,
@@ -853,7 +847,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                               Function<Long, InboxMetadata.Builder> nextSeqSetter,
                               List<SubMessage> messages,
                               IKVReader reader,
-                              IKVWriter writer) throws InvalidProtocolBufferException {
+                              IKVWriter writer) {
         int newMsgCount = messages.size();
         int currCount = (int) (nextSeq - startSeq);
         int dropCount = currCount + newMsgCount - limit;

@@ -14,16 +14,16 @@
 package com.baidu.bifromq.basekv.store.exception;
 
 public class KVRangeStoreException extends RuntimeException {
-    public static KVRangeStoreException rangeNotFound() {
-        return new KVRangeNotFoundException();
-    }
-
     public KVRangeStoreException(String message) {
         super(message);
     }
 
     public KVRangeStoreException(String message, Throwable cause) {
         super(message, cause);
+    }
+
+    public static KVRangeStoreException rangeNotFound() {
+        return new KVRangeNotFoundException();
     }
 
     public static class KVRangeNotFoundException extends KVRangeStoreException {

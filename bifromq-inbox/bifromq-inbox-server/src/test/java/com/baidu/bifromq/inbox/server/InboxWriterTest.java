@@ -22,12 +22,11 @@ import static org.testng.Assert.assertEquals;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxInsertScheduler;
-import com.baidu.bifromq.inbox.storage.proto.BatchInsertReply;
+import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
 import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResults;
-import java.lang.reflect.Field;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.mockito.Mock;
@@ -60,14 +59,14 @@ public class InboxWriterTest {
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("err")));
         SendRequest request = sendRequest();
         SendReply sendReply = new InboxWriter(insertScheduler).handle(request).join();
-        assertEquals(sendReply, sendReply(request.getReqId(), DeliveryResult.Code.ERROR));
+        assertEquals(sendReply, sendReply(request.getReqId(), DeliveryReply.Code.ERROR));
     }
 
     @Test
     public void insertScheduleNoInbox() {
         when(insertScheduler.schedule(any(InboxSubMessagePack.class))).thenReturn(
-            CompletableFuture.completedFuture(BatchInsertReply.Result.newBuilder()
-                .setCode(BatchInsertReply.Code.NO_INBOX)
+            CompletableFuture.completedFuture(InboxInsertResult.newBuilder()
+                .setCode(InboxInsertResult.Code.NO_INBOX)
                 .build()));
         SendRequest request = sendRequest();
         SendReply sendReply = new InboxWriter(insertScheduler).handle(request).join();
@@ -78,13 +77,13 @@ public class InboxWriterTest {
     public void insertScheduleRejected() {
         when(insertScheduler.schedule(any(InboxSubMessagePack.class)))
             .thenReturn(CompletableFuture.completedFuture(
-                BatchInsertReply.Result.newBuilder()
-                    .addInsertionResult(BatchInsertReply.InsertionResult.newBuilder()
+                InboxInsertResult.newBuilder()
+                    .addResult(InboxInsertResult.PackInsertResult.newBuilder()
                         .setRejected(true)
                         .setIncarnation(1L)
                         .setTopicFilter("/foo/+")
                         .build())
-                    .setCode(BatchInsertReply.Code.OK)
+                    .setCode(InboxInsertResult.Code.OK)
                     .build()));
         SendRequest request = sendRequest();
         SendReply sendReply = new InboxWriter(insertScheduler).handle(request).join();
@@ -93,49 +92,34 @@ public class InboxWriterTest {
 
     @Test
     public void insertScheduleOk() {
-        when(insertScheduler.schedule(any(InboxSubMessagePack.class))).thenReturn(
-            CompletableFuture.completedFuture(BatchInsertReply.Result.newBuilder()
-                .addInsertionResult(BatchInsertReply.InsertionResult.newBuilder()
+        when(insertScheduler.schedule(any(InboxSubMessagePack.class)))
+            .thenReturn(CompletableFuture.completedFuture(InboxInsertResult.newBuilder()
+                .setCode(InboxInsertResult.Code.OK)
+                .addResult(InboxInsertResult.PackInsertResult.newBuilder()
                     .setRejected(false)
                     .setTopicFilter("/foo/+")
                     .setIncarnation(1L)
                     .build())
-                .setCode(BatchInsertReply.Code.OK).build()));
+                .build()));
         SendRequest request = sendRequest();
         SendReply sendReply = new InboxWriter(insertScheduler).handle(request).join();
         assertEquals(sendReply, sendReply(request.getReqId(), DeliveryResult.Code.OK));
     }
 
-    @Test
-    public void insertScheduleUnexpectedCode() {
-        BatchInsertReply.Result result = BatchInsertReply.Result.newBuilder()
-            .addInsertionResult(BatchInsertReply.InsertionResult.newBuilder()
-                .setRejected(false)
+    private SendReply sendReply(long reqId, DeliveryReply.Code code) {
+        return SendReply.newBuilder()
+            .setReqId(reqId)
+            .setReply(DeliveryReply.newBuilder()
+                .setCode(code)
                 .build())
             .build();
-        setUnknownCode(result);
-        when(insertScheduler.schedule(any(InboxSubMessagePack.class))).thenReturn(
-            CompletableFuture.completedFuture(result));
-        SendRequest request = sendRequest();
-        SendReply sendReply = new InboxWriter(insertScheduler).handle(request).join();
-        assertEquals(sendReply, sendReply(request.getReqId(), DeliveryResult.Code.ERROR));
-    }
-
-    private void setUnknownCode(BatchInsertReply.Result result) {
-        Field codeField;
-        try {
-            codeField = result.getClass().getDeclaredField("code_");
-            codeField.setAccessible(true);
-            codeField.set(result, 3);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     private SendReply sendReply(long reqId, DeliveryResult.Code code) {
         return SendReply.newBuilder()
             .setReqId(reqId)
             .setReply(DeliveryReply.newBuilder()
+                .setCode(DeliveryReply.Code.OK)
                 .putResult("_",
                     DeliveryResults.newBuilder()
                         .addResult(DeliveryResult.newBuilder()
@@ -146,5 +130,4 @@ public class InboxWriterTest {
                 .build())
             .build();
     }
-
 }

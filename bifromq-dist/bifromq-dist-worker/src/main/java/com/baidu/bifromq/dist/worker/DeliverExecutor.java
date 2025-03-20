@@ -107,16 +107,10 @@ public class DeliverExecutor {
                         .delivererKey(delivererKey)
                         .subInfo(sub)
                         .messages(msgPack));
-                    case ERROR -> eventCollector.report(getLocal(DeliverError.class)
-                        .brokerId(subBrokerId)
-                        .delivererKey(delivererKey)
-                        .subInfo(sub)
-                        .messages(msgPack));
                     default -> log.error("Unknown delivery result: {}", result);
                 }
             }
         });
-
     }
 
     private record SendTask(NormalMatching route, TopicMessagePack msgPack) {

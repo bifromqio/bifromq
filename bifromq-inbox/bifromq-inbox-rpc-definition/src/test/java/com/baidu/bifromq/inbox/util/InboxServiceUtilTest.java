@@ -28,14 +28,14 @@ public class InboxServiceUtilTest {
     void testParseTenantId() {
         String delivererKey = InboxServiceUtil.getDelivererKey(TENANT_ID, INBOX_ID);
         String tenantId = InboxServiceUtil.parseTenantId(delivererKey);
-        assertEquals(TENANT_ID, tenantId);
+        assertEquals(tenantId, TENANT_ID);
     }
 
     @Test
     void testGetDelivererKey() {
         String delivererKey = InboxServiceUtil.getDelivererKey(TENANT_ID, INBOX_ID);
         assertNotNull(delivererKey);
-        assertEquals(TENANT_ID, delivererKey.substring(0, delivererKey.lastIndexOf("_")));
+        assertEquals(delivererKey.substring(0, delivererKey.lastIndexOf("_")), TENANT_ID);
 
         String[] parts = delivererKey.split("_");
         int k = Integer.parseInt(parts[1]);

@@ -65,6 +65,4 @@ public class KVRangeException extends RuntimeException {
             super(message, cause);
         }
     }
-
-
 }

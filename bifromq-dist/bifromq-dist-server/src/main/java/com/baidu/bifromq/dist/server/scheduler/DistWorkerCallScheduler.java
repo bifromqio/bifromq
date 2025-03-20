@@ -19,7 +19,6 @@ import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
 import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
 import java.time.Duration;
-import java.util.Map;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 
@@ -28,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class DistWorkerCallScheduler
-    extends BatchCallScheduler<DistServerCall, Map<String, Optional<Integer>>, DistServerCallBatcherKey>
+    extends BatchCallScheduler<DistServerCall, DistServerCallResult, DistServerCallBatcherKey>
     implements IDistWorkerCallScheduler {
 
     private final IBaseKVStoreClient distWorkerClient;
@@ -46,7 +45,7 @@ public class DistWorkerCallScheduler
     }
 
     @Override
-    protected Batcher<DistServerCall, Map<String, Optional<Integer>>, DistServerCallBatcherKey> newBatcher(
+    protected Batcher<DistServerCall, DistServerCallResult, DistServerCallBatcherKey> newBatcher(
         String name, long tolerableLatencyNanos, long burstLatencyNanos, DistServerCallBatcherKey batchKey) {
         return new DistServerCallBatcher(batchKey, name, tolerableLatencyNanos, burstLatencyNanos, distWorkerClient);
     }

@@ -16,11 +16,8 @@ package com.baidu.bifromq.dist.server.scheduler;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.IBatchCall;
-import java.util.Map;
-import java.util.Optional;
 
-class DistServerCallBatcher
-    extends Batcher<DistServerCall, Map<String, Optional<Integer>>, DistServerCallBatcherKey> {
+class DistServerCallBatcher extends Batcher<DistServerCall, DistServerCallResult, DistServerCallBatcherKey> {
     private final IBaseKVStoreClient distWorkerClient;
 
     protected DistServerCallBatcher(DistServerCallBatcherKey batcherKey,
@@ -33,7 +30,7 @@ class DistServerCallBatcher
     }
 
     @Override
-    protected IBatchCall<DistServerCall, Map<String, Optional<Integer>>, DistServerCallBatcherKey> newBatch() {
+    protected IBatchCall<DistServerCall, DistServerCallResult, DistServerCallBatcherKey> newBatch() {
         return new BatchDistServerCall(distWorkerClient, batcherKey);
     }
 }

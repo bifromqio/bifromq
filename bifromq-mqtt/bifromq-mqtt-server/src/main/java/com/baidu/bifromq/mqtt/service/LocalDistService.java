@@ -105,7 +105,7 @@ public class LocalDistService implements ILocalDistService {
 
     @Override
     public CompletableFuture<DeliveryReply> dist(DeliveryRequest request) {
-        DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder();
+        DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder().setCode(DeliveryReply.Code.OK);
         for (Map.Entry<String, DeliveryPackage> entry : request.getPackageMap().entrySet()) {
             String tenantId = entry.getKey();
             DeliveryResults.Builder resultsBuilder = DeliveryResults.newBuilder();

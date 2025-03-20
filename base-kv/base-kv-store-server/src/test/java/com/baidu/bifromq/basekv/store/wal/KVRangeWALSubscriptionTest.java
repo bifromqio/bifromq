@@ -52,7 +52,7 @@ import org.testng.annotations.Test;
 
 @Slf4j
 public class KVRangeWALSubscriptionTest extends MockableTest {
-    private long maxSize = 1024;
+    private final long maxSize = 1024;
     @Mock
     private IKVRangeWAL wal;
     @Mock

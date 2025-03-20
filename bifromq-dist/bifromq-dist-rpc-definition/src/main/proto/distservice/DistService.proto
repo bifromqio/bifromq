@@ -29,7 +29,8 @@ message MatchReply {
     OK = 0;
     EXCEED_LIMIT = 1;
     BACK_PRESSURE_REJECTED = 2;
-    ERROR = 3;
+    TRY_LATER = 3;
+    ERROR = 4;
   }
   uint64 reqId = 1;
   Result result = 2;
@@ -48,9 +49,10 @@ message UnmatchRequest {
 message UnmatchReply {
   enum Result {
     OK = 0;
-    BACK_PRESSURE_REJECTED = 1;
-    ERROR = 2;
-    NOT_EXISTED = 3;
+    NOT_EXISTED = 1;
+    BACK_PRESSURE_REJECTED = 2;
+    TRY_LATER = 3;
+    ERROR = 4;
   }
   uint64 reqId = 1;
   Result result = 2;
@@ -64,13 +66,14 @@ message DistRequest {
 message DistReply {
   enum Code{
     OK = 0;
-    NO_MATCH = 1;
-    BACK_PRESSURE_REJECTED = 2;
+    BACK_PRESSURE_REJECTED = 1;
+    TRY_LATER = 2;
     ERROR = 3;
   }
-  message Result{
-    map<string, Code> topic = 1;
+  message DistResult {
+    map<string, uint32> topic = 1; // fan-out number
   }
   uint64 reqId = 1;
-  repeated Result results = 2;
+  Code code = 2;
+  repeated DistResult results = 3;
 }

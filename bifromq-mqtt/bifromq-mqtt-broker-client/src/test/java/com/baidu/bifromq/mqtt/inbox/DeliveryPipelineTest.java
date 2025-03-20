@@ -18,7 +18,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.baserpc.client.IRPCClient;
-import com.baidu.bifromq.baserpc.client.exception.ServiceUnavailableException;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
@@ -61,6 +61,7 @@ public class DeliveryPipelineTest {
         DeliveryRequest request = buildSampleDeliveryRequest();
         WriteReply successReply = WriteReply.newBuilder()
             .setReply(DeliveryReply.newBuilder()
+                .setCode(DeliveryReply.Code.OK)
                 .putResult("tenant1", DeliveryResults.newBuilder()
                     .addResult(DeliveryResult.newBuilder()
                         .setCode(DeliveryResult.Code.OK)
@@ -82,7 +83,7 @@ public class DeliveryPipelineTest {
         DeliveryRequest request = buildSampleDeliveryRequest();
 
         when(pipeline.invoke(any())).thenReturn(CompletableFuture.failedFuture(
-            new ServiceUnavailableException("Service unavailable")));
+            new ServerNotFoundException("Service unavailable")));
 
         DeliveryReply reply = deliveryPipeline.deliver(request).join();
 
@@ -98,7 +99,7 @@ public class DeliveryPipelineTest {
 
         DeliveryReply reply = deliveryPipeline.deliver(request).join();
 
-        assertEquals(reply.getResultMap().get("tenant1").getResultList().get(0).getCode(), DeliveryResult.Code.ERROR);
+        assertEquals(reply.getCode(), DeliveryReply.Code.ERROR);
     }
 
     private DeliveryRequest buildSampleDeliveryRequest() {

@@ -45,7 +45,7 @@ class NoInboxSubBroker implements ISubBroker {
         return new IDeliverer() {
             @Override
             public CompletableFuture<DeliveryReply> deliver(DeliveryRequest request) {
-                DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder();
+                DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder().setCode(DeliveryReply.Code.OK);
                 for (Map.Entry<String, DeliveryPackage> entry : request.getPackageMap().entrySet()) {
                     Map<MatchInfo, DeliveryResult.Code> results = new HashMap<>();
                     for (DeliveryPack pack : entry.getValue().getPackList()) {

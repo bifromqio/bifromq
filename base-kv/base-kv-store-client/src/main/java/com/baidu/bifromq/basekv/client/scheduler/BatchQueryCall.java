@@ -15,11 +15,14 @@ package com.baidu.bifromq.basekv.client.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.IQueryPipeline;
+import com.baidu.bifromq.basekv.client.exception.BadRequestException;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.InternalErrorException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
-import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -127,11 +130,15 @@ public abstract class BatchQueryCall<Req, Resp> implements IBatchCall<Req, Resp,
                 .setRoCoProc(input)
                 .build())
             .thenApply(reply -> {
-                if (reply.getCode() == ReplyCode.Ok) {
-                    return reply.getRoCoProcResult();
+                switch (reply.getCode()) {
+                    case Ok -> {
+                        return reply.getRoCoProcResult();
+                    }
+                    case TryLater -> throw new TryLaterException();
+                    case BadVersion -> throw new BadVersionException();
+                    case BadRequest -> throw new BadRequestException();
+                    default -> throw new InternalErrorException();
                 }
-                log.debug("Failed to exec rw co-proc[code={}]", reply.getCode());
-                throw new RuntimeException(String.format("Failed to exec rw co-proc[code=%s]", reply.getCode()));
             })
             .handle((v, e) -> {
                 if (e != null) {
