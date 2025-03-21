@@ -13,7 +13,15 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
+import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_RANGE_BOUND_BYTES;
+import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_STATE_BYTES;
+import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_VER_BYTES;
+
 import com.baidu.bifromq.basekv.localengine.IKVSpaceReader;
+import com.baidu.bifromq.basekv.proto.Boundary;
+import com.baidu.bifromq.basekv.proto.State;
+import com.google.protobuf.ByteString;
+import java.util.Optional;
 
 public class KVRangeCheckpoint extends AbstractKVRangeMetadata implements IKVRangeCheckpointReader {
     private final IKVSpaceReader keyRangeCheckpoint;
@@ -26,5 +34,22 @@ public class KVRangeCheckpoint extends AbstractKVRangeMetadata implements IKVRan
     @Override
     public IKVCheckpointReader newDataReader() {
         return new KVCheckpointReader(keyRangeCheckpoint, this);
+    }
+
+    @Override
+    public long version() {
+        Optional<ByteString> verBytes = keyRangeCheckpoint.metadata(METADATA_VER_BYTES);
+        return version(verBytes.orElse(null));
+    }
+
+    @Override
+    public State state() {
+        Optional<ByteString> stateData = keyRangeCheckpoint.metadata(METADATA_STATE_BYTES);
+        return state(stateData.orElse(null));
+    }
+
+    @Override
+    public Boundary boundary() {
+        return boundary(keyRangeCheckpoint.metadata(METADATA_RANGE_BOUND_BYTES).orElse(null));
     }
 }

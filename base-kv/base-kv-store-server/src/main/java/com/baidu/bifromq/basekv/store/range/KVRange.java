@@ -16,6 +16,7 @@ package com.baidu.bifromq.basekv.store.range;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_RANGE_BOUND_BYTES;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_STATE_BYTES;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_VER_BYTES;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.NULL_BOUNDARY;
 
 import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
 import com.baidu.bifromq.basekv.proto.Boundary;
@@ -27,6 +28,7 @@ import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import lombok.Getter;
 import lombok.SneakyThrows;
@@ -35,26 +37,46 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
     @Getter
     private final ICPableKVSpace kvSpace;
     private final ConcurrentLinkedQueue<IKVCloseableReader> sharedDataReaders = new ConcurrentLinkedQueue<>();
+    private final BehaviorSubject<KVRangeMeta> metaSubject;
 
     public KVRange(ICPableKVSpace kvSpace) {
         super(kvSpace);
         this.kvSpace = kvSpace;
+        metaSubject = BehaviorSubject.createDefault(
+            new IKVRange.KVRangeMeta(-1L, State.newBuilder().setType(State.StateType.NoUse).build(), NULL_BOUNDARY));
+        kvSpace.metadata()
+            .map(metadataMap -> {
+                long version = version(metadataMap.get(METADATA_VER_BYTES));
+                State state = state(metadataMap.get(METADATA_STATE_BYTES));
+                Boundary boundary = boundary(metadataMap.get(METADATA_RANGE_BOUND_BYTES));
+                return new IKVRange.KVRangeMeta(version, state, boundary);
+            })
+            .subscribe(metaSubject);
     }
 
     public KVRange(ICPableKVSpace kvSpace, KVRangeSnapshot snapshot) {
-        super(kvSpace);
-        this.kvSpace = kvSpace;
+        this(kvSpace);
         toReseter(snapshot).done();
     }
 
     @Override
+    public final long version() {
+        return metaSubject.getValue().ver();
+    }
+
+    @Override
+    public final State state() {
+        return metaSubject.getValue().state();
+    }
+
+    @Override
+    public final Boundary boundary() {
+        return metaSubject.getValue().boundary();
+    }
+
+    @Override
     public Observable<KVRangeMeta> metadata() {
-        return kvSpace.metadata().map(metadataMap -> {
-            long version = version(metadataMap.get(METADATA_VER_BYTES));
-            State state = state(metadataMap.get(METADATA_STATE_BYTES));
-            Boundary boundary = boundary(metadataMap.get(METADATA_RANGE_BOUND_BYTES));
-            return new KVRangeMeta(version, state, boundary);
-        }).distinctUntilChanged();
+        return metaSubject;
     }
 
     @Override
@@ -148,6 +170,7 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
         while ((reader = sharedDataReaders.poll()) != null) {
             reader.close();
         }
+        metaSubject.onComplete();
     }
 
     @Override

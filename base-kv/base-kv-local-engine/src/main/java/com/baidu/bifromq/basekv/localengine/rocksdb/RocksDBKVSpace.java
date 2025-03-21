@@ -18,6 +18,8 @@ import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.META_SECTION_END
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.META_SECTION_START;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.fromMetaKey;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
+import static io.reactivex.rxjava3.subjects.BehaviorSubject.createDefault;
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
@@ -75,10 +77,8 @@ abstract class RocksDBKVSpace<
     >
     extends RocksDBKVSpaceReader implements IKVSpace {
 
-    protected enum State {
-        Init, Opening, Destroying, Closing, Terminated
-    }
-
+    protected final RocksDB db;
+    protected final ColumnFamilyHandle cfHandle;
     private final AtomicReference<State> state = new AtomicReference<>(State.Init);
     private final File keySpaceDBDir;
     private final DBOptions dbOptions;
@@ -89,12 +89,10 @@ abstract class RocksDBKVSpace<
     private final E engine;
     private final Runnable onDestroy;
     private final AtomicBoolean compacting = new AtomicBoolean(false);
-    private final BehaviorSubject<Map<ByteString, ByteString>> metadataSubject = BehaviorSubject.create();
+    private final BehaviorSubject<Map<ByteString, ByteString>> metadataSubject = createDefault(emptyMap());
     private final ISyncContext syncContext = new SyncContext();
     private final ISyncContext.IRefresher metadataRefresher = syncContext.refresher();
     private final MetricManager metricMgr;
-    protected final RocksDB db;
-    protected final ColumnFamilyHandle cfHandle;
     private volatile long lastCompactAt;
     private volatile long nextCompactAt;
 
@@ -133,6 +131,22 @@ abstract class RocksDBKVSpace<
         metricMgr = new MetricManager(tags);
     }
 
+    protected static void deleteDir(Path path) throws IOException {
+        Files.walkFileTree(path, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Files.delete(file);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                Files.delete(dir);
+                return FileVisitResult.CONTINUE;
+            }
+        });
+    }
+
     public T open() {
         if (state.compareAndSet(State.Init, State.Opening)) {
             doLoad();
@@ -149,10 +163,7 @@ abstract class RocksDBKVSpace<
     protected Optional<ByteString> doMetadata(ByteString metaKey) {
         return metadataRefresher.call(() -> {
             Map<ByteString, ByteString> metaMap = metadataSubject.getValue();
-            if (metaMap != null) {
-                return Optional.ofNullable(metaMap.get(metaKey));
-            }
-            return Optional.empty();
+            return Optional.ofNullable(metaMap.get(metaKey));
         });
     }
 
@@ -267,22 +278,6 @@ abstract class RocksDBKVSpace<
         return syncContext.refresher();
     }
 
-    protected static void deleteDir(Path path) throws IOException {
-        Files.walkFileTree(path, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                Files.delete(file);
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                Files.delete(dir);
-                return FileVisitResult.CONTINUE;
-            }
-        });
-    }
-
     private void scheduleCompact() {
         if (state.get() != State.Opening) {
             return;
@@ -314,6 +309,10 @@ abstract class RocksDBKVSpace<
         } else {
             nextCompactAt = System.nanoTime();
         }
+    }
+
+    protected enum State {
+        Init, Opening, Destroying, Closing, Terminated
     }
 
     private class MetricManager {

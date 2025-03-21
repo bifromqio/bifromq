@@ -13,11 +13,18 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
+import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_RANGE_BOUND_BYTES;
+import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_STATE_BYTES;
+import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_VER_BYTES;
+
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.google.protobuf.ByteString;
+import java.util.Optional;
 
 public class KVRangeWriter extends AbstractKVRangeMetadataUpdatable<KVRangeWriter>
     implements IKVRangeWriter<KVRangeWriter> {
@@ -61,5 +68,22 @@ public class KVRangeWriter extends AbstractKVRangeMetadataUpdatable<KVRangeWrite
     @Override
     public void done() {
         keyRangeWriter().done();
+    }
+
+    @Override
+    public long version() {
+        Optional<ByteString> verBytes = spaceWriter.metadata(METADATA_VER_BYTES);
+        return version(verBytes.orElse(null));
+    }
+
+    @Override
+    public State state() {
+        Optional<ByteString> stateData = spaceWriter.metadata(METADATA_STATE_BYTES);
+        return state(stateData.orElse(null));
+    }
+
+    @Override
+    public Boundary boundary() {
+        return boundary(spaceWriter.metadata(METADATA_RANGE_BOUND_BYTES).orElse(null));
     }
 }

@@ -14,9 +14,6 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_LAST_APPLIED_INDEX_BYTES;
-import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_RANGE_BOUND_BYTES;
-import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_STATE_BYTES;
-import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_VER_BYTES;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceMetadata;
 import com.baidu.bifromq.basekv.proto.Boundary;
@@ -26,7 +23,6 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeMetadata;
 import com.baidu.bifromq.basekv.store.util.KVUtil;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
-import java.util.Optional;
 import lombok.SneakyThrows;
 
 abstract class AbstractKVRangeMetadata implements IKVRangeMetadata {
@@ -43,23 +39,11 @@ abstract class AbstractKVRangeMetadata implements IKVRangeMetadata {
         return id;
     }
 
-    @Override
-    public final long version() {
-        Optional<ByteString> verBytes = keyRangeMetadata.metadata(METADATA_VER_BYTES);
-        return version(verBytes.orElse(null));
-    }
-
     protected long version(ByteString versionBytes) {
         if (versionBytes != null) {
             return KVUtil.toLongNativeOrder(versionBytes);
         }
         return -1L;
-    }
-
-    @Override
-    public final State state() {
-        Optional<ByteString> stateData = keyRangeMetadata.metadata(METADATA_STATE_BYTES);
-        return state(stateData.orElse(null));
     }
 
     @SneakyThrows
@@ -73,11 +57,6 @@ abstract class AbstractKVRangeMetadata implements IKVRangeMetadata {
     @Override
     public final long lastAppliedIndex() {
         return keyRangeMetadata.metadata(METADATA_LAST_APPLIED_INDEX_BYTES).map(KVUtil::toLong).orElse(-1L);
-    }
-
-    @Override
-    public final Boundary boundary() {
-        return boundary(keyRangeMetadata.metadata(METADATA_RANGE_BOUND_BYTES).orElse(null));
     }
 
     @SneakyThrows

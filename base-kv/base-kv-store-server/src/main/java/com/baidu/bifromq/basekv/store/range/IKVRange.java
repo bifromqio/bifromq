@@ -22,26 +22,22 @@ import com.baidu.bifromq.basekv.store.api.IKVReader;
 import io.reactivex.rxjava3.core.Observable;
 
 public interface IKVRange extends IKVRangeReader {
-    record KVRangeMeta(long ver, State state, Boundary boundary) {
-    }
-
-
     /**
-     * Get the observable of metadata
+     * Get the observable of metadata.
      *
      * @return the observable
      */
     Observable<KVRangeMeta> metadata();
 
     /**
-     * Make a checkpoint of current state and return a descriptor
+     * Make a checkpoint of current state and return a descriptor.
      *
      * @return the descriptor of the checkpoint
      */
     KVRangeSnapshot checkpoint();
 
     /**
-     * Check if the given checkpoint exists
+     * Check if the given checkpoint exists.
      *
      * @param checkpoint the descriptor
      * @return bool
@@ -49,7 +45,7 @@ public interface IKVRange extends IKVRangeReader {
     boolean hasCheckpoint(KVRangeSnapshot checkpoint);
 
     /**
-     * Open an iterator for accessing the checkpoint data
+     * Open an iterator for accessing the checkpoint data.
      *
      * @param checkpoint the descriptor
      * @return the checkpoint reader
@@ -64,14 +60,14 @@ public interface IKVRange extends IKVRangeReader {
     IKVCloseableReader newDataReader();
 
     /**
-     * Get a writer for updating the range
+     * Get a writer for updating the range.
      *
      * @return the range writer
      */
     IKVRangeWriter<?> toWriter();
 
     /**
-     * Get a writer for updating the range and using the provided recorder recording write load
+     * Get a writer for updating the range and using the provided recorder recording write load.
      *
      * @param recorder the load recorder
      * @return the range writer
@@ -83,4 +79,14 @@ public interface IKVRange extends IKVRangeReader {
     void close();
 
     void destroy();
+
+    /**
+     * Metadata about the KVRange.
+     *
+     * @param ver      the version
+     * @param state    the state
+     * @param boundary the boundary
+     */
+    record KVRangeMeta(long ver, State state, Boundary boundary) {
+    }
 }
