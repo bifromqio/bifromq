@@ -24,7 +24,6 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.stream.Collectors;
 
 /**
  * Normal level topic filter trie node.
@@ -33,27 +32,27 @@ import java.util.stream.Collectors;
  */
 final class NTopicFilterTrieNode<V> extends TopicFilterTrieNode<V> {
     private final String levelName;
-    private final Set<TopicTrieNode<V>> siblingTopicTrieNodes;
     private final NavigableSet<String> subLevelNames;
     private final NavigableMap<String, Set<TopicTrieNode<V>>> subTopicTrieNodes;
     private final Set<TopicTrieNode<V>> subWildcardMatchableTopicTrieNodes;
-
+    private final Set<TopicTrieNode<V>> backingTopics;
 
     // point to the sub node during iteration
     private String subLevelName;
 
-    protected NTopicFilterTrieNode(TopicFilterTrieNode<V> parent,
-                                   String levelName,
-                                   Set<TopicTrieNode<V>> siblingTopicTrieNodes) {
+    NTopicFilterTrieNode(TopicFilterTrieNode<V> parent, String levelName, Set<TopicTrieNode<V>> siblingTopicTrieNodes) {
         super(parent);
         assert levelName != null;
         assert siblingTopicTrieNodes.stream().allMatch(node -> node.levelName().equals(levelName));
-        this.siblingTopicTrieNodes = siblingTopicTrieNodes;
         this.subTopicTrieNodes = new TreeMap<>();
         this.subLevelNames = new TreeSet<>();
         this.subWildcardMatchableTopicTrieNodes = new HashSet<>();
         this.levelName = levelName;
+        this.backingTopics = new HashSet<>();
         for (TopicTrieNode<V> sibling : siblingTopicTrieNodes) {
+            if (sibling.isUserTopic()) {
+                backingTopics.add(sibling);
+            }
             for (Map.Entry<String, TopicTrieNode<V>> entry : sibling.children().entrySet()) {
                 TopicTrieNode<V> subNode = entry.getValue();
                 if (subNode.wildcardMatchable()) {
@@ -64,7 +63,7 @@ final class NTopicFilterTrieNode<V> extends TopicFilterTrieNode<V> {
             }
         }
         // # match parent
-        if (!backingTopics().isEmpty()) {
+        if (!backingTopics.isEmpty()) {
             subLevelNames.add(MULTI_WILDCARD);
         }
         if (!subWildcardMatchableTopicTrieNodes.isEmpty()) {
@@ -81,7 +80,7 @@ final class NTopicFilterTrieNode<V> extends TopicFilterTrieNode<V> {
 
     @Override
     Set<TopicTrieNode<V>> backingTopics() {
-        return siblingTopicTrieNodes.stream().filter(TopicTrieNode::isUserTopic).collect(Collectors.toSet());
+        return backingTopics;
     }
 
     @Override

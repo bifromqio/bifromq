@@ -14,6 +14,8 @@
 package com.baidu.bifromq.dist.trie;
 
 import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
+import static java.util.Collections.emptySet;
+import static java.util.Collections.singleton;
 
 import com.google.common.collect.Sets;
 import java.util.NoSuchElementException;
@@ -25,12 +27,15 @@ import java.util.Set;
  * @param <V> value type
  */
 final class MTopicFilterTrieNode<V> extends TopicFilterTrieNode<V> {
-    private final Set<TopicTrieNode<V>> siblingTopicTrieNodes;
+    private final Set<TopicTrieNode<V>> backingTopics;
 
-    MTopicFilterTrieNode(TopicFilterTrieNode<V> parent,
-                         Set<TopicTrieNode<V>> siblingTopicTrieNodes) {
+    MTopicFilterTrieNode(TopicFilterTrieNode<V> parent, Set<TopicTrieNode<V>> siblingTopicTrieNodes) {
         super(parent);
-        this.siblingTopicTrieNodes = siblingTopicTrieNodes;
+        Set<TopicTrieNode<V>> topics = parent != null ? parent.backingTopics() : emptySet();
+        for (TopicTrieNode<V> sibling : siblingTopicTrieNodes) {
+            topics = collectTopics(sibling, topics);
+        }
+        backingTopics = topics;
     }
 
     @Override
@@ -40,24 +45,19 @@ final class MTopicFilterTrieNode<V> extends TopicFilterTrieNode<V> {
 
     @Override
     Set<TopicTrieNode<V>> backingTopics() {
-        Set<TopicTrieNode<V>> topics = Sets.newHashSet();
-        if (parent != null) {
-            topics.addAll(parent.backingTopics());
+        return backingTopics;
+    }
+
+    private Set<TopicTrieNode<V>> collectTopics(TopicTrieNode<V> node, Set<TopicTrieNode<V>> topics) {
+        if (node.isUserTopic()) {
+            topics = Sets.union(topics, singleton(node));
         }
-        for (TopicTrieNode<V> sibling : siblingTopicTrieNodes) {
-            collectTopics(sibling, topics);
+        for (TopicTrieNode<V> child : node.children().values()) {
+            topics = collectTopics(child, topics);
         }
         return topics;
     }
 
-    private void collectTopics(TopicTrieNode<V> node, Set<TopicTrieNode<V>> topics) {
-        if (node.isUserTopic()) {
-            topics.add(node);
-        }
-        for (TopicTrieNode<V> child : node.children().values()) {
-            collectTopics(child, topics);
-        }
-    }
 
     @Override
     void seekChild(String childLevelName) {

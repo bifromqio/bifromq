@@ -16,7 +16,6 @@ package com.baidu.bifromq.dist.trie;
 import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
 import static com.baidu.bifromq.util.TopicConst.SINGLE_WILDCARD;
 
-import com.google.common.collect.Sets;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -32,22 +31,24 @@ import java.util.TreeSet;
  * @param <V> value type
  */
 final class STopicFilterTrieNode<V> extends TopicFilterTrieNode<V> {
-    private final Set<TopicTrieNode<V>> siblingTopicTrieNodes;
     private final NavigableSet<String> subLevelNames;
     private final NavigableMap<String, Set<TopicTrieNode<V>>> subTopicTrieNodes;
     private final Set<TopicTrieNode<V>> subWildcardMatchableTopicTrieNodes;
+    private final Set<TopicTrieNode<V>> backingTopics;
 
     // point to the sub node during iteration
     private String subLevelName;
 
-    STopicFilterTrieNode(TopicFilterTrieNode<V> parent,
-                         Set<TopicTrieNode<V>> siblingTopicTrieNodes) {
+    STopicFilterTrieNode(TopicFilterTrieNode<V> parent, Set<TopicTrieNode<V>> siblingTopicTrieNodes) {
         super(parent);
-        this.siblingTopicTrieNodes = siblingTopicTrieNodes;
         this.subLevelNames = new TreeSet<>();
         this.subTopicTrieNodes = new TreeMap<>();
         this.subWildcardMatchableTopicTrieNodes = new HashSet<>();
+        this.backingTopics = new HashSet<>();
         for (TopicTrieNode<V> sibling : siblingTopicTrieNodes) {
+            if (sibling.isUserTopic()) {
+                backingTopics.add(sibling);
+            }
             for (Map.Entry<String, TopicTrieNode<V>> entry : sibling.children().entrySet()) {
                 TopicTrieNode<V> subNode = entry.getValue();
                 if (subNode.wildcardMatchable()) {
@@ -59,7 +60,7 @@ final class STopicFilterTrieNode<V> extends TopicFilterTrieNode<V> {
 
         }
         // # match parent
-        if (!backingTopics().isEmpty()) {
+        if (!backingTopics.isEmpty()) {
             subLevelNames.add(MULTI_WILDCARD);
         }
         if (!subWildcardMatchableTopicTrieNodes.isEmpty()) {
@@ -77,13 +78,7 @@ final class STopicFilterTrieNode<V> extends TopicFilterTrieNode<V> {
 
     @Override
     Set<TopicTrieNode<V>> backingTopics() {
-        Set<TopicTrieNode<V>> topics = Sets.newHashSet();
-        for (TopicTrieNode<V> sibling : siblingTopicTrieNodes) {
-            if (sibling.isUserTopic()) {
-                topics.add(sibling);
-            }
-        }
-        return topics;
+        return backingTopics;
     }
 
     @Override

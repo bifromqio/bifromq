@@ -25,14 +25,14 @@ import java.util.Set;
  * @param <V> value type
  */
 abstract class TopicFilterTrieNode<V> {
-    static <V> TopicFilterTrieNode<V> from(TopicTrieNode<V> root) {
-        return new NTopicFilterTrieNode<>(null, root.levelName(), Set.of(root));
-    }
-
     protected final TopicFilterTrieNode<V> parent;
 
     protected TopicFilterTrieNode(TopicFilterTrieNode<V> parent) {
         this.parent = parent;
+    }
+
+    static <V> TopicFilterTrieNode<V> from(TopicTrieNode<V> root) {
+        return new NTopicFilterTrieNode<>(null, root.levelName(), Set.of(root));
     }
 
     /**
@@ -64,7 +64,6 @@ abstract class TopicFilterTrieNode<V> {
      * @return backing topics
      */
     abstract Set<TopicTrieNode<V>> backingTopics();
-
 
     /**
      * Seek to the child node whose level name is greater or equals to specified level name.
