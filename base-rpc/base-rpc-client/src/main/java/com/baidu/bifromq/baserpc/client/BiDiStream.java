@@ -16,7 +16,7 @@ package com.baidu.bifromq.baserpc.client;
 import static io.grpc.stub.ClientCalls.asyncBidiStreamingCall;
 
 import com.baidu.bifromq.baserpc.RPCContext;
-import com.baidu.bifromq.baserpc.client.util.BehaviorSubject;
+import com.baidu.bifromq.baserpc.client.util.FastBehaviorSubject;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.Context;
@@ -37,7 +37,7 @@ class BiDiStream<InT, OutT> implements IBiDiStream<InT, OutT> {
     private final String serverId;
     private final ClientCallStreamObserver<InT> callStreamObserver;
     private final Subject<OutT> outSubject = PublishSubject.create();
-    private final Subject<Long> onReadySubject = BehaviorSubject.create();
+    private final Subject<Long> onReadySubject = FastBehaviorSubject.create();
     private final AtomicBoolean isCancelled = new AtomicBoolean();
     private final AtomicBoolean isClosed = new AtomicBoolean();
 

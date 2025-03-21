@@ -13,21 +13,76 @@
 
 package com.baidu.bifromq.dist.worker;
 
-import static com.google.common.hash.Hashing.murmur3_128;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertTrue;
 
-import com.google.common.collect.Sets;
-import java.util.Set;
-import java.util.concurrent.ThreadLocalRandom;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.List;
 import org.testng.annotations.Test;
 
 public class RendezvousHashTest {
     @Test
-    public void hash() {
-        RendezvousHash<Integer, String> hash = new RendezvousHash<>(murmur3_128(),
-            (from, into) -> into.putInt(from), (from, into) -> into.putBytes(from.getBytes()), String::compareTo);
-        Set<String> nodes = Sets.newHashSet("Node1", "Node2", "Node3", "Node4");
-        nodes.forEach(hash::add);
-        assertTrue(nodes.contains(hash.get(ThreadLocalRandom.current().nextInt())));
+    public void testSameKeyReturnsSameNode() {
+        List<String> nodes = Arrays.asList("NodeA", "NodeB", "NodeC");
+        RendezvousHash<String, String> rendezvousHash = RendezvousHash.<String, String>builder()
+            .keyFunnel((from, into) -> into.putString(from, StandardCharsets.UTF_8))
+            .nodeFunnel((from, into) -> into.putString(from, StandardCharsets.UTF_8))
+            .nodes(nodes)
+            .build();
+
+        String key = "testKey";
+        String node1 = rendezvousHash.get(key);
+        String node2 = rendezvousHash.get(key);
+        assertNotNull(node1);
+        assertNotNull(node2);
+        assertEquals(node1, node2);
+    }
+
+    @Test
+    public void testDifferentKeysReturnNodes() {
+        List<String> nodes = Arrays.asList("NodeA", "NodeB", "NodeC");
+        RendezvousHash<String, String> rendezvousHash = RendezvousHash.<String, String>builder()
+            .keyFunnel((from, into) -> into.putString(from, StandardCharsets.UTF_8))
+            .nodeFunnel((from, into) -> into.putString(from, StandardCharsets.UTF_8))
+            .nodes(nodes)
+            .build();
+
+        String key1 = "key1";
+        String key2 = "key2";
+        String node1 = rendezvousHash.get(key1);
+        String node2 = rendezvousHash.get(key2);
+        assertNotNull(node1);
+        assertNotNull(node2);
+    }
+
+    @Test
+    public void testDistribution() {
+        List<String> nodes = Arrays.asList("NodeA", "NodeB", "NodeC");
+        RendezvousHash<String, String> rendezvousHash = RendezvousHash.<String, String>builder()
+            .keyFunnel((from, into) -> into.putString(from, StandardCharsets.UTF_8))
+            .nodeFunnel((from, into) -> into.putString(from, StandardCharsets.UTF_8))
+            .nodes(nodes)
+            .build();
+
+        int numKeys = 10000;
+        int[] counts = new int[nodes.size()];
+
+        for (int i = 0; i < numKeys; i++) {
+            String key = "key" + i;
+            String node = rendezvousHash.get(key);
+            int index = nodes.indexOf(node);
+            if (index >= 0) {
+                counts[index]++;
+            }
+        }
+
+        int avg = numKeys / nodes.size();
+        double tolerance = avg * 0.3;
+
+        for (int i = 0; i < counts.length; i++) {
+            assertTrue(Math.abs(counts[i] - avg) <= tolerance);
+        }
     }
 }

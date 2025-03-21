@@ -16,7 +16,6 @@ package com.baidu.bifromq.dist.worker;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttPersistentFanOutBytes;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersistentFanOutBytesPerSeconds;
-import static com.google.common.hash.Hashing.murmur3_128;
 
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
 import com.baidu.bifromq.dist.worker.schema.GroupMatching;
@@ -38,7 +37,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.github.benmanes.caffeine.cache.Scheduler;
-import java.util.Comparator;
+import com.google.common.base.Charsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -175,11 +174,12 @@ class DeliverExecutorGroup implements IDeliverExecutorGroup {
                             .get(new OrderedSharedMatchingKey(groupMatching.tenantId(),
                                 groupMatching.matcher.getFilterLevelList()))
                             .get(sender, senderInfo -> {
-                                RendezvousHash<ClientInfo, NormalMatching> hash = new RendezvousHash<>(murmur3_128(),
-                                    (from, into) -> into.putInt(from.hashCode()),
-                                    (from, into) -> into.putBytes(from.receiverUrl().getBytes()),
-                                    Comparator.comparing(NormalMatching::receiverUrl));
-                                groupMatching.receiverList.forEach(hash::add);
+                                RendezvousHash<ClientInfo, NormalMatching> hash =
+                                    RendezvousHash.<ClientInfo, NormalMatching>builder()
+                                        .keyFunnel((from, into) -> into.putInt(from.hashCode()))
+                                        .nodeFunnel((from, into) -> into.putString(from.receiverUrl(), Charsets.UTF_8))
+                                        .nodes(groupMatching.receiverList)
+                                        .build();
                                 NormalMatching matchRecord = hash.get(senderInfo);
                                 log.debug(
                                     "Ordered shared matching: sender={}: topicFilter={}, receiverId={}, subBroker={}",

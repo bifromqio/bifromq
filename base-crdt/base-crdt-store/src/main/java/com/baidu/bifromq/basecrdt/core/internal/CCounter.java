@@ -53,11 +53,11 @@ class CCounter extends CausalCRDT<IDotMap, CCounterOperation> implements ICCount
             Map<ByteString, Dot> dots = Maps.newHashMap();
             for (Dot dot : dotFunc) {
                 if (!dots.containsKey(dot.getReplicaId())) {
-                    total += Varint.decodeLong(dotFunc.value(dot).get());
+                    total += VarLong.decode(dotFunc.value(dot).get());
                     dots.put(dot.getReplicaId(), dot);
                 } else if (dots.get(dot.getReplicaId()).getVer() < dot.getVer()) {
-                    total -= Varint.decodeLong(dotFunc.value(dots.get(dot.getReplicaId())).get());
-                    total += Varint.decodeLong(dotFunc.value(dot).get());
+                    total -= VarLong.decode(dotFunc.value(dots.get(dot.getReplicaId())).get());
+                    total += VarLong.decode(dotFunc.value(dot).get());
                     dots.put(dot.getReplicaId(), dot);
                 }
             }

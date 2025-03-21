@@ -21,7 +21,7 @@ import com.baidu.bifromq.baserpc.client.interceptor.TenantAwareClientInterceptor
 import com.baidu.bifromq.baserpc.client.loadbalancer.IServerSelector;
 import com.baidu.bifromq.baserpc.client.loadbalancer.TrafficDirectiveLoadBalancerProvider;
 import com.baidu.bifromq.baserpc.client.nameresolver.TrafficGovernorNameResolverProvider;
-import com.baidu.bifromq.baserpc.client.util.BehaviorSubject;
+import com.baidu.bifromq.baserpc.client.util.FastBehaviorSubject;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceLandscape;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -49,8 +49,8 @@ class ClientChannel implements IClientChannel {
     private final String serviceUniqueName;
     private final ExecutorService executorService;
     private final ManagedChannel internalChannel;
-    private final BehaviorSubject<IServerSelector> serverSelectorSubject = BehaviorSubject.create();
-    private final BehaviorSubject<IRPCClient.ConnState> connStateSubject = BehaviorSubject.create();
+    private final FastBehaviorSubject<IServerSelector> serverSelectorSubject = FastBehaviorSubject.create();
+    private final FastBehaviorSubject<IRPCClient.ConnState> connStateSubject = FastBehaviorSubject.create();
     // key: server id, value: server attributes
     private final Observable<Map<String, Map<String, String>>> serverListSubject;
     private final LoadBalancerProvider loadBalancerProvider;

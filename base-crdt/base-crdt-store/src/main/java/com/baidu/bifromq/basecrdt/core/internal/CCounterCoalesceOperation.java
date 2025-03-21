@@ -59,12 +59,12 @@ class CCounterCoalesceOperation extends CoalesceOperation<IDotMap, CCounterOpera
         if (zeroOutReplicaIds.isEmpty()) {
             return ProtoUtils.replacements(ProtoUtils.dot(replicaId, ver,
                     ProtoUtils.singleMap(replicaId,
-                        ProtoUtils.singleValue(replicaId, ver, Varint.encodeLong(now)))),
+                        ProtoUtils.singleValue(replicaId, ver, VarLong.encode(now)))),
                 current.subDotFunc(replicaId).orElse(DotFunc.BOTTOM));
         }
         return Iterables.concat(ProtoUtils.replacements(
                 ProtoUtils.dot(replicaId, ver, ProtoUtils.singleMap(replicaId,
-                    ProtoUtils.singleValue(replicaId, ver, Varint.encodeLong(now)))),
+                    ProtoUtils.singleValue(replicaId, ver, VarLong.encode(now)))),
                 current.subDotFunc(replicaId).orElse(DotFunc.BOTTOM)),
             zeroOut(eventGenerator.nextEvent(), current, zeroOutReplicaIds));
     }
@@ -81,7 +81,7 @@ class CCounterCoalesceOperation extends CoalesceOperation<IDotMap, CCounterOpera
         for (Dot dot : df) {
             if (dot.getVer() > maxVer) {
                 maxVer = dot.getVer();
-                val = Varint.decodeLong(df.value(dot).get());
+                val = VarLong.decode(df.value(dot).get());
             }
         }
         return val;
