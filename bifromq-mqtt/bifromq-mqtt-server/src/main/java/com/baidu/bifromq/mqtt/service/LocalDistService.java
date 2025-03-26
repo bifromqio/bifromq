@@ -16,7 +16,6 @@ package com.baidu.bifromq.mqtt.service;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientFanOutBytes;
 import static com.baidu.bifromq.mqtt.inbox.util.DelivererKeyUtil.toDelivererKey;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalTransientFanOutBytesPerSeconds;
-import static java.util.Collections.singletonList;
 
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
@@ -37,6 +36,7 @@ import com.baidu.bifromq.util.SizeUtil;
 import com.baidu.bifromq.util.TopicUtil;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.collect.Sets;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
@@ -53,11 +53,8 @@ public class LocalDistService implements ILocalDistService {
     private final ILocalSessionRegistry sessionRegistry;
 
 
-    public LocalDistService(String serverId,
-                            ILocalSessionRegistry sessionRegistry,
-                            ILocalTopicRouter localTopicRouter,
-                            IDistClient distClient,
-                            IResourceThrottler resourceThrottler) {
+    public LocalDistService(String serverId, ILocalSessionRegistry sessionRegistry, ILocalTopicRouter localTopicRouter,
+                            IDistClient distClient, IResourceThrottler resourceThrottler) {
         this.serverId = serverId;
         this.sessionRegistry = sessionRegistry;
         this.localTopicRouter = localTopicRouter;
@@ -66,38 +63,26 @@ public class LocalDistService implements ILocalDistService {
     }
 
     @Override
-    public CompletableFuture<MatchResult> match(long reqId,
-                                                String topicFilter,
-                                                long incarnation,
+    public CompletableFuture<MatchResult> match(long reqId, String topicFilter, long incarnation,
                                                 IMQTTTransientSession session) {
         String tenantId = session.clientInfo().getTenantId();
         if (TopicUtil.isSharedSubscription(topicFilter)) {
-            return distClient.addRoute(reqId,
-                tenantId,
-                TopicUtil.from(topicFilter),
+            return distClient.addRoute(reqId, tenantId, TopicUtil.from(topicFilter),
                 ILocalDistService.globalize(session.channelId()),
-                toDelivererKey(tenantId, ILocalDistService.globalize(session.channelId()), serverId),
-                0,
-                incarnation);
+                toDelivererKey(tenantId, ILocalDistService.globalize(session.channelId()), serverId), 0, incarnation);
         } else {
             return localTopicRouter.addTopicRoute(reqId, tenantId, topicFilter, incarnation, session.channelId());
         }
     }
 
     @Override
-    public CompletableFuture<UnmatchResult> unmatch(long reqId,
-                                                    String topicFilter,
-                                                    long incarnation,
+    public CompletableFuture<UnmatchResult> unmatch(long reqId, String topicFilter, long incarnation,
                                                     IMQTTTransientSession session) {
         String tenantId = session.clientInfo().getTenantId();
         if (TopicUtil.isSharedSubscription(topicFilter)) {
-            return distClient.removeRoute(reqId,
-                tenantId,
-                TopicUtil.from(topicFilter),
+            return distClient.removeRoute(reqId, tenantId, TopicUtil.from(topicFilter),
                 ILocalDistService.globalize(session.channelId()),
-                toDelivererKey(tenantId, ILocalDistService.globalize(session.channelId()), serverId),
-                0,
-                incarnation);
+                toDelivererKey(tenantId, ILocalDistService.globalize(session.channelId()), serverId), 0, incarnation);
         } else {
             return localTopicRouter.removeTopicRoute(reqId, tenantId, topicFilter, incarnation, session.channelId());
         }
@@ -106,8 +91,8 @@ public class LocalDistService implements ILocalDistService {
     @Override
     public CompletableFuture<DeliveryReply> dist(DeliveryRequest request) {
         DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder().setCode(DeliveryReply.Code.OK);
-        for (Map.Entry<String, DeliveryPackage> entry : request.getPackageMap().entrySet()) {
-            String tenantId = entry.getKey();
+        for (Map.Entry<String, DeliveryPackage> packageEntry : request.getPackageMap().entrySet()) {
+            String tenantId = packageEntry.getKey();
             DeliveryResults.Builder resultsBuilder = DeliveryResults.newBuilder();
             ITenantMeter tenantMeter = ITenantMeter.get(tenantId);
             boolean isFanOutThrottled = !resourceThrottler.hasResource(tenantId, TotalTransientFanOutBytesPerSeconds);
@@ -115,115 +100,89 @@ public class LocalDistService implements ILocalDistService {
             Set<MatchInfo> skip = new HashSet<>();
             Set<MatchInfo> noSub = new HashSet<>();
             long totalFanOutBytes = 0L;
-            for (DeliveryPack writePack : entry.getValue().getPackList()) {
+            for (DeliveryPack writePack : packageEntry.getValue().getPackList()) {
                 TopicMessagePack topicMsgPack = writePack.getMessagePack();
-                long msgPackSize = SizeUtil.estSizeOf(topicMsgPack);
-                int fanoutScale = 1;
-                boolean hasFanOutDone = false;
+                Map<IMQTTTransientSession, Map<IMQTTTransientSession.MatchedTopicFilter, MatchInfo>> matchedSessions =
+                    new HashMap<>();
                 for (MatchInfo matchInfo : writePack.getMatchInfoList()) {
-                    if (!noSub.contains(matchInfo) && !skip.contains(matchInfo)) {
-                        if (ILocalDistService.isGlobal(matchInfo.getReceiverId())) {
-                            IMQTTSession session =
-                                sessionRegistry.get(ILocalDistService.parseReceiverId(matchInfo.getReceiverId()));
-                            if (session instanceof IMQTTTransientSession) {
-                                boolean success = ((IMQTTTransientSession) session)
-                                    .publish(matchInfo.getMatcher().getMqttTopicFilter(),
-                                        matchInfo.getIncarnation(),
-                                        singletonList(topicMsgPack));
-                                if (success) {
-                                    ok.add(matchInfo);
-                                } else {
-                                    noSub.add(matchInfo);
-                                }
+                    if (ILocalDistService.isGlobal(matchInfo.getReceiverId())) {
+                        IMQTTSession session =
+                            sessionRegistry.get(ILocalDistService.parseReceiverId(matchInfo.getReceiverId()));
+                        if (session instanceof IMQTTTransientSession) {
+                            if (isFanOutThrottled && !matchedSessions.isEmpty()) {
+                                skip.add(matchInfo);
                             } else {
-                                // no session found for shared subscription
-                                noSub.add(matchInfo);
+                                matchedSessions.computeIfAbsent((IMQTTTransientSession) session, k -> new HashMap<>())
+                                    .put(new IMQTTTransientSession.MatchedTopicFilter(
+                                            matchInfo.getMatcher().getMqttTopicFilter(), matchInfo.getIncarnation()),
+                                        matchInfo);
                             }
                         } else {
-                            if (isFanOutThrottled && hasFanOutDone) {
-                                continue;
-                            }
-                            Optional<CompletableFuture<? extends ILocalTopicRouter.ILocalRoutes>> routesFutureOpt =
-                                localTopicRouter.getTopicRoutes(tenantId, matchInfo);
-                            if (routesFutureOpt.isEmpty()) {
-                                noSub.add(matchInfo);
-                                continue;
-                            }
-                            CompletableFuture<? extends ILocalTopicRouter.ILocalRoutes> routesFuture =
-                                routesFutureOpt.get();
-                            if (!routesFuture.isDone() || routesFuture.isCompletedExceptionally()) {
-                                // skip the matchInfo if the route is not ready
-                                skip.add(matchInfo);
-                                continue;
-                            }
-                            try {
-                                ILocalTopicRouter.ILocalRoutes localRoutes = routesFuture.join();
-                                if (!localRoutes.localReceiverId().equals(matchInfo.getReceiverId())) {
-                                    noSub.add(matchInfo);
-                                    continue;
-                                }
-                                boolean published = false;
-                                if (!isFanOutThrottled) {
-                                    fanoutScale *= localRoutes.routesInfo().size();
-                                    for (Map.Entry<String, Long> route : localRoutes.routesInfo().entrySet()) {
-                                        String sessionId = route.getKey();
-                                        long incarnation = route.getValue();
-                                        // at least one session should publish the message
-                                        IMQTTSession session = sessionRegistry.get(sessionId);
-                                        if (session instanceof IMQTTTransientSession) {
-                                            if (((IMQTTTransientSession) session)
-                                                .publish(matchInfo.getMatcher().getMqttTopicFilter(),
-                                                    incarnation,
-                                                    singletonList(topicMsgPack))) {
-                                                published = true;
-                                            }
-                                        }
-                                    }
+                            // no session found for shared subscription
+                            noSub.add(matchInfo);
+                        }
+                    } else {
+                        Optional<CompletableFuture<? extends ILocalTopicRouter.ILocalRoutes>> routesFutureOpt =
+                            localTopicRouter.getTopicRoutes(tenantId, matchInfo);
+                        if (routesFutureOpt.isEmpty()) {
+                            noSub.add(matchInfo);
+                            continue;
+                        }
+                        CompletableFuture<? extends ILocalTopicRouter.ILocalRoutes> routesFuture =
+                            routesFutureOpt.get();
+                        if (!routesFuture.isDone() || routesFuture.isCompletedExceptionally()) {
+                            // skip the matchInfo if the route is not ready
+                            skip.add(matchInfo);
+                            continue;
+                        }
+                        ILocalTopicRouter.ILocalRoutes localRoutes = routesFuture.join();
+                        if (!localRoutes.localReceiverId().equals(matchInfo.getReceiverId())) {
+                            noSub.add(matchInfo);
+                            continue;
+                        }
+                        for (Map.Entry<String, Long> route : localRoutes.routesInfo().entrySet()) {
+                            String sessionId = route.getKey();
+                            long incarnation = route.getValue();
+                            // at least one session should publish the message
+                            IMQTTSession session = sessionRegistry.get(sessionId);
+                            if (session instanceof IMQTTTransientSession) {
+                                if (isFanOutThrottled && !matchedSessions.isEmpty()) {
+                                    skip.add(matchInfo);
                                 } else {
-                                    // send to one subscriber for each topic to make sure matchinfo not lost
-                                    for (Map.Entry<String, Long> route : localRoutes.routesInfo().entrySet()) {
-                                        String sessionId = route.getKey();
-                                        long incarnation = route.getValue();
-                                        // at least one session should publish the message
-                                        IMQTTSession session = sessionRegistry.get(sessionId);
-                                        if (session instanceof IMQTTTransientSession) {
-                                            if (((IMQTTTransientSession) session)
-                                                .publish(matchInfo.getMatcher().getMqttTopicFilter(),
-                                                    incarnation,
-                                                    singletonList(topicMsgPack))) {
-                                                published = true;
-                                                hasFanOutDone = true;
-                                                break;
-                                            }
-                                        }
-                                    }
+                                    matchedSessions.computeIfAbsent((IMQTTTransientSession) session,
+                                        k -> new HashMap<>()).put(new IMQTTTransientSession.MatchedTopicFilter(
+                                        matchInfo.getMatcher().getMqttTopicFilter(), incarnation), matchInfo);
                                 }
-                                if (published) {
-                                    ok.add(matchInfo);
-                                } else {
-                                    noSub.add(matchInfo);
-                                }
-                            } catch (Throwable e) {
-                                log.error("Unexpected error during local dist", e);
-                                skip.add(matchInfo);
                             }
                         }
                     }
                 }
-                totalFanOutBytes += msgPackSize * Math.max(fanoutScale, 1);
+                long msgPackSize = SizeUtil.estSizeOf(topicMsgPack);
+                int fanoutScale = 0;
+                for (Map.Entry<IMQTTTransientSession, Map<IMQTTTransientSession.MatchedTopicFilter, MatchInfo>> entry : matchedSessions.entrySet()) {
+                    IMQTTTransientSession session = entry.getKey();
+                    Map<IMQTTTransientSession.MatchedTopicFilter, MatchInfo> matchedTopics = entry.getValue();
+                    Set<IMQTTTransientSession.MatchedTopicFilter> obsoleted =
+                        session.publish(topicMsgPack, matchedTopics.keySet());
+                    for (IMQTTTransientSession.MatchedTopicFilter matchedTopic : matchedTopics.keySet()) {
+                        MatchInfo matchInfo = matchedTopics.get(matchedTopic);
+                        if (obsoleted.contains(matchedTopic)) {
+                            noSub.add(matchInfo);
+                        } else {
+                            ok.add(matchInfo);
+                            fanoutScale++;
+                        }
+                    }
+                }
+                totalFanOutBytes += msgPackSize * fanoutScale;
             }
             tenantMeter.recordSummary(MqttTransientFanOutBytes, totalFanOutBytes);
             // don't include duplicated matchInfo in the result
             // treat skip as ok
-            Sets.difference(Sets.union(ok, skip), noSub)
-                .forEach(matchInfo -> resultsBuilder.addResult(DeliveryResult.newBuilder()
-                    .setMatchInfo(matchInfo)
-                    .setCode(DeliveryResult.Code.OK)
-                    .build()));
-            noSub.forEach(matchInfo -> resultsBuilder.addResult(DeliveryResult.newBuilder()
-                .setMatchInfo(matchInfo)
-                .setCode(DeliveryResult.Code.NO_SUB)
-                .build()));
+            Sets.difference(Sets.union(ok, skip), noSub).forEach(matchInfo -> resultsBuilder.addResult(
+                DeliveryResult.newBuilder().setMatchInfo(matchInfo).setCode(DeliveryResult.Code.OK).build()));
+            noSub.forEach(matchInfo -> resultsBuilder.addResult(
+                DeliveryResult.newBuilder().setMatchInfo(matchInfo).setCode(DeliveryResult.Code.NO_SUB).build()));
             replyBuilder.putResult(tenantId, resultsBuilder.build());
         }
         return CompletableFuture.completedFuture(replyBuilder.build());
@@ -232,8 +191,7 @@ public class LocalDistService implements ILocalDistService {
     @Override
     public CheckReply.Code checkMatchInfo(String tenantId, MatchInfo matchInfo) {
         if (ILocalDistService.isGlobal(matchInfo.getReceiverId())) {
-            IMQTTSession session =
-                sessionRegistry.get(ILocalDistService.parseReceiverId(matchInfo.getReceiverId()));
+            IMQTTSession session = sessionRegistry.get(ILocalDistService.parseReceiverId(matchInfo.getReceiverId()));
             if (session == null) {
                 return CheckReply.Code.NO_RECEIVER;
             }
@@ -250,8 +208,7 @@ public class LocalDistService implements ILocalDistService {
             if (routesFutureOpt.isEmpty()) {
                 return CheckReply.Code.NO_RECEIVER;
             }
-            CompletableFuture<? extends ILocalTopicRouter.ILocalRoutes> routesFuture =
-                routesFutureOpt.get();
+            CompletableFuture<? extends ILocalTopicRouter.ILocalRoutes> routesFuture = routesFutureOpt.get();
             if (!routesFuture.isDone() || routesFuture.isCompletedExceptionally()) {
                 return CheckReply.Code.OK;
             }

@@ -39,6 +39,161 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
 public class MQTT5MessageUtils {
+    public static MqttPropertiesBuilder mqttProps() {
+        return new MqttPropertiesBuilder();
+    }
+
+    public static MqttProperties.UserProperties toMqttUserProps(UserProperties userProperties) {
+        MqttProperties.UserProperties userProps = new MqttProperties.UserProperties();
+        for (StringPair stringPair : userProperties.getUserPropertiesList()) {
+            userProps.add(stringPair.getKey(), stringPair.getValue());
+        }
+        return userProps;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static UserProperties toUserProperties(MqttProperties mqttProperties) {
+        UserProperties.Builder userPropsBuilder = UserProperties.newBuilder();
+        List<MqttProperties.UserProperty> userPropertyList = (List<MqttProperties.UserProperty>) mqttProperties
+            .getProperties(MqttProperties.MqttPropertyType.USER_PROPERTY.value());
+        if (!userPropertyList.isEmpty()) {
+            userPropertyList.forEach(up -> userPropsBuilder.addUserProperties(
+                StringPair.newBuilder().setKey(up.value().key).setValue(up.value().value).build()));
+        }
+        return userPropsBuilder.build();
+    }
+
+    public static boolean isUTF8Payload(MqttProperties mqttProperties) {
+        return packetFormatIndicator(mqttProperties).map(i -> i == 1).orElse(false);
+    }
+
+    public static Optional<Integer> receiveMaximum(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.RECEIVE_MAXIMUM);
+    }
+
+    public static Optional<Integer> topicAliasMaximum(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.TOPIC_ALIAS_MAXIMUM);
+    }
+
+    public static Optional<Integer> subscriptionIdentifier(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.SUBSCRIPTION_IDENTIFIER);
+    }
+
+    public static Optional<Integer> maximumPacketSize(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.MAXIMUM_PACKET_SIZE);
+    }
+
+    public static Optional<Integer> topicAlias(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.TOPIC_ALIAS);
+    }
+
+    static Optional<Integer> packetFormatIndicator(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, PAYLOAD_FORMAT_INDICATOR);
+    }
+
+    public static Optional<Integer> messageExpiryInterval(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.PUBLICATION_EXPIRY_INTERVAL);
+    }
+
+    public static Optional<String> contentType(MqttProperties mqttProperties) {
+        return stringMqttProperty(mqttProperties, CONTENT_TYPE);
+    }
+
+    public static Optional<String> responseTopic(MqttProperties mqttProperties) {
+        return stringMqttProperty(mqttProperties, RESPONSE_TOPIC);
+    }
+
+    public static Optional<String> authMethod(MqttProperties mqttProperties) {
+        return stringMqttProperty(mqttProperties, AUTHENTICATION_METHOD);
+    }
+
+    public static Optional<ByteString> authData(MqttProperties mqttProperties) {
+        return binaryMqttProperty(mqttProperties, AUTHENTICATION_DATA);
+    }
+
+    public static boolean requestResponseInformation(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.REQUEST_RESPONSE_INFORMATION)
+            .orElse(0) == 1;
+    }
+
+    public static boolean requestProblemInformation(MqttProperties mqttProperties) {
+        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.REQUEST_PROBLEM_INFORMATION)
+            .orElse(1) == 1;
+    }
+
+    public static Optional<String> reasonString(MqttProperties mqttProperties) {
+        return stringMqttProperty(mqttProperties, REASON_STRING);
+    }
+
+    static Optional<Integer> integerMqttProperty(MqttProperties mqttProperties, MqttProperties.MqttPropertyType type) {
+        return Optional.ofNullable((MqttProperties.IntegerProperty) mqttProperties.getProperty(type.value()))
+            .map(MqttProperties.MqttProperty::value);
+    }
+
+    static Optional<String> stringMqttProperty(MqttProperties mqttProperties, MqttProperties.MqttPropertyType type) {
+        return Optional.ofNullable((MqttProperties.StringProperty) mqttProperties.getProperty(type.value()))
+            .map(MqttProperties.MqttProperty::value);
+    }
+
+    static Optional<ByteString> binaryMqttProperty(MqttProperties mqttProperties,
+                                                   MqttProperties.MqttPropertyType type) {
+        return Optional.ofNullable((MqttProperties.BinaryProperty) mqttProperties.getProperty(type.value()))
+            .map(MqttProperties.MqttProperty::value)
+            .map(UnsafeByteOperations::unsafeWrap);
+    }
+
+    static LWT toWillMessage(MqttConnectMessage connMsg) {
+        LWT.Builder lwtBuilder = LWT.newBuilder()
+            .setTopic(connMsg.payload().willTopic())
+            .setDelaySeconds(integerMqttProperty(connMsg.payload().willProperties(),
+                MqttProperties.MqttPropertyType.WILL_DELAY_INTERVAL).orElse(0));
+        Message willMsg = toMessage(0,
+            MqttQoS.valueOf(connMsg.variableHeader().willQos()),
+            connMsg.variableHeader().isWillRetain(),
+            connMsg.payload().willProperties(),
+            UnsafeByteOperations.unsafeWrap(connMsg.payload().willMessageInBytes()));
+        return lwtBuilder.setMessage(willMsg).build();
+    }
+
+    static Message toMessage(MqttPublishMessage pubMsg) {
+        return toMessage(pubMsg.variableHeader().packetId(),
+            pubMsg.fixedHeader().qosLevel(),
+            pubMsg.fixedHeader().isRetain(),
+            pubMsg.variableHeader().properties(),
+            ByteString.copyFrom(pubMsg.payload().nioBuffer()));
+    }
+
+    static Message toMessage(long packetId,
+                             MqttQoS pubQoS,
+                             boolean isRetain,
+                             MqttProperties mqttProperties,
+                             ByteString payload) {
+        Message.Builder msgBuilder = Message.newBuilder()
+            .setMessageId(packetId)
+            .setPubQoS(QoS.forNumber(pubQoS.value()))
+            .setPayload(payload)
+            .setTimestamp(HLC.INST.get())
+            // If absent, the Application Message does not expire, we use Integer.MAX_VALUE to represent this.
+            .setExpiryInterval(messageExpiryInterval(mqttProperties).orElse(Integer.MAX_VALUE))
+            .setIsRetain(isRetain);
+        // PacketFormatIndicator
+        packetFormatIndicator(mqttProperties).ifPresent(integer -> msgBuilder.setIsUTF8String(integer == 1));
+        // ContentType
+        contentType(mqttProperties).ifPresent(msgBuilder::setContentType);
+        // ResponseTopic
+        responseTopic(mqttProperties).ifPresent(msgBuilder::setResponseTopic);
+        // CorrelationData
+        Optional<ByteString> correlationData =
+            binaryMqttProperty(mqttProperties, CORRELATION_DATA);
+        correlationData.ifPresent(msgBuilder::setCorrelationData);
+        // UserProperty
+        UserProperties userProperties = toUserProperties(mqttProperties);
+        if (userProperties.getUserPropertiesCount() > 0) {
+            msgBuilder.setUserProperties(userProperties);
+        }
+        return msgBuilder.build();
+    }
+
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
     public static class MqttPropertiesBuilder {
         private final MqttProperties mqttProperties = new MqttProperties();
@@ -164,161 +319,5 @@ public class MQTT5MessageUtils {
         public MqttProperties build() {
             return mqttProperties;
         }
-    }
-
-    public static MqttPropertiesBuilder mqttProps() {
-        return new MqttPropertiesBuilder();
-    }
-
-    public static MqttProperties.UserProperties toMqttUserProps(UserProperties userProperties) {
-        MqttProperties.UserProperties userProps = new MqttProperties.UserProperties();
-        for (StringPair stringPair : userProperties.getUserPropertiesList()) {
-            userProps.add(stringPair.getKey(), stringPair.getValue());
-        }
-        return userProps;
-    }
-
-    @SuppressWarnings("unchecked")
-    public static UserProperties toUserProperties(MqttProperties mqttProperties) {
-        UserProperties.Builder userPropsBuilder = UserProperties.newBuilder();
-        List<MqttProperties.UserProperty> userPropertyList = (List<MqttProperties.UserProperty>) mqttProperties
-            .getProperties(MqttProperties.MqttPropertyType.USER_PROPERTY.value());
-        if (!userPropertyList.isEmpty()) {
-            userPropertyList.forEach(up -> userPropsBuilder.addUserProperties(
-                StringPair.newBuilder().setKey(up.value().key).setValue(up.value().value).build()));
-        }
-        return userPropsBuilder.build();
-    }
-
-
-    public static boolean isUTF8Payload(MqttProperties mqttProperties) {
-        return packetFormatIndicator(mqttProperties).map(i -> i == 1).orElse(false);
-    }
-
-    public static Optional<Integer> receiveMaximum(MqttProperties mqttProperties) {
-        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.RECEIVE_MAXIMUM);
-    }
-
-    public static Optional<Integer> topicAliasMaximum(MqttProperties mqttProperties) {
-        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.TOPIC_ALIAS_MAXIMUM);
-    }
-
-    public static Optional<Integer> subscriptionIdentifier(MqttProperties mqttProperties) {
-        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.SUBSCRIPTION_IDENTIFIER);
-    }
-
-    public static Optional<Integer> maximumPacketSize(MqttProperties mqttProperties) {
-        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.MAXIMUM_PACKET_SIZE);
-    }
-
-    public static Optional<Integer> topicAlias(MqttProperties mqttProperties) {
-        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.TOPIC_ALIAS);
-    }
-
-    static Optional<Integer> packetFormatIndicator(MqttProperties mqttProperties) {
-        return integerMqttProperty(mqttProperties, PAYLOAD_FORMAT_INDICATOR);
-    }
-
-    public static Optional<Integer> messageExpiryInterval(MqttProperties mqttProperties) {
-        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.PUBLICATION_EXPIRY_INTERVAL);
-    }
-
-    public static Optional<String> contentType(MqttProperties mqttProperties) {
-        return stringMqttProperty(mqttProperties, CONTENT_TYPE);
-    }
-
-    public static Optional<String> responseTopic(MqttProperties mqttProperties) {
-        return stringMqttProperty(mqttProperties, RESPONSE_TOPIC);
-    }
-
-    public static Optional<String> authMethod(MqttProperties mqttProperties) {
-        return stringMqttProperty(mqttProperties, AUTHENTICATION_METHOD);
-    }
-
-    public static Optional<ByteString> authData(MqttProperties mqttProperties) {
-        return binaryMqttProperty(mqttProperties, AUTHENTICATION_DATA);
-    }
-
-    public static boolean requestResponseInformation(MqttProperties mqttProperties) {
-        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.REQUEST_RESPONSE_INFORMATION)
-            .orElse(0) == 1;
-    }
-
-    public static boolean requestProblemInformation(MqttProperties mqttProperties) {
-        return integerMqttProperty(mqttProperties, MqttProperties.MqttPropertyType.REQUEST_PROBLEM_INFORMATION)
-            .orElse(1) == 1;
-    }
-
-    public static Optional<String> reasonString(MqttProperties mqttProperties) {
-        return stringMqttProperty(mqttProperties, REASON_STRING);
-    }
-
-    static Optional<Integer> integerMqttProperty(MqttProperties mqttProperties, MqttProperties.MqttPropertyType type) {
-        return Optional.ofNullable((MqttProperties.IntegerProperty) mqttProperties.getProperty(type.value()))
-            .map(MqttProperties.MqttProperty::value);
-    }
-
-    static Optional<String> stringMqttProperty(MqttProperties mqttProperties, MqttProperties.MqttPropertyType type) {
-        return Optional.ofNullable((MqttProperties.StringProperty) mqttProperties.getProperty(type.value()))
-            .map(MqttProperties.MqttProperty::value);
-    }
-
-    static Optional<ByteString> binaryMqttProperty(MqttProperties mqttProperties,
-                                                   MqttProperties.MqttPropertyType type) {
-        return Optional.ofNullable((MqttProperties.BinaryProperty) mqttProperties.getProperty(type.value()))
-            .map(MqttProperties.MqttProperty::value)
-            .map(UnsafeByteOperations::unsafeWrap);
-    }
-
-    static LWT toWillMessage(MqttConnectMessage connMsg) {
-        LWT.Builder lwtBuilder = LWT.newBuilder()
-            .setTopic(connMsg.payload().willTopic())
-            .setDelaySeconds(integerMqttProperty(connMsg.payload().willProperties(),
-                MqttProperties.MqttPropertyType.WILL_DELAY_INTERVAL).orElse(0));
-        Message willMsg = toMessage(0,
-            MqttQoS.valueOf(connMsg.variableHeader().willQos()),
-            connMsg.variableHeader().isWillRetain(),
-            connMsg.payload().willProperties(),
-            UnsafeByteOperations.unsafeWrap(connMsg.payload().willMessageInBytes()));
-        return lwtBuilder.setMessage(willMsg).build();
-    }
-
-    static Message toMessage(MqttPublishMessage pubMsg) {
-        return toMessage(pubMsg.variableHeader().packetId(),
-            pubMsg.fixedHeader().qosLevel(),
-            pubMsg.fixedHeader().isRetain(),
-            pubMsg.variableHeader().properties(),
-            ByteString.copyFrom(pubMsg.payload().nioBuffer()));
-    }
-
-    static Message toMessage(long packetId,
-                             MqttQoS pubQoS,
-                             boolean isRetain,
-                             MqttProperties mqttProperties,
-                             ByteString payload) {
-        Message.Builder msgBuilder = Message.newBuilder()
-            .setMessageId(packetId)
-            .setPubQoS(QoS.forNumber(pubQoS.value()))
-            .setPayload(payload)
-            .setTimestamp(HLC.INST.getPhysical())
-            // If absent, the Application Message does not expire, we use Integer.MAX_VALUE to represent this.
-            .setExpiryInterval(messageExpiryInterval(mqttProperties).orElse(Integer.MAX_VALUE))
-            .setIsRetain(isRetain);
-        // PacketFormatIndicator
-        packetFormatIndicator(mqttProperties).ifPresent(integer -> msgBuilder.setIsUTF8String(integer == 1));
-        // ContentType
-        contentType(mqttProperties).ifPresent(msgBuilder::setContentType);
-        // ResponseTopic
-        responseTopic(mqttProperties).ifPresent(msgBuilder::setResponseTopic);
-        // CorrelationData
-        Optional<ByteString> correlationData =
-            binaryMqttProperty(mqttProperties, CORRELATION_DATA);
-        correlationData.ifPresent(msgBuilder::setCorrelationData);
-        // UserProperty
-        UserProperties userProperties = toUserProperties(mqttProperties);
-        if (userProperties.getUserPropertiesCount() > 0) {
-            msgBuilder.setUserProperties(userProperties);
-        }
-        return msgBuilder.build();
     }
 }

@@ -13,6 +13,9 @@
 
 package com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling;
 
+/**
+ * The reason why a message is dropped before publishing to subscriber.
+ */
 public enum DropReason {
-    ChannelClosed, Overflow, NoSubPermission, NoLocal, InternalError, Expired, ResourceExhausted
+    ChannelClosed, Overflow, NoSubPermission, NoLocal, InternalError, Expired, ResourceExhausted, Duplicated
 }

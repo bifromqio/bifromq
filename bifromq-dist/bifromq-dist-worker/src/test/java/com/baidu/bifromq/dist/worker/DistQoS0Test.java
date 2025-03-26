@@ -182,7 +182,7 @@ public class DistQoS0Test extends DistWorkerTest {
             }
         }
         assertEquals(matchInfos.size(), 2);
-        assertEquals(msgCount, 2);
+        assertEquals(msgCount, 1);
 
         unmatch(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
         unmatch(tenantA, "/a/b/c", MqttBroker, "inbox2", "batch1");

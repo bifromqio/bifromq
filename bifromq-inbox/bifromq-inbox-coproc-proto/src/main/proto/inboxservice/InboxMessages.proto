@@ -10,9 +10,8 @@ package inboxservice;
 
 message InboxMessage{
   uint64 seq = 1;
-  string topicFilter = 2;
-  commontype.TopicMessage msg = 3;
-  TopicFilterOption option = 4;
+  commontype.TopicMessage msg = 2;
+  map<string, TopicFilterOption> matchedTopicFilter = 3;
 }
 
 message InboxMessageList{

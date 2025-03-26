@@ -636,7 +636,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                 CompletableFuture<PubResult> distLWTFuture = distClient.pub(reqId,
                     lwt.getTopic(),
                     lwt.getMessage().toBuilder()
-                        .setTimestamp(HLC.INST.getPhysical()) // refresh the timestamp
+                        .setTimestamp(HLC.INST.get()) // refresh the timestamp
                         .build(),
                     client);
                 CompletableFuture<RetainReply.Result> retainLWTFuture;

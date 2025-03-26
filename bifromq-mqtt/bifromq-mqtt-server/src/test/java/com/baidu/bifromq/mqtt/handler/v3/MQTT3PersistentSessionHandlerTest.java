@@ -29,6 +29,7 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_PUSHED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_RECEIVED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACKED;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
 import static io.netty.handler.codec.mqtt.MqttMessageType.PUBREL;
@@ -41,12 +42,15 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.Fetched.Result;
+import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
+import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.BaseSessionHandlerTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
@@ -57,7 +61,10 @@ import com.baidu.bifromq.plugin.authprovider.type.Denied;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS1Confirmed;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS2Confirmed;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
+import com.baidu.bifromq.type.TopicMessage;
+import com.google.protobuf.ByteString;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -255,6 +262,44 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
     }
 
     @Test
+    public void qos0PubWithMultipleTopicFilters() {
+        mockInboxCommit(CommitReply.Code.OK);
+        mockCheckPermission(true);
+        InboxMessage inboxMessage = InboxMessage.newBuilder()
+            .setSeq(0)
+            .putMatchedTopicFilter("#", TopicFilterOption.newBuilder().setQos(QoS.AT_MOST_ONCE).build())
+            .putMatchedTopicFilter("+", TopicFilterOption.newBuilder().setQos(QoS.AT_MOST_ONCE).build())
+            .setMsg(
+                TopicMessage.newBuilder()
+                    .setTopic(topic)
+                    .setMessage(Message.newBuilder()
+                        .setMessageId(0)
+                        .setPayload(ByteString.copyFromUtf8("payload"))
+                        .setTimestamp(HLC.INST.get())
+                        .setExpiryInterval(120)
+                        .setPubQoS(QoS.AT_MOST_ONCE)
+                        .build()
+                    )
+                    .setPublisher(
+                        ClientInfo.newBuilder()
+                            .setType(MQTT_TYPE_VALUE)
+                            .build()
+                    )
+                    .build()
+            ).build();
+
+        inboxFetchConsumer.accept(Fetched.newBuilder().addQos0Msg(inboxMessage).build());
+        channel.runPendingTasks();
+        for (int i = 0; i < 2; i++) {
+            MqttPublishMessage message = channel.readOutbound();
+            assertEquals(message.fixedHeader().qosLevel().value(), QoS.AT_MOST_ONCE_VALUE);
+            assertEquals(message.variableHeader().topicName(), topic);
+        }
+        verifyEvent(QOS0_PUSHED, QOS0_PUSHED);
+        assertEquals(fetchHints.size(), 1);
+    }
+
+    @Test
     public void qoS0PubAuthFailed() {
         // not by pass
         when(authProvider.checkPermission(any(ClientInfo.class),
@@ -307,6 +352,84 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
         }
         verifyEvent(QOS1_PUSHED, QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED, QOS1_CONFIRMED, QOS1_CONFIRMED);
         verify(inboxClient, times(3)).commit(argThat(CommitRequest::hasSendBufferUpToSeq));
+    }
+
+    @Test
+    public void qos1PubWithMultipleTopicFilters() {
+        mockInboxCommit(CommitReply.Code.OK);
+        mockCheckPermission(true);
+        InboxMessage inboxMessage = InboxMessage.newBuilder()
+            .setSeq(0)
+            .putMatchedTopicFilter("#", TopicFilterOption.newBuilder().setQos(AT_LEAST_ONCE).build())
+            .putMatchedTopicFilter("+", TopicFilterOption.newBuilder().setQos(AT_LEAST_ONCE).build())
+            .setMsg(
+                TopicMessage.newBuilder()
+                    .setTopic(topic)
+                    .setMessage(Message.newBuilder()
+                        .setMessageId(0)
+                        .setPayload(ByteString.copyFromUtf8("payload"))
+                        .setTimestamp(HLC.INST.get())
+                        .setExpiryInterval(120)
+                        .setPubQoS(AT_LEAST_ONCE)
+                        .build()
+                    )
+                    .setPublisher(
+                        ClientInfo.newBuilder()
+                            .setType(MQTT_TYPE_VALUE)
+                            .build()
+                    )
+                    .build()
+            ).build();
+        inboxFetchConsumer.accept(Fetched.newBuilder().addSendBufferMsg(inboxMessage).build());
+        channel.runPendingTasks();
+        // s2c pub received and ack
+        for (int i = 0; i < 2; i++) {
+            MqttPublishMessage message = channel.readOutbound();
+            assertEquals(message.fixedHeader().qosLevel().value(), QoS.AT_LEAST_ONCE_VALUE);
+            assertEquals(message.variableHeader().topicName(), topic);
+            channel.writeInbound(MQTTMessageUtils.pubAckMessage(message.variableHeader().packetId()));
+        }
+        verifyEvent(QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED, QOS1_CONFIRMED);
+        verify(inboxClient, times(1)).commit(argThat(CommitRequest::hasSendBufferUpToSeq));
+    }
+
+    @Test
+    public void qos1PubWithMultipleTopicFiltersWithPartialReply() {
+        mockInboxCommit(CommitReply.Code.OK);
+        mockCheckPermission(true);
+        InboxMessage inboxMessage = InboxMessage.newBuilder()
+            .setSeq(0)
+            .putMatchedTopicFilter("#", TopicFilterOption.newBuilder().setQos(AT_LEAST_ONCE).build())
+            .putMatchedTopicFilter("+", TopicFilterOption.newBuilder().setQos(AT_LEAST_ONCE).build())
+            .setMsg(
+                TopicMessage.newBuilder()
+                    .setTopic(topic)
+                    .setMessage(Message.newBuilder()
+                        .setMessageId(0)
+                        .setPayload(ByteString.copyFromUtf8("payload"))
+                        .setTimestamp(HLC.INST.get())
+                        .setExpiryInterval(120)
+                        .setPubQoS(AT_LEAST_ONCE)
+                        .build()
+                    )
+                    .setPublisher(
+                        ClientInfo.newBuilder()
+                            .setType(MQTT_TYPE_VALUE)
+                            .build()
+                    )
+                    .build()
+            ).build();
+        inboxFetchConsumer.accept(Fetched.newBuilder().addSendBufferMsg(inboxMessage).build());
+        channel.runPendingTasks();
+        // s2c pub received and ack
+        for (int i = 0; i < 2; i++) {
+            MqttPublishMessage message = channel.readOutbound();
+            assertEquals(message.fixedHeader().qosLevel().value(), QoS.AT_LEAST_ONCE_VALUE);
+            assertEquals(message.variableHeader().topicName(), topic);
+        }
+        channel.writeInbound(MQTTMessageUtils.pubAckMessage(1));
+        verifyEvent(QOS1_PUSHED, QOS1_PUSHED, QOS1_CONFIRMED);
+        verify(inboxClient, times(1)).commit(argThat(CommitRequest::hasSendBufferUpToSeq));
     }
 
     @Test
@@ -409,12 +532,20 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
     }
 
     @Test
-    public void fetchError() {
-        inboxFetchConsumer.accept(Fetched.newBuilder().setResult(Result.ERROR).build());
+    public void fetchTryLater() {
+        inboxFetchConsumer.accept(Fetched.newBuilder().setResult(Result.TRY_LATER).build());
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runPendingTasks();
         verifyEvent();
         assertTrue(channel.isOpen());
+    }
+
+    @Test
+    public void fetchError() {
+        inboxFetchConsumer.accept(Fetched.newBuilder().setResult(Result.ERROR).build());
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runPendingTasks();
+        verifyEvent(INBOX_TRANSIENT_ERROR);
     }
 
     @Test
@@ -424,5 +555,4 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
         channel.runPendingTasks();
         verifyEvent(INBOX_TRANSIENT_ERROR);
     }
-
 }

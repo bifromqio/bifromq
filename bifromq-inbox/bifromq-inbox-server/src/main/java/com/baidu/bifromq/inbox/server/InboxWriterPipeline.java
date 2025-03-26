@@ -51,17 +51,19 @@ class InboxWriterPipeline extends ResponsePipeline<SendRequest, SendReply> {
     @Override
     protected CompletableFuture<SendReply> handleRequest(String ignore, SendRequest request) {
         log.trace("Received inbox write request: deliverer={}, \n{}", delivererKey, request);
-        return handler.handle(request).thenApply(v -> {
-            v.getReply().getResultMap().forEach((tenantId, deliveryResults) -> {
-                deliveryResults.getResultList().forEach(result -> {
-                    if (result.getCode() == DeliveryResult.Code.OK) {
-                        writeCallback.afterWrite(TenantInboxInstance.from(tenantId, result.getMatchInfo()),
-                            delivererKey);
-                    }
-                });
+        return handler.handle(request)
+            .thenApply(v -> {
+                v.getReply().getResultMap()
+                    .forEach((tenantId, deliveryResults) ->
+                        deliveryResults.getResultList()
+                            .forEach(result -> {
+                                if (result.getCode() == DeliveryResult.Code.OK) {
+                                    writeCallback.afterWrite(TenantInboxInstance.from(tenantId, result.getMatchInfo()),
+                                        delivererKey);
+                                }
+                            }));
+                return v;
             });
-            return v;
-        });
     }
 
     interface IWriteCallback {

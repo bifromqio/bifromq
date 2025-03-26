@@ -89,7 +89,7 @@ final class RetainClient implements IRetainClient {
                     .setMessageId(reqId)
                     .setPubQoS(qos)
                     .setPayload(payload)
-                    .setTimestamp(HLC.INST.getPhysical())
+                    .setTimestamp(HLC.INST.get())
                     .setExpiryInterval(expirySeconds)
                     .build())
                 .setPublisher(publisher)

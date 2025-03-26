@@ -72,7 +72,8 @@ public class DeliverySchedulerTest {
     public void writeSucceed() {
         MatchInfo matchInfo = MatchInfo.newBuilder().build();
         DeliveryCall request =
-            new DeliveryCall(tenantId, matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
+            new DeliveryCall(tenantId, matchInfo, 0, "group1",
+                TopicMessagePackHolder.hold(TopicMessagePack.newBuilder().build()));
 
         when(groupWriter.deliver(any())).thenReturn(
             CompletableFuture.completedFuture(DeliveryReply.newBuilder()
@@ -92,7 +93,8 @@ public class DeliverySchedulerTest {
     public void writeIncompleteResult() {
         MatchInfo matchInfo = MatchInfo.newBuilder().build();
         DeliveryCall request =
-            new DeliveryCall(tenantId, matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
+            new DeliveryCall(tenantId, matchInfo, 0, "group1",
+                TopicMessagePackHolder.hold(TopicMessagePack.newBuilder().build()));
         when(groupWriter.deliver(any())).thenReturn(
             CompletableFuture.completedFuture(DeliveryReply.newBuilder().build()));
         DeliveryResult.Code result = testDeliverer.schedule(request).join();
@@ -107,7 +109,8 @@ public class DeliverySchedulerTest {
             .setIncarnation(1)
             .build();
         DeliveryCall request =
-            new DeliveryCall(tenantId, matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
+            new DeliveryCall(tenantId, matchInfo, 0, "group1",
+                TopicMessagePackHolder.hold(TopicMessagePack.newBuilder().build()));
         when(groupWriter.deliver(any())).thenReturn(
             CompletableFuture.completedFuture(DeliveryReply.newBuilder()
                 .setCode(DeliveryReply.Code.OK)
@@ -133,7 +136,8 @@ public class DeliverySchedulerTest {
             .setIncarnation(1)
             .build();
         DeliveryCall request =
-            new DeliveryCall(tenantId, matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
+            new DeliveryCall(tenantId, matchInfo, 0, "group1",
+                TopicMessagePackHolder.hold(TopicMessagePack.newBuilder().build()));
         when(groupWriter.deliver(any())).thenReturn(
             CompletableFuture.completedFuture(DeliveryReply.newBuilder()
                 .setCode(DeliveryReply.Code.OK)
@@ -156,7 +160,8 @@ public class DeliverySchedulerTest {
     public void writeFail() {
         MatchInfo matchInfo = MatchInfo.newBuilder().build();
         DeliveryCall request =
-            new DeliveryCall(tenantId, matchInfo, 0, "group1", TopicMessagePack.newBuilder().build());
+            new DeliveryCall(tenantId, matchInfo, 0, "group1",
+                TopicMessagePackHolder.hold(TopicMessagePack.newBuilder().build()));
         when(groupWriter.deliver(any())).thenReturn(
             CompletableFuture.failedFuture(new RuntimeException("Mock Exception")));
         testDeliverer.schedule(request).join();

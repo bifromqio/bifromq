@@ -14,11 +14,14 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchQueryCall;
 import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
@@ -75,6 +78,24 @@ class BatchFetchCall extends BatchQueryCall<IInboxFetchScheduler.InboxFetch, Fet
     @Override
     protected void handleException(ICallTask<IInboxFetchScheduler.InboxFetch, Fetched, QueryCallBatcherKey> callTask,
                                    Throwable e) {
+        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+            callTask.resultPromise().complete(Fetched.newBuilder()
+                .setResult(Fetched.Result.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+            callTask.resultPromise().complete(Fetched.newBuilder()
+                .setResult(Fetched.Result.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+            callTask.resultPromise().complete(Fetched.newBuilder()
+                .setResult(Fetched.Result.TRY_LATER)
+                .build());
+            return;
+        }
         callTask.resultPromise().completeExceptionally(e);
     }
 }

@@ -42,6 +42,10 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class InboxReaderTest {
+    private final String tenantId = "tenantId";
+    private final String delivererKey = "delivererKey";
+    private final String inboxId = "inboxId";
+    private final long incarnation = 1;
     private AutoCloseable closeable;
     @Mock
     private Consumer<Fetched> onFetched;
@@ -50,10 +54,6 @@ public class InboxReaderTest {
     @Mock
     private IRPCClient.IMessageStream<InboxFetched, InboxFetchHint> messageStream;
     private InboxFetchPipeline fetchPipeline;
-    private final String tenantId = "tenantId";
-    private final String delivererKey = "delivererKey";
-    private final String inboxId = "inboxId";
-    private final long incarnation = 1;
 
     @BeforeMethod
     public void setup() {
@@ -98,7 +98,7 @@ public class InboxReaderTest {
 
     @Test
     public void reFetchAfterRetarget() {
-        Fetched fetchedError = Fetched.newBuilder().setResult(Result.ERROR).build();
+        Fetched fetchedRetry = Fetched.newBuilder().setResult(Result.TRY_LATER).build();
         InboxReader inboxReader = new InboxReader(inboxId, incarnation, fetchPipeline);
         inboxReader.fetch(onFetched);
 
@@ -106,7 +106,7 @@ public class InboxReaderTest {
         verify(messageStream).onRetarget(retargetConsumerCaptor.capture());
         retargetConsumerCaptor.getValue().accept(System.nanoTime());
 
-        verify(onFetched, times(1)).accept(fetchedError);
+        verify(onFetched, times(1)).accept(fetchedRetry);
     }
 
     @Test

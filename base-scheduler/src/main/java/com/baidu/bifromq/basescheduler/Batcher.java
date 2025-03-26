@@ -168,42 +168,45 @@ public abstract class Batcher<CallT, CallResultT, BatcherKeyT> {
                 return !(t instanceof NeedRetryException || t.getCause() instanceof NeedRetryException);
             }
             return true;
-        }, tolerableLatencyNanos >> 1, burstLatencyNanos << 1).whenComplete((v, e) -> {
-            long execEnd = System.nanoTime();
-            if (e != null) {
-                if (e instanceof TimeoutException || e.getCause() instanceof TimeoutException) {
+        }, tolerableLatencyNanos >> 1, burstLatencyNanos << 1)
+            .whenComplete((v, e) -> {
+                long execEnd = System.nanoTime();
+                if (e != null) {
+                    if (e instanceof TimeoutException || e.getCause() instanceof TimeoutException) {
+                        log.debug("Batchcall timeout", e);
+                    } else {
+                        log.error("Unexpected exception during handling batchcall result", e);
+                    }
                     batchedTasks.forEach(t -> t.resultPromise().completeExceptionally(e));
-                }
-                log.error("Unexpected exception during handling batchcall result", e);
-                // reset max batch size
-                maxBatchSize = 1;
-            } else {
-                long thisLatency = execEnd - execStart.get();
-                if (thisLatency > 0) {
-                    updateMaxBatchSize(finalBatchSize, thisLatency);
-                }
-                batchExecTimer.record(thisLatency, TimeUnit.NANOSECONDS);
-                if (execCounter.get() > 1) {
-                    // do not observe retry latency
-                    batchedTasks.forEach(t -> {
-                        long callLatency = execEnd - t.ts();
-                        batchCallTimer.record(callLatency, TimeUnit.NANOSECONDS);
-                    });
+                    // reset max batch size
+                    maxBatchSize = 1;
                 } else {
-                    batchedTasks.forEach(t -> {
-                        long callLatency = execEnd - t.ts();
-                        avgLatencyNanos.observe(callLatency);
-                        batchCallTimer.record(callLatency, TimeUnit.NANOSECONDS);
-                    });
+                    long thisLatency = execEnd - execStart.get();
+                    if (thisLatency > 0) {
+                        updateMaxBatchSize(finalBatchSize, thisLatency);
+                    }
+                    batchExecTimer.record(thisLatency, TimeUnit.NANOSECONDS);
+                    if (execCounter.get() > 1) {
+                        // do not observe retry latency
+                        batchedTasks.forEach(t -> {
+                            long callLatency = execEnd - t.ts();
+                            batchCallTimer.record(callLatency, TimeUnit.NANOSECONDS);
+                        });
+                    } else {
+                        batchedTasks.forEach(t -> {
+                            long callLatency = execEnd - t.ts();
+                            avgLatencyNanos.observe(callLatency);
+                            batchCallTimer.record(callLatency, TimeUnit.NANOSECONDS);
+                        });
+                    }
                 }
-            }
-            batchCall.reset();
-            batchPool.offer(batchCall);
-            pipelineDepth.getAndDecrement();
-            if (!callTaskBuffers.isEmpty()) {
-                trigger();
-            }
-        });
+                batchCall.reset();
+                batchPool.offer(batchCall);
+                pipelineDepth.getAndDecrement();
+                if (!callTaskBuffers.isEmpty()) {
+                    trigger();
+                }
+            });
     }
 
     private void updateMaxBatchSize(int batchSize, long latency) {

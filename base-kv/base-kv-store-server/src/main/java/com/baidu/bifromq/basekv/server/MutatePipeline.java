@@ -15,6 +15,7 @@ package com.baidu.bifromq.basekv.server;
 
 import com.baidu.bifromq.basekv.store.IKVRangeStore;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
+import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
@@ -86,7 +87,9 @@ class MutatePipeline extends ResponsePipeline<KVRangeRWRequest, KVRangeRWReply> 
                         .setCode(ReplyCode.BadVersion)
                         .build();
                 }
-                if (e instanceof KVRangeException.TryLater || e.getCause() instanceof KVRangeException.TryLater) {
+                if (e instanceof KVRangeStoreException.KVRangeNotFoundException
+                    || e.getCause() instanceof KVRangeStoreException.KVRangeNotFoundException
+                    || e instanceof KVRangeException.TryLater || e.getCause() instanceof KVRangeException.TryLater) {
                     return KVRangeRWReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(ReplyCode.TryLater)

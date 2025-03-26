@@ -37,6 +37,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
@@ -64,7 +65,6 @@ import org.testng.annotations.Test;
 
 @Slf4j
 public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
-
 
     @BeforeMethod
     public void setup() {
@@ -241,11 +241,19 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
     }
 
     @Test
+    public void fetchTryLater() {
+        inboxFetchConsumer.accept(Fetched.newBuilder().setResult(Result.TRY_LATER).build());
+        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
+        channel.runPendingTasks();
+        verifyEvent(CLIENT_CONNECTED);
+    }
+
+    @Test
     public void fetchError() {
         inboxFetchConsumer.accept(Fetched.newBuilder().setResult(Result.ERROR).build());
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
-        verifyEvent(CLIENT_CONNECTED);
+        verifyEvent(CLIENT_CONNECTED, INBOX_TRANSIENT_ERROR);
     }
 
     @Test
@@ -264,8 +272,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
         for (int i = 0; i < count; i++) {
             InboxMessage inboxMessage = InboxMessage.newBuilder()
                 .setSeq(i)
-                .setTopicFilter("testTopicFilter")
-                .setOption(TopicFilterOption.newBuilder().setQos(qoS).build())
+                .putMatchedTopicFilter("testTopicFilter", TopicFilterOption.newBuilder().setQos(qoS).build())
                 .setMsg(
                     TopicMessage.newBuilder()
                         .setTopic("testTopic")
@@ -273,7 +280,7 @@ public class MQTTPersistentS2CPubTest extends BaseMQTTTest {
                             Message.newBuilder()
                                 .setMessageId(i)
                                 .setPayload(ByteString.copyFrom(bytes))
-                                .setTimestamp(System.currentTimeMillis())
+                                .setTimestamp(HLC.INST.get())
                                 .setPubQoS(qoS)
                                 .build()
                         )

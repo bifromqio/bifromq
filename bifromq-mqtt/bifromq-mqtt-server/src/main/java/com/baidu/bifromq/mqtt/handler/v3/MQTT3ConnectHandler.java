@@ -34,6 +34,7 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_UNAVAILABLE;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
@@ -335,6 +336,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                 .setIsRetain(message.variableHeader().isWillRetain())
                 .setExpiryInterval(Integer.MAX_VALUE)
                 .setIsRetain(message.variableHeader().isWillRetain())
+                .setTimestamp(HLC.INST.get())
                 .build())
             .build();
     }

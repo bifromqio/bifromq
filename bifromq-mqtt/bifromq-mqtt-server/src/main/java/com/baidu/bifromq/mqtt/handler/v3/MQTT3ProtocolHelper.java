@@ -168,7 +168,7 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
         return message.payload()
             .topicSubscriptions()
             .stream()
-            .map(sub -> new SubTask(sub.topicName(),
+            .map(sub -> new SubTask(sub.topicFilter(),
                 TopicFilterOption.newBuilder()
                     .setQos(QoS.forNumber(sub.qualityOfService().value()))
                     .setIncarnation(HLC.INST.get())

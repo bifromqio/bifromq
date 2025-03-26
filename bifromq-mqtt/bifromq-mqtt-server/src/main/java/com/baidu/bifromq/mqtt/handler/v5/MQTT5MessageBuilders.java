@@ -151,6 +151,7 @@ public class MQTT5MessageBuilders {
     }
 
     public static final class ConnAckPropertiesBuilder {
+        private final MqttProperties.UserProperties userProperties = new MqttProperties.UserProperties();
         private String clientId;
         private Long sessionExpiryInterval;
         private int receiveMaximum;
@@ -159,7 +160,6 @@ public class MQTT5MessageBuilders {
         private Long maximumPacketSize;
         private int topicAliasMaximum;
         private String reasonString;
-        private final MqttProperties.UserProperties userProperties = new MqttProperties.UserProperties();
         private Boolean wildcardSubscriptionAvailable;
         private Boolean subscriptionIdentifiersAvailable;
         private Boolean sharedSubscriptionAvailable;
@@ -403,8 +403,9 @@ public class MQTT5MessageBuilders {
             if (message.message().getExpiryInterval() < Integer.MAX_VALUE) {
                 // If absent, the Application Message does not expire
                 int leftDelayInterval = (int) Duration.ofMillis(
-                    Duration.ofSeconds(message.message().getExpiryInterval()).toMillis() -
-                        (HLC.INST.getPhysical() - message.message().getTimestamp())).toSeconds();
+                        Duration.ofSeconds(message.message().getExpiryInterval()).toMillis()
+                            - (HLC.INST.getPhysical() - HLC.INST.getPhysical(message.message().getTimestamp())))
+                    .toSeconds();
                 propsBuilder.addMessageExpiryInterval(leftDelayInterval);
             }
 
@@ -740,9 +741,8 @@ public class MQTT5MessageBuilders {
     }
 
     public static final class UnsubAckBuilder {
-
-        private int packetId;
         private final List<MQTT5UnsubAckReasonCode> reasonCodes = new ArrayList<>();
+        private int packetId;
         private String reasonString;
         private UserProperties userProps;
 

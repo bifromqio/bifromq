@@ -252,13 +252,13 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                     .clientInfo(clientInfo));
         }
         for (MqttTopicSubscription topicSub : topicSubscriptions) {
-            if (!isWellFormed(topicSub.topicName(), SANITY_CHECK)) {
+            if (!isWellFormed(topicSub.topicFilter(), SANITY_CHECK)) {
                 return farewell(
                     MQTT5MessageBuilders.disconnect()
                         .reasonCode(MQTT5DisconnectReasonCode.MalformedPacket)
                         .build(),
                     getLocal(MalformedTopicFilter.class)
-                        .topicFilter(topicSub.topicName())
+                        .topicFilter(topicSub.topicFilter())
                         .clientInfo(clientInfo));
             }
         }
@@ -305,7 +305,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                     .setRetainHandling(RetainHandling.forNumber(sub.option().retainHandling().value()))
                     .setIncarnation(HLC.INST.get());
                 subId.ifPresent(optionBuilder::setSubId);
-                return new SubTask(sub.topicName(), optionBuilder.build(), userProps);
+                return new SubTask(sub.topicFilter(), optionBuilder.build(), userProps);
             })
             .toList();
     }

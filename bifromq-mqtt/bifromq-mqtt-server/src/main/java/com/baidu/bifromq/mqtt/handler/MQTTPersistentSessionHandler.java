@@ -57,11 +57,14 @@ import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
+import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
 import com.baidu.bifromq.util.TopicUtil;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.micrometer.core.instrument.Timer;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttMessage;
@@ -75,9 +78,13 @@ import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Abstract handler for MQTT persistent session.
+ */
 @Slf4j
 public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler implements IMQTTPersistentSession {
     private final int sessionExpirySeconds;
@@ -85,12 +92,18 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     private final long incarnation;
     private final NavigableMap<Long, SubMessage> stagingBuffer = new TreeMap<>();
     private final IInboxClient inboxClient;
+    private final Cache<String, AtomicReference<Long>> qoS0TimestampsByMQTTPublisher = Caffeine.newBuilder()
+        .expireAfterAccess(2 * DataPlaneBurstLatencyMillis.INSTANCE.get(), TimeUnit.MILLISECONDS)
+        .build();
+    private final Cache<String, AtomicReference<Long>> qoS12TimestampsByMQTTPublisher = Caffeine.newBuilder()
+        .expireAfterAccess(2 * DataPlaneBurstLatencyMillis.INSTANCE.get(), TimeUnit.MILLISECONDS)
+        .build();
     private long version = 0;
     private boolean qos0Confirming = false;
     private boolean inboxConfirming = false;
     private long nextSendSeq = 0;
     private long qos0ConfirmUpToSeq;
-    private long inboxConfirmedUpToSeq;
+    private long inboxConfirmedUpToSeq = -1;
     private IInboxClient.IInboxReader inboxReader;
     private long touchIdleTimeMS;
     private ScheduledFuture<?> touchTimeout;
@@ -170,7 +183,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                 .setNow(HLC.INST.getPhysical());
             if (willMessage() != null && willMessage().getDelaySeconds() > 0) {
                 reqBuilder.setLwt(willMessage());
-                discardLWT();// lwt will be triggered by inbox service
+                discardLWT(); // lwt will be triggered by inbox service
             }
             addFgTask(inboxClient.create(reqBuilder.build())
                 .thenAcceptAsync(reply -> {
@@ -205,8 +218,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     @Override
     protected final ProtocolResponse handleDisconnect(MqttMessage message) {
         Optional<Integer> requestSEI = helper().sessionExpiryIntervalOnDisconnect(message);
-        int finalSEI =
-            settings.forceTransient ? 0 : Math.min(requestSEI.orElse(sessionExpirySeconds), settings.maxSEI);
+        int finalSEI = settings.forceTransient ? 0 : Math.min(requestSEI.orElse(sessionExpirySeconds), settings.maxSEI);
         if (helper().isNormalDisconnect(message)) {
             discardLWT();
             if (finalSEI == 0) {
@@ -276,7 +288,8 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                 .setVersion(version)
                 .setTopicFilter(topicFilter)
                 .setOption(option)
-                .setNow(HLC.INST.getPhysical()).build())
+                .setNow(HLC.INST.getPhysical())
+                .build())
             .thenApplyAsync(v -> {
                 switch (v.getCode()) {
                     case OK -> {
@@ -297,6 +310,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                         return IMQTTProtocolHelper.SubResult.ERROR;
                     }
                     case NO_INBOX, CONFLICT -> handleProtocolResponse(helper().onInboxTransientError());
+                    default -> {
+                        // never happens
+                    }
                 }
                 return IMQTTProtocolHelper.SubResult.ERROR;
             }, ctx.executor());
@@ -412,18 +428,24 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                             confirmQoS0();
                         }
                     }
+                    default -> {
+                        // never happens
+                    }
                 }
             }, ctx.executor());
     }
 
     @Override
     protected final void onConfirm(long seq) {
-        inboxConfirmedUpToSeq = seq;
         SubMessage confirmed = stagingBuffer.remove(seq);
         if (confirmed != null) {
+            // for multiple topic filters matched message, confirm to upstream when at lease one is confirmed by client
             memUsage.addAndGet(-confirmed.estBytes());
+            if (inboxConfirmedUpToSeq < confirmed.inboxPos()) {
+                inboxConfirmedUpToSeq = confirmed.inboxPos();
+                confirmSendBuffer();
+            }
         }
-        confirmSendBuffer();
         ctx.executor().execute(this::drainStaging);
     }
 
@@ -462,6 +484,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                             inboxReader.hint(clientReceiveQuota());
                         }
                     }
+                    default -> {
+                        // never happens
+                    }
                 }
             }, ctx.executor());
     }
@@ -487,46 +512,69 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     }
                     rescheduleTouch();
                 }
-                case ERROR -> inboxReader.hint(clientReceiveQuota());
-                case NO_INBOX -> handleProtocolResponse(helper().onInboxTransientError());
+                case TRY_LATER -> inboxReader.hint(clientReceiveQuota());
+                case NO_INBOX, ERROR -> handleProtocolResponse(helper().onInboxTransientError());
+                default -> {
+                    // never happens
+                }
             }
         });
     }
 
     private void pubQoS0Message(InboxMessage inboxMsg) {
-        String topicFilter = inboxMsg.getTopicFilter();
-        TopicFilterOption option = inboxMsg.getOption();
+        boolean isDup = isDuplicateMessage(inboxMsg.getMsg()
+                .getPublisher(), inboxMsg.getMsg()
+                .getMessage(),
+            qoS0TimestampsByMQTTPublisher);
+        inboxMsg.getMatchedTopicFilterMap()
+            .forEach((topicFilter, option) -> pubQoS0Message(topicFilter, option, inboxMsg.getMsg(), isDup));
+    }
+
+    private void pubQoS0Message(String topicFilter, TopicFilterOption option, TopicMessage topicMsg, boolean isDup) {
         addFgTask(authProvider.checkPermission(clientInfo(), buildSubAction(topicFilter, option.getQos())))
             .thenAccept(checkResult -> {
-                TopicMessage topicMsg = inboxMsg.getMsg();
                 String topic = topicMsg.getTopic();
                 Message message = topicMsg.getMessage();
                 ClientInfo publisher = topicMsg.getPublisher();
                 tenantMeter.timer(MqttQoS0InternalLatency)
-                    .record(HLC.INST.getPhysical() - message.getTimestamp(), TimeUnit.MILLISECONDS);
+                    .record(HLC.INST.getPhysical() - HLC.INST.getPhysical(message.getTimestamp()),
+                        TimeUnit.MILLISECONDS);
                 sendQoS0SubMessage(
-                    new SubMessage(topic, message, publisher, topicFilter, option, checkResult.hasGranted()));
+                    new SubMessage(topic, message, publisher, topicFilter, option, checkResult.hasGranted(), isDup));
             });
     }
 
     private void pubBufferedMessage(InboxMessage inboxMsg) {
-        if (inboxMsg.getSeq() < nextSendSeq) {
+        boolean isDup = isDuplicateMessage(inboxMsg.getMsg().getPublisher(), inboxMsg.getMsg().getMessage(),
+            qoS12TimestampsByMQTTPublisher);
+        int i = 0;
+        for (Map.Entry<String, TopicFilterOption> entry : inboxMsg.getMatchedTopicFilterMap()
+            .entrySet()) {
+            String topicFilter = entry.getKey();
+            TopicFilterOption option = entry.getValue();
+            long seq = inboxMsg.getSeq();
+            pubBufferedMessage(topicFilter, option, seq + i++, seq, inboxMsg.getMsg(), isDup);
+        }
+    }
+
+    private void pubBufferedMessage(String topicFilter, TopicFilterOption option, long seq, long inboxSeq,
+                                    TopicMessage topicMsg, boolean isDup) {
+        if (seq < nextSendSeq) {
             // do not buffer message that has been sent
             return;
         }
-        String topicFilter = inboxMsg.getTopicFilter();
-        TopicFilterOption option = inboxMsg.getOption();
         addFgTask(authProvider.checkPermission(clientInfo(), buildSubAction(topicFilter, option.getQos())))
             .thenAccept(checkResult -> {
-                TopicMessage topicMsg = inboxMsg.getMsg();
                 String topic = topicMsg.getTopic();
                 Message message = topicMsg.getMessage();
                 ClientInfo publisher = topicMsg.getPublisher();
                 SubMessage msg =
-                    new SubMessage(topic, message, publisher, topicFilter, option, checkResult.hasGranted());
+                    new SubMessage(topic, message, publisher, topicFilter, option, checkResult.hasGranted(), isDup,
+                        inboxSeq);
                 tenantMeter.timer(msg.qos() == AT_LEAST_ONCE ? MqttQoS1InternalLatency : MqttQoS2InternalLatency)
-                    .record(HLC.INST.getPhysical() - message.getTimestamp(), TimeUnit.MILLISECONDS);
-                SubMessage prev = stagingBuffer.put(inboxMsg.getSeq(), msg);
+                    .record(HLC.INST.getPhysical() - HLC.INST.getPhysical(message.getTimestamp()),
+                        TimeUnit.MILLISECONDS);
+                SubMessage prev = stagingBuffer.put(seq, msg);
                 if (prev == null) {
                     memUsage.addAndGet(msg.estBytes());
                 }
@@ -568,6 +616,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     switch (v.getCode()) {
                         case OK, ERROR -> rescheduleTouch();
                         case CONFLICT -> handleProtocolResponse(helper().onInboxTransientError());
+                        default -> {
+                            // never happens
+                        }
                     }
                 }, ctx.executor());
         }, touchIdleTimeMS, TimeUnit.MILLISECONDS);

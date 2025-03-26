@@ -37,6 +37,7 @@ import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildPubAction;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildSubAction;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildUnsubAction;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_5_VALUE;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
@@ -115,6 +116,7 @@ import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.UserProperties;
 import com.baidu.bifromq.util.UTF8Util;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import com.github.benmanes.caffeine.cache.Cache;
 import com.google.common.collect.Sets;
 import io.micrometer.core.instrument.Timer;
 import io.netty.channel.ChannelFutureListener;
@@ -142,6 +144,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import lombok.Getter;
@@ -151,97 +154,33 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public abstract class MQTTSessionHandler extends MQTTMessageHandler implements IMQTTSession {
     protected static final boolean SANITY_CHECK = SanityCheckMqttUtf8String.INSTANCE.get();
-
-    @Accessors(fluent = true)
-    @Getter
-    public static class SubMessage {
-        private final String topic;
-        private final Message message;
-        private final ClientInfo publisher;
-        private final String topicFilter;
-        private final TopicFilterOption option;
-        private final int bytesSize;
-        private final boolean permissionGranted;
-
-        public SubMessage(String topic,
-                          Message message,
-                          ClientInfo publisher,
-                          String topicFilter,
-                          TopicFilterOption option,
-                          boolean permissionGranted) {
-            this.topic = topic;
-            this.message = message;
-            this.publisher = publisher;
-            this.topicFilter = topicFilter;
-            this.option = option;
-            this.permissionGranted = permissionGranted;
-            this.bytesSize = topic.length() + topicFilter.length() + message.getPayload().size();
-        }
-
-        public boolean isRetain() {
-            return message.getIsRetained() ||
-                option.getRetainAsPublished() && message.getIsRetain();
-        }
-
-        public QoS qos() {
-            return QoS.forNumber(Math.min(message.getPubQoS().getNumber(), option.getQos().getNumber()));
-        }
-
-        public int estBytes() {
-            return bytesSize;
-        }
-    }
-
-    private static class ConfirmingMessage {
-        final long seq;
-        final SubMessage message;
-        final long timestamp; // timestamp of first sent
-        int sentCount = 1;
-        boolean acked = false;
-
-        private ConfirmingMessage(long seq, SubMessage message, long timestamp) {
-            this.seq = seq;
-            this.message = message;
-            this.timestamp = timestamp;
-        }
-
-        int packetId() {
-            return MQTTSessionIdUtil.packetId(seq);
-        }
-
-        void setAcked() {
-            acked = true;
-        }
-    }
-
     protected final TenantSettings settings;
     protected final String userSessionId;
     protected final int keepAliveTimeSeconds;
     protected final ClientInfo clientInfo;
     protected final AtomicLong memUsage;
     protected final ITenantMeter tenantMeter;
+    protected final ChannelHandlerContext ctx;
+    protected final MQTTSessionContext sessionCtx;
+    protected final IAuthProvider authProvider;
+    protected final IEventCollector eventCollector;
+    protected final IResourceThrottler resourceThrottler;
     private final Condition oomCondition;
     private final long idleTimeoutNanos;
     private final MPSThrottler throttler;
     private final Set<CompletableFuture<?>> fgTasks = new HashSet<>();
     private final FutureTracker bgTasks = new FutureTracker();
     private final Set<Integer> inUsePacketIds = new HashSet<>();
-
-    protected final ChannelHandlerContext ctx;
-    protected final MQTTSessionContext sessionCtx;
-    protected final IAuthProvider authProvider;
-    protected final IEventCollector eventCollector;
-    protected final IResourceThrottler resourceThrottler;
     private final IMQTTMessageSizer sizer;
+    private final LinkedHashMap<Integer, ConfirmingMessage> unconfirmedPacketIds = new LinkedHashMap<>();
+    private final TreeSet<ConfirmingMessage> resendQueue;
+    private final CompletableFuture<Void> onInitialized = new CompletableFuture<>();
     private LWT willMessage;
     private boolean isGoAway;
     private ScheduledFuture<?> idleTimeoutTask;
     private ScheduledFuture<?> redirectTask;
     private ISessionRegistration sessionRegistration;
     private long lastActiveAtNanos;
-    private final LinkedHashMap<Integer, ConfirmingMessage> unconfirmedPacketIds = new LinkedHashMap<>();
-    private final TreeSet<ConfirmingMessage> resendQueue;
-    private final CompletableFuture<Void> onInitialized = new CompletableFuture<>();
     private ScheduledFuture<?> resendTask;
     private int receivingCount = 0;
 
@@ -253,8 +192,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                  ClientInfo clientInfo,
                                  @Nullable LWT willMessage,
                                  ChannelHandlerContext ctx) {
-        this.sizer = clientInfo.getMetadataOrDefault(MQTT_PROTOCOL_VER_KEY, "").equals(MQTT_PROTOCOL_VER_5_VALUE) ?
-            IMQTTMessageSizer.mqtt5() : IMQTTMessageSizer.mqtt3();
+        this.sizer = clientInfo.getMetadataOrDefault(MQTT_PROTOCOL_VER_KEY, "").equals(MQTT_PROTOCOL_VER_5_VALUE)
+            ? IMQTTMessageSizer.mqtt5() : IMQTTMessageSizer.mqtt3();
         this.ctx = ctx;
         this.settings = settings;
         this.oomCondition = oomCondition;
@@ -501,7 +440,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                         .messageId(packetId)
                         .granted(((MqttSubAckMessage) (response.message())).payload().grantedQoSLevels())
                         .topicFilter(message.payload().topicSubscriptions().stream()
-                            .map(MqttTopicSubscription::topicName)
+                            .map(MqttTopicSubscription::topicFilter)
                             .collect(Collectors.toList()))
                         .clientInfo(clientInfo));
                 }
@@ -664,7 +603,6 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 return helper().buildUnsubAckMessage(message, subResults);
             });
     }
-
 
     protected final CompletableFuture<IMQTTProtocolHelper.UnsubResult> checkAndUnsubscribe(long reqId,
                                                                                            String topicFilter,
@@ -860,7 +798,6 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         assert msg.qos() == AT_MOST_ONCE;
         ClientInfo publisher = msg.publisher();
         String topicFilter = msg.topicFilter();
-        TopicFilterOption option = msg.option();
         MqttPublishMessage pubMsg = helper().buildMqttPubMessage(0, msg, false);
         int msgSize = sizer.sizeOf(pubMsg).encodedBytes();
         assert ctx.executor().inEventLoop();
@@ -877,6 +814,18 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             addBgTask(unsubTopicFilter(System.nanoTime(), topicFilter));
             return;
         }
+        if (msg.isDup) {
+            eventCollector.report(getLocal(QoS0Dropped.class)
+                .reason(DropReason.Duplicated)
+                .isRetain(msg.isRetain())
+                .sender(publisher)
+                .topic(msg.topic)
+                .matchedFilter(topicFilter)
+                .size(msgSize)
+                .clientInfo(clientInfo()));
+            return;
+        }
+        TopicFilterOption option = msg.option();
         if (option.getNoLocal() && clientInfo.equals(publisher)) {
             // skip local sub
             if (settings.debugMode) {
@@ -997,6 +946,11 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             reportDropConfirmableMsgEvent(msg, DropReason.NoSubPermission);
             ctx.executor().execute(() -> confirm(packetId, false));
             addBgTask(this.unsubTopicFilter(System.nanoTime(), topicFilter));
+            return;
+        }
+        if (msg.isDup) {
+            reportDropConfirmableMsgEvent(msg, DropReason.Duplicated);
+            ctx.executor().execute(() -> confirm(packetId, false));
             return;
         }
         if (option.getNoLocal() && clientInfo.equals(publisher)) {
@@ -1429,6 +1383,24 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         }
     }
 
+    protected final boolean isDuplicateMessage(ClientInfo publisher, Message message,
+                                               Cache<String, AtomicReference<Long>> latestMsgTsByPublisher) {
+        if (message.getIsRetained()) {
+            return false;
+        }
+        String mqttPublisherKey = publisher.getMetadataMap().get(MQTT_CHANNEL_ID_KEY);
+        if (mqttPublisherKey == null) {
+            // don't deduplicate message published from HTTP API
+            return false;
+        }
+        AtomicReference<Long> lastPubRef = latestMsgTsByPublisher.get(mqttPublisherKey, k -> new AtomicReference<>(0L));
+        if (lastPubRef.get() >= message.getTimestamp()) {
+            return true;
+        }
+        lastPubRef.set(message.getTimestamp());
+        return false;
+    }
+
     private CompletableFuture<IMQTTProtocolHelper.PubResult> doPub(long reqId,
                                                                    String topic,
                                                                    Message message,
@@ -1480,7 +1452,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
 
     private CompletableFuture<Void> doPubLastWill(LWT willMessage) {
         Message message = willMessage.getMessage().toBuilder()
-            .setTimestamp(HLC.INST.getPhysical())
+            .setTimestamp(HLC.INST.get())
             .build();
         long reqId = sessionCtx.nanoTime();
         int size = message.getPayload().size() + willMessage.getTopic().length();
@@ -1639,5 +1611,82 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 }
                 return v.getResult();
             }, ctx.executor());
+    }
+
+    @Accessors(fluent = true)
+    @Getter
+    public static class SubMessage {
+        private final String topic;
+        private final Message message;
+        private final ClientInfo publisher;
+        private final String topicFilter;
+        private final TopicFilterOption option;
+        private final int bytesSize;
+        private final boolean permissionGranted;
+        private final boolean isDup; // if duplicated because of internal retry, should be dropped before send
+        private final long inboxPos; // used in persistent session, the position in inbox
+
+        public SubMessage(String topic,
+                          Message message,
+                          ClientInfo publisher,
+                          String topicFilter,
+                          TopicFilterOption option,
+                          boolean permissionGranted,
+                          boolean isDup) {
+            this(topic, message, publisher, topicFilter, option, permissionGranted, isDup, 0);
+        }
+
+        public SubMessage(String topic,
+                          Message message,
+                          ClientInfo publisher,
+                          String topicFilter,
+                          TopicFilterOption option,
+                          boolean permissionGranted,
+                          boolean isDup,
+                          long inboxPos) {
+            this.topic = topic;
+            this.message = message;
+            this.publisher = publisher;
+            this.topicFilter = topicFilter;
+            this.option = option;
+            this.permissionGranted = permissionGranted;
+            this.isDup = isDup;
+            this.bytesSize = topic.length() + topicFilter.length() + message.getPayload().size();
+            this.inboxPos = inboxPos;
+        }
+
+        public boolean isRetain() {
+            return message.getIsRetained() || option.getRetainAsPublished() && message.getIsRetain();
+        }
+
+        public QoS qos() {
+            return QoS.forNumber(Math.min(message.getPubQoS().getNumber(), option.getQos().getNumber()));
+        }
+
+        public int estBytes() {
+            return bytesSize;
+        }
+    }
+
+    private static class ConfirmingMessage {
+        final long seq;
+        final SubMessage message;
+        final long timestamp; // timestamp of first sent
+        int sentCount = 1;
+        boolean acked = false;
+
+        private ConfirmingMessage(long seq, SubMessage message, long timestamp) {
+            this.seq = seq;
+            this.message = message;
+            this.timestamp = timestamp;
+        }
+
+        int packetId() {
+            return MQTTSessionIdUtil.packetId(seq);
+        }
+
+        void setAcked() {
+            acked = true;
+        }
     }
 }

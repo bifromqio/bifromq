@@ -86,7 +86,7 @@ import org.testng.annotations.Test;
 public class MQTT5PersistentSessionHandlerTest extends BaseSessionHandlerTest {
 
     private MQTT5PersistentSessionHandler persistentSessionHandler;
-    private int sessionExpirySeconds = 120;
+    private final int sessionExpirySeconds = 120;
 
     @BeforeMethod(alwaysRun = true)
     public void setup(Method method) {
@@ -429,12 +429,20 @@ public class MQTT5PersistentSessionHandlerTest extends BaseSessionHandlerTest {
     }
 
     @Test
-    public void fetchError() {
-        inboxFetchConsumer.accept(Fetched.newBuilder().setResult(Result.ERROR).build());
+    public void fetchRetry() {
+        inboxFetchConsumer.accept(Fetched.newBuilder().setResult(Result.TRY_LATER).build());
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runPendingTasks();
         verifyEvent();
         assertTrue(channel.isOpen());
+    }
+
+    @Test
+    public void fetchError() {
+        inboxFetchConsumer.accept(Fetched.newBuilder().setResult(Result.NO_INBOX).build());
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runPendingTasks();
+        verifyEvent(INBOX_TRANSIENT_ERROR);
     }
 
     @Test

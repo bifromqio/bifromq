@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.type.ClientInfo;
@@ -121,7 +122,7 @@ public class BatchDistTest extends DistWorkerTest {
                 .setMessageId(ThreadLocalRandom.current().nextInt())
                 .setPubQoS(qos)
                 .setPayload(payload)
-                .setTimestamp(System.currentTimeMillis())
+                .setTimestamp(HLC.INST.get())
                 .build())
             .build();
     }

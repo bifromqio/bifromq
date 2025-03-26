@@ -34,17 +34,6 @@ import lombok.extern.slf4j.Slf4j;
 public class MQTT3MessageSizer implements IMQTTMessageSizer {
     public static final IMQTTMessageSizer INSTANCE = new MQTT3MessageSizer();
 
-    private record MqttMessageSize(int varHeaderBytes, int payloadBytes)
-        implements IMQTTMessageSizer.MqttMessageSize {
-        public int encodedBytes() {
-            return encodedBytes(true, true);
-        }
-
-        public int encodedBytes(boolean includeUserProps, boolean includeReasonString) {
-            return 1 + IMQTTMessageSizer.varIntBytes(varHeaderBytes + payloadBytes) + varHeaderBytes + payloadBytes;
-        }
-    }
-
     public IMQTTMessageSizer.MqttMessageSize sizeOf(MqttMessage message) {
         switch (message.fixedHeader().messageType()) {
             case CONNECT -> {
@@ -106,7 +95,7 @@ public class MQTT3MessageSizer implements IMQTTMessageSizer {
         int totalBytes = 0;
         for (MqttTopicSubscription sub : payload.topicSubscriptions()) {
             // 1 byte for encoding sub qos
-            totalBytes += 1 + IMQTTMessageSizer.sizeUTF8EncodedString(sub.topicName());
+            totalBytes += 1 + IMQTTMessageSizer.sizeUTF8EncodedString(sub.topicFilter());
         }
         return totalBytes;
     }
@@ -122,5 +111,16 @@ public class MQTT3MessageSizer implements IMQTTMessageSizer {
     private int sizeSubAckPayload(MqttSubAckPayload payload) {
         // 1 byte for each reason code
         return payload.reasonCodes().size();
+    }
+
+    private record MqttMessageSize(int varHeaderBytes, int payloadBytes)
+        implements IMQTTMessageSizer.MqttMessageSize {
+        public int encodedBytes() {
+            return encodedBytes(true, true);
+        }
+
+        public int encodedBytes(boolean includeUserProps, boolean includeReasonString) {
+            return 1 + IMQTTMessageSizer.varIntBytes(varHeaderBytes + payloadBytes) + varHeaderBytes + payloadBytes;
+        }
     }
 }

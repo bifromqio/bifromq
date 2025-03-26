@@ -15,6 +15,7 @@ package com.baidu.bifromq.inbox.server;
 
 import static com.baidu.bifromq.inbox.util.InboxServiceUtil.receiverId;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPackage;
@@ -36,7 +37,7 @@ public class Fixtures {
             .setMessageId(1L)
             .setPubQoS(QoS.AT_MOST_ONCE)
             .setPayload(ByteString.EMPTY)
-            .setTimestamp(System.currentTimeMillis())
+            .setTimestamp(HLC.INST.get())
             .setIsRetain(false)
             .setIsRetained(false)
             .setIsUTF8String(false)

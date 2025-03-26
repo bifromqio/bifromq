@@ -68,7 +68,7 @@ public class GCTest extends RetainStoreTest {
     @Test(groups = "integration")
     public void gcTenantWithExpirySeconds() {
         requestRetain(tenantId, message("/a", "hello", 0, 2));
-        requestRetain(tenantId, message("/b", "hello", Duration.ofSeconds(1).toMillis(), 3));
+        requestRetain(tenantId, message("/b", "hello", Duration.ofSeconds(1).toMillis() << 16, 3));
         Gauge retainCountGauge = getRetainCountGauge(tenantId);
         await().until(() -> retainCountGauge.value() == 2);
         requestGC(1100L, tenantId, 1);

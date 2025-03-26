@@ -103,7 +103,7 @@ class InboxFetchPipeline {
         public void accept(Long ts) {
             log.debug("Message stream retargeting, signal transient error to all fetchers");
             fetcherMap.values().forEach(consumer -> consumer.accept(Fetched.newBuilder()
-                .setResult(Fetched.Result.ERROR)
+                .setResult(Fetched.Result.TRY_LATER)
                 .build()));
         }
     }

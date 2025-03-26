@@ -44,7 +44,7 @@ class DeliveryBatchCall implements IBatchCall<DeliveryCall, DeliveryResult.Code,
     private final IDeliverer deliverer;
     private final DelivererKey batcherKey;
     private final Queue<ICallTask<DeliveryCall, DeliveryResult.Code, DelivererKey>> tasks = new ArrayDeque<>(128);
-    private Map<String, Map<MessagePackWrapper, Set<MatchInfo>>> batch = new HashMap<>(128);
+    private Map<String, Map<TopicMessagePackHolder, Set<MatchInfo>>> batch = new HashMap<>(128);
 
     DeliveryBatchCall(IDistClient distClient, IDeliverer deliverer, DelivererKey batcherKey) {
         this.distClient = distClient;
@@ -55,12 +55,14 @@ class DeliveryBatchCall implements IBatchCall<DeliveryCall, DeliveryResult.Code,
     @Override
     public void reset() {
         batch = new HashMap<>(128);
+        tasks.clear();
     }
 
     @Override
     public void add(ICallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> callTask) {
         batch.computeIfAbsent(callTask.call().tenantId, k -> new LinkedHashMap<>(128))
-            .computeIfAbsent(callTask.call().msgPackWrapper, k -> new HashSet<>()).add(callTask.call().matchInfo);
+            .computeIfAbsent(callTask.call().messagePackHolder, k -> new HashSet<>())
+            .add(callTask.call().matchInfo);
         tasks.add(callTask);
     }
 
@@ -76,56 +78,58 @@ class DeliveryBatchCall implements IBatchCall<DeliveryCall, DeliveryResult.Code,
             });
             requestBuilder.putPackage(tenantId, packageBuilder.build());
         });
-
-        return deliverer.deliver(requestBuilder.build()).exceptionally(e -> {
-            log.error("Unexpected exception", e);
-            return DeliveryReply.newBuilder().setCode(DeliveryReply.Code.ERROR).build();
-        }).thenAccept(reply -> {
-            switch (reply.getCode()) {
-                case OK -> {
-                    ICallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> task;
-                    Map<String, Map<MatchInfo, DeliveryResult.Code>> resultMap = toMap(reply.getResultMap());
-                    Map<String, Set<MatchInfo>> staleMatchInfos = new HashMap<>();
-                    while ((task = tasks.poll()) != null) {
-                        DeliveryResult.Code result =
-                            resultMap.getOrDefault(task.call().tenantId, Collections.emptyMap())
-                                .get(task.call().matchInfo);
-                        if (result != null) {
-                            if (result == DeliveryResult.Code.NO_SUB || result == DeliveryResult.Code.NO_RECEIVER) {
-                                staleMatchInfos.computeIfAbsent(task.call().tenantId, k -> new HashSet<>())
-                                    .add(task.call().matchInfo);
+        DeliveryRequest request = requestBuilder.build();
+        return deliverer.deliver(request)
+            .exceptionally(e -> {
+                log.error("Unexpected exception", e);
+                return DeliveryReply.newBuilder().setCode(DeliveryReply.Code.ERROR).build();
+            })
+            .thenAccept(reply -> {
+                switch (reply.getCode()) {
+                    case OK -> {
+                        ICallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> task;
+                        Map<String, Map<MatchInfo, DeliveryResult.Code>> resultMap = toMap(reply.getResultMap());
+                        Map<String, Set<MatchInfo>> staleMatchInfos = new HashMap<>();
+                        while ((task = tasks.poll()) != null) {
+                            DeliveryResult.Code result =
+                                resultMap.getOrDefault(task.call().tenantId, Collections.emptyMap())
+                                    .get(task.call().matchInfo);
+                            if (result != null) {
+                                if (result == DeliveryResult.Code.NO_SUB || result == DeliveryResult.Code.NO_RECEIVER) {
+                                    staleMatchInfos.computeIfAbsent(task.call().tenantId, k -> new HashSet<>())
+                                        .add(task.call().matchInfo);
+                                }
+                                task.resultPromise().complete(result);
+                            } else {
+                                log.warn("No deliver result: tenantId={}, route={}, batcherKey={}",
+                                    task.call().tenantId, task.call().matchInfo, task.call().delivererKey);
+                                task.resultPromise().complete(DeliveryResult.Code.OK);
                             }
-                            task.resultPromise().complete(result);
-                        } else {
-                            log.warn("[{}]No deliver result: tenantId={}, route={}, batcherKey={}", this.hashCode(),
-                                task.call().tenantId, task.call().matchInfo, task.call().delivererKey);
-                            task.resultPromise().complete(DeliveryResult.Code.OK);
+                        }
+                        for (Map.Entry<String, Set<MatchInfo>> entry : staleMatchInfos.entrySet()) {
+                            String tenantId = entry.getKey();
+                            Set<MatchInfo> matchInfos = entry.getValue();
+                            for (MatchInfo matchInfo : matchInfos) {
+                                log.debug(
+                                    "Stale match info: tenantId={}, topicFilter={}, receiverId={}, delivererKey={}, subBrokerId={}",
+                                    tenantId, matchInfo.getMatcher().getMqttTopicFilter(), matchInfo.getReceiverId(),
+                                    batcherKey.delivererKey(), batcherKey.subBrokerId());
+                                distClient.removeRoute(System.nanoTime(), tenantId, matchInfo.getMatcher(),
+                                    matchInfo.getReceiverId(), batcherKey.delivererKey(), batcherKey.subBrokerId(),
+                                    matchInfo.getIncarnation());
+                            }
                         }
                     }
-                    for (Map.Entry<String, Set<MatchInfo>> entry : staleMatchInfos.entrySet()) {
-                        String tenantId = entry.getKey();
-                        Set<MatchInfo> matchInfos = entry.getValue();
-                        for (MatchInfo matchInfo : matchInfos) {
-                            log.warn(
-                                "Stale match info: tenantId={}, topicFilter={}, receiverId={}, delivererKey={}, subBrokerId={}",
-                                tenantId, matchInfo.getMatcher().getMqttTopicFilter(), matchInfo.getReceiverId(),
-                                batcherKey.delivererKey(), batcherKey.subBrokerId());
-                            distClient.removeRoute(System.nanoTime(), tenantId, matchInfo.getMatcher(),
-                                matchInfo.getReceiverId(), batcherKey.delivererKey(), batcherKey.subBrokerId(),
-                                matchInfo.getIncarnation());
+                    case TRY_LATER -> throw new NeedRetryException();
+                    default -> {
+                        assert reply.getCode() == DeliveryReply.Code.ERROR;
+                        ICallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> task;
+                        while ((task = tasks.poll()) != null) {
+                            task.resultPromise().completeExceptionally(new DeliveryException("Failed to deliver"));
                         }
                     }
                 }
-                case TRY_LATER -> throw new NeedRetryException();
-                default -> {
-                    assert reply.getCode() == DeliveryReply.Code.ERROR;
-                    ICallTask<DeliveryCall, DeliveryResult.Code, DelivererKey> task;
-                    while ((task = tasks.poll()) != null) {
-                        task.resultPromise().completeExceptionally(new DeliveryException("Failed to deliver"));
-                    }
-                }
-            }
-        });
+            });
     }
 }
 

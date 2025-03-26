@@ -281,7 +281,7 @@ public class RetainStoreTest {
     }
 
     protected TopicMessage message(String topic, String payload) {
-        return message(topic, payload, HLC.INST.getPhysical(), Integer.MAX_VALUE);
+        return message(topic, payload, HLC.INST.get(), Integer.MAX_VALUE);
     }
 
     protected TopicMessage message(String topic, String payload, long timestamp, int expirySeconds) {

@@ -36,6 +36,7 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.localengine.rocksdb.RocksDBCPableKVEngineConfigurator;
@@ -427,7 +428,7 @@ public abstract class DistWorkerTest {
                     .setMessageId(ThreadLocalRandom.current().nextInt())
                     .setPubQoS(qos)
                     .setPayload(payload)
-                    .setTimestamp(System.currentTimeMillis())
+                    .setTimestamp(HLC.INST.get())
                     .build())
                 .build())
             .build()), orderKey);

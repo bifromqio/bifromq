@@ -18,13 +18,13 @@ import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLo
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.deliverer.DeliveryCall;
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
+import com.baidu.bifromq.deliverer.TopicMessagePackHolder;
 import com.baidu.bifromq.dist.worker.schema.NormalMatching;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverNoInbox;
 import com.baidu.bifromq.plugin.eventcollector.distservice.Delivered;
 import com.baidu.bifromq.type.MatchInfo;
-import com.baidu.bifromq.type.TopicMessagePack;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -52,11 +52,11 @@ public class DeliverExecutor {
                 EnvProvider.INSTANCE.newThreadFactory("deliver-executor-" + id)), Integer.toString(id), "deliver");
     }
 
-    public void submit(NormalMatching route, TopicMessagePack msgPack, boolean inline) {
+    public void submit(NormalMatching route, TopicMessagePackHolder msgPackHolder, boolean inline) {
         if (inline) {
-            send(route, msgPack);
+            send(route, msgPackHolder);
         } else {
-            tasks.add(new SendTask(route, msgPack));
+            tasks.add(new SendTask(route, msgPackHolder));
             scheduleSend();
         }
     }
@@ -74,7 +74,7 @@ public class DeliverExecutor {
     private void sendAll() {
         SendTask task;
         while ((task = tasks.poll()) != null) {
-            send(task.route, task.msgPack);
+            send(task.route, task.msgPackHolder);
         }
         sending.set(false);
         if (!tasks.isEmpty()) {
@@ -82,11 +82,11 @@ public class DeliverExecutor {
         }
     }
 
-    private void send(NormalMatching matched, TopicMessagePack msgPack) {
+    private void send(NormalMatching matched, TopicMessagePackHolder msgPackHolder) {
         int subBrokerId = matched.subBrokerId();
         String delivererKey = matched.delivererKey();
         MatchInfo sub = matched.matchInfo();
-        DeliveryCall request = new DeliveryCall(matched.tenantId(), sub, subBrokerId, delivererKey, msgPack);
+        DeliveryCall request = new DeliveryCall(matched.tenantId(), sub, subBrokerId, delivererKey, msgPackHolder);
         deliverer.schedule(request).whenComplete((result, e) -> {
             if (e != null) {
                 log.debug("Failed to deliver", e);
@@ -94,25 +94,25 @@ public class DeliverExecutor {
                     .brokerId(subBrokerId)
                     .delivererKey(delivererKey)
                     .subInfo(sub)
-                    .messages(msgPack));
+                    .messages(msgPackHolder.messagePack));
             } else {
                 switch (result) {
                     case OK -> eventCollector.report(getLocal(Delivered.class)
                         .brokerId(subBrokerId)
                         .delivererKey(delivererKey)
                         .subInfo(sub)
-                        .messages(msgPack));
+                        .messages(msgPackHolder.messagePack));
                     case NO_SUB, NO_RECEIVER -> eventCollector.report(getLocal(DeliverNoInbox.class)
                         .brokerId(subBrokerId)
                         .delivererKey(delivererKey)
                         .subInfo(sub)
-                        .messages(msgPack));
+                        .messages(msgPackHolder.messagePack));
                     default -> log.error("Unknown delivery result: {}", result);
                 }
             }
         });
     }
 
-    private record SendTask(NormalMatching route, TopicMessagePack msgPack) {
+    private record SendTask(NormalMatching route, TopicMessagePackHolder msgPackHolder) {
     }
 }

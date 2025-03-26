@@ -40,26 +40,34 @@ import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.handler.condition.Condition;
 import com.baidu.bifromq.mqtt.handler.record.ProtocolResponse;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
+import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
 import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStart;
 import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStop;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
+import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.baidu.bifromq.util.TopicUtil;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.google.common.collect.Sets;
 import io.micrometer.core.instrument.Timer;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttMessage;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
@@ -67,16 +75,21 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler implements IMQTTTransientSession {
-
     // the topicFilters could be accessed concurrently
     private final Map<String, TopicFilterOption> topicFilters = new ConcurrentHashMap<>();
     private final NavigableMap<Long, SubMessage> inbox = new TreeMap<>();
+    private final Cache<String, AtomicReference<Long>> latestMsgTsByMQTTPublisher = Caffeine.newBuilder()
+        // we simply use 2 times of the burst latency as the expiration time
+        // which is a rough estimation of stabilizing time of internal resource scheduling
+        // during which the internal retry mechanism takes effect.
+        .expireAfterAccess(2 * DataPlaneBurstLatencyMillis.INSTANCE.get(), TimeUnit.MILLISECONDS)
+        .build();
     private long nextSendSeq = 0;
     private long msgSeqNo = 0;
     private AtomicLong subNumGauge;
@@ -257,39 +270,70 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     }
 
     @Override
-    public boolean publish(String topicFilter, long incarnation, List<TopicMessagePack> topicMsgPacks) {
-        TopicFilterOption option = topicFilters.get(topicFilter);
-        if (option == null || !ctx.channel().isActive()) {
-            return false;
+    public Set<MatchedTopicFilter> publish(TopicMessagePack messagePack, Set<MatchedTopicFilter> matchedTopicFilters) {
+        if (!ctx.channel().isActive()) {
+            return matchedTopicFilters;
         }
-        if (option.getIncarnation() > incarnation) {
-            log.debug("Receive message from previous subscription: topicFilter={}, inc={}, prevInc={}",
-                topicFilter, option.getIncarnation(), incarnation);
+        Map<MatchedTopicFilter, TopicFilterOption> validTopicFilters = new HashMap<>();
+        for (MatchedTopicFilter topicFilter : matchedTopicFilters) {
+            TopicFilterOption option = topicFilters.get(topicFilter.topicFilter());
+            if (option != null) {
+                validTopicFilters.put(topicFilter, option);
+                if (option.getIncarnation() > topicFilter.incarnation()) {
+                    log.debug("Receive message from previous route: topicFilter={}, inc={}, prevInc={}",
+                        topicFilter, option.getIncarnation(), topicFilter.incarnation());
+                }
+            }
         }
-        ctx.executor().execute(() -> publish(topicFilter, option, topicMsgPacks));
-        return true;
+        ctx.executor().execute(() -> publish(validTopicFilters, messagePack));
+        return Sets.difference(matchedTopicFilters, validTopicFilters.keySet());
     }
 
-    private void publish(String topicFilter, TopicFilterOption option, List<TopicMessagePack> topicMsgPacks) {
-        assert ctx.executor().inEventLoop();
-        if (!ctx.channel().isActive()) {
-            return;
+    private void publish(Map<MatchedTopicFilter, TopicFilterOption> matchedTopicFilters,
+                         TopicMessagePack topicMsgPack) {
+        CompletableFuture<?>[] checkPermissionFutures = new CompletableFuture[matchedTopicFilters.size()];
+        List<TopicFilterAndPermission> topicFilterAndPermissions = new ArrayList<>(matchedTopicFilters.size());
+        int i = 0;
+        for (Map.Entry<MatchedTopicFilter, TopicFilterOption> entry : matchedTopicFilters.entrySet()) {
+            MatchedTopicFilter mtf = entry.getKey();
+            TopicFilterOption opt = entry.getValue();
+            CompletableFuture<CheckResult> f =
+                addFgTask(authProvider.checkPermission(clientInfo(), buildSubAction(mtf.topicFilter(), opt.getQos())));
+            checkPermissionFutures[i++] = f;
+            topicFilterAndPermissions.add(new TopicFilterAndPermission(mtf.topicFilter(), opt, f));
         }
-        addFgTask(authProvider.checkPermission(clientInfo(), buildSubAction(topicFilter, option.getQos())))
-            .thenAccept(checkResult -> {
-                AtomicInteger totalMsgBytesSize = new AtomicInteger();
-                forEach(topicFilter, option, topicMsgPacks, checkResult.hasGranted(), subMsg -> {
-                    logInternalLatency(subMsg);
-                    if (subMsg.qos() == QoS.AT_MOST_ONCE) {
-                        sendQoS0SubMessage(subMsg);
-                    } else {
-                        inbox.put(msgSeqNo++, subMsg);
-                        totalMsgBytesSize.addAndGet(subMsg.estBytes());
-                    }
-                });
-                memUsage.addAndGet(totalMsgBytesSize.get());
-                send();
+
+        CompletableFuture.allOf(checkPermissionFutures)
+            .thenAccept(v -> {
+                for (TopicMessagePack.PublisherPack publisherPack : topicMsgPack.getMessageList()) {
+                    publish(topicMsgPack.getTopic(), publisherPack.getPublisher(), publisherPack.getMessageList(),
+                        topicFilterAndPermissions);
+                }
             });
+    }
+
+    private void publish(String topic,
+                         ClientInfo publisher,
+                         List<Message> messages,
+                         List<TopicFilterAndPermission> topicFilterAndPermissions) {
+        AtomicInteger totalMsgBytesSize = new AtomicInteger();
+        for (Message message : messages) {
+            // deduplicate messages based on topic and publisher
+            for (TopicFilterAndPermission tfp : topicFilterAndPermissions) {
+                SubMessage subMsg = new SubMessage(topic, message, publisher, tfp.topicFilter, tfp.option,
+                    tfp.permissionCheckFuture.join().hasGranted(),
+                    isDuplicateMessage(publisher, message, latestMsgTsByMQTTPublisher));
+                logInternalLatency(subMsg);
+                if (subMsg.qos() == QoS.AT_MOST_ONCE) {
+                    sendQoS0SubMessage(subMsg);
+                } else {
+                    inbox.put(msgSeqNo++, subMsg);
+                    totalMsgBytesSize.addAndGet(subMsg.estBytes());
+                }
+            }
+        }
+        memUsage.addAndGet(totalMsgBytesSize.get());
+        send();
     }
 
     private void send() {
@@ -313,25 +357,8 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
             case AT_LEAST_ONCE -> tenantMeter.timer(MqttQoS1InternalLatency);
             default -> tenantMeter.timer(MqttQoS2InternalLatency);
         };
-        timer.record(HLC.INST.getPhysical() - message.message().getTimestamp(), TimeUnit.MILLISECONDS);
-    }
-
-    private void forEach(String topicFilter,
-                         TopicFilterOption option,
-                         List<TopicMessagePack> topicMessagePacks,
-                         boolean permissionGranted,
-                         Consumer<SubMessage> consumer) {
-        for (TopicMessagePack topicMsgPack : topicMessagePacks) {
-            String topic = topicMsgPack.getTopic();
-            List<TopicMessagePack.PublisherPack> publisherPacks = topicMsgPack.getMessageList();
-            for (TopicMessagePack.PublisherPack senderMsgPack : publisherPacks) {
-                ClientInfo publisher = senderMsgPack.getPublisher();
-                List<Message> messages = senderMsgPack.getMessageList();
-                for (Message message : messages) {
-                    consumer.accept(new SubMessage(topic, message, publisher, topicFilter, option, permissionGranted));
-                }
-            }
-        }
+        timer.record(HLC.INST.getPhysical() - HLC.INST.getPhysical(message.message().getTimestamp()),
+            TimeUnit.MILLISECONDS);
     }
 
     private CompletableFuture<MatchResult> addMatchRecord(long reqId, String topicFilter, long incarnation) {
@@ -340,5 +367,10 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
 
     private CompletableFuture<UnmatchResult> removeMatchRecord(long reqId, String topicFilter, long incarnation) {
         return sessionCtx.localDistService.unmatch(reqId, topicFilter, incarnation, this);
+    }
+
+    private record TopicFilterAndPermission(String topicFilter,
+                                            TopicFilterOption option,
+                                            CompletableFuture<CheckResult> permissionCheckFuture) {
     }
 }

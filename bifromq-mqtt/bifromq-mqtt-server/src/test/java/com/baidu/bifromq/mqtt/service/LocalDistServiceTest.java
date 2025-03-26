@@ -15,8 +15,9 @@ package com.baidu.bifromq.mqtt.service;
 
 import static com.baidu.bifromq.mqtt.inbox.util.DelivererKeyUtil.toDelivererKey;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalTransientFanOutBytesPerSeconds;
+import static java.util.Collections.emptySet;
+import static java.util.Collections.singleton;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -47,6 +48,7 @@ import com.baidu.bifromq.util.TopicUtil;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -249,7 +251,7 @@ public class LocalDistServiceTest extends MockableTest {
             ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
             when(session.clientInfo()).thenReturn(clientInfo);
             when(session.channelId()).thenReturn("channelId" + i);
-            when(session.publish(any(), anyLong(), anyList())).thenReturn(true);
+            when(session.publish(any(), any())).thenReturn(Collections.emptySet());
             when(localSessionRegistry.get("channelId" + i)).thenReturn(session);
             sessions.add(session);
             localDistService.match(reqId, topicFilter, 1L, session);
@@ -276,7 +278,7 @@ public class LocalDistServiceTest extends MockableTest {
             .allMatch(result -> result.getCode() == DeliveryResult.Code.OK));
 
         // Verify that the publish method was called correctly
-        verify(sessions.get(0), times(1)).publish(any(), anyLong(), anyList());
+        verify(sessions.get(0), times(1)).publish(any(), any());
     }
 
     @Test
@@ -296,7 +298,7 @@ public class LocalDistServiceTest extends MockableTest {
 
         IMQTTTransientSession mockTransientSession = mock(IMQTTTransientSession.class);
         when(mockTransientSession.channelId()).thenReturn(channelId);
-        when(mockTransientSession.publish(any(), anyLong(), any())).thenReturn(true);
+        when(mockTransientSession.publish(any(), any())).thenReturn(Collections.emptySet());
         when(localSessionRegistry.get(anyString())).thenReturn(mockTransientSession);
 
         ILocalTopicRouter.ILocalRoutes localRoutes = mock(ILocalTopicRouter.ILocalRoutes.class);
@@ -312,7 +314,7 @@ public class LocalDistServiceTest extends MockableTest {
         DeliveryReply reply = future.join();
 
         verify(localSessionRegistry).get(anyString());
-        verify(mockTransientSession).publish(any(), anyLong(), any());
+        verify(mockTransientSession).publish(any(), any());
 
         assertNotNull(reply);
         DeliveryResults results = reply.getResultMap().get(tenantId);
@@ -339,7 +341,7 @@ public class LocalDistServiceTest extends MockableTest {
 
         IMQTTTransientSession mockTransientSession = mock(IMQTTTransientSession.class);
         when(mockTransientSession.channelId()).thenReturn(channelId);
-        when(mockTransientSession.publish(any(), anyLong(), any())).thenReturn(true);
+        when(mockTransientSession.publish(any(), any())).thenReturn(Collections.emptySet());
         when(localSessionRegistry.get(anyString())).thenReturn(mockTransientSession);
 
         ILocalTopicRouter.ILocalRoutes localRoutes = mock(ILocalTopicRouter.ILocalRoutes.class);
@@ -377,7 +379,7 @@ public class LocalDistServiceTest extends MockableTest {
 
         IMQTTTransientSession mockTransientSession = mock(IMQTTTransientSession.class);
         when(mockTransientSession.channelId()).thenReturn(channelId);
-        when(mockTransientSession.publish(any(), anyLong(), any())).thenReturn(true);
+        when(mockTransientSession.publish(any(), any())).thenReturn(Collections.emptySet());
         when(localSessionRegistry.get(anyString())).thenReturn(mockTransientSession);
 
         when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.empty());
@@ -411,7 +413,7 @@ public class LocalDistServiceTest extends MockableTest {
 
         IMQTTTransientSession mockTransientSession = mock(IMQTTTransientSession.class);
         when(mockTransientSession.channelId()).thenReturn(channelId);
-        when(mockTransientSession.publish(any(), anyLong(), any())).thenReturn(true);
+        when(mockTransientSession.publish(any(), any())).thenReturn(Collections.emptySet());
         when(localSessionRegistry.get(anyString())).thenReturn(mockTransientSession);
 
         when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(Optional.of(new CompletableFuture<>()));
@@ -445,7 +447,7 @@ public class LocalDistServiceTest extends MockableTest {
 
         IMQTTTransientSession mockTransientSession = mock(IMQTTTransientSession.class);
         when(mockTransientSession.channelId()).thenReturn(channelId);
-        when(mockTransientSession.publish(any(), anyLong(), any())).thenReturn(true);
+        when(mockTransientSession.publish(any(), any())).thenReturn(Collections.emptySet());
         when(localSessionRegistry.get(anyString())).thenReturn(mockTransientSession);
 
         when(localTopicRouter.getTopicRoutes(anyString(), any())).thenReturn(
@@ -483,12 +485,12 @@ public class LocalDistServiceTest extends MockableTest {
 
         IMQTTTransientSession mockTransientSession1 = mock(IMQTTTransientSession.class);
         when(mockTransientSession1.channelId()).thenReturn(channelId1);
-        when(mockTransientSession1.publish(any(), anyLong(), any())).thenReturn(true);
+        when(mockTransientSession1.publish(any(), any())).thenReturn(Collections.emptySet());
         when(localSessionRegistry.get(channelId1)).thenReturn(mockTransientSession1);
 
         IMQTTTransientSession mockTransientSession2 = mock(IMQTTTransientSession.class);
         when(mockTransientSession2.channelId()).thenReturn(channelId2);
-        when(mockTransientSession2.publish(any(), anyLong(), any())).thenReturn(true);
+        when(mockTransientSession2.publish(any(), any())).thenReturn(Collections.emptySet());
         when(localSessionRegistry.get(channelId2)).thenReturn(mockTransientSession2);
 
         ILocalTopicRouter.ILocalRoutes localRoutes = mock(ILocalTopicRouter.ILocalRoutes.class);
@@ -507,8 +509,10 @@ public class LocalDistServiceTest extends MockableTest {
         DeliveryReply reply = future.join();
 
         verify(localSessionRegistry).get(eq(channelId1));
-        verify(mockTransientSession1).publish(eq(topicFilter), eq(1L), eq(List.of(topicMessagePack)));
-        verify(mockTransientSession2, never()).publish(any(), anyLong(), any());
+
+        verify(mockTransientSession1).publish(eq(topicMessagePack),
+            eq(singleton(new IMQTTTransientSession.MatchedTopicFilter(topicFilter, 1L))));
+        verify(mockTransientSession2, never()).publish(any(), any());
 
         DeliveryResults results = reply.getResultMap().get(tenantId);
         DeliveryResult result = results.getResult(0);
@@ -538,12 +542,12 @@ public class LocalDistServiceTest extends MockableTest {
 
         IMQTTTransientSession mockTransientSession1 = mock(IMQTTTransientSession.class);
         when(mockTransientSession1.channelId()).thenReturn(channelId1);
-        when(mockTransientSession1.publish(any(), anyLong(), any())).thenReturn(true);
+        when(mockTransientSession1.publish(any(), any())).thenReturn(emptySet());
         when(localSessionRegistry.get(channelId1)).thenReturn(mockTransientSession1);
 
         IMQTTTransientSession mockTransientSession2 = mock(IMQTTTransientSession.class);
         when(mockTransientSession2.channelId()).thenReturn(channelId2);
-        when(mockTransientSession2.publish(any(), anyLong(), any())).thenReturn(true);
+        when(mockTransientSession2.publish(any(), any())).thenReturn(emptySet());
         when(localSessionRegistry.get(channelId2)).thenReturn(mockTransientSession2);
 
         ILocalTopicRouter.ILocalRoutes localRoutes = mock(ILocalTopicRouter.ILocalRoutes.class);
@@ -562,8 +566,8 @@ public class LocalDistServiceTest extends MockableTest {
         DeliveryReply reply = future.join();
 
         verify(localSessionRegistry, times(2)).get(channelId1);
-        verify(mockTransientSession1, times(2)).publish(any(), anyLong(), any());
-        verify(mockTransientSession2, never()).publish(any(), anyLong(), any());
+        verify(mockTransientSession1, times(2)).publish(any(), any());
+        verify(mockTransientSession2, never()).publish(any(), any());
 
         DeliveryResults results = reply.getResultMap().get(tenantId);
         DeliveryResult result = results.getResult(0);
@@ -588,7 +592,8 @@ public class LocalDistServiceTest extends MockableTest {
 
         IMQTTTransientSession mockTransientSession = mock(IMQTTTransientSession.class);
         when(mockTransientSession.channelId()).thenReturn(channelId);
-        when(mockTransientSession.publish(any(), anyLong(), any())).thenReturn(false);
+        when(mockTransientSession.publish(any(), any())).thenReturn(
+            singleton(new IMQTTTransientSession.MatchedTopicFilter(topicFilter, 1L)));
         when(localSessionRegistry.get(anyString())).thenReturn(mockTransientSession);
 
         ILocalTopicRouter.ILocalRoutes localRoutes = mock(ILocalTopicRouter.ILocalRoutes.class);
@@ -604,7 +609,7 @@ public class LocalDistServiceTest extends MockableTest {
         DeliveryReply reply = future.join();
 
         verify(localSessionRegistry).get(anyString());
-        verify(mockTransientSession).publish(any(), anyLong(), any());
+        verify(mockTransientSession).publish(any(), any());
 
         DeliveryResults results = reply.getResultMap().get(tenantId);
         DeliveryResult result = results.getResult(0);

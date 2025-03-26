@@ -247,9 +247,8 @@ message BatchFetchReply{
 
 // insert won't change version & lastActive timestamp
 message SubMessagePack{
-  string topicFilter = 1;
-  uint64 incarnation = 2; // the incarnation of the subscription
-  repeated commontype.TopicMessagePack messages = 3;
+  map<string, uint64> matchedTopicFilters = 1; // key: topicFilter, value: route incarnation
+  commontype.TopicMessagePack messages = 2;
 }
 message InboxSubMessagePack{
   string tenantId = 1;

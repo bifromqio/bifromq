@@ -37,7 +37,7 @@ public final class MQTT3MessageUtils {
             .setMessageId(packetId)
             .setPubQoS(QoS.forNumber(pubQoS.value()))
             .setPayload(payload)
-            .setTimestamp(HLC.INST.getPhysical())
+            .setTimestamp(HLC.INST.get())
             // MessageExpiryInterval
             .setExpiryInterval(Integer.MAX_VALUE)
             .setIsRetain(isRetain)

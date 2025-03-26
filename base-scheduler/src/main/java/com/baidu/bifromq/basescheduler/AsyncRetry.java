@@ -61,6 +61,7 @@ public class AsyncRetry {
 
         if (initialBackoffNanos > 0 && delayNanosSoFar >= maxDelayNanos) {
             onDone.completeExceptionally(new TimeoutException("Max retry delay exceeded"));
+            return;
         }
 
         // Execute the asynchronous task.

@@ -15,6 +15,7 @@ package com.baidu.bifromq.basekv.server;
 
 import com.baidu.bifromq.basekv.store.IKVRangeStore;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
+import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
 import com.baidu.bifromq.basekv.store.proto.KVRangeROReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.NullableValue;
@@ -76,7 +77,9 @@ class QueryPipeline extends ResponsePipeline<KVRangeRORequest, KVRangeROReply> {
                                 .setCode(ReplyCode.BadVersion)
                                 .build();
                         }
-                        if (e instanceof KVRangeException.TryLater
+                        if (e instanceof KVRangeStoreException.KVRangeNotFoundException
+                            || e.getCause() instanceof KVRangeStoreException.KVRangeNotFoundException
+                            || e instanceof KVRangeException.TryLater
                             || e.getCause() instanceof KVRangeException.TryLater) {
                             return KVRangeROReply.newBuilder()
                                 .setReqId(request.getReqId())
@@ -132,8 +135,7 @@ class QueryPipeline extends ResponsePipeline<KVRangeRORequest, KVRangeROReply> {
     }
 
     private CompletionStage<KVRangeROReply> roCoproc(KVRangeRORequest request) {
-        return kvRangeStore.queryCoProc(request.getVer(), request.getKvRangeId(), request.getRoCoProc(),
-                linearized)
+        return kvRangeStore.queryCoProc(request.getVer(), request.getKvRangeId(), request.getRoCoProc(), linearized)
             .thenApply(result -> KVRangeROReply.newBuilder()
                 .setReqId(request.getReqId())
                 .setCode(ReplyCode.Ok)

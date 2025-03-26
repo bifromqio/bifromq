@@ -11,7 +11,8 @@ message Fetched {
   enum Result {
     OK = 0;
     NO_INBOX = 1;
-    ERROR = 2;
+    TRY_LATER = 2;
+    ERROR = 3;
   }
   Result result = 1;
 

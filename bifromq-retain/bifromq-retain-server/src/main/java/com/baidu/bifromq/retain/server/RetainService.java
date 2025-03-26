@@ -20,6 +20,7 @@ import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.deliverer.DeliveryCall;
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
+import com.baidu.bifromq.deliverer.TopicMessagePackHolder;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.retain.rpc.proto.ExpireAllReply;
@@ -112,7 +113,8 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                                     .build())
                                 .build();
                             return messageDeliverer.schedule(new DeliveryCall(request.getTenantId(), matchInfo,
-                                request.getBrokerId(), request.getDelivererKey(), topicMessagePack));
+                                request.getBrokerId(), request.getDelivererKey(),
+                                TopicMessagePackHolder.hold(topicMessagePack)));
                         }).toList();
                     ITenantMeter.get(request.getTenantId()).recordSummary(MqttRetainMatchedBytes, matchedBytes.get());
                     return CompletableFuture.allOf(deliveryResults.toArray(CompletableFuture[]::new))

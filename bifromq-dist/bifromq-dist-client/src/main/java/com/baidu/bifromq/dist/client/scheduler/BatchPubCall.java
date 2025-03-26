@@ -40,6 +40,7 @@ class BatchPubCall implements IBatchCall<PubCall, PubResult, PubCallBatcherKey> 
     @Override
     public void reset() {
         clientMsgPack = new HashMap<>(128);
+        tasks.clear();
     }
 
     @Override
@@ -55,8 +56,7 @@ class BatchPubCall implements IBatchCall<PubCall, PubResult, PubCallBatcherKey> 
     public CompletableFuture<Void> execute() {
         DistRequest.Builder requestBuilder = DistRequest.newBuilder().setReqId(System.nanoTime());
         clientMsgPack.forEach((k, v) -> {
-            PublisherMessagePack.Builder senderMsgPackBuilder =
-                PublisherMessagePack.newBuilder().setPublisher(k);
+            PublisherMessagePack.Builder senderMsgPackBuilder = PublisherMessagePack.newBuilder().setPublisher(k);
             for (PublisherMessagePack.TopicPack.Builder packBuilder : v.values()) {
                 senderMsgPackBuilder.addMessagePack(packBuilder);
             }

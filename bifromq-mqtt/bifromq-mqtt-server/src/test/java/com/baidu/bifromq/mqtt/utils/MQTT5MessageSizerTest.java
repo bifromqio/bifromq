@@ -108,7 +108,7 @@ public class MQTT5MessageSizerTest extends MockableTest {
                     .build(),
                 ClientInfo.getDefaultInstance(), "topicFilter",
                 TopicFilterOption.getDefaultInstance(),
-                true))
+                true, false, 0))
             .build();
         verifySize(message);
     }

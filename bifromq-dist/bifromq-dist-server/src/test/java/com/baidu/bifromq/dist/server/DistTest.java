@@ -142,7 +142,7 @@ public class DistTest extends DistServiceTest {
                 try {
                     PubResult result = distClient().pub(reqId, "sport/tennis" + i,
                         Message.newBuilder().setPubQoS(QoS.AT_LEAST_ONCE).setPayload(payload)
-                            .setTimestamp(HLC.INST.getPhysical()).setExpiryInterval(Integer.MAX_VALUE).build(),
+                            .setTimestamp(HLC.INST.get()).setExpiryInterval(Integer.MAX_VALUE).build(),
                         clientInfo).join();
                     assertEquals(result, PubResult.OK);
                 } catch (Throwable e) {

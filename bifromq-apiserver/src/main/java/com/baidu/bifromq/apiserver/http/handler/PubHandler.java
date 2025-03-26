@@ -134,7 +134,7 @@ final class PubHandler extends TenantAwareHandler {
                 .setPubQoS(QoS.forNumber(qos))
                 .setPayload(ByteString.copyFrom(req.content().nioBuffer()))
                 .setExpiryInterval(expirySeconds)
-                .setTimestamp(HLC.INST.getPhysical())
+                .setTimestamp(HLC.INST.get())
                 .build(),
             clientInfo);
         return distFuture

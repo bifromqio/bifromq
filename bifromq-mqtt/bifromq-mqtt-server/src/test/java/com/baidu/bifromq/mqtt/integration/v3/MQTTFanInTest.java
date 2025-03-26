@@ -31,6 +31,8 @@ import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.observers.TestObserver;
 import java.lang.reflect.Method;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
@@ -86,10 +88,10 @@ public class MQTTFanInTest extends MQTTTest {
             pubClient1.publish("/" + subQoS, 0, ByteString.copyFromUtf8("hello"), false);
             pubClient2.publish("/a/" + subQoS, 1, ByteString.copyFromUtf8("world"), false);
             pubClient3.publish("/a/b" + subQoS, 2, ByteString.copyFromUtf8("greeting"), false);
-            return testObserver.values().size() >= 2;
+            return testObserver.values().size() >= 3;
         });
-
-        for (MqttMsg m : testObserver.values()) {
+        List<MqttMsg> msgs = new ArrayList<>(testObserver.values());
+        for (MqttMsg m : msgs) {
             if (m.topic.equals("/" + subQoS)) {
                 assertEquals(m.qos, Math.min(0, subQoS));
                 assertFalse(m.isDup);

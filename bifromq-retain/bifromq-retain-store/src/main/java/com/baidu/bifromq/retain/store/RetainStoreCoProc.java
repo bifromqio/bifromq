@@ -18,6 +18,7 @@ import static com.baidu.bifromq.retain.store.schema.KVSchemaUtil.retainMessageKe
 import static com.baidu.bifromq.util.TopicConst.MULTI_WILDCARD;
 import static java.util.Collections.emptyList;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
@@ -295,7 +296,7 @@ class RetainStoreCoProc implements IKVRangeCoProc {
         return expireAt(message.getTimestamp(), message.getExpiryInterval());
     }
 
-    private long expireAt(long timestamp, int expirySeconds) {
-        return Duration.ofMillis(timestamp).plusSeconds(expirySeconds).toMillis();
+    private long expireAt(long hlc, int expirySeconds) {
+        return Duration.ofMillis(HLC.INST.getPhysical(hlc)).plusSeconds(expirySeconds).toMillis();
     }
 }

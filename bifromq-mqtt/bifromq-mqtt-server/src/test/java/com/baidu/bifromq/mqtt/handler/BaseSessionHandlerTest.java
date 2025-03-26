@@ -48,6 +48,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.PubResult;
@@ -134,7 +135,7 @@ public class BaseSessionHandlerTest extends MockableTest {
         .putMetadata(MQTT_CLIENT_BROKER_KEY, serverId)
         .build();
     protected final String topic = "topic";
-    protected final String topicFilter = "testTopicFilter";
+    protected final String topicFilter = "topic/#";
     protected final TestTicker testTicker = new TestTicker();
     protected EmbeddedChannel channel;
     @Mock
@@ -272,78 +273,67 @@ public class BaseSessionHandlerTest extends MockableTest {
             .build();
     }
 
-    protected List<TopicMessagePack> s2cMQTT5MessageList(String topic, int count, QoS qos) {
-        List<TopicMessagePack> topicMessagePacks = new ArrayList<>();
+    protected TopicMessagePack s2cMQTT5MessageList(String topic, int count, QoS qos) {
+        TopicMessagePack.Builder packBuilder = TopicMessagePack.newBuilder().setTopic(topic);
         for (int i = 0; i < count; i++) {
-            topicMessagePacks.add(TopicMessagePack.newBuilder()
-                .setTopic(topic)
-                .addMessage(TopicMessagePack.PublisherPack.newBuilder()
-                    .setPublisher(ClientInfo.newBuilder().build())
-                    .addMessage(Message.newBuilder()
-                        .setMessageId(i)
-                        .setExpiryInterval(Integer.MAX_VALUE)
-                        .setPayload(ByteString.EMPTY)
-                        .setTimestamp(System.currentTimeMillis())
-                        .setPubQoS(qos)
-                        .build()))
-                .build());
+            packBuilder.addMessage(TopicMessagePack.PublisherPack.newBuilder()
+                .setPublisher(ClientInfo.newBuilder().build())
+                .addMessage(Message.newBuilder()
+                    .setMessageId(i)
+                    .setExpiryInterval(Integer.MAX_VALUE)
+                    .setPayload(ByteString.EMPTY)
+                    .setTimestamp(HLC.INST.get())
+                    .setPubQoS(qos)
+                    .build()));
         }
-        return topicMessagePacks;
+        return packBuilder.build();
     }
 
-    protected List<TopicMessagePack> s2cMQTT5MessageList(String topic, List<ByteBuffer> payloads, QoS qos) {
-        List<TopicMessagePack> topicMessagePacks = new ArrayList<>();
+    protected TopicMessagePack s2cMQTT5MessageList(String topic, List<ByteBuffer> payloads, QoS qos) {
+        TopicMessagePack.Builder packBuilder = TopicMessagePack.newBuilder().setTopic(topic);
         for (int i = 0; i < payloads.size(); i++) {
-            topicMessagePacks.add(TopicMessagePack.newBuilder()
-                .setTopic(topic)
-                .addMessage(TopicMessagePack.PublisherPack.newBuilder()
-                    .setPublisher(ClientInfo.newBuilder().build())
-                    .addMessage(Message.newBuilder()
-                        .setMessageId(i)
-                        .setExpiryInterval(Integer.MAX_VALUE)
-                        .setPayload(ByteString.copyFrom(payloads.get(i).duplicate()))
-                        .setTimestamp(System.currentTimeMillis())
-                        .setPubQoS(qos)
-                        .build()))
-                .build());
+            packBuilder.addMessage(TopicMessagePack.PublisherPack.newBuilder()
+                .setPublisher(ClientInfo.newBuilder().build())
+                .addMessage(Message.newBuilder()
+                    .setMessageId(i)
+                    .setExpiryInterval(Integer.MAX_VALUE)
+                    .setPayload(ByteString.copyFrom(payloads.get(i).duplicate()))
+                    .setTimestamp(HLC.INST.get())
+                    .setPubQoS(qos)
+                    .build()));
         }
-        return topicMessagePacks;
+        return packBuilder.build();
     }
 
-    protected List<TopicMessagePack> s2cMessageList(String topic, int count, QoS qos) {
-        List<TopicMessagePack> topicMessagePacks = new ArrayList<>();
+    protected TopicMessagePack s2cMessageList(String topic, int count, QoS qos) {
+        TopicMessagePack.Builder packBuilder = TopicMessagePack.newBuilder().setTopic(topic);
         for (int i = 0; i < count; i++) {
-            topicMessagePacks.add(TopicMessagePack.newBuilder()
-                .setTopic(topic)
-                .addMessage(TopicMessagePack.PublisherPack.newBuilder()
-                    .setPublisher(ClientInfo.newBuilder().build())
-                    .addMessage(Message.newBuilder()
-                        .setMessageId(i)
-                        .setPayload(ByteString.EMPTY)
-                        .setTimestamp(System.currentTimeMillis())
-                        .setPubQoS(qos)
-                        .build()))
-                .build());
+            packBuilder.addMessage(TopicMessagePack.PublisherPack.newBuilder()
+                .setPublisher(ClientInfo.newBuilder().build())
+                .addMessage(Message.newBuilder()
+                    .setMessageId(i)
+                    .setPayload(ByteString.EMPTY)
+                    .setTimestamp(HLC.INST.get())
+                    .setPubQoS(qos)
+                    .build()));
         }
-        return topicMessagePacks;
+        return packBuilder.build();
     }
 
-    protected List<TopicMessagePack> s2cMessageList(String topic, List<ByteBuffer> payloads, QoS qos) {
-        List<TopicMessagePack> topicMessagePacks = new ArrayList<>();
+    protected TopicMessagePack s2cMessageList(String topic, List<ByteBuffer> payloads, QoS qos) {
+        TopicMessagePack.Builder packBuilder = TopicMessagePack.newBuilder().setTopic(topic);
         for (int i = 0; i < payloads.size(); i++) {
-            topicMessagePacks.add(TopicMessagePack.newBuilder()
-                .setTopic(topic)
-                .addMessage(TopicMessagePack.PublisherPack.newBuilder()
+            packBuilder.addMessage(TopicMessagePack.PublisherPack.newBuilder()
                     .setPublisher(ClientInfo.newBuilder().build())
                     .addMessage(Message.newBuilder()
                         .setMessageId(i)
                         .setPayload(ByteString.copyFrom(payloads.get(i).duplicate()))
-                        .setTimestamp(System.currentTimeMillis())
+                        .setTimestamp(HLC.INST.get())
                         .setPubQoS(qos)
                         .build()))
-                .build());
+                .build();
         }
-        return topicMessagePacks;
+        return packBuilder.build();
     }
 
     protected List<ByteBuffer> s2cMessagesPayload(int count, int size) {
@@ -429,8 +419,7 @@ public class BaseSessionHandlerTest extends MockableTest {
         for (int i = 0; i < count; i++) {
             InboxMessage inboxMessage = InboxMessage.newBuilder()
                 .setSeq(i)
-                .setTopicFilter(topicFilter)
-                .setOption(TopicFilterOption.newBuilder().setQos(qoS).build())
+                .putMatchedTopicFilter(topicFilter, TopicFilterOption.newBuilder().setQos(qoS).build())
                 .setMsg(
                     TopicMessage.newBuilder()
                         .setTopic(topic)
@@ -438,7 +427,7 @@ public class BaseSessionHandlerTest extends MockableTest {
                             Message.newBuilder()
                                 .setMessageId(i)
                                 .setPayload(ByteString.copyFrom(bytes))
-                                .setTimestamp(System.currentTimeMillis())
+                                .setTimestamp(HLC.INST.get())
                                 .setExpiryInterval(120)
                                 .setPubQoS(qoS)
                                 .build()
@@ -457,7 +446,6 @@ public class BaseSessionHandlerTest extends MockableTest {
         }
         return builder.build();
     }
-
 
     protected void mockRetainMatch() {
         when(retainClient.match(any()))

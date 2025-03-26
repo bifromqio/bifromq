@@ -14,22 +14,21 @@
 package com.baidu.bifromq.deliverer;
 
 import com.baidu.bifromq.type.MatchInfo;
-import com.baidu.bifromq.type.TopicMessagePack;
 
 public class DeliveryCall {
     public final String tenantId;
     public final MatchInfo matchInfo;
-    public final MessagePackWrapper msgPackWrapper;
+    public final TopicMessagePackHolder messagePackHolder;
     public final DelivererKey delivererKey;
 
     public DeliveryCall(String tenantId,
                         MatchInfo matchInfo,
                         int brokerId,
                         String delivererKey,
-                        TopicMessagePack msgPack) {
+                        TopicMessagePackHolder msgPackHolder) {
         this.tenantId = tenantId;
         this.matchInfo = matchInfo;
-        this.msgPackWrapper = MessagePackWrapper.wrap(msgPack);
+        this.messagePackHolder = msgPackHolder;
         this.delivererKey = new DelivererKey(brokerId, delivererKey);
     }
 }

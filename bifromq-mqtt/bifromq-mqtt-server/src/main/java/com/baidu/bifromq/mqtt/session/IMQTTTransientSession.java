@@ -14,12 +14,31 @@
 package com.baidu.bifromq.mqtt.session;
 
 import com.baidu.bifromq.type.TopicMessagePack;
-import java.util.List;
+import java.util.Set;
 
+/**
+ * The interface of transient session.
+ */
 public interface IMQTTTransientSession extends IMQTTSession {
     String NAME = "MQTTTransientSession";
 
-    boolean publish(String topicFilter, long incarnation, List<TopicMessagePack> messagePack);
+    /**
+     * Publish message to the topic filters, and return the topic filters that are not subscribed.
+     *
+     * @param messagePack         The message pack to publish.
+     * @param matchedTopicFilters The topic filters to publish.
+     * @return The topic filters that are not subscribed.
+     */
+    Set<MatchedTopicFilter> publish(TopicMessagePack messagePack, Set<MatchedTopicFilter> matchedTopicFilters);
 
     boolean isSubscribing(String topicFilter);
+
+    /**
+     * The matched topic filter.
+     *
+     * @param topicFilter The topic filter.
+     * @param incarnation The incarnation.
+     */
+    record MatchedTopicFilter(String topicFilter, long incarnation) {
+    }
 }

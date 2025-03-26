@@ -39,11 +39,6 @@ import org.slf4j.Logger;
 
 class KVRangeQueryRunner implements IKVRangeQueryRunner {
     private final Logger log;
-
-    private interface QueryFunction<Req, Resp> {
-        CompletableFuture<Resp> apply(IKVReader dataReader);
-    }
-
     private final IKVRange kvRange;
     private final IKVRangeCoProc coProc;
     private final Executor executor;
@@ -71,7 +66,6 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
     public CompletableFuture<Boolean> exist(long ver, ByteString key, boolean linearized) {
         return submit(ver, rangeReader -> completedFuture(rangeReader.exist(key)), linearized);
     }
-
 
     @Override
     public CompletableFuture<Optional<ByteString>> get(long ver, ByteString key, boolean linearized) {
@@ -166,7 +160,12 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
                 }
             }, executor);
         } catch (Throwable e) {
+            log.debug("Failed to query range", e);
             return CompletableFuture.failedFuture(new KVRangeException.InternalException(e.getMessage()));
         }
+    }
+
+    private interface QueryFunction<Req, Resp> {
+        CompletableFuture<Resp> apply(IKVReader dataReader);
     }
 }

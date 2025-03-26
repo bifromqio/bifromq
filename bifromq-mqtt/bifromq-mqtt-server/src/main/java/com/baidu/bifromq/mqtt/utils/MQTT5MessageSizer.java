@@ -45,39 +45,6 @@ import lombok.extern.slf4j.Slf4j;
 public class MQTT5MessageSizer implements IMQTTMessageSizer {
     static final IMQTTMessageSizer INSTANCE = new MQTT5MessageSizer();
 
-    private record MqttMessageSize(MqttVarHeaderBytes varHeaderBytes, int payloadBytes)
-        implements IMQTTMessageSizer.MqttMessageSize {
-        public int encodedBytes() {
-            return encodedBytes(true, true);
-        }
-
-        public int encodedBytes(boolean includeUserProps, boolean includeReasonString) {
-            if (varHeaderBytes == null) {
-                // 1 byte for fixHeader byte0
-                // 1 byte for encoding 0 remainingLength
-                return 2;
-            }
-            int totalVarHeaderBytes = varHeaderBytes.minBytes;
-            if (includeUserProps) {
-                totalVarHeaderBytes += varHeaderBytes.userPropsBytes;
-            }
-            if (includeReasonString) {
-                totalVarHeaderBytes += varHeaderBytes.reasonStringBytes;
-            }
-            // 1 byte for fixHeader byte0
-            // varInt encoding remainingLength(variableHeaderBytes + payloadBytes)
-            return 1 + IMQTTMessageSizer.varIntBytes(totalVarHeaderBytes + payloadBytes) + totalVarHeaderBytes +
-                payloadBytes;
-        }
-    }
-
-    private record MqttVarHeaderBytes(int minBytes, int reasonStringBytes, int userPropsBytes) {
-
-    }
-
-    private record MqttPropertiesBytes(int minBytes, int reasonStringBytes, int userPropsBytes) {
-    }
-
     public IMQTTMessageSizer.MqttMessageSize sizeOf(MqttMessage message) {
         switch (message.fixedHeader().messageType()) {
             case CONNECT -> {
@@ -269,7 +236,7 @@ public class MQTT5MessageSizer implements IMQTTMessageSizer {
         int totalBytes = 0;
         for (MqttTopicSubscription sub : payload.topicSubscriptions()) {
             // 1 byte for encoding subscription options
-            totalBytes += 1 + IMQTTMessageSizer.sizeUTF8EncodedString(sub.topicName());
+            totalBytes += 1 + IMQTTMessageSizer.sizeUTF8EncodedString(sub.topicFilter());
         }
         return totalBytes;
     }
@@ -515,5 +482,38 @@ public class MQTT5MessageSizer implements IMQTTMessageSizer {
             totalBytes += IMQTTMessageSizer.sizeUTF8EncodedString(pair.value);
         }
         return totalBytes;
+    }
+
+    private record MqttMessageSize(MqttVarHeaderBytes varHeaderBytes, int payloadBytes)
+        implements IMQTTMessageSizer.MqttMessageSize {
+        public int encodedBytes() {
+            return encodedBytes(true, true);
+        }
+
+        public int encodedBytes(boolean includeUserProps, boolean includeReasonString) {
+            if (varHeaderBytes == null) {
+                // 1 byte for fixHeader byte0
+                // 1 byte for encoding 0 remainingLength
+                return 2;
+            }
+            int totalVarHeaderBytes = varHeaderBytes.minBytes;
+            if (includeUserProps) {
+                totalVarHeaderBytes += varHeaderBytes.userPropsBytes;
+            }
+            if (includeReasonString) {
+                totalVarHeaderBytes += varHeaderBytes.reasonStringBytes;
+            }
+            // 1 byte for fixHeader byte0
+            // varInt encoding remainingLength(variableHeaderBytes + payloadBytes)
+            return 1 + IMQTTMessageSizer.varIntBytes(totalVarHeaderBytes + payloadBytes) + totalVarHeaderBytes +
+                payloadBytes;
+        }
+    }
+
+    private record MqttVarHeaderBytes(int minBytes, int reasonStringBytes, int userPropsBytes) {
+
+    }
+
+    private record MqttPropertiesBytes(int minBytes, int reasonStringBytes, int userPropsBytes) {
     }
 }

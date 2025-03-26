@@ -16,16 +16,16 @@ package com.baidu.bifromq.deliverer;
 import com.baidu.bifromq.type.TopicMessagePack;
 
 /**
- * Using the wrapper as the map key instead of using TopicMessagePack directly to prevent heavy hashcode calculation
+ * Using the wrapper as the map key instead of using TopicMessagePack directly to prevent heavy hashcode calculation.
  */
-public class MessagePackWrapper {
+public class TopicMessagePackHolder {
     public final TopicMessagePack messagePack;
 
-    private MessagePackWrapper(TopicMessagePack messagePack) {
+    private TopicMessagePackHolder(TopicMessagePack messagePack) {
         this.messagePack = messagePack;
     }
 
-    public static MessagePackWrapper wrap(TopicMessagePack msgPack) {
-        return new MessagePackWrapper(msgPack);
+    public static TopicMessagePackHolder hold(TopicMessagePack msgPack) {
+        return new TopicMessagePackHolder(msgPack);
     }
 }
