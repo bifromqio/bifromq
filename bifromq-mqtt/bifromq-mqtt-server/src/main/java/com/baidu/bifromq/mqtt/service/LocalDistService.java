@@ -196,7 +196,7 @@ public class LocalDistService implements ILocalDistService {
                 return CheckReply.Code.NO_RECEIVER;
             }
             if (session instanceof IMQTTTransientSession transientSession) {
-                return transientSession.isSubscribing(matchInfo.getMatcher().getMqttTopicFilter())
+                return transientSession.hasSubscribed(matchInfo.getMatcher().getMqttTopicFilter())
                     ? CheckReply.Code.OK : CheckReply.Code.NO_SUB;
             } else {
                 // should not be here

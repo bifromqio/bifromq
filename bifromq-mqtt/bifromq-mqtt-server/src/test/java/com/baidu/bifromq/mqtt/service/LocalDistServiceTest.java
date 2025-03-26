@@ -96,7 +96,7 @@ public class LocalDistServiceTest extends MockableTest {
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         when(session.clientInfo()).thenReturn(clientInfo);
         when(session.channelId()).thenReturn(channelId);
-        when(session.isSubscribing(topicFilter)).thenReturn(true);
+        when(session.hasSubscribed(topicFilter)).thenReturn(true);
         when(localSessionRegistry.get(channelId)).thenReturn(session);
         long reqId = System.nanoTime();
         localDistService.match(reqId, topicFilter, 1, session);
@@ -189,7 +189,7 @@ public class LocalDistServiceTest extends MockableTest {
             ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
             when(session.clientInfo()).thenReturn(clientInfo);
             when(session.channelId()).thenReturn(channelId);
-            when(session.isSubscribing(topicFilter)).thenReturn(false);
+            when(session.hasSubscribed(topicFilter)).thenReturn(false);
             when(localSessionRegistry.get(channelId)).thenReturn(session);
             long reqId = System.nanoTime();
             localDistService.unmatch(reqId, topicFilter, 1L, session);

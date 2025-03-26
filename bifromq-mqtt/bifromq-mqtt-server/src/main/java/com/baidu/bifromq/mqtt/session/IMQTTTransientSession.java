@@ -31,7 +31,7 @@ public interface IMQTTTransientSession extends IMQTTSession {
      */
     Set<MatchedTopicFilter> publish(TopicMessagePack messagePack, Set<MatchedTopicFilter> matchedTopicFilters);
 
-    boolean isSubscribing(String topicFilter);
+    boolean hasSubscribed(String topicFilter);
 
     /**
      * The matched topic filter.

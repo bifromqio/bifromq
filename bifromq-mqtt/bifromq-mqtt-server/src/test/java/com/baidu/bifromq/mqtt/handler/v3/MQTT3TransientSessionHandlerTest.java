@@ -80,7 +80,6 @@ import com.baidu.bifromq.mqtt.handler.BaseSessionHandlerTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
-import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.authprovider.type.Granted;
@@ -133,26 +132,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
     @BeforeMethod(alwaysRun = true)
     public void setup(Method method) {
         super.setup(method);
-        int keepAlive = 2;
-        sessionContext =
-            MQTTSessionContext.builder().serverId(serverId).ticker(testTicker).defaultKeepAliveTimeSeconds(keepAlive)
-                .distClient(distClient).retainClient(retainClient).authProvider(authProvider)
-                .localDistService(localDistService).localSessionRegistry(localSessionRegistry)
-                .sessionDictClient(sessionDictClient).clientBalancer(clientBalancer).eventCollector(eventCollector)
-                .resourceThrottler(resourceThrottler).settingProvider(settingProvider).build();
-        // common mocks
-        mockSettings();
-        ChannelDuplexHandler sessionHandlerAdder = new ChannelDuplexHandler() {
-            @Override
-            public void channelActive(ChannelHandlerContext ctx) throws Exception {
-                super.channelActive(ctx);
-                ctx.pipeline().addLast(
-                    MQTT3TransientSessionHandler.builder().settings(new TenantSettings(tenantId, settingProvider))
-                        .tenantMeter(tenantMeter).oomCondition(oomCondition).userSessionId(userSessionId(clientInfo))
-                        .keepAliveTimeSeconds(120).clientInfo(clientInfo).willMessage(null).ctx(ctx).build());
-                ctx.pipeline().remove(this);
-            }
-        };
+        ChannelDuplexHandler sessionHandlerAdder = buildChannelHandler();
         mockSessionReg();
         channel = new EmbeddedChannel(true, true, new ChannelInitializer<>() {
             @Override
@@ -184,6 +164,26 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         super.tearDown(method);
     }
 
+    @Override
+    protected ChannelDuplexHandler buildChannelHandler() {
+        return new ChannelDuplexHandler() {
+            @Override
+            public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                super.channelActive(ctx);
+                ctx.pipeline().addLast(MQTT3TransientSessionHandler.builder()
+                        .settings(new TenantSettings(tenantId, settingProvider))
+                        .tenantMeter(tenantMeter)
+                        .oomCondition(oomCondition)
+                        .userSessionId(userSessionId(clientInfo))
+                        .keepAliveTimeSeconds(120)
+                        .clientInfo(clientInfo)
+                        .willMessage(null)
+                        .ctx(ctx)
+                        .build());
+                ctx.pipeline().remove(this);
+            }
+        };
+    }
 
     @Test
     public void handleConnect() {
@@ -210,9 +210,9 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         verifySubAck(subAckMessage, qos);
         verifyEvent(MQTT_SESSION_START, SUB_ACKED);
         shouldCleanSubs = true;
-        boolean isSub =
-            transientSessionHandler.isSubscribing(subMessage.payload().topicSubscriptions().get(0).topicFilter());
-        assertTrue(isSub);
+        boolean hasSub =
+            transientSessionHandler.hasSubscribed(subMessage.payload().topicSubscriptions().get(0).topicFilter());
+        assertTrue(hasSub);
     }
 
     @Test

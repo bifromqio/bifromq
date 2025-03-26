@@ -173,7 +173,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
             return CompletableFuture.completedFuture(EXCEED_LIMIT);
         }
         tenantMeter.recordCount(MqttTransientSubCount);
-        int maxTopicFiltersPerInbox = settings.maxTopicFiltersPerSub;
+        int maxTopicFiltersPerInbox = settings.maxTopicFiltersPerInbox;
         if (topicFilters.size() >= maxTopicFiltersPerInbox) {
             return CompletableFuture.completedFuture(EXCEED_LIMIT);
         }
@@ -265,7 +265,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
     }
 
     @Override
-    public boolean isSubscribing(String topicFilter) {
+    public boolean hasSubscribed(String topicFilter) {
         return topicFilters.containsKey(topicFilter);
     }
 
