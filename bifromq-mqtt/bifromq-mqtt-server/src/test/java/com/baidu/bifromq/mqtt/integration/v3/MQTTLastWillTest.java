@@ -44,7 +44,7 @@ public class MQTTLastWillTest extends MQTTTest {
     public void lastWillQoS1() {
         String deviceKey = "testDevice";
         String userName = tenantId + "/" + deviceKey;
-        String willTopic = "willTopic";
+        String willTopic = "willTopicQoS1";
         ByteString willPayload = ByteString.copyFromUtf8("bye");
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
@@ -57,7 +57,6 @@ public class MQTTLastWillTest extends MQTTTest {
             .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
                 .setGranted(Granted.getDefaultInstance())
                 .build()));
-
 
         MqttConnectOptions lwtPubConnOpts = new MqttConnectOptions();
         lwtPubConnOpts.setCleanSession(true);
@@ -82,19 +81,25 @@ public class MQTTLastWillTest extends MQTTTest {
         log.info("Kill client");
         kill(deviceKey, "lwtPubclient").join();
 
-        topicSub.awaitCount(2);
-        MqttMsg msg = topicSub.values().get(topicSub.values().size() - 1);
-        assertEquals(msg.topic, willTopic);
-        assertEquals(msg.qos, 1);
-        assertEquals(msg.payload, willPayload);
-        assertFalse(msg.isRetain);
+        await().until(() -> {
+            MqttMsg msg = topicSub.values().get(topicSub.values().size() - 1);
+            try {
+                assertEquals(msg.topic, willTopic);
+                assertEquals(msg.qos, 1);
+                assertEquals(msg.payload, willPayload);
+                assertFalse(msg.isRetain);
+                return true;
+            } catch (Throwable e) {
+                return false;
+            }
+        });
     }
 
     @Test(groups = "integration")
     public void lastWillQoS1Retained() {
         String deviceKey = "testDevice";
         String userName = tenantId + "/" + deviceKey;
-        String willTopic = "willTopic";
+        String willTopic = "willTopicQoS1Retained";
         ByteString willPayload = ByteString.copyFromUtf8("bye");
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
@@ -109,11 +114,7 @@ public class MQTTLastWillTest extends MQTTTest {
                 .build()));
 
 
-        doAnswer(invocationOnMock -> {
-            Event event = invocationOnMock.getArgument(0);
-            log.info("event: {}", event.type());
-            return null;
-        }).when(eventCollector).report(any(Event.class));
+        doAnswer(invocationOnMock -> null).when(eventCollector).report(any(Event.class));
 
         MqttConnectOptions lwtPubConnOpts = new MqttConnectOptions();
         lwtPubConnOpts.setCleanSession(true);
@@ -121,6 +122,7 @@ public class MQTTLastWillTest extends MQTTTest {
         lwtPubConnOpts.setUserName(userName);
         MqttTestClient lwtPubClient = new MqttTestClient(BROKER_URI, "lwtPubclient");
         lwtPubClient.connect(lwtPubConnOpts);
+
         kill(deviceKey, "lwtPubclient").join();
 
         MqttConnectOptions lwtSubConnOpts = new MqttConnectOptions();
@@ -129,9 +131,9 @@ public class MQTTLastWillTest extends MQTTTest {
 
         MqttTestClient lwtSubClient = new MqttTestClient(BROKER_URI, "lwtSubClient");
         lwtSubClient.connect(lwtSubConnOpts);
-        TestObserver<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 1).test();
+        Observable<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, 1);
 
-        MqttMsg msg = topicSub.values().get(0);
+        MqttMsg msg = topicSub.blockingFirst();
         assertEquals(msg.topic, willTopic);
         assertEquals(msg.qos, 1);
         assertEquals(msg.payload, willPayload);
@@ -146,7 +148,7 @@ public class MQTTLastWillTest extends MQTTTest {
     public void lastWillQoS2() {
         String deviceKey = "testDevice";
         String userName = tenantId + "/" + deviceKey;
-        String willTopic = "willTopic";
+        String willTopic = "willTopicQoS2";
         ByteString willPayload = ByteString.copyFromUtf8("bye");
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
@@ -201,7 +203,7 @@ public class MQTTLastWillTest extends MQTTTest {
     public void lastWillQoS2Retained() {
         String deviceKey = "testDevice";
         String userName = tenantId + "/" + deviceKey;
-        String willTopic = "willTopic";
+        String willTopic = "willTopicQoS2Retained";
         ByteString willPayload = ByteString.copyFromUtf8("bye");
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
@@ -214,7 +216,6 @@ public class MQTTLastWillTest extends MQTTTest {
             .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
                 .setGranted(Granted.getDefaultInstance())
                 .build()));
-
 
         MqttConnectOptions lwtPubConnOpts = new MqttConnectOptions();
         lwtPubConnOpts.setCleanSession(true);

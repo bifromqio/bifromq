@@ -71,7 +71,6 @@ public class DistQoS2Test extends DistWorkerTest {
         BatchDistReply reply = dist(tenantA, EXACTLY_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
         assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 3);
 
-
         ArgumentCaptor<DeliveryRequest> msgCap = ArgumentCaptor.forClass(DeliveryRequest.class);
 
         verify(writer1, timeout(200).atLeastOnce()).deliver(msgCap.capture());
@@ -91,11 +90,6 @@ public class DistQoS2Test extends DistWorkerTest {
                 }
             }
         }
-
-//        // '/#' must come first
-//        List<TopicMessage> inbox1Msgs = msgCap.getValue().get("tenantA").get("inbox1");
-//        assertEquals(inbox1Msgs.get(0).getSubQoS(), AT_LEAST_ONCE);
-//        assertEquals(inbox1Msgs.get(1).getSubQoS(), AT_MOST_ONCE);
 
         msgCap = ArgumentCaptor.forClass(DeliveryRequest.class);
         verify(writer2, timeout(200).atLeastOnce()).deliver(msgCap.capture());
@@ -117,5 +111,4 @@ public class DistQoS2Test extends DistWorkerTest {
         unmatch(tenantA, "/#", MqttBroker, "inbox1", "server1");
         unmatch(tenantA, "/#", MqttBroker, "inbox2", "server2");
     }
-
 }

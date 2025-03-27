@@ -67,7 +67,6 @@ public class DistQoS1Test extends DistWorkerTest {
         when(receiverManager.get(MqttBroker)).thenReturn(mqttBroker);
         when(mqttBroker.open("server1")).thenReturn(writer1);
 
-
         when(writer1.deliver(any())).thenAnswer(answer(DeliveryResult.Code.NO_SUB));
 
         when(distClient.removeRoute(anyLong(), anyString(), any(), anyString(), anyString(),

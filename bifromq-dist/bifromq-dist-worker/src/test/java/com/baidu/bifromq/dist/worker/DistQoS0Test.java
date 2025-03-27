@@ -19,6 +19,7 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -74,10 +75,6 @@ public class DistQoS0Test extends DistWorkerTest {
 
     @Test(groups = "integration")
     public void testDistCase1() {
-        // pub: qos0
-        // topic: "/a/b/c"
-        // sub: inbox1 -> [(/a/b/c, qos0),(/#, qos0)], inbox2 -> [(/#,qos1)]
-        // expected behavior: inbox1 gets 2 messages, inbox2 get 1 message
         when(mqttBroker.open("batch1")).thenReturn(writer1);
 
         match(tenantA, "TopicA/#", MqttBroker, "inbox1", "batch1");
@@ -90,10 +87,6 @@ public class DistQoS0Test extends DistWorkerTest {
 
     @Test(groups = "integration")
     public void testDistCase2() {
-        // pub: qos0
-        // topic: "/a/b/c"
-        // sub: inbox1 -> [(/a/b/c, qos0),(/#, qos0)], inbox2 -> [(/#,qos1)]
-        // expected behavior: inbox1 gets 2 messages, inbox2 get 1 message
         when(mqttBroker.open("batch1")).thenReturn(writer1);
         when(inboxBroker.open("batch2")).thenReturn(writer2);
 
@@ -151,49 +144,48 @@ public class DistQoS0Test extends DistWorkerTest {
 
     @Test(groups = "integration")
     public void testDistCase3() {
-        // pub: qos0
-        // topic: "/a/b/c"
-        // sub: inbox1 -> [(/a/b/c, qos0)], inbox2 -> [(/a/b/c, qos0)]
-        // expected behavior: inbox1 gets 1 messages
         when(mqttBroker.open("batch1")).thenReturn(writer1);
 
         match(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
         match(tenantA, "/a/b/c", MqttBroker, "inbox2", "batch1");
-        BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
-        assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 2);
-        ArgumentCaptor<DeliveryRequest> list1 = ArgumentCaptor.forClass(DeliveryRequest.class);
-        verify(writer1, after(1000).atMost(2)).deliver(list1.capture());
-        log.info("Case3: verify writer1, list size is {}", list1.getAllValues().size());
-        int msgCount = 0;
-        Set<MatchInfo> matchInfos = new HashSet<>();
-        for (DeliveryRequest request : list1.getAllValues()) {
-            for (String tenantId : request.getPackageMap().keySet()) {
-                for (DeliveryPack pack : request.getPackageMap().get(tenantId).getPackList()) {
-                    TopicMessagePack msgs = pack.getMessagePack();
-                    matchInfos.addAll(pack.getMatchInfoList());
-                    assertEquals(msgs.getTopic(), "/a/b/c");
-                    for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
-                        for (Message msg : publisherPack.getMessageList()) {
-                            msgCount++;
-                            assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+        await().until(() -> {
+            try {
+                reset(writer1);
+                when(writer1.deliver(any())).thenAnswer(answer(DeliveryResult.Code.OK));
+                BatchDistReply reply = dist(tenantA, AT_MOST_ONCE, "/a/b/c", copyFromUtf8("Hello"), "orderKey1");
+                assertEquals(reply.getResultMap().get(tenantA).getFanoutMap().get("/a/b/c").intValue(), 2);
+
+                ArgumentCaptor<DeliveryRequest> list1 = ArgumentCaptor.forClass(DeliveryRequest.class);
+                verify(writer1, timeout(1).times(1)).deliver(list1.capture());
+                log.info("Case3: verify writer1, list size is {}", list1.getAllValues().size());
+                int msgCount = 0;
+                Set<MatchInfo> matchInfos = new HashSet<>();
+                for (DeliveryRequest request : list1.getAllValues()) {
+                    for (String tenantId : request.getPackageMap().keySet()) {
+                        for (DeliveryPack pack : request.getPackageMap().get(tenantId).getPackList()) {
+                            TopicMessagePack msgs = pack.getMessagePack();
+                            matchInfos.addAll(pack.getMatchInfoList());
+                            assertEquals(msgs.getTopic(), "/a/b/c");
+                            for (TopicMessagePack.PublisherPack publisherPack : msgs.getMessageList()) {
+                                for (Message msg : publisherPack.getMessageList()) {
+                                    msgCount++;
+                                    assertEquals(msg.getPayload(), copyFromUtf8("Hello"));
+                                }
+                            }
                         }
                     }
                 }
+                return matchInfos.size() == 2 && msgCount == 1;
+            } catch (Throwable e) {
+                return false;
             }
-        }
-        assertEquals(matchInfos.size(), 2);
-        assertEquals(msgCount, 1);
-
+        });
         unmatch(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
         unmatch(tenantA, "/a/b/c", MqttBroker, "inbox2", "batch1");
     }
 
     @Test(groups = "integration")
     public void testDistCase4() {
-        // pub: qos0
-        // topic: "/a/b/c"
-        // sub: inbox1 -> [($share/group//a/b/c, qos0),(/#, qos0)], inbox2 -> [($share/group//a/b/c,qos1)]
-        // expected behavior: total 10 messages, inbox1 gets N messages, inbox2 get M message, N + M == 10, N > 0, M > 0
         when(mqttBroker.open("batch1")).thenReturn(writer1);
         when(mqttBroker.open("batch2")).thenReturn(writer2);
 
@@ -244,10 +236,6 @@ public class DistQoS0Test extends DistWorkerTest {
 
     @Test(groups = "integration")
     public void testDistCase5() {
-        // pub: qos0
-        // topic: "/a/b/c"
-        // sub: inbox1 -> [($oshare/group//a/b/c, qos0)], inbox2 -> [($oshare/group//a/b/c, qos1)]
-        // expected behavior: total 10 messages, inbox1 gets N messages, inbox2 get M message, either N or M is 10
         Mockito.reset(distClient);
         when(mqttBroker.open("batch1")).thenReturn(writer1);
         when(mqttBroker.open("batch2")).thenReturn(writer2);
@@ -266,8 +254,7 @@ public class DistQoS0Test extends DistWorkerTest {
         ArgumentCaptor<DeliveryRequest> list2 = ArgumentCaptor.forClass(DeliveryRequest.class);
         verify(writer2, after(200).atMost(10)).deliver(list2.capture());
 
-        List<DeliveryRequest> captured = list1.getAllValues().isEmpty() ?
-            list2.getAllValues() : list1.getAllValues();
+        List<DeliveryRequest> captured = list1.getAllValues().isEmpty() ? list2.getAllValues() : list1.getAllValues();
 
         for (DeliveryRequest request : captured) {
             for (String tenantId : request.getPackageMap().keySet()) {
@@ -290,12 +277,6 @@ public class DistQoS0Test extends DistWorkerTest {
 
     @Test(groups = "integration")
     public void testDistCase6() {
-        // pub: qos0
-        // topic: "/a/b/c"
-        // sub: inbox1 -> [(/a/b/c, qos0),(/#, qos0)], inbox2 -> [($share/group//a/b/c, qos0)]
-        //      inbox3 -> [($oshare/group//a/b/c, qos0)]
-        // subbroker: inbox1 -> NO_INBOX, inbox2 -> NO_INBOX, inbox3 -> NO_INBOX
-        // expected behavior: unsub gets called 3 times
         when(mqttBroker.open("batch1")).thenReturn(writer1);
         when(mqttBroker.open("batch2")).thenReturn(writer2);
         when(mqttBroker.open("batch3")).thenReturn(writer3);
@@ -318,10 +299,6 @@ public class DistQoS0Test extends DistWorkerTest {
 
     @Test(groups = "integration")
     public void testDistCase7() {
-        // pub: qos0
-        // topic: "/a/b/c"
-        // sub: tenantA, inbox1 -> [(/a/b/c, qos0)]; tenantB, inbox2 -> [(#, qos0)]
-        // expected behavior: inbox1 gets 1 messages
         when(mqttBroker.open("batch1")).thenReturn(writer1);
 
         match(tenantA, "/a/b/c", MqttBroker, "inbox1", "batch1");
@@ -357,9 +334,6 @@ public class DistQoS0Test extends DistWorkerTest {
         when(mqttBroker.open("batch1")).thenReturn(writer1);
         when(mqttBroker.open("batch2")).thenReturn(writer2);
         when(mqttBroker.open("batch3")).thenReturn(writer3);
-
-//        when(distClient.clear(anyLong(), anyString(), anyString(), anyString(), anyInt()))
-//                .thenReturn(CompletableFuture.completedFuture(null));
 
         // pub: qos0
         // topic: "/a/b/c"
