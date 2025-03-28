@@ -123,7 +123,7 @@ mvn wrapper:wrapper
 ./mvnw -U clean package
 ```
 
-构建输出位于`/build/build-bifromq-starters/target/`下：
+构建输出位于`/target/output`下：
 
 * `bifromq-<VERSION>-windows-standalone.zip`
 * `bifromq-<VERSION>-standalone.tar.gz`
