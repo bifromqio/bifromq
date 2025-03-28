@@ -131,7 +131,7 @@ mvn wrapper:wrapper
 ./mvnw -U clean package
 ```
 
-The build output consists of several archive files located under `/build/build-bifromq-starters/target/`
+The build output consists of several archive files located under `/target/output`
 
 * `bifromq-<VERSION>-windows-standalone.zip`
 * `bifromq-<VERSION>-standalone.tar.gz`
