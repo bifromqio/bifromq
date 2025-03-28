@@ -50,7 +50,6 @@ import com.baidu.bifromq.mqtt.handler.BaseSessionHandlerTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5DisconnectReasonCode;
-import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS1Confirmed;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.pushhandling.QoS2Confirmed;
@@ -85,51 +84,10 @@ import org.testng.annotations.Test;
 @Slf4j
 public class MQTT5PersistentSessionHandlerTest extends BaseSessionHandlerTest {
 
-    private MQTT5PersistentSessionHandler persistentSessionHandler;
-    private final int sessionExpirySeconds = 120;
-
     @BeforeMethod(alwaysRun = true)
     public void setup(Method method) {
         super.setup(method);
-        sessionContext = MQTTSessionContext.builder()
-            .serverId(serverId)
-            .ticker(testTicker)
-            .defaultKeepAliveTimeSeconds(2)
-            .distClient(distClient)
-            .retainClient(retainClient)
-            .localDistService(localDistService)
-            .authProvider(authProvider)
-            .localSessionRegistry(localSessionRegistry)
-            .sessionDictClient(sessionDictClient)
-            .clientBalancer(clientBalancer)
-            .inboxClient(inboxClient)
-            .eventCollector(eventCollector)
-            .resourceThrottler(resourceThrottler)
-            .settingProvider(settingProvider)
-            .build();
-        // common mocks
-        mockSettings();
-        ChannelDuplexHandler sessionHandlerAdder = new ChannelDuplexHandler() {
-            @Override
-            public void channelActive(ChannelHandlerContext ctx) throws Exception {
-                super.channelActive(ctx);
-                ctx.pipeline().addLast(MQTT5PersistentSessionHandler.builder()
-                    .settings(new TenantSettings(tenantId, settingProvider))
-                    .tenantMeter(tenantMeter)
-                    .oomCondition(oomCondition)
-                    .connMsg(MqttMessageBuilders.connect()
-                        .protocolVersion(MqttVersion.MQTT_5)
-                        .build())
-                    .userSessionId(userSessionId(clientInfo))
-                    .keepAliveTimeSeconds(120)
-                    .sessionExpirySeconds(sessionExpirySeconds)
-                    .clientInfo(clientInfo)
-                    .willMessage(null)
-                    .ctx(ctx)
-                    .build());
-                ctx.pipeline().remove(this);
-            }
-        };
+        ChannelDuplexHandler sessionHandlerAdder = buildChannelHandler();
         mockInboxCreate(CreateReply.Code.OK);
         mockInboxReader();
         channel = new EmbeddedChannel(true, true, new ChannelInitializer<>() {
@@ -143,7 +101,6 @@ public class MQTT5PersistentSessionHandlerTest extends BaseSessionHandlerTest {
                 pipeline.addLast(sessionHandlerAdder);
             }
         });
-        persistentSessionHandler = (MQTT5PersistentSessionHandler) channel.pipeline().last();
     }
 
 
@@ -152,6 +109,31 @@ public class MQTT5PersistentSessionHandlerTest extends BaseSessionHandlerTest {
     public void tearDown(Method method) {
         super.tearDown(method);
         fetchHints.clear();
+    }
+
+    @Override
+    protected ChannelDuplexHandler buildChannelHandler() {
+        return new ChannelDuplexHandler() {
+            @Override
+            public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                super.channelActive(ctx);
+                ctx.pipeline().addLast(MQTT5PersistentSessionHandler.builder()
+                        .settings(new TenantSettings(tenantId, settingProvider))
+                        .tenantMeter(tenantMeter)
+                        .oomCondition(oomCondition)
+                        .connMsg(MqttMessageBuilders.connect()
+                                .protocolVersion(MqttVersion.MQTT_5)
+                                .build())
+                        .userSessionId(userSessionId(clientInfo))
+                        .keepAliveTimeSeconds(120)
+                        .sessionExpirySeconds(120)
+                        .clientInfo(clientInfo)
+                        .willMessage(null)
+                        .ctx(ctx)
+                        .build());
+                ctx.pipeline().remove(this);
+            }
+        };
     }
 
 //  =============================================== connect & disconnect =============================================

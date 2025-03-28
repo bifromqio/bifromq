@@ -93,46 +93,10 @@ import org.testng.annotations.Test;
 @Slf4j
 public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
 
-    private MQTT3PersistentSessionHandler persistentSessionHandler;
-
     @BeforeMethod(alwaysRun = true)
     public void setup(Method method) {
         super.setup(method);
-        sessionContext = MQTTSessionContext.builder()
-            .serverId(serverId)
-            .ticker(testTicker)
-            .defaultKeepAliveTimeSeconds(2)
-            .distClient(distClient)
-            .retainClient(retainClient)
-            .localDistService(localDistService)
-            .authProvider(authProvider)
-            .localSessionRegistry(localSessionRegistry)
-            .sessionDictClient(sessionDictClient)
-            .clientBalancer(clientBalancer)
-            .inboxClient(inboxClient)
-            .eventCollector(eventCollector)
-            .resourceThrottler(resourceThrottler)
-            .settingProvider(settingProvider)
-            .build();
-        // common mocks
-        mockSettings();
-        ChannelDuplexHandler sessionHandlerAdder = new ChannelDuplexHandler() {
-            @Override
-            public void channelActive(ChannelHandlerContext ctx) throws Exception {
-                super.channelActive(ctx);
-                ctx.pipeline().addLast(MQTT3PersistentSessionHandler.builder()
-                    .settings(new TenantSettings(tenantId, settingProvider))
-                    .tenantMeter(tenantMeter)
-                    .oomCondition(oomCondition)
-                    .userSessionId(userSessionId(clientInfo))
-                    .keepAliveTimeSeconds(120)
-                    .clientInfo(clientInfo)
-                    .willMessage(null)
-                    .ctx(ctx)
-                    .build());
-                ctx.pipeline().remove(this);
-            }
-        };
+        ChannelDuplexHandler sessionHandlerAdder = buildChannelHandler();
         mockInboxCreate(CreateReply.Code.OK);
         mockInboxReader();
         channel = new EmbeddedChannel(true, true, new ChannelInitializer<>() {
@@ -146,7 +110,6 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
                 pipeline.addLast(sessionHandlerAdder);
             }
         });
-        persistentSessionHandler = (MQTT3PersistentSessionHandler) channel.pipeline().last();
     }
 
 
@@ -157,7 +120,28 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
         fetchHints.clear();
     }
 
-//  =============================================== sub & unSub =======================================================
+    @Override
+    protected ChannelDuplexHandler buildChannelHandler() {
+        return new ChannelDuplexHandler() {
+            @Override
+            public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                super.channelActive(ctx);
+                ctx.pipeline().addLast(MQTT3PersistentSessionHandler.builder()
+                        .settings(new TenantSettings(tenantId, settingProvider))
+                        .tenantMeter(tenantMeter)
+                        .oomCondition(oomCondition)
+                        .userSessionId(userSessionId(clientInfo))
+                        .keepAliveTimeSeconds(120)
+                        .clientInfo(clientInfo)
+                        .willMessage(null)
+                        .ctx(ctx)
+                        .build());
+                ctx.pipeline().remove(this);
+            }
+        };
+    }
+
+    //  =============================================== sub & unSub =======================================================
 
     @Test
     public void persistentQoS0Sub() {

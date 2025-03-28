@@ -76,7 +76,6 @@ import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5SubAckReasonCode;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
-import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.authprovider.type.Granted;
@@ -129,48 +128,7 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
     @BeforeMethod(alwaysRun = true)
     public void setup(Method method) {
         super.setup(method);
-        int keepAlive = 2;
-        sessionContext = MQTTSessionContext.builder()
-            .serverId(serverId)
-            .ticker(testTicker)
-            .defaultKeepAliveTimeSeconds(keepAlive)
-            .distClient(distClient)
-            .retainClient(retainClient)
-            .authProvider(authProvider)
-            .localDistService(localDistService)
-            .localSessionRegistry(localSessionRegistry)
-            .sessionDictClient(sessionDictClient)
-            .clientBalancer(clientBalancer)
-            .eventCollector(eventCollector)
-            .resourceThrottler(resourceThrottler)
-            .settingProvider(settingProvider)
-            .build();
-        // common mocks
-        mockSettings();
-        MqttProperties mqttProperties = new MqttProperties();
-        mqttProperties.add(new MqttProperties.IntegerProperty(TOPIC_ALIAS_MAXIMUM.value(), 10));
-        ChannelDuplexHandler sessionHandlerAdder = new ChannelDuplexHandler() {
-            @Override
-            public void channelActive(ChannelHandlerContext ctx) throws Exception {
-                super.channelActive(ctx);
-                ctx.pipeline()
-                    .addLast(MQTT5TransientSessionHandler.builder()
-                        .settings(new TenantSettings(tenantId, settingProvider))
-                        .tenantMeter(tenantMeter)
-                        .oomCondition(oomCondition)
-                        .connMsg(MqttMessageBuilders.connect()
-                            .protocolVersion(MqttVersion.MQTT_5)
-                            .properties(mqttProperties)
-                            .build())
-                        .userSessionId(userSessionId(clientInfo))
-                        .keepAliveTimeSeconds(120)
-                        .clientInfo(clientInfo)
-                        .willMessage(null)
-                        .ctx(ctx)
-                        .build());
-                ctx.pipeline().remove(this);
-            }
-        };
+        ChannelDuplexHandler sessionHandlerAdder = buildChannelHandler();
         mockSessionReg();
         channel = new EmbeddedChannel(true, true, new ChannelInitializer<>() {
             @Override
@@ -202,8 +160,34 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         super.tearDown(method);
     }
 
+    @Override
+    protected ChannelDuplexHandler buildChannelHandler() {
+        MqttProperties mqttProperties = new MqttProperties();
+        mqttProperties.add(new MqttProperties.IntegerProperty(TOPIC_ALIAS_MAXIMUM.value(), 10));
+        return new ChannelDuplexHandler() {
+            @Override
+            public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                super.channelActive(ctx);
+                ctx.pipeline().addLast(MQTT5TransientSessionHandler.builder()
+                        .settings(new TenantSettings(tenantId, settingProvider))
+                        .tenantMeter(tenantMeter)
+                        .oomCondition(oomCondition)
+                        .connMsg(MqttMessageBuilders.connect()
+                                .protocolVersion(MqttVersion.MQTT_5)
+                                .properties(mqttProperties)
+                                .build())
+                        .userSessionId(userSessionId(clientInfo))
+                        .keepAliveTimeSeconds(120)
+                        .clientInfo(clientInfo)
+                        .willMessage(null)
+                        .ctx(ctx)
+                        .build());
+                ctx.pipeline().remove(this);
+            }
+        };
+    }
 
-//  =============================================== sub & unSub ======================================================
+    //  =============================================== sub & unSub ======================================================
 
     @Test
     public void transientMixedSub() {
@@ -233,6 +217,31 @@ public class MQTT5TransientSessionHandlerTest extends BaseSessionHandlerTest {
         MqttSubAckMessage subAckMessage = channel.readOutbound();
         verifySubAck(subAckMessage, new int[] {0, 1, 128});
         verifyEvent(MQTT_SESSION_START, SUB_ACKED);
+        shouldCleanSubs = true;
+    }
+
+    @Test
+    public void transientSubExceedInboxLimit() {
+        mockCheckPermission(true);
+        mockDistMatch(true);
+        mockRetainMatch();
+        int settingLimit = 10;
+        String[] tfs = new String[settingLimit];
+        int[] qos = new int[10];
+        for (int index = 0; index < 10; index++) {
+            tfs[index] = "t/" + index;
+            qos[index] = 0;
+        }
+        MqttSubscribeMessage subMessage = MQTTMessageUtils.qoSMqttSubMessages(tfs, qos);
+        channel.writeInbound(subMessage);
+        MqttSubAckMessage subAckMessage = channel.readOutbound();
+        verifySubAck(subAckMessage, new int[settingLimit]);
+
+        subMessage = MQTTMessageUtils.qoSMqttSubMessages(new String[]{"anotherTFS"}, new int[]{0});
+        channel.writeInbound(subMessage);
+        subAckMessage = channel.readOutbound();
+        verifySubAck(subAckMessage, new int[] {MQTT5SubAckReasonCode.QuotaExceeded.value()});
+        verifyEvent(MQTT_SESSION_START, SUB_ACKED, SUB_ACKED);
         shouldCleanSubs = true;
     }
 

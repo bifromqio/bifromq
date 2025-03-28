@@ -72,7 +72,7 @@ public class MQTTPacketFilterTest extends MockableTest {
     @Test
     public void mqtt3DropPacket() {
         try (MockedStatic<ITenantMeter> mockedStatic = mockStatic(ITenantMeter.class)) {
-            // 模拟MyUtility.staticMethod()方法
+            // simulate MyUtility.staticMethod()
             mockedStatic.when(() -> ITenantMeter.get(tenantId)).thenReturn(tenantMeter);
             when(tenantMeter.timer(any())).thenReturn(timer);
             MQTTPacketFilter testFilter =

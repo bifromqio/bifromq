@@ -17,6 +17,7 @@ import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckEr
 import static com.baidu.bifromq.plugin.settingprovider.Setting.DebugModeEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ForceTransient;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.InBoundBandWidth;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicFiltersPerInbox;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicFiltersPerSub;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLength;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevelLength;
@@ -99,6 +100,7 @@ import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Timer;
+import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.mqtt.MqttSubAckMessage;
 import io.netty.handler.codec.mqtt.MqttUnsubAckMessage;
@@ -118,7 +120,7 @@ import org.mockito.Mockito;
 import org.mockito.stubbing.Answer;
 import org.mockito.stubbing.OngoingStubbing;
 
-public class BaseSessionHandlerTest extends MockableTest {
+public abstract class BaseSessionHandlerTest extends MockableTest {
 
     protected final String tenantId = "tenantId";
     protected final String serverId = "serverId";
@@ -178,8 +180,26 @@ public class BaseSessionHandlerTest extends MockableTest {
         when(tenantMeter.timer(any())).thenReturn(mock(Timer.class));
         when(oomCondition.meet()).thenReturn(false);
         when(clientBalancer.needRedirect(any())).thenReturn(Optional.empty());
+        sessionContext = MQTTSessionContext.builder()
+                .serverId(serverId)
+                .ticker(testTicker)
+                .defaultKeepAliveTimeSeconds(2)
+                .distClient(distClient)
+                .retainClient(retainClient)
+                .authProvider(authProvider)
+                .localDistService(localDistService)
+                .localSessionRegistry(localSessionRegistry)
+                .sessionDictClient(sessionDictClient)
+                .clientBalancer(clientBalancer)
+                .inboxClient(inboxClient)
+                .eventCollector(eventCollector)
+                .resourceThrottler(resourceThrottler)
+                .settingProvider(settingProvider)
+                .build();
+        mockSettings();
     }
 
+    protected abstract ChannelDuplexHandler buildChannelHandler();
 
     protected void verifySubAck(MqttSubAckMessage subAckMessage, int[] expectedReasonCodes) {
         assertEquals(subAckMessage.payload().reasonCodes().size(), expectedReasonCodes.length);
@@ -220,6 +240,7 @@ public class BaseSessionHandlerTest extends MockableTest {
         Mockito.lenient().when(settingProvider.provide(eq(RetainEnabled), anyString())).thenReturn(true);
         Mockito.lenient().when(settingProvider.provide(eq(RetainMessageMatchLimit), anyString())).thenReturn(10);
         Mockito.lenient().when(settingProvider.provide(eq(MaxTopicFiltersPerSub), anyString())).thenReturn(10);
+        Mockito.lenient().when(settingProvider.provide(eq(MaxTopicFiltersPerInbox), anyString())).thenReturn(10);
     }
 
     protected void mockCheckPermission(boolean allow) {
