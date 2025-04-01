@@ -105,6 +105,8 @@ public interface IMQTTProtocolHelper {
 
     ProtocolResponse onQoS1DistDenied(String topic, int packetId, Message distMessage, CheckResult result);
 
+    ProtocolResponse respondQoS1PacketInUse(MqttPublishMessage message);
+
     ProtocolResponse onQoS1PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps);
 
     ProtocolResponse respondQoS2PacketInUse(MqttPublishMessage message);

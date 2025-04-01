@@ -13,6 +13,51 @@
 
 package com.baidu.bifromq.mqtt.handler.v5;
 
+import static com.baidu.bifromq.metrics.TenantMetric.MqttAuthFailureCount;
+import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.goAway;
+import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.ok;
+import static com.baidu.bifromq.mqtt.handler.condition.ORCondition.or;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authData;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.authMethod;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.isUTF8Payload;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.maximumPacketSize;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.requestProblemInformation;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.requestResponseInformation;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toUserProperties;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.toWillMessage;
+import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.topicAliasMaximum;
+import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildConnAction;
+import static com.baidu.bifromq.mqtt.utils.MQTT5MessageSizer.MIN_CONTROL_PACKET_SIZE;
+import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_BROKER_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_5_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_PROTOCOL_VER_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_RESPONSE_INFO;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BAD_AUTHENTICATION_METHOD;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USERNAME_OR_PASSWORD;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BANNED;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_CLIENT_IDENTIFIER_NOT_VALID;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_IMPLEMENTATION_SPECIFIC;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_MALFORMED_PACKET;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_NOT_AUTHORIZED_5;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PACKET_TOO_LARGE;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PAYLOAD_FORMAT_INVALID;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PROTOCOL_ERROR;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_QOS_NOT_SUPPORTED;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_QUOTA_EXCEEDED;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_RETAIN_NOT_SUPPORTED;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_MOVED;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_TOPIC_NAME_INVALID;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNSPECIFIED_ERROR;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNSUPPORTED_PROTOCOL_VERSION;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_USE_ANOTHER_SERVER;
+import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.SESSION_EXPIRY_INTERVAL;
+
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
@@ -26,12 +71,28 @@ import com.baidu.bifromq.mqtt.handler.v5.reason.MQTT5AuthReasonCode;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
 import com.baidu.bifromq.mqtt.utils.IMQTTMessageSizer;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
-import com.baidu.bifromq.plugin.authprovider.type.*;
+import com.baidu.bifromq.plugin.authprovider.type.Continue;
+import com.baidu.bifromq.plugin.authprovider.type.Failed;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT5AuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthData;
+import com.baidu.bifromq.plugin.authprovider.type.MQTTAction;
+import com.baidu.bifromq.plugin.authprovider.type.Success;
 import com.baidu.bifromq.plugin.clientbalancer.IClientBalancer;
 import com.baidu.bifromq.plugin.clientbalancer.Redirection;
 import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.*;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.*;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.AuthError;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.EnhancedAuthAbortByClient;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.MalformedClientIdentifier;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.MalformedUserName;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.MalformedWillTopic;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.NotAuthorizedClient;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.ProtocolError;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.UnauthenticatedClient;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InboxTransientError;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InvalidTopic;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Redirect;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
 import com.baidu.bifromq.sysprops.props.MaxMqtt5ClientIdLength;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.QoS;
@@ -40,25 +101,18 @@ import com.baidu.bifromq.util.UTF8Util;
 import com.bifromq.plugin.resourcethrottler.TenantResourceType;
 import com.google.common.base.Strings;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.mqtt.*;
-import lombok.extern.slf4j.Slf4j;
-
-import javax.annotation.Nullable;
+import io.netty.handler.codec.mqtt.MqttConnAckMessage;
+import io.netty.handler.codec.mqtt.MqttConnectMessage;
+import io.netty.handler.codec.mqtt.MqttConnectReturnCode;
+import io.netty.handler.codec.mqtt.MqttMessage;
+import io.netty.handler.codec.mqtt.MqttMessageBuilders;
+import io.netty.handler.codec.mqtt.MqttProperties;
+import io.netty.handler.codec.mqtt.MqttReasonCodeAndPropertiesVariableHeader;
 import java.net.InetSocketAddress;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-
-import static com.baidu.bifromq.metrics.TenantMetric.MqttAuthFailureCount;
-import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.goAway;
-import static com.baidu.bifromq.mqtt.handler.MQTTConnectHandler.AuthResult.ok;
-import static com.baidu.bifromq.mqtt.handler.condition.ORCondition.or;
-import static com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils.*;
-import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildConnAction;
-import static com.baidu.bifromq.mqtt.utils.MQTT5MessageSizer.MIN_CONTROL_PACKET_SIZE;
-import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.*;
-import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.*;
-import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.SESSION_EXPIRY_INTERVAL;
+import javax.annotation.Nullable;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class MQTT5ConnectHandler extends MQTTConnectHandler {
@@ -515,7 +569,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                     .connAck()
                     .returnCode(CONNECTION_REFUSED_TOPIC_NAME_INVALID)
                     .properties(MQTT5MessageBuilders.connAckProperties()
-                        .reasonString("Will topic exceeds limits")
+                        .reasonString("Invalid will topic:" + message.payload().willTopic())
                         .build())
                     .build(),
                     getLocal(InvalidTopic.class)

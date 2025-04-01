@@ -326,6 +326,11 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public ProtocolResponse validatePubMessage(MqttPublishMessage message) {
+        if (message.fixedHeader().isRetain() && !settings.retainEnabled) {
+            return goAway(getLocal(ProtocolViolation.class)
+                .statement("Retain is disabled")
+                .clientInfo(clientInfo));
+        }
         String topic = message.variableHeader().topicName();
         if (!UTF8Util.isWellFormed(topic, SANITY_CHECK)) {
             return goAway(getLocal(MalformedTopic.class)
@@ -393,6 +398,11 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
             .topic(topic)
             .retain(distMessage.getIsRetain())
             .clientInfo(clientInfo));
+    }
+
+    @Override
+    public ProtocolResponse respondQoS1PacketInUse(MqttPublishMessage message) {
+        return goAway(getLocal(ProtocolViolation.class).statement("MQTT3-2.3.1-4").clientInfo(clientInfo));
     }
 
     @Override

@@ -454,7 +454,6 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     protected abstract ProtocolResponse handleDisconnect(MqttMessage message);
 
     private void handlePubMsg(MqttPublishMessage mqttMessage) {
-
         if (isExceedReceivingMaximum()) {
             handleProtocolResponse(helper().respondReceivingMaximumExceeded(mqttMessage));
             mqttMessage.release();
@@ -1265,6 +1264,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                                   int ingressMsgBytes) {
         int packetId = message.variableHeader().packetId();
         if (inUsePacketIds.contains(packetId)) {
+            handleProtocolResponse(helper().respondQoS1PacketInUse(message));
             return CompletableFuture.completedFuture(null);
         }
         inUsePacketIds.add(packetId);

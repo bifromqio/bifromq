@@ -79,7 +79,6 @@ public class PubSubTest extends MQTTTest {
         pubSub("pubQOS0SubQoS2Persistent", 0, "pubQOS0SubQoS2Persistent", 2, false);
     }
 
-
     @Test(groups = "integration")
     public void pubQOS1SubQoS0Transient() {
         pubSub("pubQOS1SubQoS0Transient", 1, "pubQOS1SubQoS0Transient", 0, true);
@@ -89,7 +88,6 @@ public class PubSubTest extends MQTTTest {
     public void pubQOS1SubQoS0Persistent() {
         pubSub("pubQOS1SubQoS0Persistent", 1, "pubQOS1SubQoS0Persistent", 0, false);
     }
-
 
     @Test(groups = "integration")
     public void pubQOS1SubQoS1Transient() {
@@ -101,7 +99,6 @@ public class PubSubTest extends MQTTTest {
         pubSub("pubQOS1SubQoS1Persistent", 1, "pubQOS1SubQoS1Persistent", 1, false);
     }
 
-
     @Test(groups = "integration")
     public void pubQOS1SubQoS2Transient() {
         pubSub("pubQOS1SubQoS2Transient", 1, "pubQOS1SubQoS2Transient", 2, true);
@@ -112,7 +109,6 @@ public class PubSubTest extends MQTTTest {
         pubSub("pubQOS1SubQoS2Persistent", 1, "pubQOS1SubQoS2Persistent", 2, false);
     }
 
-
     @Test(groups = "integration")
     public void pubQOS2SubQoS0Transient() {
         pubSub("pubQOS2SubQoS0Transient", 2, "pubQOS2SubQoS0Transient", 0, true);
@@ -122,7 +118,6 @@ public class PubSubTest extends MQTTTest {
     public void pubQOS2SubQoS0Persistent() {
         pubSub("pubQOS2SubQoS0Persistent", 2, "pubQOS2SubQoS0Persistent", 0, false);
     }
-
 
     @Test(groups = "integration")
     public void pubQOS2SubQoS1Transient() {
@@ -143,7 +138,6 @@ public class PubSubTest extends MQTTTest {
     public void pubQOS2SubQoS2Persistent() {
         pubSub("pubQOS2SubQoS2Persistent", 2, "pubQOS2SubQoS2Persistent", 2, false);
     }
-
 
     @SneakyThrows
     private void pubSub(String topic, int pubQoS, String topicFilter, int subQoS, boolean cleanSession) {

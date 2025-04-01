@@ -48,6 +48,7 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACTION_DISALLOW;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ReceivingMaximum;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainEnabled;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.CLEARED;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.ERROR;
 import static com.baidu.bifromq.retain.rpc.proto.RetainReply.Result.RETAINED;
@@ -170,16 +171,10 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
             @Override
             public void channelActive(ChannelHandlerContext ctx) throws Exception {
                 super.channelActive(ctx);
-                ctx.pipeline().addLast(MQTT3TransientSessionHandler.builder()
-                        .settings(new TenantSettings(tenantId, settingProvider))
-                        .tenantMeter(tenantMeter)
-                        .oomCondition(oomCondition)
-                        .userSessionId(userSessionId(clientInfo))
-                        .keepAliveTimeSeconds(120)
-                        .clientInfo(clientInfo)
-                        .willMessage(null)
-                        .ctx(ctx)
-                        .build());
+                ctx.pipeline().addLast(
+                    MQTT3TransientSessionHandler.builder().settings(new TenantSettings(tenantId, settingProvider))
+                        .tenantMeter(tenantMeter).oomCondition(oomCondition).userSessionId(userSessionId(clientInfo))
+                        .keepAliveTimeSeconds(120).clientInfo(clientInfo).willMessage(null).ctx(ctx).build());
                 ctx.pipeline().remove(this);
             }
         };
@@ -195,8 +190,6 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         assertFalse(channel.isOpen());
         verifyEvent(MQTT_SESSION_START, PROTOCOL_VIOLATION, MQTT_SESSION_STOP);
     }
-
-//  =============================================== sub & unSub ======================================================
 
     @Test
     public void transientQoS0Sub() {
@@ -273,7 +266,6 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         shouldCleanSubs = true;
     }
 
-
     @Test
     public void transientUnSub() {
         mockCheckPermission(true);
@@ -340,9 +332,6 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
             UNSUB_ACKED);
     }
 
-
-//  =============================================== C2SPub ============================================================
-
     @Test
     public void handleQoS0Pub() {
         mockCheckPermission(true);
@@ -378,6 +367,22 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         MqttMessage ackMessage = channel.readOutbound();
         assertEquals(((MqttMessageIdVariableHeader) ackMessage.variableHeader()).messageId(), 123);
         verifyEvent(MQTT_SESSION_START, PUB_ACKED);
+    }
+
+    @Test
+    public void handleQoS1PubPacketIdInUse() {
+        mockCheckPermission(true);
+        when(distClient.pub(anyLong(), anyString(), any(), any(ClientInfo.class))).thenReturn(
+            new CompletableFuture<>());
+        assertTrue(channel.isOpen());
+
+        MqttPublishMessage message = MQTTMessageUtils.publishQoS1Message(topic, 123);
+        channel.writeInbound(message);
+        channel.writeInbound(message);
+        channel.advanceTimeBy(5, TimeUnit.SECONDS);
+        channel.runPendingTasks();
+        assertFalse(channel.isOpen());
+        verifyEvent(MQTT_SESSION_START, PROTOCOL_VIOLATION, MQTT_SESSION_STOP);
     }
 
     @Test
@@ -426,6 +431,22 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         assertEquals(mqttMessage.fixedHeader().messageType(), MqttMessageType.PUBCOMP);
         assertEquals(((MqttMessageIdVariableHeader) mqttMessage.variableHeader()).messageId(), 123);
         verifyEvent(MQTT_SESSION_START, PUB_RECED);
+    }
+
+    @Test
+    public void handleQoS2PubPacketIdInUse() {
+        mockCheckPermission(true);
+        when(distClient.pub(anyLong(), anyString(), any(), any(ClientInfo.class))).thenReturn(
+            new CompletableFuture<>());
+        assertTrue(channel.isOpen());
+
+        MqttPublishMessage message = MQTTMessageUtils.publishQoS2Message(topic, 123);
+        channel.writeInbound(message);
+        channel.writeInbound(message);
+        channel.advanceTimeBy(5, TimeUnit.SECONDS);
+        channel.runPendingTasks();
+        assertFalse(channel.isOpen());
+        verifyEvent(MQTT_SESSION_START, PROTOCOL_VIOLATION, MQTT_SESSION_STOP);
     }
 
     @Test
@@ -503,6 +524,31 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
     }
 
     @Test
+    public void retainDisabled() {
+        when(settingProvider.provide(eq(RetainEnabled), anyString())).thenReturn(false);
+        assertTrue(channel.isOpen());
+        channel.pipeline().removeLast();
+        channel.pipeline().addLast(new ChannelDuplexHandler() {
+            @Override
+            public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+                super.channelActive(ctx);
+                ctx.pipeline().addLast(
+                    MQTT3TransientSessionHandler.builder().settings(new TenantSettings(tenantId, settingProvider))
+                        .tenantMeter(tenantMeter).oomCondition(oomCondition).userSessionId(userSessionId(clientInfo))
+                        .keepAliveTimeSeconds(120).clientInfo(clientInfo).willMessage(null).ctx(ctx).build());
+                ctx.pipeline().remove(this);
+            }
+        });
+        reset(eventCollector);
+        MqttPublishMessage publishMessage = MQTTMessageUtils.publishRetainQoS1Message(topic, 123);
+        channel.writeInbound(publishMessage);
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runPendingTasks();
+        assertFalse(channel.isActive());
+        verifyEvent(PROTOCOL_VIOLATION, MQTT_SESSION_STOP);
+    }
+
+    @Test
     public void malformedTopic() {
         assertTrue(channel.isOpen());
 
@@ -560,7 +606,6 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         assertTrue(channel.isOpen());
     }
 
-
     @Test
     public void exceedReceiveMaximum() {
         mockCheckPermission(true);
@@ -593,8 +638,6 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         // leave channel open in MQTT3
         assertTrue(channel.isOpen());
     }
-
-//  =============================================== retain ============================================================
 
     @Test
     public void qoS1PubRetain() {
@@ -635,9 +678,6 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.writeInbound(publishMessage);
         verifyEvent(MQTT_SESSION_START, MSG_RETAINED_ERROR, PUB_RECED);
     }
-
-
-//  =============================================== S2CPub ============================================================
 
     @Test
     public void qos0Pub() {
@@ -743,7 +783,6 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
             return true;
         }));
     }
-
 
     @Test
     public void qos1PubExceedBufferCapacity() {
