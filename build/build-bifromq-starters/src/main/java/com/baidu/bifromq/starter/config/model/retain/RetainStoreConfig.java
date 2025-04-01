@@ -28,8 +28,8 @@ import lombok.Setter;
 @Setter
 public class RetainStoreConfig {
     private boolean enable = true;
-    private int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 8);
-        // 0 means use calling thread
+    // 0 means use calling thread
+    private int workerThreads = 0;
     private int tickerThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 20);
     private int queryPipelinePerStore = 100;
     private int compactWALThreshold = 2500;

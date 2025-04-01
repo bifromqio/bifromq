@@ -19,6 +19,6 @@ import lombok.Setter;
 @Getter
 @Setter
 public class RetainStoreClientConfig {
-    private int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 8);
+    private int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 4);
     private int queryPipelinePerStore = 1000;
 }

@@ -24,8 +24,8 @@ public class RPCConfig {
     private String host;
     private int port = 0;
     private boolean enableSSL;
-    private int clientEventLoopThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 8);
-    private int serverEventLoopThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 8);
+    private int clientEventLoopThreads = Math.max(4, Runtime.getRuntime().availableProcessors() / 8);
+    private int serverEventLoopThreads = Math.max(4, Runtime.getRuntime().availableProcessors() / 8);
     @JsonSetter(nulls = Nulls.SKIP)
     private SSLContextConfig clientSSLConfig;
     @JsonSetter(nulls = Nulls.SKIP)

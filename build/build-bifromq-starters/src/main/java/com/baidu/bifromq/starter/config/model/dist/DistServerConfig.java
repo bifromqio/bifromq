@@ -24,7 +24,8 @@ import lombok.Setter;
 @Setter
 public class DistServerConfig {
     private boolean enable = true;
-    private int workerThreads = 0;
+    // 0 for doing tasks on calling threads
+    private int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 4);
     private Map<String, String> attributes = new HashMap<>();
     private Set<String> defaultGroups = new HashSet<>();
 }
