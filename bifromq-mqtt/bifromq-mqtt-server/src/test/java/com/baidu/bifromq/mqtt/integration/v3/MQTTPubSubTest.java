@@ -18,8 +18,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
-import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.mqtt.integration.MQTTTest;
 import com.baidu.bifromq.mqtt.integration.v3.client.MqttMsg;
@@ -32,13 +30,11 @@ import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthResult;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
-import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.observers.TestObserver;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -127,7 +123,6 @@ public class MQTTPubSubTest extends MQTTTest {
         pubSub("/topic/0/2", 0, "/topic/0/2", 2, false);
         pubSub("/topic/1/0", 1, "/topic/1/0", 0, false);
         pubSub("/topic/1/1", 1, "/topic/1/1", 1, false);
-//        pubSub("/topic/1/2", 1, "/topic/1/2", 2, false);
         pubSub("/topic/2/0", 2, "/topic/2/0", 0, false);
         pubSub("/topic/2/1", 2, "/topic/2/1", 1, false);
         pubSub("/topic/2/2", 2, "/topic/2/2", 2, false);
@@ -143,12 +138,30 @@ public class MQTTPubSubTest extends MQTTTest {
     }
 
     @Test(groups = "integration")
-    public void receiveOfflineMessage() {
-        receiveOfflineMessage(1, 1);
-        receiveOfflineMessage(2, 1);
-        receiveOfflineMessage(1, 2);
-//        receiveOfflineMessage(2, 2);
+    public void pubSubCleanSessionFalseQoS2() {
+        pubSub("/topic/1/2", 1, "/topic/1/2", 2, false);
     }
+
+    @Test(groups = "integration")
+    public void receiveOfflineMessage11() {
+        receiveOfflineMessage(1, 1);
+    }
+
+    @Test(groups = "integration")
+    public void receiveOfflineMessageQoS21() {
+        receiveOfflineMessage(2, 1);
+    }
+
+    @Test(groups = "integration")
+    public void receiveOfflineMessageQoS12() {
+        receiveOfflineMessage(1, 2);
+    }
+
+//    @Test(groups = "integration")
+//    public void receiveOfflineMessageQoS22() {
+//     paho client having some issue to run this case
+//        receiveOfflineMessage(2, 2);
+//    }
 
     @Test(groups = "integration")
     public void pubSubInOrder_0_0_true() {
@@ -283,12 +296,15 @@ public class MQTTPubSubTest extends MQTTTest {
         subClientOpts.setCleanSession(false);
         subClientOpts.setUserName(tenantId + "/subClient");
 
-        log.info("Connect sub client and disconnect");
+        log.info("Connect sub client");
         // make a offline subscription
-        MqttTestClient subClient = new MqttTestClient(BROKER_URI, MqttClient.generateClientId());
+        String clientId = MqttClient.generateClientId();
+        MqttTestClient subClient = new MqttTestClient(BROKER_URI, clientId);
         subClient.connect(subClientOpts);
         subClient.subscribe(topic, subQoS);
+        log.info("Disconnect sub client");
         subClient.disconnect();
+        subClient.close();
 
         log.info("Connect pub client and pub some message");
         MqttConnectOptions pubClientOpts = new MqttConnectOptions();
@@ -299,27 +315,21 @@ public class MQTTPubSubTest extends MQTTTest {
         pubClient.publish(topic, pubQoS, ByteString.copyFromUtf8("hello"), false);
 
         log.info("Reconnect sub client");
-        CountDownLatch latch = new CountDownLatch(1);
-        Disposable disposable = subClient.messageArrived().subscribe(msg -> {
-            log.debug("offline message arrived: pubQos = {}, subQos = {}", pubQoS, subQoS);
-            latch.countDown();
-            assertEquals(msg.topic, topic);
-            assertEquals(msg.qos, Math.min(pubQoS, subQoS));
-            assertFalse(msg.isDup);
-            assertFalse(msg.isRetain);
-            assertEquals(msg.payload, ByteString.copyFromUtf8("hello"));
-        });
+        subClient = new MqttTestClient(BROKER_URI, clientId);
+        TestObserver<MqttMsg> msgObserver = subClient.messageArrived().test();
         subClient.connect(subClientOpts);
-        try {
-            assertTrue(latch.await(5, TimeUnit.SECONDS));
-        } catch (InterruptedException e) {
-            fail();
-        }
-        disposable.dispose();
+
+        msgObserver.awaitCount(1);
+        MqttMsg msg = msgObserver.values().get(0);
+        assertEquals(msg.topic, topic);
+        assertEquals(msg.qos, Math.min(pubQoS, subQoS));
+        assertFalse(msg.isDup);
+        assertFalse(msg.isRetain);
+        assertEquals(msg.payload, ByteString.copyFromUtf8("hello"));
 
         pubClient.disconnect();
         pubClient.close();
-        subClient.unsubscribe(topic);
+//        subClient.unsubscribe(topic);
         subClient.disconnect();
         subClient.close();
     }

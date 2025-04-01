@@ -23,10 +23,8 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEP
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_NOT_AUTHORIZED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_UNAVAILABLE;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotEquals;
 import static org.testng.Assert.assertNull;
@@ -44,7 +42,6 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientconnected.Client
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.ArgumentCaptor;
@@ -152,22 +149,6 @@ public class MQTTConnectTest extends BaseMQTTTest {
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
         assertNull(channel.readOutbound());
-        verifyEvent(INBOX_TRANSIENT_ERROR);
-    }
-
-    @Test
-    public void persistentSessionCheckInboxError() {
-        // create inbox failed
-        mockAuthPass();
-        mockSessionReg();
-        when(inboxClient.get(any())).thenReturn(CompletableFuture.failedFuture(new RuntimeException("Mock exception")));
-        MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(false);
-        channel.writeInbound(connectMessage);
-        // verifications
-        channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
-        channel.runPendingTasks();
-        MqttConnAckMessage ackMessage = channel.readOutbound();
-        Assert.assertEquals(CONNECTION_REFUSED_SERVER_UNAVAILABLE, ackMessage.variableHeader().connectReturnCode());
         verifyEvent(INBOX_TRANSIENT_ERROR);
     }
 

@@ -21,18 +21,19 @@ import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.tenantBeginKeyPr
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
+import com.baidu.bifromq.basekv.client.exception.BadRequestException;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.InternalErrorException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
-import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
 import com.baidu.bifromq.inbox.storage.proto.GCReply;
 import com.baidu.bifromq.inbox.storage.proto.GCRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.google.protobuf.ByteString;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -77,51 +78,49 @@ public class InboxStoreGCProcessor implements IInboxStoreGCProcessor {
         CompletableFuture<?>[] gcResults = rangeSettingList.stream().map(
             setting -> doGC(reqId, setting, tenantId, expirySeconds, now)).toArray(CompletableFuture[]::new);
         return CompletableFuture.allOf(gcResults)
-            .thenApply(v -> Arrays.stream(gcResults).map(CompletableFuture::join).toList())
-            .thenApply(gcReplies -> gcReplies.stream()
-                .anyMatch(r -> ((GCReply) r).getCode() != GCReply.Code.OK) ? Result.ERROR : Result.OK);
+            .handle((v, e) -> {
+                if (e != null) {
+                    log.debug("[InboxGC] Failed to do gc: reqId={}", reqId, e);
+                    return Result.ERROR;
+                }
+                return Result.OK;
+            });
     }
 
-    private CompletableFuture<GCReply> doGC(long reqId,
-                                            KVRangeSetting rangeSetting,
-                                            @Nullable String tenantId,
-                                            @Nullable Integer expirySeconds,
-                                            long now) {
+    private CompletableFuture<Void> doGC(long reqId,
+                                         KVRangeSetting rangeSetting,
+                                         @Nullable String tenantId,
+                                         @Nullable Integer expirySeconds,
+                                         long now) {
         return scan(rangeSetting, tenantId, expirySeconds, now)
             .thenCompose(gcReply -> {
-                if (gcReply.getCode() == GCReply.Code.ERROR) {
-                    return CompletableFuture.completedFuture(gcReply);
-                }
                 List<GCReply.GCCandidate> inboxList = gcReply.getCandidateList();
                 log.debug("[InboxGC] scan success: reqId={}, rangeId={}, size={}",
                     reqId, KVRangeIdUtil.toString(rangeSetting.id), inboxList.size());
                 return CompletableFuture.allOf(inboxList.stream()
-                        .map(inbox -> inboxClient.detach(DetachRequest.newBuilder()
-                                .setReqId(System.nanoTime())
-                                .setInboxId(inbox.getInboxId())
-                                .setIncarnation(inbox.getIncarnation())
-                                .setVersion(inbox.getVersion())
-                                .setExpirySeconds(expirySeconds != null ? 0 : inbox.getExpirySeconds())
-                                .setDiscardLWT(false)
-                                .setClient(inbox.getClient())
-                                .setNow(now)
-                                .build())
-                            .thenAccept(v -> {
-                                if (v.getCode() == DetachReply.Code.ERROR) {
+                    .map(inbox -> inboxClient.detach(DetachRequest.newBuilder()
+                            .setReqId(System.nanoTime())
+                            .setInboxId(inbox.getInboxId())
+                            .setIncarnation(inbox.getIncarnation())
+                            .setVersion(inbox.getVersion())
+                            .setExpirySeconds(expirySeconds != null ? 0 : inbox.getExpirySeconds())
+                            .setDiscardLWT(false)
+                            .setClient(inbox.getClient())
+                            .setNow(now)
+                            .build())
+                        .thenAccept(v -> {
+                            switch (v.getCode()) {
+                                case OK, NO_INBOX -> log.debug("[InboxGC] detach success: reqId={}, inboxId={}",
+                                    reqId, inbox.getInboxId());
+                                case TRY_LATER, CONFLICT ->
+                                    log.debug("[InboxGC] detach inbox needs retry: reqId={}, inboxId={}, reason={}",
+                                        reqId, inbox.getInboxId(), v.getCode());
+                                default ->
                                     log.debug("[InboxGC] Failed to detach inbox: reqId={}, inboxId={}, reason={}",
-                                        reqId,
-                                        inbox.getInboxId(), v.getCode());
-                                } else {
-                                    log.debug("[InboxGC] detach success: reqId={}, inboxId={}", reqId,
-                                        inbox.getInboxId());
-                                }
-                            }))
-                        .toArray(CompletableFuture[]::new))
-                    .thenApply(v -> gcReply);
-            })
-            .exceptionally(e -> {
-                log.debug("Failed to gc inboxes: reqId={}", reqId, e);
-                return GCReply.newBuilder().setCode(GCReply.Code.ERROR).build();
+                                        reqId, inbox.getInboxId(), v.getCode());
+                            }
+                        }))
+                    .toArray(CompletableFuture[]::new));
             });
     }
 
@@ -139,15 +138,15 @@ public class InboxStoreGCProcessor implements IInboxStoreGCProcessor {
                     .build())
                 .build())
             .thenApply(v -> {
-                if (v.getCode() == ReplyCode.Ok) {
-                    return v.getRoCoProcResult().getInboxService().getGc();
+                switch (v.getCode()) {
+                    case Ok -> {
+                        return v.getRoCoProcResult().getInboxService().getGc();
+                    }
+                    case BadRequest -> throw new BadRequestException();
+                    case BadVersion -> throw new BadVersionException();
+                    case TryLater -> throw new TryLaterException();
+                    default -> throw new InternalErrorException();
                 }
-                throw new RuntimeException("BaseKV Query failed:" + v.getCode().name());
-            })
-            .exceptionally(e -> {
-                log.debug("[InboxGC] scan failed: tenantId={}, rangeId={}",
-                    tenantId, KVRangeIdUtil.toString(rangeSetting.id), e);
-                return GCReply.newBuilder().setCode(GCReply.Code.ERROR).build();
             });
     }
 

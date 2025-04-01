@@ -13,10 +13,11 @@
 
 package com.baidu.bifromq.basescheduler;
 
-import static com.baidu.bifromq.basescheduler.AsyncRetry.retryAsync;
+import static com.baidu.bifromq.basescheduler.AsyncRetry.exec;
 
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.basescheduler.exception.NeedRetryException;
+import com.baidu.bifromq.basescheduler.exception.RetryTimeoutException;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
@@ -30,7 +31,6 @@ import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -159,7 +159,7 @@ public abstract class Batcher<CallT, CallResultT, BatcherKeyT> {
         AtomicLong execStart = new AtomicLong();
         AtomicInteger execCounter = new AtomicInteger();
         final int finalBatchSize = batchSize;
-        retryAsync(() -> {
+        exec(() -> {
             execCounter.incrementAndGet();
             execStart.set(System.nanoTime());
             return batchCall.execute();
@@ -172,7 +172,7 @@ public abstract class Batcher<CallT, CallResultT, BatcherKeyT> {
             .whenComplete((v, e) -> {
                 long execEnd = System.nanoTime();
                 if (e != null) {
-                    if (e instanceof TimeoutException || e.getCause() instanceof TimeoutException) {
+                    if (e instanceof RetryTimeoutException || e.getCause() instanceof RetryTimeoutException) {
                         log.debug("Batchcall timeout", e);
                     } else {
                         log.error("Unexpected exception during handling batchcall result", e);

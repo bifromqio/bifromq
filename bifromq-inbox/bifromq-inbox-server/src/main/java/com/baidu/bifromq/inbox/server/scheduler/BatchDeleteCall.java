@@ -76,9 +76,7 @@ class BatchDeleteCall extends BatchMutationCall<BatchDeleteRequest.Params, Batch
     protected void handleException(
         ICallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result, MutationCallBatcherKey> callTask,
         Throwable e) {
-        callTask.resultPromise().complete(BatchDeleteReply.Result.newBuilder()
-            .setCode(BatchDeleteReply.Code.ERROR)
-            .build());
+        callTask.resultPromise().completeExceptionally(e);
     }
 
     private static class BatchDeleteCallTask extends

@@ -135,7 +135,6 @@ public class BatchMatchCallTest {
     void testHandleOutput() {
         testHandleOutput(BatchMatchReply.TenantBatch.Code.OK, MatchReply.Result.OK);
         testHandleOutput(BatchMatchReply.TenantBatch.Code.EXCEED_LIMIT, MatchReply.Result.EXCEED_LIMIT);
-        testHandleOutput(BatchMatchReply.TenantBatch.Code.ERROR, MatchReply.Result.ERROR);
     }
 
     @Test

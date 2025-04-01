@@ -14,11 +14,14 @@
 package com.baidu.bifromq.dist.server.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.dist.rpc.proto.BatchMatchReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchMatchRequest;
@@ -36,7 +39,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> {
     private final ISettingProvider settingProvider;
 
@@ -80,6 +85,27 @@ class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> {
 
     @Override
     protected void handleException(ICallTask<MatchRequest, MatchReply, MutationCallBatcherKey> callTask, Throwable e) {
+        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+            callTask.resultPromise().complete(MatchReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setResult(MatchReply.Result.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+            callTask.resultPromise().complete(MatchReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setResult(MatchReply.Result.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+            callTask.resultPromise().complete(MatchReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setResult(MatchReply.Result.TRY_LATER)
+                .build());
+            return;
+        }
         callTask.resultPromise().completeExceptionally(e);
     }
 
@@ -103,8 +129,8 @@ class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> {
                         yield MatchReply.Result.OK;
                     case EXCEED_LIMIT:
                         yield MatchReply.Result.EXCEED_LIMIT;
-                    case ERROR:
                     default:
+                        log.error("Unexpected match result: {}", codes.get(i));
                         yield MatchReply.Result.ERROR;
                 };
                 tasks.get(i).resultPromise().complete(MatchReply.newBuilder()

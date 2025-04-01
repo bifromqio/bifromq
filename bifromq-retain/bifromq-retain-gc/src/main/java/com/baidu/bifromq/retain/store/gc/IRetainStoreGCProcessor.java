@@ -17,12 +17,12 @@ import java.util.concurrent.CompletableFuture;
 import javax.annotation.Nullable;
 
 public interface IRetainStoreGCProcessor {
-    enum Result {
-        OK, ERROR;
-    }
-
     CompletableFuture<Result> gc(long reqId,
                                  @Nullable String tenantId,
                                  @Nullable Integer expirySeconds,
                                  long now);
+
+    enum Result {
+        OK, TRY_LATER, ERROR
+    }
 }

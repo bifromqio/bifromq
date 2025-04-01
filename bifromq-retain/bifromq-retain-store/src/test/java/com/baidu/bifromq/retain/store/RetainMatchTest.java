@@ -42,66 +42,66 @@ public class RetainMatchTest extends RetainStoreTest {
         requestRetain(tenantId, message4);
 
         MatchResult matchReply = requestMatch(tenantId, "#", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 4);
-        assertEquals(newHashSet(matchReply.getOk().getMessagesList()),
+        assertEquals(matchReply.getMessagesCount(), 4);
+        assertEquals(newHashSet(matchReply.getMessagesList()),
             newHashSet(message1, message2, message3, message4));
 
         matchReply = requestMatch(tenantId, "+", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 1);
-        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message4));
+        assertEquals(matchReply.getMessagesCount(), 1);
+        assertEquals(newHashSet(matchReply.getMessagesList()), newHashSet(message4));
 
         matchReply = requestMatch(tenantId, "+/#", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 4);
-        assertEquals(newHashSet(matchReply.getOk().getMessagesList()),
+        assertEquals(matchReply.getMessagesCount(), 4);
+        assertEquals(newHashSet(matchReply.getMessagesList()),
             newHashSet(message1, message2, message3, message4));
 
         matchReply = requestMatch(tenantId, "+/+/#", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 3);
-        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1, message2, message3));
+        assertEquals(matchReply.getMessagesCount(), 3);
+        assertEquals(newHashSet(matchReply.getMessagesList()), newHashSet(message1, message2, message3));
 
         matchReply = requestMatch(tenantId, "+/+/+", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 1);
-        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message3));
+        assertEquals(matchReply.getMessagesCount(), 1);
+        assertEquals(newHashSet(matchReply.getMessagesList()), newHashSet(message3));
 
         matchReply = requestMatch(tenantId, "/#", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 3);
-        assertEquals(newHashSet(matchReply.getOk().getMessagesList()),
+        assertEquals(matchReply.getMessagesCount(), 3);
+        assertEquals(newHashSet(matchReply.getMessagesList()),
             newHashSet(message1, message2, message3));
 
         matchReply = requestMatch(tenantId, "/c/#", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 1);
-        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message3));
+        assertEquals(matchReply.getMessagesCount(), 1);
+        assertEquals(newHashSet(matchReply.getMessagesList()), newHashSet(message3));
 
         matchReply = requestMatch(tenantId, "/a/+", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 0);
+        assertEquals(matchReply.getMessagesCount(), 0);
 
         matchReply = requestMatch(tenantId, "/a/#", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 2);
-        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1, message2));
+        assertEquals(matchReply.getMessagesCount(), 2);
+        assertEquals(newHashSet(matchReply.getMessagesList()), newHashSet(message1, message2));
 
         matchReply = requestMatch(tenantId, "/a/+/+", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 2);
-        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1, message2));
+        assertEquals(matchReply.getMessagesCount(), 2);
+        assertEquals(newHashSet(matchReply.getMessagesList()), newHashSet(message1, message2));
 
         matchReply = requestMatch(tenantId, "/a/+/#", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 2);
-        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1, message2));
+        assertEquals(matchReply.getMessagesCount(), 2);
+        assertEquals(newHashSet(matchReply.getMessagesList()), newHashSet(message1, message2));
 
         matchReply = requestMatch(tenantId, "/+/b/", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 1);
-        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message2));
+        assertEquals(matchReply.getMessagesCount(), 1);
+        assertEquals(newHashSet(matchReply.getMessagesList()), newHashSet(message2));
 
         matchReply = requestMatch(tenantId, "/+/b/#", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 2);
-        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1, message2));
+        assertEquals(matchReply.getMessagesCount(), 2);
+        assertEquals(newHashSet(matchReply.getMessagesList()), newHashSet(message1, message2));
 
         matchReply = requestMatch(tenantId, "/a/b/c/#", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 1);
-        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1));
+        assertEquals(matchReply.getMessagesCount(), 1);
+        assertEquals(newHashSet(matchReply.getMessagesList()), newHashSet(message1));
 
         matchReply = requestMatch(tenantId, "/a/b/#", 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 2);
-        assertEquals(newHashSet(matchReply.getOk().getMessagesList()), newHashSet(message1, message2));
+        assertEquals(matchReply.getMessagesCount(), 2);
+        assertEquals(newHashSet(matchReply.getMessagesList()), newHashSet(message1, message2));
     }
 
     @Test(groups = "integration")
@@ -113,7 +113,7 @@ public class RetainMatchTest extends RetainStoreTest {
         requestRetain(tenantId, message2);
         requestRetain(tenantId, message3);
 
-        assertEquals(requestMatch(tenantId, "#", 0).getOk().getMessagesCount(), 0);
-        assertEquals(requestMatch(tenantId, "#", 1).getOk().getMessagesCount(), 1);
+        assertEquals(requestMatch(tenantId, "#", 0).getMessagesCount(), 0);
+        assertEquals(requestMatch(tenantId, "#", 1).getMessagesCount(), 1);
     }
 }

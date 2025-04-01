@@ -18,6 +18,7 @@ import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainMatchedBytes;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
+import com.baidu.bifromq.basescheduler.exception.BatcherUnavailableException;
 import com.baidu.bifromq.deliverer.DeliveryCall;
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
 import com.baidu.bifromq.deliverer.TopicMessagePackHolder;
@@ -38,6 +39,7 @@ import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import io.grpc.stub.StreamObserver;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -74,6 +76,12 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                 completionStage = retainCallScheduler.schedule(request);
             }
             return completionStage.exceptionally(e -> {
+                if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
+                    return RetainReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setResult(RetainReply.Result.TRY_LATER)
+                        .build();
+                }
                 if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
                     return RetainReply.newBuilder()
                         .setReqId(request.getReqId())
@@ -97,7 +105,7 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
             .schedule(new MatchCall(request.getTenantId(), request.getMatchInfo().getMatcher().getMqttTopicFilter(),
                 request.getLimit()))
             .thenCompose(matchCallResult -> {
-                if (matchCallResult.result() == MatchReply.Result.OK) {
+                if (Objects.requireNonNull(matchCallResult.result()) == MatchReply.Result.OK) {
                     MatchInfo matchInfo = request.getMatchInfo();
                     AtomicInteger matchedBytes = new AtomicInteger();
                     List<CompletableFuture<DeliveryResult.Code>> deliveryResults = matchCallResult.retainMessages()
@@ -116,7 +124,8 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                                 request.getBrokerId(), request.getDelivererKey(),
                                 TopicMessagePackHolder.hold(topicMessagePack)));
                         }).toList();
-                    ITenantMeter.get(request.getTenantId()).recordSummary(MqttRetainMatchedBytes, matchedBytes.get());
+                    ITenantMeter.get(request.getTenantId())
+                        .recordSummary(MqttRetainMatchedBytes, matchedBytes.get());
                     return CompletableFuture.allOf(deliveryResults.toArray(CompletableFuture[]::new))
                         .thenApply(v -> deliveryResults.stream().map(CompletableFuture::join))
                         .thenApply(resultList -> {
@@ -135,7 +144,7 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                 }
                 return CompletableFuture.completedFuture(MatchReply.newBuilder()
                     .setReqId(request.getReqId())
-                    .setResult(MatchReply.Result.ERROR)
+                    .setResult(matchCallResult.result())
                     .build());
             })
             .exceptionally(e -> {
@@ -159,16 +168,25 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                 request.hasExpirySeconds() ? request.getExpirySeconds() : null,
                 HLC.INST.getPhysical())
             .thenApply(result -> {
-                if (result == IRetainStoreGCProcessor.Result.OK) {
-                    return ExpireAllReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setResult(ExpireAllReply.Result.OK)
-                        .build();
-                } else {
-                    return ExpireAllReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setResult(ExpireAllReply.Result.ERROR)
-                        .build();
+                switch (result) {
+                    case OK -> {
+                        return ExpireAllReply.newBuilder()
+                            .setReqId(request.getReqId())
+                            .setResult(ExpireAllReply.Result.OK)
+                            .build();
+                    }
+                    case TRY_LATER -> {
+                        return ExpireAllReply.newBuilder()
+                            .setReqId(request.getReqId())
+                            .setResult(ExpireAllReply.Result.TRY_LATER)
+                            .build();
+                    }
+                    default -> {
+                        return ExpireAllReply.newBuilder()
+                            .setReqId(request.getReqId())
+                            .setResult(ExpireAllReply.Result.ERROR)
+                            .build();
+                    }
                 }
             }), responseObserver);
     }

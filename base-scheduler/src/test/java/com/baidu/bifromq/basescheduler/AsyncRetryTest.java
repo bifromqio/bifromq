@@ -18,9 +18,9 @@ import static org.testng.Assert.assertThrows;
 import static org.testng.Assert.fail;
 import static org.testng.AssertJUnit.assertTrue;
 
+import com.baidu.bifromq.basescheduler.exception.RetryTimeoutException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.testng.annotations.Test;
@@ -32,7 +32,7 @@ public class AsyncRetryTest {
         String expected = "success";
         Supplier<CompletableFuture<String>> taskSupplier = () -> CompletableFuture.completedFuture(expected);
         CompletableFuture<String> resultFuture =
-            AsyncRetry.retryAsync(taskSupplier, (result, e) -> result.equals("success"), 100, 1000);
+            AsyncRetry.exec(taskSupplier, (result, e) -> result.equals("success"), 100, 1000);
         String result = resultFuture.get();
         assertEquals(result, expected);
     }
@@ -41,7 +41,7 @@ public class AsyncRetryTest {
     public void testNoRetry() {
         Supplier<CompletableFuture<String>> taskSupplier = () -> CompletableFuture.failedFuture(new RuntimeException());
         CompletableFuture<String> resultFuture =
-            AsyncRetry.retryAsync(taskSupplier, (result, e) -> e == null, 0, 1000);
+            AsyncRetry.exec(taskSupplier, (result, e) -> e == null, 0, 1000);
         assertThrows(resultFuture::join);
     }
 
@@ -54,7 +54,7 @@ public class AsyncRetryTest {
         });
 
         CompletableFuture<String> resultFuture =
-            AsyncRetry.retryAsync(taskSupplier, (result, e) -> result.equals("success"), 100, 1000);
+            AsyncRetry.exec(taskSupplier, (result, e) -> result.equals("success"), 100, 1000);
         String result = resultFuture.get();
         assertEquals(result, "success");
         assertTrue(counter.get() >= 3);
@@ -69,14 +69,14 @@ public class AsyncRetryTest {
         });
 
         CompletableFuture<String> resultFuture =
-            AsyncRetry.retryAsync(taskSupplier, (result, e) -> result.equals("success"), 100, 250);
+            AsyncRetry.exec(taskSupplier, (result, e) -> result.equals("success"), 100, 250);
 
         try {
             resultFuture.get();
             fail();
         } catch (ExecutionException ex) {
             Throwable cause = ex.getCause();
-            assertTrue(cause instanceof TimeoutException);
+            assertTrue(cause instanceof RetryTimeoutException);
         }
         assertTrue(counter.get() > 0);
     }

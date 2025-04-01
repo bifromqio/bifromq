@@ -4,7 +4,7 @@ import "subbroker/type.proto";
 import "inboxservice/InboxFetched.proto";
 import "inboxservice/LWT.proto";
 import "inboxservice/TopicFilterOption.proto";
-import "inboxservice/InboxCoProc.proto";
+import "inboxservice/InboxStoreCoProc.proto";
 
 option java_multiple_files = true;
 option java_package = "com.baidu.bifromq.inbox.rpc.proto";
@@ -40,7 +40,8 @@ message GetReply {
   enum Code{
     EXIST = 0;
     NO_INBOX = 1;
-    ERROR = 2;
+    TRY_LATER = 2;
+    ERROR = 3;
   }
   uint64 reqId = 1;
   Code code = 2;
@@ -64,7 +65,8 @@ message AttachReply {
     OK = 0;
     NO_INBOX = 1;
     CONFLICT = 2;
-    ERROR = 3;
+    TRY_LATER = 3;
+    ERROR = 4;
   }
   uint64 reqId = 1;
   Code code = 2;
@@ -87,7 +89,8 @@ message DetachReply {
     OK = 0;
     NO_INBOX = 1;
     CONFLICT = 2;
-    ERROR = 3;
+    TRY_LATER = 3;
+    ERROR = 4;
   }
   uint64 reqId = 1;
   Code code = 2;
@@ -111,7 +114,8 @@ message CreateRequest {
 message CreateReply {
   enum Code {
     OK = 0;
-    ERROR = 1;
+    TRY_LATER = 1;
+    ERROR = 2;
   }
   uint64 reqId = 1;
   Code code = 2;
@@ -131,7 +135,8 @@ message TouchReply {
     OK = 0;
     NO_INBOX = 1;
     CONFLICT = 2;
-    ERROR = 3;
+    TRY_LATER = 3;
+    ERROR = 4;
   }
   uint64 reqId = 1;
   Code code = 2;
@@ -148,7 +153,8 @@ message ExpireReply {
   enum Code {
     OK = 0;
     NOT_FOUND = 1;
-    ERROR = 2;
+    TRY_LATER = 2;
+    ERROR = 3;
   }
   uint64 reqId = 1;
   Code code = 2;
@@ -173,7 +179,8 @@ message SubReply {
     EXCEED_LIMIT = 3;
     CONFLICT = 4;
     BACK_PRESSURE_REJECTED = 5;
-    ERROR = 6;
+    TRY_LATER = 6;
+    ERROR = 7;
   }
   uint64 reqId = 1;
   Code code = 2;
@@ -196,7 +203,8 @@ message UnsubReply {
     NO_SUB = 2;
     CONFLICT = 3;
     BACK_PRESSURE_REJECTED = 4;
-    ERROR = 5;
+    TRY_LATER = 5;
+    ERROR = 6;
   }
   uint64 reqId = 1;
   Code code = 2;
@@ -245,7 +253,8 @@ message CommitReply {
     OK = 0;
     NO_INBOX = 1;
     CONFLICT = 2;
-    ERROR = 3;
+    TRY_LATER = 3;
+    ERROR = 4;
   }
   uint64 reqId = 1;
   Code code = 2;

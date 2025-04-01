@@ -14,11 +14,14 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.record.InboxInstance;
 import com.baidu.bifromq.inbox.record.TenantInboxInstance;
@@ -32,7 +35,9 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 class BatchAttachCall extends BatchMutationCall<AttachRequest, AttachReply> {
 
     protected BatchAttachCall(KVRangeId rangeId,
@@ -94,9 +99,12 @@ class BatchAttachCall extends BatchMutationCall<AttachRequest, AttachReply> {
                 case CONFLICT -> callTask.resultPromise().complete(replyBuilder
                     .setCode(AttachReply.Code.CONFLICT)
                     .build());
-                case ERROR -> callTask.resultPromise().complete(replyBuilder
-                    .setCode(AttachReply.Code.ERROR)
-                    .build());
+                default -> {
+                    log.error("Unexpected attach result: {}", result.getCode());
+                    callTask.resultPromise().complete(replyBuilder
+                        .setCode(AttachReply.Code.ERROR)
+                        .build());
+                }
             }
         }
     }
@@ -104,10 +112,28 @@ class BatchAttachCall extends BatchMutationCall<AttachRequest, AttachReply> {
     @Override
     protected void handleException(ICallTask<AttachRequest, AttachReply, MutationCallBatcherKey> callTask,
                                    Throwable e) {
-        callTask.resultPromise().complete(AttachReply.newBuilder()
-            .setReqId(callTask.call().getReqId())
-            .setCode(AttachReply.Code.ERROR)
-            .build());
+        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+            callTask.resultPromise().complete(AttachReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(AttachReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+            callTask.resultPromise().complete(AttachReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(AttachReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+            callTask.resultPromise().complete(AttachReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(AttachReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        callTask.resultPromise().completeExceptionally(e);
     }
 
     private static class BatchAttachCallTask extends MutationCallTaskBatch<AttachRequest, AttachReply> {

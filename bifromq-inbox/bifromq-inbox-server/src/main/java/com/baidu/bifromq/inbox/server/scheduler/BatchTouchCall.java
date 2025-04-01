@@ -14,16 +14,20 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.record.InboxInstance;
 import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.rpc.proto.TouchReply;
 import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchTouchReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchTouchRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import java.time.Duration;
@@ -31,7 +35,9 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 class BatchTouchCall extends BatchMutationCall<TouchRequest, TouchReply> {
     protected BatchTouchCall(KVRangeId rangeId,
                              IBaseKVStoreClient distWorkerClient,
@@ -71,13 +77,17 @@ class BatchTouchCall extends BatchMutationCall<TouchRequest, TouchReply> {
         int i = 0;
         while ((callTask = batchedTasks.poll()) != null) {
             TouchReply.Builder replyBuilder = TouchReply.newBuilder().setReqId(callTask.call().getReqId());
-            switch (output.getInboxService().getBatchTouch().getCode(i++)) {
+            BatchTouchReply.Code result = output.getInboxService().getBatchTouch().getCode(i++);
+            switch (result) {
                 case OK -> callTask.resultPromise().complete(replyBuilder.setCode(TouchReply.Code.OK).build());
                 case NO_INBOX ->
                     callTask.resultPromise().complete(replyBuilder.setCode(TouchReply.Code.NO_INBOX).build());
                 case CONFLICT ->
                     callTask.resultPromise().complete(replyBuilder.setCode(TouchReply.Code.CONFLICT).build());
-                default -> callTask.resultPromise().complete(replyBuilder.setCode(TouchReply.Code.ERROR).build());
+                default -> {
+                    log.error("Unexpected touch result: {}", result);
+                    callTask.resultPromise().complete(replyBuilder.setCode(TouchReply.Code.ERROR).build());
+                }
             }
         }
     }
@@ -85,7 +95,28 @@ class BatchTouchCall extends BatchMutationCall<TouchRequest, TouchReply> {
     @Override
     protected void handleException(ICallTask<TouchRequest, TouchReply, MutationCallBatcherKey> callTask,
                                    Throwable e) {
-        callTask.resultPromise().complete(TouchReply.newBuilder().setCode(TouchReply.Code.ERROR).build());
+        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+            callTask.resultPromise().complete(TouchReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(TouchReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+            callTask.resultPromise().complete(TouchReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(TouchReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+            callTask.resultPromise().complete(TouchReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(TouchReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        callTask.resultPromise().completeExceptionally(e);
     }
 
     private static class BatchTouchCallTask extends MutationCallTaskBatch<TouchRequest, TouchReply> {

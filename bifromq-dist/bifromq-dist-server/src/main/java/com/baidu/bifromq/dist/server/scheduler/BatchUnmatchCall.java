@@ -14,11 +14,14 @@
 package com.baidu.bifromq.dist.server.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchUnmatchRequest;
@@ -33,7 +36,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchReply> {
     BatchUnmatchCall(KVRangeId rangeId,
                      IBaseKVStoreClient distWorkerClient,
@@ -70,6 +75,27 @@ class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchReply> {
     @Override
     protected void handleException(ICallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey> callTask,
                                    Throwable e) {
+        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+            callTask.resultPromise().complete(UnmatchReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setResult(UnmatchReply.Result.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+            callTask.resultPromise().complete(UnmatchReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setResult(UnmatchReply.Result.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+            callTask.resultPromise().complete(UnmatchReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setResult(UnmatchReply.Result.TRY_LATER)
+                .build());
+            return;
+        }
         callTask.resultPromise().completeExceptionally(e);
     }
 
@@ -93,8 +119,8 @@ class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchReply> {
                         yield UnmatchReply.Result.OK;
                     case NOT_EXISTED:
                         yield UnmatchReply.Result.NOT_EXISTED;
-                    case ERROR:
                     default:
+                        log.error("Unexpected unmatch result: {}", codes.get(i));
                         yield UnmatchReply.Result.ERROR;
                 };
                 tasks.get(i)

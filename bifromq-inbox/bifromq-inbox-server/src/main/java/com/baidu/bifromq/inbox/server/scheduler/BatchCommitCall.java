@@ -14,11 +14,14 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.record.InboxInstance;
 import com.baidu.bifromq.inbox.record.TenantInboxInstance;
@@ -92,11 +95,28 @@ class BatchCommitCall extends BatchMutationCall<CommitRequest, CommitReply> {
     @Override
     protected void handleException(ICallTask<CommitRequest, CommitReply, MutationCallBatcherKey> callTask,
                                    Throwable e) {
-        callTask.resultPromise().complete(CommitReply.newBuilder()
-            .setReqId(callTask.call().getReqId())
-            .setCode(CommitReply.Code.ERROR)
-            .build());
-
+        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+            callTask.resultPromise().complete(CommitReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(CommitReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+            callTask.resultPromise().complete(CommitReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(CommitReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+            callTask.resultPromise().complete(CommitReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(CommitReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        callTask.resultPromise().completeExceptionally(e);
     }
 
     private static class BatchCommitCallTask extends MutationCallTaskBatch<CommitRequest, CommitReply> {

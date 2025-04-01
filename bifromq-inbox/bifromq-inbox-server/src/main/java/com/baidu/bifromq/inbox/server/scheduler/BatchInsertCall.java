@@ -68,8 +68,8 @@ class BatchInsertCall extends BatchMutationCall<InboxSubMessagePack, InboxInsert
     }
 
     @Override
-    protected void handleException(
-        ICallTask<InboxSubMessagePack, InboxInsertResult, MutationCallBatcherKey> callTask, Throwable e) {
+    protected void handleException(ICallTask<InboxSubMessagePack, InboxInsertResult, MutationCallBatcherKey> callTask,
+                                   Throwable e) {
         callTask.resultPromise().completeExceptionally(e);
     }
 

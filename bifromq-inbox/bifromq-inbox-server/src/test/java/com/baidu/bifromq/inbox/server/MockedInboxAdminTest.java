@@ -61,7 +61,7 @@ public class MockedInboxAdminTest extends MockedInboxService {
         inboxService.create(CreateRequest.newBuilder().setReqId(reqId).build(), streamObserver);
 
         verify(streamObserver).onNext(argThat(reply ->
-            reply.getReqId() == reqId && reply.getCode() == CreateReply.Code.ERROR));
+            reply.getReqId() == reqId && reply.getCode() == CreateReply.Code.TRY_LATER));
         verify(streamObserver).onCompleted();
     }
 
@@ -75,7 +75,7 @@ public class MockedInboxAdminTest extends MockedInboxService {
         inboxService.attach(AttachRequest.newBuilder().setReqId(reqId).build(), streamObserver);
 
         verify(streamObserver).onNext(argThat(reply ->
-            reply.getReqId() == reqId && reply.getCode() == AttachReply.Code.ERROR));
+            reply.getReqId() == reqId && reply.getCode() == AttachReply.Code.TRY_LATER));
         verify(streamObserver).onCompleted();
     }
 
@@ -89,7 +89,7 @@ public class MockedInboxAdminTest extends MockedInboxService {
         inboxService.detach(DetachRequest.newBuilder().setReqId(reqId).build(), streamObserver);
 
         verify(streamObserver).onNext(argThat(reply ->
-            reply.getReqId() == reqId && reply.getCode() == DetachReply.Code.ERROR));
+            reply.getReqId() == reqId && reply.getCode() == DetachReply.Code.TRY_LATER));
         verify(streamObserver).onCompleted();
     }
 
@@ -103,7 +103,7 @@ public class MockedInboxAdminTest extends MockedInboxService {
         inboxService.touch(TouchRequest.newBuilder().setReqId(reqId).build(), streamObserver);
 
         verify(streamObserver).onNext(argThat(reply ->
-            reply.getReqId() == reqId && reply.getCode() == TouchReply.Code.ERROR));
+            reply.getReqId() == reqId && reply.getCode() == TouchReply.Code.TRY_LATER));
         verify(streamObserver).onCompleted();
     }
 }

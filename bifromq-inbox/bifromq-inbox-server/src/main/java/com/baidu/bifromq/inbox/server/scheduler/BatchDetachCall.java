@@ -14,11 +14,14 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.record.InboxInstance;
 import com.baidu.bifromq.inbox.record.TenantInboxInstance;
@@ -32,7 +35,9 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
 
     protected BatchDetachCall(KVRangeId rangeId,
@@ -91,7 +96,10 @@ class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
                 }
                 case NO_INBOX -> replyBuilder.setCode(DetachReply.Code.NO_INBOX);
                 case CONFLICT -> replyBuilder.setCode(DetachReply.Code.CONFLICT);
-                default -> replyBuilder.setCode(DetachReply.Code.ERROR);
+                default -> {
+                    log.error("Unexpected detach result: {}", result.getCode());
+                    replyBuilder.setCode(DetachReply.Code.ERROR);
+                }
             }
             callTask.resultPromise().complete(replyBuilder.build());
         }
@@ -100,7 +108,28 @@ class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
     @Override
     protected void handleException(ICallTask<DetachRequest, DetachReply, MutationCallBatcherKey> callTask,
                                    Throwable e) {
-        callTask.resultPromise().complete(DetachReply.newBuilder().setCode(DetachReply.Code.ERROR).build());
+        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+            callTask.resultPromise()
+                .complete(DetachReply.newBuilder()
+                    .setCode(DetachReply.Code.TRY_LATER)
+                    .build());
+            return;
+        }
+        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+            callTask.resultPromise()
+                .complete(DetachReply.newBuilder()
+                    .setCode(DetachReply.Code.TRY_LATER)
+                    .build());
+            return;
+        }
+        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+            callTask.resultPromise()
+                .complete(DetachReply.newBuilder()
+                    .setCode(DetachReply.Code.TRY_LATER)
+                    .build());
+            return;
+        }
+        callTask.resultPromise().completeExceptionally(e);
     }
 
     private static class BatchDetachCallTask extends MutationCallTaskBatch<DetachRequest, DetachReply> {

@@ -14,5 +14,5 @@
 package com.baidu.bifromq.dist.client;
 
 public enum PubResult {
-    OK, NO_MATCH, BACK_PRESSURE_REJECTED, ERROR
+    OK, NO_MATCH, BACK_PRESSURE_REJECTED, TRY_LATER, ERROR
 }

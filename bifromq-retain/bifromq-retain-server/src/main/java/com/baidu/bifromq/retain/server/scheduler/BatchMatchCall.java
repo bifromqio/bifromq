@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.retain.server.scheduler;
 
-import static com.baidu.bifromq.retain.rpc.proto.MatchReply.Result.ERROR;
 import static com.baidu.bifromq.retain.rpc.proto.MatchReply.Result.OK;
 import static com.baidu.bifromq.retain.server.scheduler.BatchMatchCallHelper.parallelMatch;
 import static com.baidu.bifromq.retain.server.scheduler.BatchMatchCallHelper.serialMatch;
@@ -23,17 +22,20 @@ import static com.baidu.bifromq.util.TopicUtil.isWildcardTopicFilter;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
+import com.baidu.bifromq.basekv.client.exception.BadRequestException;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.InternalErrorException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
-import com.baidu.bifromq.basekv.store.proto.ReplyCode;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.rpc.proto.BatchMatchReply;
 import com.baidu.bifromq.retain.rpc.proto.BatchMatchRequest;
-import com.baidu.bifromq.retain.rpc.proto.MatchError;
 import com.baidu.bifromq.retain.rpc.proto.MatchParam;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchResult;
@@ -47,7 +49,6 @@ import java.util.NavigableMap;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -107,6 +108,15 @@ class BatchMatchCall implements IBatchCall<MatchCall, MatchCallResult, MatchCall
             .handle((v, e) -> {
                 ICallTask<MatchCall, MatchCallResult, MatchCallBatcherKey> task;
                 if (e != null) {
+                    if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException
+                        || e instanceof TryLaterException || e.getCause() instanceof TryLaterException
+                        || e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+                        while ((task = tasks.poll()) != null) {
+                            task.resultPromise()
+                                .complete(new MatchCallResult(MatchReply.Result.TRY_LATER, Collections.emptyList()));
+                        }
+                        return null;
+                    }
                     while ((task = tasks.poll()) != null) {
                         task.resultPromise()
                             .complete(new MatchCallResult(MatchReply.Result.ERROR, Collections.emptyList()));
@@ -118,12 +128,7 @@ class BatchMatchCall implements IBatchCall<MatchCall, MatchCallResult, MatchCall
                     aggregatedResults.putAll(wildcardMatchFuture.join());
                     while ((task = tasks.poll()) != null) {
                         MatchResult matchResult = aggregatedResults.get(task.call().topicFilter());
-                        if (matchResult.hasOk()) {
-                            task.resultPromise()
-                                .complete(new MatchCallResult(OK, matchResult.getOk().getMessagesList()));
-                        } else {
-                            task.resultPromise().complete(new MatchCallResult(ERROR, Collections.emptyList()));
-                        }
+                        task.resultPromise().complete(new MatchCallResult(OK, matchResult.getMessagesList()));
                     }
                 }
                 return null;
@@ -134,10 +139,10 @@ class BatchMatchCall implements IBatchCall<MatchCall, MatchCallResult, MatchCall
                                                               KVRangeSetting rangeSetting) {
         BatchMatchRequest request = BatchMatchRequest.newBuilder().putMatchParams(batcherKey.tenantId(),
             MatchParam.newBuilder().putAllTopicFilters(topicFilters).setNow(now).build()).setReqId(reqId).build();
-        return queryCoProc(request, rangeSetting).thenApply(
-            reply -> reply.getResultPackMap().get(batcherKey.tenantId()).getResultsMap()).exceptionally(
-            e -> topicFilters.keySet().stream().collect(Collectors.toMap(k -> k,
-                v -> MatchResult.newBuilder().setError(MatchError.getDefaultInstance()).build())));
+        return queryCoProc(request, rangeSetting)
+            .thenApply(reply -> reply.getResultPackMap()
+                .get(batcherKey.tenantId())
+                .getResultsMap());
     }
 
     private CompletableFuture<BatchMatchReply> queryCoProc(BatchMatchRequest request, KVRangeSetting rangeSetting) {
@@ -147,13 +152,15 @@ class BatchMatchCall implements IBatchCall<MatchCall, MatchCallResult, MatchCall
                         .setRetainService(RetainServiceROCoProcInput.newBuilder().setBatchMatch(request).build()).build())
                     .build())
             .thenApply(v -> {
-                if (v.getCode() == ReplyCode.Ok) {
-                    BatchMatchReply batchMatchReply = v.getRoCoProcResult().getRetainService().getBatchMatch();
-                    assert batchMatchReply.getReqId() == request.getReqId();
-                    return batchMatchReply;
+                switch (v.getCode()) {
+                    case Ok -> {
+                        return v.getRoCoProcResult().getRetainService().getBatchMatch();
+                    }
+                    case TryLater -> throw new TryLaterException();
+                    case BadVersion -> throw new BadVersionException();
+                    case BadRequest -> throw new BadRequestException();
+                    default -> throw new InternalErrorException();
                 }
-                log.warn("Failed to exec ro co-proc[code={}]", v.getCode());
-                throw new RuntimeException("Failed to exec rw co-proc");
             });
     }
 }

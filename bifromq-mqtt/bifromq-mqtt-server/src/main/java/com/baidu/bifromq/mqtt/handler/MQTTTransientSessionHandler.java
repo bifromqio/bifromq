@@ -198,6 +198,9 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                     case BACK_PRESSURE_REJECTED -> {
                         return IMQTTProtocolHelper.SubResult.BACK_PRESSURE_REJECTED;
                     }
+                    case TRY_LATER -> {
+                        return IMQTTProtocolHelper.SubResult.TRY_LATER;
+                    }
                     default -> {
                         return IMQTTProtocolHelper.SubResult.ERROR;
                     }
@@ -255,6 +258,9 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
                         }
                         case BACK_PRESSURE_REJECTED -> {
                             return IMQTTProtocolHelper.UnsubResult.BACK_PRESSURE_REJECTED;
+                        }
+                        case TRY_LATER -> {
+                            return IMQTTProtocolHelper.UnsubResult.TRY_LATER;
                         }
                         default -> {
                             return ERROR;

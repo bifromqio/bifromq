@@ -13,10 +13,10 @@
 
 package com.baidu.bifromq.basescheduler;
 
+import com.baidu.bifromq.basescheduler.exception.RetryTimeoutException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.BiPredicate;
 import java.util.function.Supplier;
 
@@ -41,26 +41,26 @@ public class AsyncRetry {
      * @return A CompletableFuture that completes with the task result if successful, or exceptionally with a
      * TimeoutException if max delay is exceeded.
      */
-    public static <T> CompletableFuture<T> retryAsync(Supplier<CompletableFuture<T>> taskSupplier,
-                                                      BiPredicate<T, Throwable> successPredicate,
-                                                      long initialBackoffNanos,
-                                                      long maxDelayNanos) {
+    public static <T> CompletableFuture<T> exec(Supplier<CompletableFuture<T>> taskSupplier,
+                                                BiPredicate<T, Throwable> successPredicate,
+                                                long initialBackoffNanos,
+                                                long maxDelayNanos) {
         assert initialBackoffNanos <= maxDelayNanos;
         CompletableFuture<T> onDone = new CompletableFuture<>();
-        retryAsync(taskSupplier, successPredicate, initialBackoffNanos, maxDelayNanos, 0, 0, onDone);
+        exec(taskSupplier, successPredicate, initialBackoffNanos, maxDelayNanos, 0, 0, onDone);
         return onDone;
     }
 
-    private static <T> void retryAsync(Supplier<CompletableFuture<T>> taskSupplier,
-                                       BiPredicate<T, Throwable> successPredicate,
-                                       long initialBackoffNanos,
-                                       long maxDelayNanos,
-                                       int retryCount,
-                                       long delayNanosSoFar,
-                                       CompletableFuture<T> onDone) {
+    private static <T> void exec(Supplier<CompletableFuture<T>> taskSupplier,
+                                 BiPredicate<T, Throwable> successPredicate,
+                                 long initialBackoffNanos,
+                                 long maxDelayNanos,
+                                 int retryCount,
+                                 long delayNanosSoFar,
+                                 CompletableFuture<T> onDone) {
 
         if (initialBackoffNanos > 0 && delayNanosSoFar >= maxDelayNanos) {
-            onDone.completeExceptionally(new TimeoutException("Max retry delay exceeded"));
+            onDone.completeExceptionally(new RetryTimeoutException("Max retry delay exceeded"));
             return;
         }
 
@@ -81,7 +81,7 @@ public class AsyncRetry {
                 long delayMillisSoFarNew = delayNanosSoFar + delay;
                 // Otherwise, schedule a retry after the calculated delay.
                 Executor delayExecutor = CompletableFuture.delayedExecutor(delay, TimeUnit.NANOSECONDS);
-                CompletableFuture.runAsync(() -> retryAsync(
+                CompletableFuture.runAsync(() -> exec(
                     taskSupplier,
                     successPredicate,
                     initialBackoffNanos,

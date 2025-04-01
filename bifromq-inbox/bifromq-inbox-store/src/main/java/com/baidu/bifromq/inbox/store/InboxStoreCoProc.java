@@ -659,7 +659,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
 
     @SneakyThrows
     private GCReply gcScan(GCRequest request, IKVReader reader) {
-        GCReply.Builder replyBuilder = GCReply.newBuilder().setCode(GCReply.Code.OK);
+        GCReply.Builder replyBuilder = GCReply.newBuilder();
         if (request.hasTenantId()) {
             Collection<InboxMetadata> inboxInstances = tenantStates.getAll(request.getTenantId());
             for (InboxMetadata metadata : inboxInstances) {
@@ -962,6 +962,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         return listBuilder.build();
     }
 
+    @SneakyThrows
     private Runnable batchCommit(BatchCommitRequest request,
                                  BatchCommitReply.Builder replyBuilder,
                                  IKVReader reader,
@@ -978,24 +979,17 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 replyBuilder.addCode(BatchCommitReply.Code.CONFLICT);
                 continue;
             }
-            try {
-                ByteString inboxInstStartKey =
-                    inboxInstanceStartKey(params.getTenantId(), params.getInboxId(), params.getIncarnation());
-                InboxMetadata metadata = metadataOpt.get();
-                InboxMetadata.Builder metaBuilder = metadata.toBuilder();
-                commitInbox(inboxInstStartKey, params, metaBuilder, reader, writer);
-                metadata = metaBuilder
-                    .setLastActiveTime(params.getNow())
-                    .build();
-                writer.put(inboxInstStartKey, metadata.toByteString());
-                replyBuilder.addCode(BatchCommitReply.Code.OK);
-                toBeCached.computeIfAbsent(params.getTenantId(), k -> new HashSet<>()).add(metadata);
-            } catch (Throwable e) {
-                log.error("Failed to commit:tenantId={}, inbox={}, inc={}",
-                    params.getTenantId(), params.getInboxId(), params.getIncarnation(), e);
-                replyBuilder.addCode(BatchCommitReply.Code.ERROR);
-
-            }
+            ByteString inboxInstStartKey =
+                inboxInstanceStartKey(params.getTenantId(), params.getInboxId(), params.getIncarnation());
+            InboxMetadata metadata = metadataOpt.get();
+            InboxMetadata.Builder metaBuilder = metadata.toBuilder();
+            commitInbox(inboxInstStartKey, params, metaBuilder, reader, writer);
+            metadata = metaBuilder
+                .setLastActiveTime(params.getNow())
+                .build();
+            writer.put(inboxInstStartKey, metadata.toByteString());
+            replyBuilder.addCode(BatchCommitReply.Code.OK);
+            toBeCached.computeIfAbsent(params.getTenantId(), k -> new HashSet<>()).add(metadata);
         }
         return () -> toBeCached.forEach(
             (tenantId, putSet) -> putSet.forEach(inboxMetadata -> tenantStates.upsert(tenantId, inboxMetadata)));

@@ -37,10 +37,8 @@ import com.baidu.bifromq.retain.rpc.proto.BatchRetainReply;
 import com.baidu.bifromq.retain.rpc.proto.BatchRetainRequest;
 import com.baidu.bifromq.retain.rpc.proto.GCReply;
 import com.baidu.bifromq.retain.rpc.proto.GCRequest;
-import com.baidu.bifromq.retain.rpc.proto.MatchError;
 import com.baidu.bifromq.retain.rpc.proto.MatchResult;
 import com.baidu.bifromq.retain.rpc.proto.MatchResultPack;
-import com.baidu.bifromq.retain.rpc.proto.Matched;
 import com.baidu.bifromq.retain.rpc.proto.RetainMessage;
 import com.baidu.bifromq.retain.rpc.proto.RetainResult;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcInput;
@@ -143,14 +141,9 @@ class RetainStoreCoProc implements IKVRangeCoProc {
             MatchResultPack.Builder resultPackBuilder = MatchResultPack.newBuilder();
             for (String topicFilter : request.getMatchParamsMap().get(tenantId).getTopicFiltersMap().keySet()) {
                 MatchResult.Builder resultBuilder = MatchResult.newBuilder();
-                try {
-                    resultBuilder.setOk(Matched.newBuilder()
-                        .addAllMessages(match(tenantId, topicFilter,
-                            request.getMatchParamsMap().get(tenantId).getTopicFiltersMap().get(topicFilter),
-                            request.getMatchParamsMap().get(tenantId).getNow(), reader)));
-                } catch (Throwable e) {
-                    resultBuilder.setError(MatchError.getDefaultInstance());
-                }
+                resultBuilder.addAllMessages(match(tenantId, topicFilter,
+                    request.getMatchParamsMap().get(tenantId).getTopicFiltersMap().get(topicFilter),
+                    request.getMatchParamsMap().get(tenantId).getNow(), reader));
                 resultPackBuilder.putResults(topicFilter, resultBuilder.build());
             }
             replyBuilder.putResultPack(tenantId, resultPackBuilder.build());
@@ -158,11 +151,12 @@ class RetainStoreCoProc implements IKVRangeCoProc {
         return CompletableFuture.completedFuture(replyBuilder.build());
     }
 
+    @SneakyThrows
     private List<TopicMessage> match(String tenantId,
                                      String topicFilter,
                                      int limit,
                                      long now,
-                                     IKVReader reader) throws Exception {
+                                     IKVReader reader) {
         if (limit == 0) {
             return emptyList();
         }
@@ -197,39 +191,34 @@ class RetainStoreCoProc implements IKVRangeCoProc {
                 request.getParamsMap().get(tenantId).getTopicMessagesMap().entrySet()) {
                 String topic = entry.getKey();
                 RetainMessage retainMessage = entry.getValue();
-                try {
-                    TopicMessage topicMessage = TopicMessage.newBuilder()
-                        .setTopic(topic)
-                        .setMessage(retainMessage.getMessage())
-                        .setPublisher(retainMessage.getPublisher())
-                        .build();
-                    ByteString retainKey = retainMessageKey(tenantId, topicMessage.getTopic());
-                    Set<RetainedMsgInfo> retainedMsgInfos = index.match(tenantId, topic);
-                    if (topicMessage.getMessage().getPayload().isEmpty()) {
-                        // delete existing retained
-                        if (!retainedMsgInfos.isEmpty()) {
-                            writer.delete(retainKey);
-                            removeTopics.computeIfAbsent(tenantId, k -> new HashSet<>()).add(topic);
-                        }
-                        results.put(topic, RetainResult.Code.CLEARED);
-                        continue;
+                TopicMessage topicMessage = TopicMessage.newBuilder()
+                    .setTopic(topic)
+                    .setMessage(retainMessage.getMessage())
+                    .setPublisher(retainMessage.getPublisher())
+                    .build();
+                ByteString retainKey = retainMessageKey(tenantId, topicMessage.getTopic());
+                Set<RetainedMsgInfo> retainedMsgInfos = index.match(tenantId, topic);
+                if (topicMessage.getMessage().getPayload().isEmpty()) {
+                    // delete existing retained
+                    if (!retainedMsgInfos.isEmpty()) {
+                        writer.delete(retainKey);
+                        removeTopics.computeIfAbsent(tenantId, k -> new HashSet<>()).add(topic);
                     }
-                    if (retainedMsgInfos.isEmpty()) {
-                        // retain new message
-                        writer.put(retainKey, topicMessage.toByteString());
-                        addTopics.computeIfAbsent(tenantId, k -> new HashMap<>())
-                            .put(topic, topicMessage.getMessage());
-                    } else {
-                        // replace existing
-                        writer.put(retainKey, topicMessage.toByteString());
-                        updateTopics.computeIfAbsent(tenantId, k -> new HashMap<>())
-                            .put(topic, topicMessage.getMessage());
-                    }
-                    results.put(topic, RetainResult.Code.RETAINED);
-                } catch (Throwable e) {
-                    log.error("Retain failed", e);
-                    results.put(topic, RetainResult.Code.ERROR);
+                    results.put(topic, RetainResult.Code.CLEARED);
+                    continue;
                 }
+                if (retainedMsgInfos.isEmpty()) {
+                    // retain new message
+                    writer.put(retainKey, topicMessage.toByteString());
+                    addTopics.computeIfAbsent(tenantId, k -> new HashMap<>())
+                        .put(topic, topicMessage.getMessage());
+                } else {
+                    // replace existing
+                    writer.put(retainKey, topicMessage.toByteString());
+                    updateTopics.computeIfAbsent(tenantId, k -> new HashMap<>())
+                        .put(topic, topicMessage.getMessage());
+                }
+                results.put(topic, RetainResult.Code.RETAINED);
             }
             replyBuilder.putResults(tenantId, RetainResult.newBuilder()
                 .putAllResults(results)

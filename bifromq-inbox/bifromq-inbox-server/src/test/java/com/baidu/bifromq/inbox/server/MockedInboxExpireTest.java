@@ -43,7 +43,7 @@ public class MockedInboxExpireTest extends MockedInboxService {
         inboxService.expire(ExpireRequest.newBuilder().setReqId(reqId).build(), streamObserver);
 
         verify(streamObserver).onNext(argThat(reply ->
-            reply.getReqId() == reqId && reply.getCode() == ExpireReply.Code.ERROR));
+            reply.getReqId() == reqId && reply.getCode() == ExpireReply.Code.TRY_LATER));
         verify(streamObserver).onCompleted();
     }
 
@@ -78,7 +78,7 @@ public class MockedInboxExpireTest extends MockedInboxService {
             .build(), streamObserver);
 
         verify(streamObserver).onNext(argThat(reply ->
-            reply.getReqId() == reqId && reply.getCode() == ExpireReply.Code.ERROR));
+            reply.getReqId() == reqId && reply.getCode() == ExpireReply.Code.TRY_LATER));
         verify(streamObserver).onCompleted();
 
         verify(detachScheduler).schedule(argThat(req ->

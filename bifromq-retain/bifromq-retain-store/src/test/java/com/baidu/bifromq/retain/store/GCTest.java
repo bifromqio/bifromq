@@ -42,11 +42,11 @@ public class GCTest extends RetainStoreTest {
         requestRetain(tenantId, message);
 
         requestGC(0, null, null);
-        assertTrue(requestMatch(tenantId, 0L, topic, 1).getOk().getMessagesCount() > 0);
+        assertTrue(requestMatch(tenantId, 0L, topic, 1).getMessagesCount() > 0);
 
         requestGC(1100L, null, null);
 
-        assertEquals(requestMatch(tenantId, 1100L, topic, 1).getOk().getMessagesCount(), 0);
+        assertEquals(requestMatch(tenantId, 1100L, topic, 1).getMessagesCount(), 0);
     }
 
     @Test(groups = "integration")

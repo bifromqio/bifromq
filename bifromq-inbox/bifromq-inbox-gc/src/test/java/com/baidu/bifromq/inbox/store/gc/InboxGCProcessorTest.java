@@ -26,6 +26,7 @@ import static org.testng.Assert.assertFalse;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.store.proto.KVRangeROReply;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
@@ -51,21 +52,18 @@ import org.testng.annotations.Test;
 
 public class InboxGCProcessorTest {
 
+    private final String localStoreId = "testLocalStoreId";
+    private final KVRangeSetting localRangeSetting = new KVRangeSetting("cluster", localStoreId,
+        KVRangeDescriptor.newBuilder().setId(KVRangeIdUtil.generate()).build());
+    private final String remoteStoreId = "testRemoteStoreId";
+    private final KVRangeSetting remoteRangeSetting = new KVRangeSetting("cluster", remoteStoreId,
+        KVRangeDescriptor.newBuilder().setId(KVRangeIdUtil.generate()).setBoundary(FULL_BOUNDARY).build());
+    private final String tenantId = "testTenantId";
     @Mock
     private IInboxClient inboxClient;
     @Mock
     private IBaseKVStoreClient storeClient;
     private InboxStoreGCProcessor inboxGCProc;
-    private final String localStoreId = "testLocalStoreId";
-    private final KVRangeSetting localRangeSetting = new KVRangeSetting("cluster", localStoreId,
-        KVRangeDescriptor.newBuilder().setId(KVRangeIdUtil.generate()).build());
-
-    private final String remoteStoreId = "testRemoteStoreId";
-    private final KVRangeSetting remoteRangeSetting = new KVRangeSetting("cluster", remoteStoreId,
-        KVRangeDescriptor.newBuilder().setId(KVRangeIdUtil.generate())
-            .setBoundary(FULL_BOUNDARY)
-            .build());
-    private final String tenantId = "testTenantId";
     private AutoCloseable closeable;
 
     @BeforeMethod
@@ -94,13 +92,10 @@ public class InboxGCProcessorTest {
         when(storeClient.latestEffectiveRouter()).thenReturn(new TreeMap<>(BoundaryUtil::compare) {{
             put(FULL_BOUNDARY, remoteRangeSetting);
         }});
-        when(storeClient.query(eq(remoteStoreId), any())).thenReturn(
-            CompletableFuture.completedFuture(KVRangeROReply.newBuilder()
-                .setCode(ReplyCode.Ok)
-                .setRoCoProcResult(ROCoProcOutput.newBuilder()
+        when(storeClient.query(eq(remoteStoreId), any())).thenReturn(CompletableFuture.completedFuture(
+            KVRangeROReply.newBuilder().setCode(ReplyCode.Ok).setRoCoProcResult(ROCoProcOutput.newBuilder()
                     .setInboxService(InboxServiceROCoProcOutput.newBuilder()
                         .setGc(GCReply.newBuilder()
-                            .setCode(GCReply.Code.OK)
                             .build())
                         .build())
                     .build())
@@ -117,8 +112,7 @@ public class InboxGCProcessorTest {
             put(FULL_BOUNDARY, remoteRangeSetting);
         }});
 
-        when(storeClient.query(anyString(), any()))
-            .thenReturn(CompletableFuture.failedFuture(new RuntimeException()));
+        when(storeClient.query(anyString(), any())).thenReturn(CompletableFuture.failedFuture(new RuntimeException()));
         IInboxStoreGCProcessor.Result result =
             inboxGCProc.gc(System.nanoTime(), null, 10, HLC.INST.getPhysical()).join();
         assertEquals(result, IInboxStoreGCProcessor.Result.ERROR);
@@ -131,10 +125,8 @@ public class InboxGCProcessorTest {
             put(FULL_BOUNDARY, remoteRangeSetting);
         }});
 
-        when(storeClient.query(anyString(), any()))
-            .thenReturn(CompletableFuture.completedFuture(KVRangeROReply.newBuilder()
-                .setCode(ReplyCode.InternalError)
-                .build()));
+        when(storeClient.query(anyString(), any())).thenReturn(
+            CompletableFuture.completedFuture(KVRangeROReply.newBuilder().setCode(ReplyCode.InternalError).build()));
         IInboxStoreGCProcessor.Result result =
             inboxGCProc.gc(System.nanoTime(), null, 10, HLC.INST.getPhysical()).join();
         assertEquals(result, IInboxStoreGCProcessor.Result.ERROR);
@@ -147,17 +139,7 @@ public class InboxGCProcessorTest {
             put(FULL_BOUNDARY, remoteRangeSetting);
         }});
 
-        when(storeClient.query(anyString(), any()))
-            .thenReturn(CompletableFuture.completedFuture(KVRangeROReply.newBuilder()
-                .setCode(ReplyCode.Ok)
-                .setRoCoProcResult(ROCoProcOutput.newBuilder()
-                    .setInboxService(InboxServiceROCoProcOutput.newBuilder()
-                        .setGc(GCReply.newBuilder()
-                            .setCode(GCReply.Code.ERROR)
-                            .build())
-                        .build())
-                    .build())
-                .build()));
+        when(storeClient.query(anyString(), any())).thenReturn(CompletableFuture.failedFuture(new TryLaterException()));
         IInboxStoreGCProcessor.Result result =
             inboxGCProc.gc(System.nanoTime(), null, 10, HLC.INST.getPhysical()).join();
         assertEquals(result, IInboxStoreGCProcessor.Result.ERROR);
@@ -165,32 +147,21 @@ public class InboxGCProcessorTest {
 
     @Test
     public void detachAfterScan() {
-        GCReply.GCCandidate gcCandidate1 = GCReply.GCCandidate.newBuilder()
-            .setInboxId("inboxId1")
-            .setIncarnation(1)
-            .setVersion(2)
-            .setExpirySeconds(3)
-            .setClient(ClientInfo.newBuilder().build())
-            .build();
-        GCReply.GCCandidate gcCandidate2 = GCReply.GCCandidate.newBuilder()
-            .setInboxId("inboxId2")
-            .setIncarnation(1)
-            .setVersion(2)
-            .setExpirySeconds(3)
-            .setClient(ClientInfo.newBuilder().build())
-            .build();
+        GCReply.GCCandidate gcCandidate1 =
+            GCReply.GCCandidate.newBuilder().setInboxId("inboxId1").setIncarnation(1).setVersion(2).setExpirySeconds(3)
+                .setClient(ClientInfo.newBuilder().build()).build();
+        GCReply.GCCandidate gcCandidate2 =
+            GCReply.GCCandidate.newBuilder().setInboxId("inboxId2").setIncarnation(1).setVersion(2).setExpirySeconds(3)
+                .setClient(ClientInfo.newBuilder().build()).build();
         inboxGCProc = new InboxStoreGCProcessor(inboxClient, storeClient);
         when(storeClient.latestEffectiveRouter()).thenReturn(new TreeMap<>(BoundaryUtil::compare) {{
             put(FULL_BOUNDARY, remoteRangeSetting);
         }});
 
-        when(storeClient.query(anyString(), any()))
-            .thenReturn(CompletableFuture.completedFuture(KVRangeROReply.newBuilder()
-                .setCode(ReplyCode.Ok)
-                .setRoCoProcResult(ROCoProcOutput.newBuilder()
+        when(storeClient.query(anyString(), any())).thenReturn(CompletableFuture.completedFuture(
+            KVRangeROReply.newBuilder().setCode(ReplyCode.Ok).setRoCoProcResult(ROCoProcOutput.newBuilder()
                     .setInboxService(InboxServiceROCoProcOutput.newBuilder()
                         .setGc(GCReply.newBuilder()
-                            .setCode(GCReply.Code.OK)
                             .addCandidate(gcCandidate1)
                             .addCandidate(gcCandidate2)
                             .build())
@@ -222,13 +193,9 @@ public class InboxGCProcessorTest {
 
     @Test
     public void expirySecondsOverride() {
-        GCReply.GCCandidate gcCandidate1 = GCReply.GCCandidate.newBuilder()
-            .setInboxId("inboxId1")
-            .setIncarnation(1)
-            .setVersion(2)
-            .setExpirySeconds(3)
-            .setClient(ClientInfo.newBuilder().build())
-            .build();
+        GCReply.GCCandidate gcCandidate1 =
+            GCReply.GCCandidate.newBuilder().setInboxId("inboxId1").setIncarnation(1).setVersion(2).setExpirySeconds(3)
+                .setClient(ClientInfo.newBuilder().build()).build();
         inboxGCProc = new InboxStoreGCProcessor(inboxClient, storeClient);
         when(storeClient.latestEffectiveRouter()).thenReturn(new TreeMap<>(BoundaryUtil::compare) {{
             put(FULL_BOUNDARY, remoteRangeSetting);
@@ -240,7 +207,6 @@ public class InboxGCProcessorTest {
                 .setRoCoProcResult(ROCoProcOutput.newBuilder()
                     .setInboxService(InboxServiceROCoProcOutput.newBuilder()
                         .setGc(GCReply.newBuilder()
-                            .setCode(GCReply.Code.OK)
                             .addCandidate(gcCandidate1)
                             .build())
                         .build())

@@ -38,7 +38,7 @@ public class MockedInboxCommitTest extends MockedInboxService {
         inboxService.commit(CommitRequest.newBuilder().setReqId(reqId).build(), streamObserver);
 
         verify(streamObserver).onNext(argThat(reply ->
-            reply.getReqId() == reqId && reply.getCode() == CommitReply.Code.ERROR));
+            reply.getReqId() == reqId && reply.getCode() == CommitReply.Code.TRY_LATER));
         verify(streamObserver).onCompleted();
     }
 }

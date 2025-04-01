@@ -25,9 +25,7 @@ import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
-import com.baidu.bifromq.retain.rpc.proto.MatchError;
 import com.baidu.bifromq.retain.rpc.proto.MatchResult;
-import com.baidu.bifromq.retain.rpc.proto.Matched;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
 import com.google.protobuf.ByteString;
@@ -71,8 +69,7 @@ public class BatchMatchCallHelperTest {
 
         ArgumentCaptor<Map<String, Integer>> topicFiltersCaptor = ArgumentCaptor.forClass(Map.class);
         ArgumentCaptor<KVRangeSetting> rangeSettingCaptor = ArgumentCaptor.forClass(KVRangeSetting.class);
-        verify(matcher, times(2)).match(eq(1L), eq(2L),
-            topicFiltersCaptor.capture(), rangeSettingCaptor.capture());
+        verify(matcher, times(2)).match(eq(1L), eq(2L), topicFiltersCaptor.capture(), rangeSettingCaptor.capture());
         assertEquals(topicFiltersCaptor.getAllValues().size(), 2);
         assertEquals(topicFiltersCaptor.getAllValues().get(0), Map.of("topic1", 1, "topic2", 1));
         assertEquals(topicFiltersCaptor.getAllValues().get(1), Map.of("topic3", 1, "topic4", 1));
@@ -82,99 +79,38 @@ public class BatchMatchCallHelperTest {
     }
 
     @Test
-    public void testParallelMatchAggregateResult() {
-        Map<KVRangeSetting, Set<String>> rangeAssignment = new LinkedHashMap<>();
-        rangeAssignment.put(rangeSetting("1"), Set.of("topic1", "topic2"));
-        rangeAssignment.put(rangeSetting("2"), Set.of("topic3", "topic4"));
-        Map<String, MatchResult> map1 =
-            Map.of("topic1", MatchResult.newBuilder().setOk(Matched.getDefaultInstance()).build(),
-                "topic2", MatchResult.newBuilder().setError(MatchError.getDefaultInstance()).build());
-        Map<String, MatchResult> map2 =
-            Map.of("topic3", MatchResult.newBuilder().setOk(Matched.getDefaultInstance()).build(),
-                "topic4", MatchResult.newBuilder().setError(MatchError.getDefaultInstance()).build());
-        Map<String, MatchResult> all = new HashMap<>();
-        all.putAll(map1);
-        all.putAll(map2);
-
-        when(matcher.match(anyLong(), anyLong(), any(), eq(rangeSetting("1"))))
-            .thenReturn(CompletableFuture.completedFuture(map1));
-        when(matcher.match(anyLong(), anyLong(), any(), eq(rangeSetting("2"))))
-            .thenReturn(CompletableFuture.completedFuture(map2));
-
-        Map<String, MatchResult> resultMap = parallelMatch(1L, 2L, rangeAssignment, matcher).join();
-        assertEquals(resultMap, all);
-    }
-
-    @Test
     public void testSerialMatch() {
         Map<KVRangeSetting, Set<String>> rangeAssignment = new LinkedHashMap<>();
         rangeAssignment.put(rangeSetting("1"), Set.of("topic1", "topic2"));
         rangeAssignment.put(rangeSetting("2"), Set.of("topic1", "topic2"));
 
         Map<String, MatchResult> response1 = new HashMap<>();
-        response1.put("topic1", MatchResult.newBuilder()
-            .setOk(Matched.newBuilder()
-                .addMessages(TopicMessage.newBuilder().setTopic("topic1")
-                    .setMessage(Message.newBuilder()
-                        .setPayload(ByteString.copyFromUtf8("msg1-1"))
-                        .build())
-                    .build())
-                .addMessages(TopicMessage.newBuilder().setTopic("topic1")
-                    .setMessage(Message.newBuilder()
-                        .setPayload(ByteString.copyFromUtf8("msg1-2"))
-                        .build())
-                    .build())
-                .build())
+        response1.put("topic1", MatchResult.newBuilder().addMessages(TopicMessage.newBuilder().setTopic("topic1")
+                .setMessage(Message.newBuilder().setPayload(ByteString.copyFromUtf8("msg1-1")).build()).build())
+            .addMessages(TopicMessage.newBuilder().setTopic("topic1")
+                .setMessage(Message.newBuilder().setPayload(ByteString.copyFromUtf8("msg1-2")).build()).build())
             .build());
-        response1.put("topic2", MatchResult.newBuilder()
-            .setOk(Matched.newBuilder()
-                .addMessages(TopicMessage.newBuilder().setTopic("topic2")
-                    .setMessage(Message.newBuilder()
-                        .setPayload(ByteString.copyFromUtf8("msg2-1"))
-                        .build())
-                    .build())
-                .build())
-            .build());
+        response1.put("topic2", MatchResult.newBuilder().addMessages(TopicMessage.newBuilder().setTopic("topic2")
+            .setMessage(Message.newBuilder().setPayload(ByteString.copyFromUtf8("msg2-1")).build()).build()).build());
 
         Map<String, MatchResult> response2 = new HashMap<>();
-        response2.put("topic1", MatchResult.newBuilder()
-            .setOk(Matched.newBuilder()
-                .addMessages(TopicMessage.newBuilder().setTopic("topic1")
-                    .setMessage(Message.newBuilder()
-                        .setPayload(ByteString.copyFromUtf8("msg1-3"))
-                        .build())
-                    .build())
-                .addMessages(TopicMessage.newBuilder().setTopic("topic1")
-                    .setMessage(Message.newBuilder()
-                        .setPayload(ByteString.copyFromUtf8("msg1-4"))
-                        .build())
-                    .build())
-                .build())
+        response2.put("topic1", MatchResult.newBuilder().addMessages(TopicMessage.newBuilder().setTopic("topic1")
+                .setMessage(Message.newBuilder().setPayload(ByteString.copyFromUtf8("msg1-3")).build()).build())
+            .addMessages(TopicMessage.newBuilder().setTopic("topic1")
+                .setMessage(Message.newBuilder().setPayload(ByteString.copyFromUtf8("msg1-4")).build()).build())
             .build());
-        response2.put("topic2", MatchResult.newBuilder()
-            .setOk(Matched.newBuilder()
-                .addMessages(TopicMessage.newBuilder().setTopic("topic2")
-                    .setMessage(Message.newBuilder()
-                        .setPayload(ByteString.copyFromUtf8("msg2-2"))
-                        .build())
-                    .build())
-                .addMessages(TopicMessage.newBuilder().setTopic("topic2")
-                    .setMessage(Message.newBuilder()
-                        .setPayload(ByteString.copyFromUtf8("msg2-3"))
-                        .build())
-                    .build())
-                .addMessages(TopicMessage.newBuilder().setTopic("topic3")
-                    .setMessage(Message.newBuilder()
-                        .setPayload(ByteString.copyFromUtf8("msg2-4"))
-                        .build())
-                    .build())
-                .build())
+        response2.put("topic2", MatchResult.newBuilder().addMessages(TopicMessage.newBuilder().setTopic("topic2")
+                .setMessage(Message.newBuilder().setPayload(ByteString.copyFromUtf8("msg2-2")).build()).build())
+            .addMessages(TopicMessage.newBuilder().setTopic("topic2")
+                .setMessage(Message.newBuilder().setPayload(ByteString.copyFromUtf8("msg2-3")).build()).build())
+            .addMessages(TopicMessage.newBuilder().setTopic("topic3")
+                .setMessage(Message.newBuilder().setPayload(ByteString.copyFromUtf8("msg2-4")).build()).build())
             .build());
 
-        when(matcher.match(eq(1L), eq(2L), any(), eq(rangeSetting("1"))))
-            .thenReturn(CompletableFuture.completedFuture(response1));
-        when(matcher.match(eq(1L), eq(2L), any(), eq(rangeSetting("2"))))
-            .thenReturn(CompletableFuture.completedFuture(response2));
+        when(matcher.match(eq(1L), eq(2L), any(), eq(rangeSetting("1")))).thenReturn(
+            CompletableFuture.completedFuture(response1));
+        when(matcher.match(eq(1L), eq(2L), any(), eq(rangeSetting("2")))).thenReturn(
+            CompletableFuture.completedFuture(response2));
 
         int limit = 3;
         Map<String, MatchResult> result =
@@ -184,16 +120,16 @@ public class BatchMatchCallHelperTest {
         verify(matcher, times(1)).match(eq(1L), eq(2L), any(), eq(rangeSetting("2")));
 
         MatchResult topic1Result = result.get("topic1");
-        assertEquals(topic1Result.getOk().getMessagesCount(), 3);
-        assertEquals(topic1Result.getOk().getMessages(0).getMessage().getPayload().toStringUtf8(), "msg1-1");
-        assertEquals(topic1Result.getOk().getMessages(1).getMessage().getPayload().toStringUtf8(), "msg1-2");
-        assertEquals(topic1Result.getOk().getMessages(2).getMessage().getPayload().toStringUtf8(), "msg1-3");
+        assertEquals(topic1Result.getMessagesCount(), 3);
+        assertEquals(topic1Result.getMessages(0).getMessage().getPayload().toStringUtf8(), "msg1-1");
+        assertEquals(topic1Result.getMessages(1).getMessage().getPayload().toStringUtf8(), "msg1-2");
+        assertEquals(topic1Result.getMessages(2).getMessage().getPayload().toStringUtf8(), "msg1-3");
 
         MatchResult topic2Result = result.get("topic2");
-        assertEquals(topic2Result.getOk().getMessagesCount(), 3);
-        assertEquals(topic2Result.getOk().getMessages(0).getMessage().getPayload().toStringUtf8(), "msg2-1");
-        assertEquals(topic2Result.getOk().getMessages(1).getMessage().getPayload().toStringUtf8(), "msg2-2");
-        assertEquals(topic2Result.getOk().getMessages(2).getMessage().getPayload().toStringUtf8(), "msg2-3");
+        assertEquals(topic2Result.getMessagesCount(), 3);
+        assertEquals(topic2Result.getMessages(0).getMessage().getPayload().toStringUtf8(), "msg2-1");
+        assertEquals(topic2Result.getMessages(1).getMessage().getPayload().toStringUtf8(), "msg2-2");
+        assertEquals(topic2Result.getMessages(2).getMessage().getPayload().toStringUtf8(), "msg2-3");
     }
 
     private KVRangeSetting rangeSetting(String storeId) {

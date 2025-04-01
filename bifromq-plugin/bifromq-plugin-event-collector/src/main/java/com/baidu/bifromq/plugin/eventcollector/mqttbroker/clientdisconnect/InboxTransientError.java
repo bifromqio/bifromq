@@ -15,10 +15,18 @@ package com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect;
 
 
 import com.baidu.bifromq.plugin.eventcollector.EventType;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.ToString;
+import lombok.experimental.Accessors;
 
+@Getter
+@Setter
+@Accessors(fluent = true, chain = true)
 @ToString(callSuper = true)
 public final class InboxTransientError extends ClientDisconnectEvent<InboxTransientError> {
+    private String reason;
+
     @Override
     public EventType type() {
         return EventType.INBOX_TRANSIENT_ERROR;

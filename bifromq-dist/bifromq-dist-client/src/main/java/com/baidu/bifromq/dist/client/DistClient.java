@@ -14,6 +14,8 @@
 package com.baidu.bifromq.dist.client;
 
 import com.baidu.bifromq.baserpc.client.IRPCClient;
+import com.baidu.bifromq.basescheduler.exception.BackPressureException;
+import com.baidu.bifromq.basescheduler.exception.RetryTimeoutException;
 import com.baidu.bifromq.dist.client.scheduler.DistServerCallScheduler;
 import com.baidu.bifromq.dist.client.scheduler.IDistServerCallScheduler;
 import com.baidu.bifromq.dist.client.scheduler.PubCall;
@@ -48,6 +50,12 @@ final class DistClient implements IDistClient {
     public CompletableFuture<PubResult> pub(long reqId, String topic, Message message, ClientInfo publisher) {
         return reqScheduler.schedule(new PubCall(publisher, topic, message))
             .exceptionally(e -> {
+                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                    return PubResult.BACK_PRESSURE_REJECTED;
+                }
+                if (e instanceof RetryTimeoutException || e.getCause() instanceof RetryTimeoutException) {
+                    return PubResult.TRY_LATER;
+                }
                 log.debug("Failed to pub", e);
                 return PubResult.ERROR;
             });
@@ -76,6 +84,7 @@ final class DistClient implements IDistClient {
                 case OK -> MatchResult.OK;
                 case EXCEED_LIMIT -> MatchResult.EXCEED_LIMIT;
                 case BACK_PRESSURE_REJECTED -> MatchResult.BACK_PRESSURE_REJECTED;
+                case TRY_LATER -> MatchResult.TRY_LATER;
                 default -> MatchResult.ERROR;
             })
             .exceptionally(e -> {
@@ -107,6 +116,7 @@ final class DistClient implements IDistClient {
                 case OK -> UnmatchResult.OK;
                 case NOT_EXISTED -> UnmatchResult.NOT_EXISTED;
                 case BACK_PRESSURE_REJECTED -> UnmatchResult.BACK_PRESSURE_REJECTED;
+                case TRY_LATER -> UnmatchResult.TRY_LATER;
                 default -> UnmatchResult.ERROR;
             })
             .exceptionally(e -> {

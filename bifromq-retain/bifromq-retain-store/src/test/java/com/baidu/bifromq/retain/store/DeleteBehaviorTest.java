@@ -49,6 +49,6 @@ public class DeleteBehaviorTest extends RetainStoreTest {
         assertEquals(requestRetain(tenantId, message(topic, "")), RetainResult.Code.CLEARED);
 
         MatchResult matchReply = requestMatch(tenantId, topic, 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 0);
+        assertEquals(matchReply.getMessagesCount(), 0);
     }
 }

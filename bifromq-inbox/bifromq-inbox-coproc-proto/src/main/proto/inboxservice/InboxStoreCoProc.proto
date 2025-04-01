@@ -51,7 +51,6 @@ message BatchCheckSubReply{
     OK = 0;
     NO_INBOX = 1;
     NO_MATCH = 2;
-    ERROR = 3;
   }
   repeated Code code = 1;
 }
@@ -94,7 +93,6 @@ message BatchAttachReply{
     OK = 0;
     NO_INBOX = 1;
     CONFLICT = 2;
-    ERROR = 3;
   }
   message Result{
     Code code = 1;
@@ -121,7 +119,6 @@ message BatchDetachReply{
     OK = 0;
     NO_INBOX = 1;
     CONFLICT = 2;
-    ERROR = 3;
   }
   message Result{
     Code code = 1;
@@ -148,7 +145,6 @@ message BatchTouchReply{
     OK = 0;
     NO_INBOX = 1;
     CONFLICT = 2;
-    ERROR = 3;
   }
   repeated Code code = 1;
 }
@@ -168,7 +164,6 @@ message BatchDeleteReply{
     OK = 0;
     NO_INBOX = 1;
     CONFLICT = 2;
-    ERROR = 3;
   }
   message Result{
     Code code = 1;
@@ -197,7 +192,6 @@ message BatchSubReply{
     EXCEED_LIMIT = 2;
     NO_INBOX = 3;
     CONFLICT = 4;
-    ERROR = 5;
   }
   repeated Code code = 1;
 }
@@ -220,7 +214,6 @@ message BatchUnsubReply{
     NO_INBOX = 1;
     NO_SUB = 2;
     CONFLICT = 3;
-    ERROR = 4;
   }
   message Result{
     Code code = 1;
@@ -296,7 +289,6 @@ message BatchCommitReply{
     OK = 0;
     NO_INBOX = 1;
     CONFLICT = 2;
-    ERROR = 3;
   }
   repeated Code code = 1;
 }
@@ -308,10 +300,6 @@ message GCRequest {
 }
 
 message GCReply {
-  enum Code{
-    OK = 0;
-    ERROR = 1;
-  }
   message GCCandidate{
     string inboxId = 2;
     uint64 incarnation = 3;
@@ -319,8 +307,7 @@ message GCReply {
     uint32 expirySeconds = 5;
     commontype.ClientInfo client = 6;
   }
-  Code code = 1;
-  repeated GCCandidate candidate = 2;
+  repeated GCCandidate candidate = 1;
 }
 
 message CollectMetricsRequest{

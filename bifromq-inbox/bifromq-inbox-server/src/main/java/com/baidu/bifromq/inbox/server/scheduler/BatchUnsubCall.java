@@ -14,11 +14,14 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.record.InboxInstance;
 import com.baidu.bifromq.inbox.record.TenantInboxInstance;
@@ -32,7 +35,9 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 class BatchUnsubCall extends BatchMutationCall<UnsubRequest, UnsubReply> {
     protected BatchUnsubCall(KVRangeId rangeId,
                              IBaseKVStoreClient distWorkerClient,
@@ -82,17 +87,39 @@ class BatchUnsubCall extends BatchMutationCall<UnsubRequest, UnsubReply> {
                 case NO_INBOX -> task.resultPromise().complete(replyBuilder.setCode(UnsubReply.Code.NO_INBOX).build());
                 case NO_SUB -> task.resultPromise().complete(replyBuilder.setCode(UnsubReply.Code.NO_SUB).build());
                 case CONFLICT -> task.resultPromise().complete(replyBuilder.setCode(UnsubReply.Code.CONFLICT).build());
-                default -> task.resultPromise().complete(replyBuilder.setCode(UnsubReply.Code.ERROR).build());
+                default -> {
+                    log.error("Unknown error code: {}", result.getCode());
+                    task.resultPromise().complete(replyBuilder.setCode(UnsubReply.Code.ERROR).build());
+                }
             }
         }
     }
 
     @Override
     protected void handleException(ICallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey> callTask, Throwable e) {
-        callTask.resultPromise().complete(UnsubReply.newBuilder()
-            .setReqId(callTask.call().getReqId())
-            .setCode(UnsubReply.Code.ERROR)
-            .build());
+        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+            callTask.resultPromise().complete(UnsubReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(UnsubReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+            callTask.resultPromise().complete(UnsubReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(UnsubReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+            callTask.resultPromise().complete(UnsubReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(UnsubReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        callTask.resultPromise().completeExceptionally(e);
+
     }
 
     private static class BatchUnsubCallTask extends MutationCallTaskBatch<UnsubRequest, UnsubReply> {

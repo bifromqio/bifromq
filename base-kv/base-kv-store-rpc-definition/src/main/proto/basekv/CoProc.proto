@@ -1,7 +1,7 @@
 syntax = "proto3";
-import "distservice/DistCoProc.proto";
-import "inboxservice/InboxCoProc.proto";
-import "retainservice/RetainCoProc.proto";
+import "distservice/DistWorkerCoProc.proto";
+import "inboxservice/InboxStoreCoProc.proto";
+import "retainservice/RetainStoreCoProc.proto";
 package basekv;
 
 option java_multiple_files = true;

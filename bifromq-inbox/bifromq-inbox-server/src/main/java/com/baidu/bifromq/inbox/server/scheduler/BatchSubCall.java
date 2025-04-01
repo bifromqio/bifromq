@@ -14,16 +14,20 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.record.InboxInstance;
 import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchSubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import java.time.Duration;
@@ -77,27 +81,46 @@ class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
         int i = 0;
         while ((task = batchedTasks.poll()) != null) {
             SubReply.Builder replyBuilder = SubReply.newBuilder().setReqId(task.call().getReqId());
-            switch (output.getInboxService().getBatchSub().getCode(i++)) {
+            BatchSubReply.Code code = output.getInboxService().getBatchSub().getCode(i++);
+            switch (code) {
                 case OK -> task.resultPromise().complete(replyBuilder.setCode(SubReply.Code.OK).build());
                 case EXISTS -> task.resultPromise().complete(replyBuilder.setCode(SubReply.Code.EXISTS).build());
                 case NO_INBOX -> task.resultPromise().complete(replyBuilder.setCode(SubReply.Code.NO_INBOX).build());
                 case EXCEED_LIMIT ->
                     task.resultPromise().complete(replyBuilder.setCode(SubReply.Code.EXCEED_LIMIT).build());
                 case CONFLICT -> task.resultPromise().complete(replyBuilder.setCode(SubReply.Code.CONFLICT).build());
-                default -> task.resultPromise().complete(replyBuilder.setCode(SubReply.Code.ERROR).build());
+                default -> {
+                    log.error("Unknown error code: {}", code);
+                    task.resultPromise().complete(replyBuilder.setCode(SubReply.Code.ERROR).build());
+                }
             }
         }
-
     }
 
     @Override
     protected void handleException(ICallTask<SubRequest, SubReply, MutationCallBatcherKey> callTask, Throwable e) {
-        log.debug("Failed to batch sub", e);
-        callTask.resultPromise().complete(SubReply.newBuilder()
-            .setReqId(callTask.call().getReqId())
-            .setCode(SubReply.Code.ERROR)
-            .build());
-
+        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+            callTask.resultPromise().complete(SubReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(SubReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+            callTask.resultPromise().complete(SubReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(SubReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+            callTask.resultPromise().complete(SubReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(SubReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        callTask.resultPromise().completeExceptionally(e);
     }
 
     private static class BatchSubCallTask extends MutationCallTaskBatch<SubRequest, SubReply> {

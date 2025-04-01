@@ -15,11 +15,14 @@ package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchQueryCall;
 import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.storage.proto.BatchCheckSubReply;
@@ -76,6 +79,18 @@ class BatchCheckSubCall extends BatchQueryCall<IInboxCheckSubScheduler.CheckMatc
     @Override
     protected void handleException(
         ICallTask<IInboxCheckSubScheduler.CheckMatchInfo, CheckReply.Code, QueryCallBatcherKey> callTask, Throwable e) {
-        callTask.resultPromise().complete(CheckReply.Code.ERROR);
+        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+            callTask.resultPromise().complete(CheckReply.Code.TRY_LATER);
+            return;
+        }
+        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+            callTask.resultPromise().complete(CheckReply.Code.TRY_LATER);
+            return;
+        }
+        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+            callTask.resultPromise().complete(CheckReply.Code.TRY_LATER);
+            return;
+        }
+        callTask.resultPromise().completeExceptionally(e);
     }
 }

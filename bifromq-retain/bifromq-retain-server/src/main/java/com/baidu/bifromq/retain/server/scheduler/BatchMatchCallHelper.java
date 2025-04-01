@@ -15,7 +15,6 @@ package com.baidu.bifromq.retain.server.scheduler;
 
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.retain.rpc.proto.MatchResult;
-import com.baidu.bifromq.retain.rpc.proto.Matched;
 import com.baidu.bifromq.type.TopicMessage;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,15 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class BatchMatchCallHelper {
-    interface IRetainMatcher {
-        CompletableFuture<Map<String, MatchResult>> match(long reqId,
-                                                          long now,
-                                                          Map<String, Integer> topicFilters,
-                                                          KVRangeSetting rangeSetting);
-    }
-
-    static CompletableFuture<Map<String, MatchResult>> parallelMatch(long reqId,
-                                                                     long now,
+    static CompletableFuture<Map<String, MatchResult>> parallelMatch(long reqId, long now,
                                                                      Map<KVRangeSetting, Set<String>> rangeAssignment,
                                                                      IRetainMatcher matcher) {
         List<CompletableFuture<Map<String, MatchResult>>> futures = new ArrayList<>(rangeAssignment.size());
@@ -56,11 +47,9 @@ class BatchMatchCallHelper {
                 }));
     }
 
-    static CompletableFuture<Map<String, MatchResult>> serialMatch(long reqId,
-                                                                   long now,
+    static CompletableFuture<Map<String, MatchResult>> serialMatch(long reqId, long now,
                                                                    Map<KVRangeSetting, Set<String>> rangeAssignment,
-                                                                   int limit,
-                                                                   IRetainMatcher matcher) {
+                                                                   int limit, IRetainMatcher matcher) {
         Map<String, List<TopicMessage>> aggregatedMap = new HashMap<>();
         for (Set<String> topicFilters : rangeAssignment.values()) {
             topicFilters.forEach(tf -> aggregatedMap.putIfAbsent(tf, new LinkedList<>()));
@@ -86,42 +75,34 @@ class BatchMatchCallHelper {
                 }
 
                 // Issue the match query for the remaining topic filters, using the provided limit.
-                return matcher.match(reqId, now, remainingFilters, rangeSetting)
-                    .thenApply(result -> {
-                        // For each topic filter in the result, combine the new matches with any previously
-                        // aggregated matches, ensuring that the total does not exceed the limit.
-                        for (Map.Entry<String, MatchResult> entry : result.entrySet()) {
-                            String topicFilter = entry.getKey();
-                            MatchResult newResult = entry.getValue();
-                            aggregated.computeIfPresent(topicFilter, (k, v) -> switch (newResult.getTypeCase()) {
-                                case OK -> {
-                                    for (int i = 0; i < newResult.getOk().getMessagesCount(); i++) {
-                                        if (v.size() < limit) {
-                                            v.add(newResult.getOk().getMessages(i));
-                                        }
-                                    }
-                                    yield v;
+                return matcher.match(reqId, now, remainingFilters, rangeSetting).thenApply(result -> {
+                    // For each topic filter in the result, combine the new matches with any previously
+                    // aggregated matches, ensuring that the total does not exceed the limit.
+                    for (Map.Entry<String, MatchResult> entry : result.entrySet()) {
+                        String topicFilter = entry.getKey();
+                        MatchResult newResult = entry.getValue();
+                        aggregated.computeIfPresent(topicFilter, (k, v) -> {
+                            for (int i = 0; i < newResult.getMessagesCount(); i++) {
+                                if (v.size() < limit) {
+                                    v.add(newResult.getMessages(i));
                                 }
-                                case ERROR -> {
-                                    log.error("Match error for topic filter: {}", topicFilter);
-                                    // treat error as zero match
-                                    yield v;
-                                }
-                                default -> {
-                                    log.error("Unexpected MatchResult type: {}", newResult.getTypeCase());
-                                    yield v;
-                                }
-                            });
-                        }
-                        return aggregated;
-                    });
+                            }
+                            return v;
+                        });
+                    }
+                    return aggregated;
+                });
             });
         }
         return future.thenApply(v -> {
             Map<String, MatchResult> result = new HashMap<>();
-            v.forEach((k, v1) -> result.put(k,
-                MatchResult.newBuilder().setOk(Matched.newBuilder().addAllMessages(v1)).build()));
+            v.forEach((k, v1) -> result.put(k, MatchResult.newBuilder().addAllMessages(v1).build()));
             return result;
         });
+    }
+
+    interface IRetainMatcher {
+        CompletableFuture<Map<String, MatchResult>> match(long reqId, long now, Map<String, Integer> topicFilters,
+                                                          KVRangeSetting rangeSetting);
     }
 }

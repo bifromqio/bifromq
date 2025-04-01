@@ -130,12 +130,15 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public ProtocolResponse onInboxTransientError() {
+    public ProtocolResponse onInboxTransientError(String reason) {
         return farewell(
             MQTT5MessageBuilders.disconnect()
-                .reasonCode(MQTT5DisconnectReasonCode.UnspecifiedError)
+                .reasonCode(MQTT5DisconnectReasonCode.ImplementationSpecificError)
+                .reasonString(reason)
                 .build(),
-            getLocal(InboxTransientError.class).clientInfo(clientInfo));
+            getLocal(InboxTransientError.class)
+                .reason(reason)
+                .clientInfo(clientInfo));
     }
 
     @Override
@@ -324,6 +327,8 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public ProtocolResponse buildSubAckMessage(MqttSubscribeMessage subMessage, List<SubResult> results) {
+        MQTT5MessageBuilders.SubAckBuilder subAckBuilder = MQTT5MessageBuilders.subAck()
+            .packetId(subMessage.variableHeader().messageId());
         MQTT5SubAckReasonCode[] reasonCodes = new MQTT5SubAckReasonCode[results.size()];
         assert subMessage.payload().topicSubscriptions().size() == results.size();
         for (int i = 0; i < results.size(); i++) {
@@ -336,13 +341,14 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 case WILDCARD_NOT_SUPPORTED -> MQTT5SubAckReasonCode.WildcardSubscriptionsNotSupported;
                 case SUBSCRIPTION_IDENTIFIER_NOT_SUPPORTED -> MQTT5SubAckReasonCode.SubscriptionIdentifierNotSupported;
                 case SHARED_SUBSCRIPTION_NOT_SUPPORTED -> MQTT5SubAckReasonCode.SharedSubscriptionsNotSupported;
+                case TRY_LATER -> {
+                    subAckBuilder.reasonString(results.get(i).name());
+                    yield MQTT5SubAckReasonCode.ImplementationSpecificError;
+                }
                 default -> MQTT5SubAckReasonCode.UnspecifiedError;
             };
         }
-        return response(MQTT5MessageBuilders.subAck()
-            .packetId(subMessage.variableHeader().messageId())
-            .reasonCodes(reasonCodes)
-            .build());
+        return response(subAckBuilder.reasonCodes(reasonCodes).build());
     }
 
     @Override
@@ -421,11 +427,18 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public ProtocolResponse buildUnsubAckMessage(MqttUnsubscribeMessage unsubMessage, List<UnsubResult> results) {
-        MQTT5UnsubAckReasonCode[] reasonCodes = results.stream().map(result -> switch (result) {
+        MQTT5MessageBuilders.UnsubAckBuilder unsubAckBuilder =
+            MQTT5MessageBuilders.unsubAck().packetId(unsubMessage.variableHeader().messageId());
+        MQTT5UnsubAckReasonCode[] reasonCodes = results.stream()
+            .map(result -> switch (result) {
                 case OK -> MQTT5UnsubAckReasonCode.Success;
                 case NO_SUB -> MQTT5UnsubAckReasonCode.NoSubscriptionExisted;
                 case TOPIC_FILTER_INVALID -> MQTT5UnsubAckReasonCode.TopicFilterInvalid;
                 case NOT_AUTHORIZED -> MQTT5UnsubAckReasonCode.NotAuthorized;
+                case TRY_LATER -> {
+                    unsubAckBuilder.reasonString(result.name());
+                    yield MQTT5UnsubAckReasonCode.ImplementationSpecificError;
+                }
                 default -> MQTT5UnsubAckReasonCode.UnspecifiedError;
             })
             .toArray(MQTT5UnsubAckReasonCode[]::new);
@@ -597,8 +610,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                     .clientInfo(clientInfo));
         }
         // disconnect if protocol error
-        if (message.fixedHeader().qosLevel() == MqttQoS.AT_MOST_ONCE &&
-            message.fixedHeader().isDup()) {
+        if (message.fixedHeader().qosLevel() == MqttQoS.AT_MOST_ONCE && message.fixedHeader().isDup()) {
             // ignore the QoS = 0 Dup = 1 messages according to [MQTT-3.3.1-2]
             return farewell(
                 MQTT5MessageBuilders.disconnect()
@@ -748,7 +760,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                     .clientInfo(clientInfo));
             case ERROR -> farewell(
                 MQTT5MessageBuilders.disconnect()
-                    .reasonCode(MQTT5DisconnectReasonCode.UnspecifiedError)
+                    .reasonCode(MQTT5DisconnectReasonCode.ImplementationSpecificError)
                     .reasonString(result.getError().hasReason() ? result.getError().getReason() : null)
                     .userProps(result.getError().getUserProps())
                     .build(),
@@ -773,13 +785,16 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     public ProtocolResponse onQoS0PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
         if (result.distResult() == com.baidu.bifromq.dist.client.PubResult.BACK_PRESSURE_REJECTED
             || result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
+            String reason = result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED
+                ? "Too many retained qos0 publish"
+                : "Too many qos0 publish";
             return farewell(MQTT5MessageBuilders.disconnect()
                     .reasonCode(MQTT5DisconnectReasonCode.ServerBusy)
-                    .reasonString("Too many QoS0 publish")
+                    .reasonString(reason)
                     .userProps(userProps)
                     .build(),
                 getLocal(ServerBusy.class)
-                    .reason("Too many QoS0 publish")
+                    .reason(reason)
                     .clientInfo(clientInfo));
         } else {
             return ProtocolResponse.responseNothing();
@@ -798,7 +813,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 .build());
             case ERROR -> response(MQTT5MessageBuilders.pubAck(requestProblemInfo)
                 .packetId(packetId)
-                .reasonCode(MQTT5PubAckReasonCode.UnspecifiedError)
+                .reasonCode(MQTT5PubAckReasonCode.ImplementationSpecificError)
                 .reasonString(result.getError().hasReason() ? result.getError().getReason() : null)
                 .userProps(result.getError().getUserProps())
                 .build());
@@ -813,12 +828,15 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     public ProtocolResponse onQoS1PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
         if (result.distResult() == com.baidu.bifromq.dist.client.PubResult.BACK_PRESSURE_REJECTED
             || result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
+            String reason = result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED
+                ? "Too many retained qos1 publish"
+                : "Too many qos1 publish";
             return farewell(MQTT5MessageBuilders.disconnect()
                     .reasonCode(MQTT5DisconnectReasonCode.ServerBusy)
-                    .reasonString("Too many QoS1 publish")
+                    .reasonString(reason)
                     .build(),
                 getLocal(ServerBusy.class)
-                    .reason("Too many QoS1 publish")
+                    .reason(reason)
                     .clientInfo(clientInfo));
         }
         int packetId = message.variableHeader().packetId();
@@ -852,6 +870,12 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 .reasonCode(MQTT5PubAckReasonCode.NoMatchingSubscribers)
                 .userProps(userProps)
                 .build(), debugEvents);
+            case TRY_LATER -> response(MQTT5MessageBuilders.pubAck(requestProblemInfo)
+                .packetId(packetId)
+                .reasonCode(MQTT5PubAckReasonCode.ImplementationSpecificError)
+                .reasonString(result.distResult().name())
+                .userProps(userProps)
+                .build(), debugEvents);
             default -> response(MQTT5MessageBuilders.pubAck(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubAckReasonCode.UnspecifiedError)
@@ -880,7 +904,7 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
                 .build());
             case ERROR -> response(MQTT5MessageBuilders.pubRec(requestProblemInfo)
                 .packetId(packetId)
-                .reasonCode(MQTT5PubRecReasonCode.UnspecifiedError)
+                .reasonCode(MQTT5PubRecReasonCode.ImplementationSpecificError)
                 .reasonString(result.getError().hasReason() ? result.getError().getReason() : null)
                 .userProps(result.getError().getUserProps())
                 .build());
@@ -895,12 +919,15 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
     public ProtocolResponse onQoS2PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
         if (result.distResult() == com.baidu.bifromq.dist.client.PubResult.BACK_PRESSURE_REJECTED
             || result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
+            String reason = result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED
+                ? "Too many retained qos2 publish"
+                : "Too many qos2 publish";
             return farewell(MQTT5MessageBuilders.disconnect()
                     .reasonCode(MQTT5DisconnectReasonCode.ServerBusy)
-                    .reasonString("Too many QoS2 publish")
+                    .reasonString(reason)
                     .build(),
                 getLocal(ServerBusy.class)
-                    .reason("Too many QoS2 publish")
+                    .reason(reason)
                     .clientInfo(clientInfo));
         }
         int packetId = message.variableHeader().packetId();
@@ -932,6 +959,12 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
             case NO_MATCH -> response(MQTT5MessageBuilders.pubRec(requestProblemInfo)
                 .packetId(packetId)
                 .reasonCode(MQTT5PubRecReasonCode.NoMatchingSubscribers)
+                .userProps(userProps)
+                .build(), debugEvents);
+            case TRY_LATER -> response(MQTT5MessageBuilders.pubRec(requestProblemInfo)
+                .packetId(packetId)
+                .reasonCode(MQTT5PubRecReasonCode.ImplementationSpecificError)
+                .reasonString(result.distResult().name())
                 .userProps(userProps)
                 .build(), debugEvents);
             default -> response(MQTT5MessageBuilders.pubRec(requestProblemInfo)

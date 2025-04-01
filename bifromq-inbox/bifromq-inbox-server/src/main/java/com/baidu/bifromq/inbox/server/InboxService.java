@@ -24,6 +24,7 @@ import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetai
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
+import com.baidu.bifromq.basescheduler.exception.BatcherUnavailableException;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
@@ -183,11 +184,18 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         assert !request.hasLwt() || request.getLwt().getDelaySeconds() > 0;
         response(tenantId -> createScheduler.schedule(request)
             .exceptionally(e -> {
-                log.debug("Failed to create inbox", e);
-                return CreateReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(CreateReply.Code.ERROR)
-                    .build();
+                if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
+                    return CreateReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(CreateReply.Code.TRY_LATER)
+                        .build();
+                } else {
+                    log.debug("Failed to create inbox", e);
+                    return CreateReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(CreateReply.Code.ERROR)
+                        .build();
+                }
             })
             .whenComplete((v, e) -> {
                 //reg a deadline for this inbox
@@ -220,11 +228,18 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         assert !request.hasLwt() || request.getLwt().getDelaySeconds() > 0;
         response(tenantId -> attachScheduler.schedule(request)
             .exceptionally(e -> {
-                log.debug("Failed to attach inbox", e);
-                return AttachReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(AttachReply.Code.ERROR)
-                    .build();
+                if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
+                    return AttachReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(AttachReply.Code.TRY_LATER)
+                        .build();
+                } else {
+                    log.debug("Failed to attach inbox", e);
+                    return AttachReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(AttachReply.Code.ERROR)
+                        .build();
+                }
             })
             .whenComplete((v, e) -> {
                 //reg a deadline for this inbox
@@ -265,11 +280,18 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         log.trace("Handling detach {}", request);
         return detachScheduler.schedule(request)
             .exceptionally(e -> {
-                log.debug("Failed to detach inbox", e);
-                return DetachReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(DetachReply.Code.ERROR)
-                    .build();
+                if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
+                    return DetachReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(DetachReply.Code.TRY_LATER)
+                        .build();
+                } else {
+                    log.debug("Failed to detach inbox", e);
+                    return DetachReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(DetachReply.Code.ERROR)
+                        .build();
+                }
             })
             .whenComplete((reply, e) -> {
                 if (reply == null || reply.getCode() != DetachReply.Code.OK) {
@@ -298,11 +320,18 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         log.trace("Handling touch {}", request);
         response(tenantId -> touchScheduler.schedule(request)
             .exceptionally(e -> {
-                log.debug("Failed to touch inbox", e);
-                return TouchReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(TouchReply.Code.ERROR)
-                    .build();
+                if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
+                    return TouchReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(TouchReply.Code.TRY_LATER)
+                        .build();
+                } else {
+                    log.debug("Failed to touch inbox", e);
+                    return TouchReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(TouchReply.Code.ERROR)
+                        .build();
+                }
             })
             .whenComplete((v, e) -> {
                 //update monitored deadline record
@@ -342,6 +371,11 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                         .setReqId(request.getReqId())
                                         .setCode(SubReply.Code.BACK_PRESSURE_REJECTED).build();
                                 }
+                                case TRY_LATER -> {
+                                    return SubReply.newBuilder()
+                                        .setReqId(request.getReqId())
+                                        .setCode(SubReply.Code.TRY_LATER).build();
+                                }
                                 default -> {
                                     return SubReply.newBuilder()
                                         .setReqId(request.getReqId())
@@ -354,6 +388,12 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             })
             .exceptionally(e -> {
                 log.debug("Failed to subscribe", e);
+                if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
+                    return SubReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(SubReply.Code.TRY_LATER)
+                        .build();
+                }
                 if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
                     return SubReply.newBuilder()
                         .setReqId(request.getReqId())
@@ -400,6 +440,10 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                 .setReqId(request.getReqId())
                                 .setCode(UnsubReply.Code.BACK_PRESSURE_REJECTED)
                                 .build();
+                            case TRY_LATER -> UnsubReply.newBuilder()
+                                .setReqId(request.getReqId())
+                                .setCode(UnsubReply.Code.TRY_LATER)
+                                .build();
                             case ERROR -> UnsubReply.newBuilder()
                                 .setReqId(request.getReqId())
                                 .setCode(UnsubReply.Code.ERROR)
@@ -409,13 +453,19 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                 return CompletableFuture.completedFuture(v);
             })
             .exceptionally(e -> {
-                log.debug("Failed to unsubscribe", e);
+                if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
+                    return UnsubReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(UnsubReply.Code.TRY_LATER)
+                        .build();
+                }
                 if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
                     return UnsubReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(UnsubReply.Code.BACK_PRESSURE_REJECTED)
                         .build();
                 }
+                log.debug("Failed to unsubscribe", e);
                 return UnsubReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setCode(UnsubReply.Code.ERROR)
@@ -451,8 +501,13 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                 .setNow(request.getNow())
                 .build())
             .exceptionally(e -> {
-                log.debug("Failed to expire", e);
-                return GetReply.newBuilder().setReqId(request.getReqId()).setCode(GetReply.Code.ERROR).build();
+                if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
+                    return GetReply.newBuilder().setReqId(request.getReqId()).setCode(GetReply.Code.TRY_LATER).build();
+                } else {
+                    log.debug("Failed to expire", e);
+                    return GetReply.newBuilder().setReqId(request.getReqId()).setCode(GetReply.Code.ERROR).build();
+                }
+
             })
             .thenCompose(reply -> {
                 switch (reply.getCode()) {
@@ -470,14 +525,23 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                 .build())).toList();
                         return CompletableFuture.allOf(detachTasks.toArray(CompletableFuture[]::new))
                             .thenApply(v -> detachTasks.stream().map(CompletableFuture::join).toList())
-                            .handle((detachReplies, e) -> {
-                                if (e != null
-                                    || detachReplies.stream().anyMatch(r -> r.getCode() != DetachReply.Code.OK)) {
+                            .thenApply((detachReplies) -> {
+                                if (detachReplies.stream().anyMatch(r ->
+                                    r.getCode() != DetachReply.Code.OK && r.getCode() != DetachReply.Code.NO_INBOX)) {
+                                    if (detachReplies.stream()
+                                        .anyMatch(r -> r.getCode() == DetachReply.Code.TRY_LATER)) {
+                                        // Any detach reply is TRY_LATER
+                                        return ExpireReply.newBuilder()
+                                            .setReqId(request.getReqId())
+                                            .setCode(ExpireReply.Code.TRY_LATER)
+                                            .build();
+                                    }
                                     return ExpireReply.newBuilder()
                                         .setReqId(request.getReqId())
                                         .setCode(ExpireReply.Code.ERROR)
                                         .build();
                                 } else {
+                                    // OK or NO_INBOX
                                     return ExpireReply.newBuilder()
                                         .setReqId(request.getReqId())
                                         .setCode(ExpireReply.Code.OK)
@@ -489,6 +553,12 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         return CompletableFuture.completedFuture(ExpireReply.newBuilder()
                             .setReqId(request.getReqId())
                             .setCode(ExpireReply.Code.OK)
+                            .build());
+                    }
+                    case TRY_LATER -> {
+                        return CompletableFuture.completedFuture(ExpireReply.newBuilder()
+                            .setReqId(request.getReqId())
+                            .setCode(ExpireReply.Code.TRY_LATER)
                             .build());
                     }
                     default -> {
@@ -525,21 +595,21 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         response(tenantId -> {
             List<CompletableFuture<CheckReply.Code>> futures = request.getMatchInfoList().stream()
                 .map(matchInfo -> checkSubScheduler.schedule(
-                    new IInboxCheckSubScheduler.CheckMatchInfo(request.getTenantId(), matchInfo)))
+                        new IInboxCheckSubScheduler.CheckMatchInfo(request.getTenantId(), matchInfo))
+                    .exceptionally(e -> {
+                        if (e instanceof BatcherUnavailableException
+                            || e.getCause() instanceof BatcherUnavailableException) {
+                            return CheckReply.Code.TRY_LATER;
+                        }
+                        log.debug("Failed to check subscription", e);
+                        return CheckReply.Code.ERROR;
+                    }))
                 .toList();
             return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
                 .thenApply(v -> futures.stream().map(CompletableFuture::join).toList())
                 .thenApply(codes -> CheckReply.newBuilder()
                     .addAllCode(codes)
-                    .build())
-                .exceptionally(e -> {
-                    log.debug("Failed to check subscriptions", e);
-                    return CheckReply.newBuilder()
-                        .addAllCode(request.getMatchInfoList().stream()
-                            .map(i -> CheckReply.Code.ERROR)
-                            .toList())
-                        .build();
-                });
+                    .build());
         }, responseObserver);
     }
 
@@ -559,11 +629,18 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         log.trace("Handling commit {}", request);
         response(tenantId -> commitScheduler.schedule(request)
             .exceptionally(e -> {
-                log.debug("Failed to commit", e);
-                return CommitReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(CommitReply.Code.ERROR)
-                    .build();
+                if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
+                    return CommitReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(CommitReply.Code.TRY_LATER)
+                        .build();
+                } else {
+                    log.debug("Failed to commit", e);
+                    return CommitReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(CommitReply.Code.ERROR)
+                        .build();
+                }
             })
             .whenComplete((v, e) -> {
                 // update monitored deadline record
@@ -700,15 +777,15 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                             });
                     }
                 } else {
-                    retainLWTFuture = CompletableFuture.completedFuture(null);
+                    retainLWTFuture = CompletableFuture.completedFuture(RetainReply.Result.RETAINED);
                 }
                 CompletableFuture.allOf(distLWTFuture, retainLWTFuture)
                     .thenAccept(v -> {
                         PubResult distResult = distLWTFuture.join();
-                        boolean retry = distResult == PubResult.ERROR;
+                        boolean retry = distResult == PubResult.TRY_LATER;
                         if (!retry) {
                             if (willRetain && retainEnabled) {
-                                retry = retainLWTFuture.join() == RetainReply.Result.ERROR;
+                                retry = retainLWTFuture.join() == RetainReply.Result.TRY_LATER;
                             }
                         }
                         if (retry) {
@@ -716,7 +793,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                             delayTaskRunner.reg(tenantInboxInstance, Duration.ofSeconds(lwt.getDelaySeconds()),
                                 new ExpireSessionTask(tenantInboxInstance, version, expireSeconds, client, lwt));
                         } else {
-                            switch (distLWTFuture.join()) {
+                            switch (distResult) {
                                 case OK, NO_MATCH -> {
                                     eventCollector.report(getLocal(WillDisted.class)
                                         .reqId(reqId)
@@ -777,6 +854,10 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                             return CompletableFuture.allOf(unmatchFutures.toArray(CompletableFuture[]::new));
                         }
                         return CompletableFuture.completedFuture(null);
+                    })
+                    .exceptionally(e -> {
+                        log.debug("Failed to delete inbox", e);
+                        return null;
                     });
             }
         }

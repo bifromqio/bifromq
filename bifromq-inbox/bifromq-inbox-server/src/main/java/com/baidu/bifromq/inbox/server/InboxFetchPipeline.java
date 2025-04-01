@@ -17,6 +17,7 @@ import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_DELIVE
 import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_ID;
 
 import com.baidu.bifromq.baserpc.server.AckStream;
+import com.baidu.bifromq.basescheduler.exception.BatcherUnavailableException;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetchHint;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetched;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxFetchScheduler;
@@ -57,7 +58,8 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
         inboxFetchSessions = new ConcurrentHashMap<>();
         this.fetcher = fetcher;
         registry.reg(this);
-        disposable = ack().doFinally(() -> {
+        disposable = ack()
+            .doFinally(() -> {
                 registry.unreg(this);
                 closed = true;
             })
@@ -163,26 +165,39 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
                     return;
                 }
                 if (e != null) {
-                    log.debug("Failed to fetch inbox: tenantId={}, inboxId={}, incarnation={}",
-                        tenantId, inboxId, incarnation, e);
                     try {
                         inboxFetchSessions.computeIfPresent(sessionId, (k, v) -> {
                             inboxSessionMap.remove(new InboxId(v.inboxId, v.incarnation));
                             return null;
                         });
-                        send(InboxFetched.newBuilder()
-                            .setSessionId(fetchState.sessionId)
-                            .setInboxId(inboxId)
-                            .setIncarnation(incarnation)
-                            .setFetched(Fetched.newBuilder()
-                                .setResult(Fetched.Result.ERROR)
-                                .build())
-                            .build());
+                        if (e instanceof BatcherUnavailableException
+                            || e.getCause() instanceof BatcherUnavailableException) {
+                            send(InboxFetched.newBuilder()
+                                .setSessionId(fetchState.sessionId)
+                                .setInboxId(inboxId)
+                                .setIncarnation(incarnation)
+                                .setFetched(Fetched.newBuilder()
+                                    .setResult(Fetched.Result.TRY_LATER)
+                                    .build())
+                                .build());
+                        } else {
+                            log.debug("Failed to fetch inbox: tenantId={}, inboxId={}, incarnation={}",
+                                tenantId, inboxId, incarnation, e);
+                            send(InboxFetched.newBuilder()
+                                .setSessionId(fetchState.sessionId)
+                                .setInboxId(inboxId)
+                                .setIncarnation(incarnation)
+                                .setFetched(Fetched.newBuilder()
+                                    .setResult(Fetched.Result.ERROR)
+                                    .build())
+                                .build());
+                        }
                     } catch (Throwable t) {
-                        log.debug("Send error", t);
+                        log.error("Unexpected error", t);
                     }
                 } else {
-                    log.trace("Fetched inbox: tenantId={}, inboxId={}, incarnation={}", tenantId, inboxId, incarnation);
+                    log.trace("Fetched inbox: tenantId={}, inboxId={}, incarnation={}\n{}",
+                        tenantId, inboxId, incarnation, fetched);
                     try {
                         send(InboxFetched.newBuilder()
                             .setSessionId(sessionId)
@@ -202,8 +217,8 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
                                 fetchState.lastFetchSendBufferSeq.set(
                                     fetched.getSendBufferMsg(fetched.getSendBufferMsgCount() - 1).getSeq());
                             }
-                            fetchState.hasMore.set(fetchedCount >= inboxFetch.params.getMaxFetch() ||
-                                fetchState.signalFetchTS.get() > fetchTS);
+                            fetchState.hasMore.set(fetchedCount >= inboxFetch.params.getMaxFetch()
+                                || fetchState.signalFetchTS.get() > fetchTS);
                         } else {
                             fetchState.hasMore.set(fetchState.signalFetchTS.get() > fetchTS);
                         }
@@ -219,7 +234,7 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
                             fetch(sessionId);
                         }
                     } catch (Throwable t) {
-                        log.debug("Send error", t);
+                        log.error("Unexpected error", t);
                     }
                 }
             });

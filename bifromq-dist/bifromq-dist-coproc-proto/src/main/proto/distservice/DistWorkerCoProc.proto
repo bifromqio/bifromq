@@ -27,7 +27,6 @@ message BatchMatchReply {
     enum Code{
       OK = 0;
       EXCEED_LIMIT = 1; // only for group join
-      ERROR = 2;
     }
     repeated Code code = 1; // the order is same as the input
   }
@@ -49,7 +48,6 @@ message BatchUnmatchReply {
     enum Code{
       OK = 0;
       NOT_EXISTED = 1;
-      ERROR = 2;
     }
     repeated Code code = 1; // the order is same as the input
   }
@@ -77,12 +75,7 @@ message GCRequest {
 }
 
 message GCReply {
-  enum Result{
-    OK = 0;
-    ERROR = 1;
-  }
   uint64 reqId = 1;
-  Result result = 2;
 }
 
 message DistServiceRWCoProcInput{

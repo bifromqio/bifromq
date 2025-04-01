@@ -125,7 +125,6 @@ public class BatchUnmatchCallTest {
     void testHandleOutput() {
         testHandleOutput(BatchUnmatchReply.TenantBatch.Code.OK, UnmatchReply.Result.OK);
         testHandleOutput(BatchUnmatchReply.TenantBatch.Code.NOT_EXISTED, UnmatchReply.Result.NOT_EXISTED);
-        testHandleOutput(BatchUnmatchReply.TenantBatch.Code.ERROR, UnmatchReply.Result.ERROR);
     }
 
     @Test

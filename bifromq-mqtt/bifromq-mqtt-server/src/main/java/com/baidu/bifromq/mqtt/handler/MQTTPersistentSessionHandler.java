@@ -158,7 +158,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                         version++;
                         setupInboxReader();
                     } else {
-                        handleProtocolResponse(helper().onInboxTransientError());
+                        handleProtocolResponse(helper().onInboxTransientError(reply.getCode().name()));
                     }
                 }, ctx.executor()));
         } else {
@@ -190,7 +190,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     if (reply.getCode() == CreateReply.Code.OK) {
                         setupInboxReader();
                     } else {
-                        handleProtocolResponse(helper().onInboxTransientError());
+                        handleProtocolResponse(helper().onInboxTransientError(reply.getCode().name()));
                     }
                 }, ctx.executor()));
         }
@@ -303,13 +303,17 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     case EXCEED_LIMIT -> {
                         return IMQTTProtocolHelper.SubResult.EXCEED_LIMIT;
                     }
+                    case NO_INBOX, CONFLICT ->
+                        handleProtocolResponse(helper().onInboxTransientError(v.getCode().name()));
                     case BACK_PRESSURE_REJECTED -> {
                         return IMQTTProtocolHelper.SubResult.BACK_PRESSURE_REJECTED;
+                    }
+                    case TRY_LATER -> {
+                        return IMQTTProtocolHelper.SubResult.TRY_LATER;
                     }
                     case ERROR -> {
                         return IMQTTProtocolHelper.SubResult.ERROR;
                     }
-                    case NO_INBOX, CONFLICT -> handleProtocolResponse(helper().onInboxTransientError());
                     default -> {
                         // never happens
                     }
@@ -371,11 +375,14 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                         return IMQTTProtocolHelper.UnsubResult.NO_SUB;
                     }
                     case NO_INBOX, CONFLICT -> {
-                        handleProtocolResponse(helper().onInboxTransientError());
+                        handleProtocolResponse(helper().onInboxTransientError(v.getCode().name()));
                         return IMQTTProtocolHelper.UnsubResult.ERROR;
                     }
                     case BACK_PRESSURE_REJECTED -> {
                         return IMQTTProtocolHelper.UnsubResult.BACK_PRESSURE_REJECTED;
+                    }
+                    case TRY_LATER -> {
+                        return IMQTTProtocolHelper.UnsubResult.TRY_LATER;
                     }
                     default -> {
                         return IMQTTProtocolHelper.UnsubResult.ERROR;
@@ -420,8 +427,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                             confirmQoS0();
                         }
                     }
-                    case NO_INBOX, CONFLICT -> handleProtocolResponse(helper().onInboxTransientError());
-                    case ERROR -> {
+                    case NO_INBOX, CONFLICT, ERROR ->
+                        handleProtocolResponse(helper().onInboxTransientError(v.getCode().name()));
+                    case TRY_LATER -> {
                         // try again with same version
                         qos0Confirming = false;
                         if (upToSeq < qos0ConfirmUpToSeq) {
@@ -474,8 +482,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                             inboxReader.hint(clientReceiveQuota());
                         }
                     }
-                    case NO_INBOX, CONFLICT -> handleProtocolResponse(helper().onInboxTransientError());
-                    case ERROR -> {
+                    case NO_INBOX, CONFLICT, ERROR ->
+                        handleProtocolResponse(helper().onInboxTransientError(v.getCode().name()));
+                    case TRY_LATER -> {
                         // try again with same version
                         inboxConfirming = false;
                         if (upToSeq < inboxConfirmedUpToSeq) {
@@ -513,7 +522,8 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     rescheduleTouch();
                 }
                 case TRY_LATER -> inboxReader.hint(clientReceiveQuota());
-                case NO_INBOX, ERROR -> handleProtocolResponse(helper().onInboxTransientError());
+                case NO_INBOX, ERROR ->
+                    handleProtocolResponse(helper().onInboxTransientError(fetched.getResult().name()));
                 default -> {
                     // never happens
                 }
@@ -614,8 +624,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     .build())
                 .thenAcceptAsync(v -> {
                     switch (v.getCode()) {
-                        case OK, ERROR -> rescheduleTouch();
-                        case CONFLICT -> handleProtocolResponse(helper().onInboxTransientError());
+                        case OK, TRY_LATER -> rescheduleTouch();
+                        case NO_INBOX, CONFLICT ->
+                            handleProtocolResponse(helper().onInboxTransientError(v.getCode().name()));
                         default -> {
                             // never happens
                         }

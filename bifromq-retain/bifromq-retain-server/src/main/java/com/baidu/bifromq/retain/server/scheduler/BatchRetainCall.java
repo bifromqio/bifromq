@@ -14,11 +14,14 @@
 package com.baidu.bifromq.retain.server.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainRequest;
@@ -33,18 +36,14 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class BatchRetainCall extends BatchMutationCall<RetainRequest, RetainReply> {
 
-    protected BatchRetainCall(KVRangeId rangeId,
-                              IBaseKVStoreClient retainStoreClient,
-                              Duration pipelineExpiryTime) {
+    protected BatchRetainCall(KVRangeId rangeId, IBaseKVStoreClient retainStoreClient, Duration pipelineExpiryTime) {
         super(rangeId, retainStoreClient, pipelineExpiryTime);
     }
 
     @Override
     protected RWCoProcInput makeBatch(Iterator<RetainRequest> retainRequestIterator) {
-        return RWCoProcInput.newBuilder()
-            .setRetainService(RetainServiceRWCoProcInput.newBuilder()
-                .setBatchRetain(BatchRetainCallHelper.makeBatch(retainRequestIterator))
-                .build()).build();
+        return RWCoProcInput.newBuilder().setRetainService(RetainServiceRWCoProcInput.newBuilder()
+            .setBatchRetain(BatchRetainCallHelper.makeBatch(retainRequestIterator)).build()).build();
     }
 
     @Override
@@ -52,11 +51,8 @@ public class BatchRetainCall extends BatchMutationCall<RetainRequest, RetainRepl
                                 RWCoProcOutput output) {
         ICallTask<RetainRequest, RetainReply, MutationCallBatcherKey> task;
         while ((task = batchedTasks.poll()) != null) {
-            RetainReply.Builder replyBuilder = RetainReply.newBuilder()
-                .setReqId(task.call().getReqId());
-            Map<String, RetainResult> resultMap = output.getRetainService()
-                .getBatchRetain()
-                .getResultsMap();
+            RetainReply.Builder replyBuilder = RetainReply.newBuilder().setReqId(task.call().getReqId());
+            Map<String, RetainResult> resultMap = output.getRetainService().getBatchRetain().getResultsMap();
             RetainResult topicMap = resultMap.get(task.call().getPublisher().getTenantId());
             if (topicMap == null) {
                 log.error("tenantId not found in result map, tenantId: {}", task.call().getPublisher().getTenantId());
@@ -73,7 +69,10 @@ public class BatchRetainCall extends BatchMutationCall<RetainRequest, RetainRepl
             switch (result) {
                 case RETAINED -> replyBuilder.setResult(RetainReply.Result.RETAINED);
                 case CLEARED -> replyBuilder.setResult(RetainReply.Result.CLEARED);
-                case ERROR -> replyBuilder.setResult(RetainReply.Result.ERROR);
+                default -> {
+                    log.error("unknown result code:{}", result);
+                    replyBuilder.setResult(RetainReply.Result.ERROR);
+                }
             }
             task.resultPromise().complete(replyBuilder.build());
         }
@@ -82,9 +81,27 @@ public class BatchRetainCall extends BatchMutationCall<RetainRequest, RetainRepl
     @Override
     protected void handleException(ICallTask<RetainRequest, RetainReply, MutationCallBatcherKey> callTask,
                                    Throwable e) {
-        callTask.resultPromise().complete(RetainReply.newBuilder()
-            .setReqId(callTask.call().getReqId())
-            .setResult(RetainReply.Result.ERROR)
-            .build());
+        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+            callTask.resultPromise().complete(RetainReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setResult(RetainReply.Result.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+            callTask.resultPromise().complete(RetainReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setResult(RetainReply.Result.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+            callTask.resultPromise().complete(RetainReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setResult(RetainReply.Result.TRY_LATER)
+                .build());
+            return;
+        }
+        callTask.resultPromise().completeExceptionally(e);
     }
 }

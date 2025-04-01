@@ -96,8 +96,8 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     }
 
     @Override
-    public ProtocolResponse onInboxTransientError() {
-        return goAway(getLocal(InboxTransientError.class).clientInfo(clientInfo));
+    public ProtocolResponse onInboxTransientError(String reason) {
+        return goAway(getLocal(InboxTransientError.class).reason(reason).clientInfo(clientInfo));
     }
 
     @Override
@@ -204,7 +204,7 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public MqttSubAckMessage respondPacketIdInUse(MqttSubscribeMessage message) {
-        throw new UnsupportedOperationException("MQTT3 do not check packetId usage");
+        throw new UnsupportedOperationException("MQTT3 does not check packetId usage");
     }
 
     @Override
@@ -232,7 +232,7 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public MqttUnsubAckMessage respondPacketIdInUse(MqttUnsubscribeMessage message) {
-        throw new UnsupportedOperationException("MQTT3 do not check packetId usage");
+        throw new UnsupportedOperationException("MQTT3 does not check packetId usage");
     }
 
     @Override
@@ -373,10 +373,13 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public ProtocolResponse onQoS0PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
-        if (result.distResult() == com.baidu.bifromq.dist.client.PubResult.BACK_PRESSURE_REJECTED ||
-            result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
+        if (result.distResult() == com.baidu.bifromq.dist.client.PubResult.BACK_PRESSURE_REJECTED
+            || result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
+            String reason = result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED
+                ? "Too many retained qos0 publish"
+                : "Too many qos0 publish";
             return goAway(getLocal(ServerBusy.class)
-                .reason("Too many qos0 publish")
+                .reason(reason)
                 .clientInfo(clientInfo));
         } else {
             return responseNothing();
@@ -394,10 +397,13 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public ProtocolResponse onQoS1PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
-        if (result.distResult() == com.baidu.bifromq.dist.client.PubResult.BACK_PRESSURE_REJECTED ||
-            result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
+        if (result.distResult() == com.baidu.bifromq.dist.client.PubResult.BACK_PRESSURE_REJECTED
+            || result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
+            String reason = result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED
+                ? "Too many retained qos1 publish"
+                : "Too many qos1 publish";
             return goAway(getLocal(ServerBusy.class)
-                .reason("Too many qos1 publish")
+                .reason(reason)
                 .clientInfo(clientInfo));
         } else {
             if (settings.debugMode) {
@@ -436,8 +442,11 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     public ProtocolResponse onQoS2PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps) {
         if (result.distResult() == com.baidu.bifromq.dist.client.PubResult.BACK_PRESSURE_REJECTED
             || result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED) {
+            String reason = result.retainResult() == RetainReply.Result.BACK_PRESSURE_REJECTED
+                ? "Too many retained qos2 publish"
+                : "Too many qos2 publish";
             return goAway(getLocal(ServerBusy.class)
-                .reason("Too many qos2 publish")
+                .reason(reason)
                 .clientInfo(clientInfo));
         } else {
             if (settings.debugMode) {

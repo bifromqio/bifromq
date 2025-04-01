@@ -63,8 +63,9 @@ class InboxFetchPipeline {
                      int bufferCapacity,
                      long lastFetchQoS0Seq,
                      long lastFetchSendBufferSeq) {
-        log.trace("Send hint: inboxId={}, incarnation={}, capacity={}, client={}", inboxId, incarnation, bufferCapacity,
-            tenantId);
+        log.trace(
+            "Send hint: inboxId={}, incarnation={}, capacity={}, client={}, lastFetchedQoSeq={}, lastFetchedSendBufferSeq={}",
+            inboxId, incarnation, bufferCapacity, tenantId, lastFetchQoS0Seq, lastFetchSendBufferSeq);
         messageStream.ack(InboxFetchHint.newBuilder()
             .setSessionId(sessionId)
             .setInboxId(inboxId)

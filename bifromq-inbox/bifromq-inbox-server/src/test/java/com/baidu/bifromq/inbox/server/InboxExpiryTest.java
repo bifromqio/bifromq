@@ -165,7 +165,7 @@ public class InboxExpiryTest extends InboxServiceTest {
         when(retainClient.retain(anyLong(), anyString(), any(), any(), anyInt(), any()))
             .thenReturn(
                 CompletableFuture.completedFuture(
-                    RetainReply.newBuilder().setResult(RetainReply.Result.ERROR).build()),
+                    RetainReply.newBuilder().setResult(RetainReply.Result.TRY_LATER).build()),
                 CompletableFuture.completedFuture(
                     RetainReply.newBuilder().setResult(RetainReply.Result.RETAINED).build()));
         inboxClient.create(CreateRequest.newBuilder()

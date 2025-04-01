@@ -38,7 +38,7 @@ public class RetainBehaviorTest extends RetainStoreTest {
         assertEquals(reply, RetainResult.Code.RETAINED);
 
         MatchResult matchReply = requestMatch(tenantId, topic, 10);
-        assertEquals(matchReply.getOk().getMessagesCount(), 1);
-        assertEquals(matchReply.getOk().getMessages(0), message);
+        assertEquals(matchReply.getMessagesCount(), 1);
+        assertEquals(matchReply.getMessages(0), message);
     }
 }

@@ -21,9 +21,15 @@ import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.tenantBeginKey;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
+import com.baidu.bifromq.basekv.client.exception.BadRequestException;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.InternalErrorException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
+import com.baidu.bifromq.retain.rpc.proto.GCReply;
 import com.baidu.bifromq.retain.rpc.proto.GCRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcInput;
 import java.util.Arrays;
@@ -61,19 +67,28 @@ public class RetainStoreGCProcessor implements IRetainStoreGCProcessor {
             .thenApply(v -> Arrays.stream(gcFutures).map(CompletableFuture::join).toList())
             .thenApply(v -> {
                 log.debug("All range gc succeed");
-                return v.stream().anyMatch(r -> r != Result.OK) ? Result.ERROR : Result.OK;
+                return Result.OK;
             })
             .exceptionally(e -> {
-                log.error("Some range gc failed");
+                if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+                    return Result.TRY_LATER;
+                }
+                if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+                    return Result.TRY_LATER;
+                }
+                if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+                    return Result.TRY_LATER;
+                }
+                log.error("Some range gc failed", e);
                 return Result.ERROR;
             });
     }
 
-    private CompletableFuture<Result> gcRange(long reqId,
-                                              KVRangeSetting rangeSetting,
-                                              @Nullable String tenantId,
-                                              @Nullable Integer expirySeconds,
-                                              long now) {
+    private CompletableFuture<GCReply> gcRange(long reqId,
+                                               KVRangeSetting rangeSetting,
+                                               @Nullable String tenantId,
+                                               @Nullable Integer expirySeconds,
+                                               long now) {
         GCRequest.Builder reqBuilder = GCRequest.newBuilder().setReqId(reqId).setNow(now);
         if (tenantId != null) {
             reqBuilder.setTenantId(tenantId);
@@ -92,14 +107,17 @@ public class RetainStoreGCProcessor implements IRetainStoreGCProcessor {
                     .build())
                 .build())
             .thenApply(reply -> {
-                log.debug("Range gc succeed: serverId={}, rangeId={}, ver={}",
-                    rangeSetting.leader, rangeSetting.id, rangeSetting.ver);
-                return Result.OK;
-            })
-            .exceptionally(e -> {
-                log.error("Range gc failed: serverId={}, rangeId={}, ver={}",
-                    rangeSetting.leader, rangeSetting.id, rangeSetting.ver);
-                return Result.ERROR;
+                switch (reply.getCode()) {
+                    case Ok -> {
+                        log.debug("Range gc succeed: serverId={}, rangeId={}, ver={}",
+                            rangeSetting.leader, rangeSetting.id, rangeSetting.ver);
+                        return reply.getRwCoProcResult().getRetainService().getGc();
+                    }
+                    case TryLater -> throw new TryLaterException();
+                    case BadVersion -> throw new BadVersionException();
+                    case BadRequest -> throw new BadRequestException();
+                    default -> throw new InternalErrorException();
+                }
             });
     }
 }

@@ -70,7 +70,8 @@ message CheckReply{
     OK = 0;
     NO_SUB = 1;
     NO_RECEIVER = 2;
-    ERROR = 3;
+    TRY_LATER = 3;
+    ERROR = 4;
   }
   repeated Code code = 1;
 }

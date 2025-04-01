@@ -133,7 +133,7 @@ public class MockedInboxUnsubTest extends MockedInboxService {
         inboxService.unsub(UnsubRequest.newBuilder().setReqId(reqId).build(), streamObserver);
 
         verify(streamObserver).onNext(argThat(reply ->
-            reply.getReqId() == reqId && reply.getCode() == UnsubReply.Code.ERROR));
+            reply.getReqId() == reqId && reply.getCode() == UnsubReply.Code.TRY_LATER));
         verify(streamObserver).onCompleted();
     }
 }

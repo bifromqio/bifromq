@@ -283,7 +283,7 @@ public class MockedInboxSubTest extends MockedInboxService {
         inboxService.sub(SubRequest.newBuilder().setReqId(reqId).build(), streamObserver);
 
         verify(streamObserver).onNext(argThat(reply ->
-            reply.getReqId() == reqId && reply.getCode() == SubReply.Code.ERROR));
+            reply.getReqId() == reqId && reply.getCode() == SubReply.Code.TRY_LATER));
         verify(streamObserver).onCompleted();
     }
 }

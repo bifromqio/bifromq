@@ -18,7 +18,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -53,6 +53,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -66,21 +68,17 @@ public class KVStoreBalanceControllerTest {
 
     private static final String CLUSTER_ID = "test_cluster";
     private static final String LOCAL_STORE_ID = "localStoreId";
-
+    private final PublishSubject<Map<String, Struct>> loadRuleSubject = PublishSubject.create();
+    private final PublishSubject<Set<KVRangeStoreDescriptor>> storeDescSubject = PublishSubject.create();
     @Mock
     private IBaseKVClusterMetadataManager metadataManager;
     @Mock
     private IBaseKVStoreClient storeClient;
-
     @Mock
     private IStoreBalancerFactory balancerFactory;
-
     @Mock
     private StoreBalancer storeBalancer;
-
-    private final PublishSubject<Map<String, Struct>> loadRuleSubject = PublishSubject.create();
-    private final PublishSubject<Set<KVRangeStoreDescriptor>> storeDescSubject = PublishSubject.create();
-
+    private ScheduledExecutorService executor;
     private KVStoreBalanceController balanceController;
     private AutoCloseable closeable;
 
@@ -89,13 +87,10 @@ public class KVStoreBalanceControllerTest {
         closeable = MockitoAnnotations.openMocks(this);
         when(storeClient.clusterId()).thenReturn(CLUSTER_ID);
         when(balancerFactory.newBalancer(eq(CLUSTER_ID), eq(LOCAL_STORE_ID))).thenReturn(storeBalancer);
-        balanceController = new KVStoreBalanceController(
-            metadataManager,
-            storeClient,
-            List.of(balancerFactory),
-            Duration.ofMillis(100),
-            Executors.newScheduledThreadPool(1)
-        );
+        executor = Executors.newScheduledThreadPool(1);
+        balanceController =
+            new KVStoreBalanceController(metadataManager, storeClient, List.of(balancerFactory), Duration.ofMillis(100),
+                executor);
         when(metadataManager.loadRules()).thenReturn(loadRuleSubject);
         when(storeClient.describe()).thenReturn(storeDescSubject);
         balanceController.start(LOCAL_STORE_ID);
@@ -109,8 +104,10 @@ public class KVStoreBalanceControllerTest {
 
     @Test
     public void testNoInput() {
-        verify(storeBalancer, timeout(1200).times(0)).update(any(Struct.class));
-        verify(storeBalancer, timeout(1200).times(0)).update(any(Set.class));
+        awaitExecute(200);
+        verify(storeBalancer, times(0)).update(any(Struct.class));
+        awaitExecute(200);
+        verify(storeBalancer, times(0)).update(any(Set.class));
     }
 
     @Test
@@ -118,25 +115,28 @@ public class KVStoreBalanceControllerTest {
         Set<KVRangeStoreDescriptor> storeDescriptors = generateDescriptor();
         when(storeBalancer.balance()).thenReturn(NoNeedBalance.INSTANCE);
         storeDescSubject.onNext(storeDescriptors);
-        verify(storeBalancer, timeout(1200).times(1)).update(eq(storeDescriptors));
-        verify(storeBalancer, timeout(1200).times(1)).balance();
+        awaitExecute(200);
+        verify(storeBalancer, times(1)).update(eq(storeDescriptors));
+        awaitExecute(200);
+        verify(storeBalancer, times(1)).balance();
 
         log.info("Test input done");
         loadRuleSubject.onNext(Map.of(balancerFactory.getClass().getName(), Struct.getDefaultInstance()));
-        verify(storeBalancer, timeout(1200).times(1)).update(eq(Struct.getDefaultInstance()));
-        verify(storeBalancer, timeout(1200).times(2)).balance();
+        awaitExecute(200);
+        verify(storeBalancer, times(1)).update(eq(Struct.getDefaultInstance()));
+        verify(storeBalancer, times(2)).balance();
     }
 
     @Test
     public void testBootStrapCommand() {
         KVRangeId id = KVRangeIdUtil.generate();
         Set<KVRangeStoreDescriptor> storeDescriptors = generateDescriptor();
-        when(storeBalancer.balance()).thenReturn(
-            BalanceNow.of(
-                BootstrapCommand.builder().kvRangeId(id).toStore(LOCAL_STORE_ID).boundary(FULL_BOUNDARY).build()));
+        when(storeBalancer.balance()).thenReturn(BalanceNow.of(
+            BootstrapCommand.builder().kvRangeId(id).toStore(LOCAL_STORE_ID).boundary(FULL_BOUNDARY).build()));
         when(storeClient.bootstrap(eq(LOCAL_STORE_ID), any())).thenReturn(new CompletableFuture<>());
         storeDescSubject.onNext(storeDescriptors);
-        verify(storeClient, timeout(1200).times(1)).bootstrap(eq(LOCAL_STORE_ID),
+        awaitExecute(200);
+        verify(storeClient, times(1)).bootstrap(eq(LOCAL_STORE_ID),
             argThat(c -> c.getKvRangeId().equals(id) && c.getBoundary().equals(FULL_BOUNDARY)));
     }
 
@@ -144,92 +144,77 @@ public class KVStoreBalanceControllerTest {
     public void testChangeConfig() {
         KVRangeId id = KVRangeIdUtil.generate();
         Set<KVRangeStoreDescriptor> storeDescriptors = generateDescriptor();
-        ChangeConfigCommand command = ChangeConfigCommand.builder()
-            .kvRangeId(id)
-            .expectedVer(2L)
-            .toStore(LOCAL_STORE_ID)
-            .voters(Sets.newHashSet(LOCAL_STORE_ID, "store1"))
-            .learners(Sets.newHashSet("learner1"))
-            .build();
+        ChangeConfigCommand command =
+            ChangeConfigCommand.builder().kvRangeId(id).expectedVer(2L).toStore(LOCAL_STORE_ID)
+                .voters(Sets.newHashSet(LOCAL_STORE_ID, "store1")).learners(Sets.newHashSet("learner1")).build();
         when(storeBalancer.balance()).thenReturn(BalanceNow.of(command));
         when(storeClient.changeReplicaConfig(eq(LOCAL_STORE_ID), any())).thenReturn(new CompletableFuture<>());
         storeDescSubject.onNext(storeDescriptors);
-        verify(storeClient, timeout(1200).times(1)).changeReplicaConfig(eq(LOCAL_STORE_ID),
-            argThat(r -> r.getKvRangeId().equals(id)
-                && r.getVer() == command.getExpectedVer()
-                && r.getNewVotersList().containsAll(command.getVoters())
-                && r.getNewLearnersList().containsAll(command.getLearners())));
+        awaitExecute(200);
+        verify(storeClient, times(1)).changeReplicaConfig(eq(LOCAL_STORE_ID), argThat(
+            r -> r.getKvRangeId().equals(id) && r.getVer() == command.getExpectedVer() &&
+                r.getNewVotersList().containsAll(command.getVoters()) &&
+                r.getNewLearnersList().containsAll(command.getLearners())));
     }
 
     @Test
     public void testMerge() {
         KVRangeId id = KVRangeIdUtil.generate();
         Set<KVRangeStoreDescriptor> storeDescriptors = generateDescriptor();
-        MergeCommand command = MergeCommand.builder()
-            .kvRangeId(id)
-            .mergeeId(KVRangeIdUtil.generate())
-            .toStore(LOCAL_STORE_ID)
-            .expectedVer(2L)
-            .build();
+        MergeCommand command =
+            MergeCommand.builder().kvRangeId(id).mergeeId(KVRangeIdUtil.generate()).toStore(LOCAL_STORE_ID)
+                .expectedVer(2L).build();
         when(storeBalancer.balance()).thenReturn(BalanceNow.of(command));
         when(storeClient.mergeRanges(eq(LOCAL_STORE_ID), any())).thenReturn(new CompletableFuture<>());
         storeDescSubject.onNext(storeDescriptors);
-        verify(storeClient, timeout(1200).times(1)).mergeRanges(eq(LOCAL_STORE_ID),
-            argThat(r -> r.getMergerId().equals(id)
-                && r.getVer() == command.getExpectedVer()
-                && r.getMergeeId().equals(command.getMergeeId())));
+        awaitExecute(200);
+        verify(storeClient, times(1)).mergeRanges(eq(LOCAL_STORE_ID), argThat(
+            r -> r.getMergerId().equals(id) && r.getVer() == command.getExpectedVer() &&
+                r.getMergeeId().equals(command.getMergeeId())));
     }
 
     @Test
     public void testSplit() {
         KVRangeId id = KVRangeIdUtil.generate();
         Set<KVRangeStoreDescriptor> storeDescriptors = generateDescriptor();
-        SplitCommand command = SplitCommand.builder()
-            .toStore(LOCAL_STORE_ID)
-            .kvRangeId(id)
-            .splitKey(ByteString.copyFromUtf8("splitKey"))
-            .expectedVer(2L)
-            .build();
+        SplitCommand command =
+            SplitCommand.builder().toStore(LOCAL_STORE_ID).kvRangeId(id).splitKey(ByteString.copyFromUtf8("splitKey"))
+                .expectedVer(2L).build();
         when(storeBalancer.balance()).thenReturn(BalanceNow.of(command));
         when(storeClient.splitRange(eq(LOCAL_STORE_ID), any())).thenReturn(new CompletableFuture<>());
         storeDescSubject.onNext(storeDescriptors);
-        verify(storeClient, timeout(1200).times(1)).splitRange(eq(LOCAL_STORE_ID),
-            argThat(r -> r.getKvRangeId().equals(id)
-                && r.getVer() == command.getExpectedVer()
-                && r.getSplitKey().equals(command.getSplitKey())));
+        awaitExecute(200);
+        verify(storeClient, times(1)).splitRange(eq(LOCAL_STORE_ID), argThat(
+            r -> r.getKvRangeId().equals(id) && r.getVer() == command.getExpectedVer() &&
+                r.getSplitKey().equals(command.getSplitKey())));
     }
 
     @Test
     public void testTransferLeadership() {
         KVRangeId id = KVRangeIdUtil.generate();
         Set<KVRangeStoreDescriptor> storeDescriptors = generateDescriptor();
-        TransferLeadershipCommand command = TransferLeadershipCommand.builder()
-            .toStore(LOCAL_STORE_ID)
-            .newLeaderStore("store1")
-            .kvRangeId(id)
-            .expectedVer(2L)
-            .build();
+        TransferLeadershipCommand command =
+            TransferLeadershipCommand.builder().toStore(LOCAL_STORE_ID).newLeaderStore("store1").kvRangeId(id)
+                .expectedVer(2L).build();
         when(storeBalancer.balance()).thenReturn(BalanceNow.of(command));
         when(storeClient.transferLeadership(eq(LOCAL_STORE_ID), any())).thenReturn(new CompletableFuture<>());
         storeDescSubject.onNext(storeDescriptors);
-        verify(storeClient, timeout(1200).times(1)).transferLeadership(eq(LOCAL_STORE_ID),
-            argThat(r -> r.getKvRangeId().equals(id)
-                && r.getVer() == command.getExpectedVer()
-                && r.getNewLeaderStore().equals(command.getNewLeaderStore())));
+        awaitExecute(200);
+        verify(storeClient, times(1)).transferLeadership(eq(LOCAL_STORE_ID), argThat(
+            r -> r.getKvRangeId().equals(id) && r.getVer() == command.getExpectedVer() &&
+                r.getNewLeaderStore().equals(command.getNewLeaderStore())));
     }
 
     @Test
     public void testRecover() {
         KVRangeId id = KVRangeIdUtil.generate();
         Set<KVRangeStoreDescriptor> storeDescriptors = generateDescriptor();
-        RecoveryCommand command = RecoveryCommand.builder()
-            .toStore(LOCAL_STORE_ID)
-            .kvRangeId(id)
-            .build();
+        RecoveryCommand command = RecoveryCommand.builder().toStore(LOCAL_STORE_ID).kvRangeId(id).build();
         when(storeBalancer.balance()).thenReturn(BalanceNow.of(command));
         when(storeClient.recover(eq(LOCAL_STORE_ID), any())).thenReturn(new CompletableFuture<>());
         storeDescSubject.onNext(storeDescriptors);
-        verify(storeClient, timeout(1200).times(1)).recover(eq(LOCAL_STORE_ID),
+        awaitExecute(200);
+        verify(storeClient, times(1)).recover(eq(LOCAL_STORE_ID),
             argThat(r -> r.getKvRangeId().equals(id)));
     }
 
@@ -237,77 +222,65 @@ public class KVStoreBalanceControllerTest {
     public void testRangeCommandRunHistoryKept() {
         KVRangeId id = KVRangeIdUtil.generate();
         Set<KVRangeStoreDescriptor> storeDescriptors = generateDescriptor();
-        SplitCommand command = SplitCommand.builder()
-            .toStore(LOCAL_STORE_ID)
-            .kvRangeId(id)
-            .splitKey(ByteString.copyFromUtf8("splitKey"))
-            .expectedVer(2L)
-            .build();
+        SplitCommand command =
+            SplitCommand.builder().toStore(LOCAL_STORE_ID).kvRangeId(id).splitKey(ByteString.copyFromUtf8("splitKey"))
+                .expectedVer(2L).build();
         when(storeBalancer.balance()).thenReturn(BalanceNow.of(command));
-        when(storeClient.splitRange(eq(LOCAL_STORE_ID), any()))
-            .thenReturn(CompletableFuture.completedFuture(KVRangeSplitReply.newBuilder()
-                .setCode(ReplyCode.Ok).build()
-            ));
+        when(storeClient.splitRange(eq(LOCAL_STORE_ID), any())).thenReturn(
+            CompletableFuture.completedFuture(KVRangeSplitReply.newBuilder().setCode(ReplyCode.Ok).build()));
         storeDescSubject.onNext(storeDescriptors);
-        verify(storeClient, timeout(1200).times(1)).splitRange(eq(LOCAL_STORE_ID),
-            argThat(r -> r.getKvRangeId().equals(id)
-                && r.getVer() == command.getExpectedVer()
-                && r.getSplitKey().equals(command.getSplitKey())));
+        awaitExecute(200);
+        verify(storeClient, times(1)).splitRange(eq(LOCAL_STORE_ID), argThat(
+            r -> r.getKvRangeId().equals(id) && r.getVer() == command.getExpectedVer() &&
+                r.getSplitKey().equals(command.getSplitKey())));
 
         loadRuleSubject.onNext(Map.of(storeBalancer.getClass().getName(), Struct.getDefaultInstance()));
 
-        verify(storeClient, timeout(1200).times(1)).splitRange(eq(LOCAL_STORE_ID),
-            argThat(r -> r.getKvRangeId().equals(id)
-                && r.getVer() == command.getExpectedVer()
-                && r.getSplitKey().equals(command.getSplitKey())));
+        awaitExecute(200);
+        verify(storeClient, times(1)).splitRange(eq(LOCAL_STORE_ID), argThat(
+            r -> r.getKvRangeId().equals(id) && r.getVer() == command.getExpectedVer() &&
+                r.getSplitKey().equals(command.getSplitKey())));
     }
 
     @Test
     public void testRangeCommandRunHistoryCleared() {
         KVRangeId id = KVRangeIdUtil.generate();
-        Set<KVRangeStoreDescriptor> storeDescriptors = generateDescriptor();
-        SplitCommand command = SplitCommand.builder()
-            .toStore(LOCAL_STORE_ID)
-            .kvRangeId(id)
-            .splitKey(ByteString.copyFromUtf8("splitKey"))
-            .expectedVer(2L)
-            .build();
+        Set<KVRangeStoreDescriptor> storeDescriptors = generateDescriptor(id, 2L);
+        SplitCommand command =
+            SplitCommand.builder().toStore(LOCAL_STORE_ID).kvRangeId(id).splitKey(ByteString.copyFromUtf8("splitKey"))
+                .expectedVer(2L).build();
         when(storeBalancer.balance()).thenReturn(BalanceNow.of(command));
-        when(storeClient.splitRange(eq(LOCAL_STORE_ID), any()))
-            .thenReturn(CompletableFuture.completedFuture(KVRangeSplitReply.newBuilder()
-                .setCode(ReplyCode.Ok).build()));
+        when(storeClient.splitRange(eq(LOCAL_STORE_ID), any())).thenReturn(
+            CompletableFuture.completedFuture(KVRangeSplitReply.newBuilder().setCode(ReplyCode.Ok).build()));
         storeDescSubject.onNext(storeDescriptors);
-        verify(storeClient, timeout(1200).times(1)).splitRange(eq(LOCAL_STORE_ID),
-            argThat(r -> r.getKvRangeId().equals(id)
-                && r.getVer() == command.getExpectedVer()
-                && r.getSplitKey().equals(command.getSplitKey())));
+        awaitExecute(200);
+        verify(storeClient, times(1)).splitRange(eq(LOCAL_STORE_ID), argThat(
+            r -> r.getKvRangeId().equals(id) && r.getVer() == command.getExpectedVer() &&
+                r.getSplitKey().equals(command.getSplitKey())));
 
         storeDescriptors = generateDescriptor();
         storeDescSubject.onNext(storeDescriptors);
-        verify(storeClient, timeout(1200).times(2)).splitRange(eq(LOCAL_STORE_ID),
-            argThat(r -> r.getKvRangeId().equals(id)
-                && r.getVer() == command.getExpectedVer()
-                && r.getSplitKey().equals(command.getSplitKey())));
+        awaitExecute(200);
+        verify(storeClient, times(2)).splitRange(eq(LOCAL_STORE_ID), argThat(
+            r -> r.getKvRangeId().equals(id) && r.getVer() == command.getExpectedVer() &&
+                r.getSplitKey().equals(command.getSplitKey())));
     }
 
     @Test
     public void testRetryWhenCommandRunFailed() {
         KVRangeId id = KVRangeIdUtil.generate();
-        Set<KVRangeStoreDescriptor> storeDescriptors = generateDescriptor();
-        SplitCommand command = SplitCommand.builder()
-            .toStore(LOCAL_STORE_ID)
-            .kvRangeId(id)
-            .splitKey(ByteString.copyFromUtf8("splitKey"))
-            .expectedVer(2L)
-            .build();
+        Set<KVRangeStoreDescriptor> storeDescriptors = generateDescriptor(id, 2L);
+        SplitCommand command =
+            SplitCommand.builder().toStore(LOCAL_STORE_ID).kvRangeId(id).splitKey(ByteString.copyFromUtf8("splitKey"))
+                .expectedVer(2L).build();
         when(storeBalancer.balance()).thenReturn(BalanceNow.of(command));
-        when(storeClient.splitRange(eq(LOCAL_STORE_ID), any()))
-            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Mock Exception")),
-                CompletableFuture.completedFuture(KVRangeSplitReply.newBuilder().setCode(ReplyCode.Ok).build()));
+        when(storeClient.splitRange(eq(LOCAL_STORE_ID), any())).thenReturn(
+            CompletableFuture.failedFuture(new RuntimeException("Mock Exception")),
+            CompletableFuture.completedFuture(KVRangeSplitReply.newBuilder().setCode(ReplyCode.Ok).build()));
         storeDescSubject.onNext(storeDescriptors);
-        verify(storeClient, timeout(1200).times(2)).splitRange(eq(LOCAL_STORE_ID),
-            argThat(r -> r.getKvRangeId().equals(id)
-                && r.getVer() == command.getExpectedVer()
+        awaitExecute(1200);
+        verify(storeClient, times(2)).splitRange(eq(LOCAL_STORE_ID), argThat(
+            r -> r.getKvRangeId().equals(id) && r.getVer() == command.getExpectedVer()
                 && r.getSplitKey().equals(command.getSplitKey())));
     }
 
@@ -315,20 +288,16 @@ public class KVStoreBalanceControllerTest {
     public void testRetryWhenCommandNotReady() {
         KVRangeId id = KVRangeIdUtil.generate();
         Set<KVRangeStoreDescriptor> storeDescriptors = generateDescriptor();
-        SplitCommand command = SplitCommand.builder()
-            .toStore(LOCAL_STORE_ID)
-            .kvRangeId(id)
-            .splitKey(ByteString.copyFromUtf8("splitKey"))
-            .expectedVer(2L)
-            .build();
+        SplitCommand command =
+            SplitCommand.builder().toStore(LOCAL_STORE_ID).kvRangeId(id).splitKey(ByteString.copyFromUtf8("splitKey"))
+                .expectedVer(2L).build();
         when(storeBalancer.balance()).thenReturn(AwaitBalance.of(Duration.ofMillis(200)), BalanceNow.of(command));
-        when(storeClient.splitRange(eq(LOCAL_STORE_ID), any()))
-            .thenReturn(
-                CompletableFuture.completedFuture(KVRangeSplitReply.newBuilder().setCode(ReplyCode.Ok).build()));
+        when(storeClient.splitRange(eq(LOCAL_STORE_ID), any())).thenReturn(
+            CompletableFuture.completedFuture(KVRangeSplitReply.newBuilder().setCode(ReplyCode.Ok).build()));
         storeDescSubject.onNext(storeDescriptors);
-        verify(storeClient, timeout(1200).times(1)).splitRange(eq(LOCAL_STORE_ID),
-            argThat(r -> r.getKvRangeId().equals(id)
-                && r.getVer() == command.getExpectedVer()
+        awaitExecute(1200);
+        verify(storeClient, times(1)).splitRange(eq(LOCAL_STORE_ID), argThat(
+            r -> r.getKvRangeId().equals(id) && r.getVer() == command.getExpectedVer()
                 && r.getSplitKey().equals(command.getSplitKey())));
     }
 
@@ -336,22 +305,21 @@ public class KVStoreBalanceControllerTest {
     public void testRetryBeingPreempted() {
         KVRangeId id = KVRangeIdUtil.generate();
         Set<KVRangeStoreDescriptor> storeDescriptors = generateDescriptor();
-        SplitCommand command = SplitCommand.builder()
-            .toStore(LOCAL_STORE_ID)
-            .kvRangeId(id)
-            .splitKey(ByteString.copyFromUtf8("splitKey"))
-            .expectedVer(2L)
-            .build();
+        SplitCommand command =
+            SplitCommand.builder().toStore(LOCAL_STORE_ID).kvRangeId(id).splitKey(ByteString.copyFromUtf8("splitKey"))
+                .expectedVer(2L).build();
         when(storeBalancer.balance()).thenReturn(AwaitBalance.of(Duration.ofSeconds(10)), BalanceNow.of(command));
         when(storeClient.splitRange(eq(LOCAL_STORE_ID), any())).thenReturn(
             CompletableFuture.completedFuture(KVRangeSplitReply.newBuilder().setCode(ReplyCode.Ok).build()));
         storeDescSubject.onNext(storeDescriptors);
-        verify(storeBalancer, timeout(1200).times(1)).update(any(Set.class));
+        awaitExecute(200);
+        verify(storeBalancer, times(1)).update(any(Set.class));
         loadRuleSubject.onNext(Map.of(balancerFactory.getClass().getName(), Struct.getDefaultInstance()));
-        verify(storeBalancer, timeout(1200).times(1)).update(any(Struct.class));
-        verify(storeClient, timeout(1200).times(1)).splitRange(eq(LOCAL_STORE_ID),
-            argThat(r -> r.getKvRangeId().equals(id)
-                && r.getVer() == command.getExpectedVer()
+        awaitExecute(200);
+        verify(storeBalancer, times(1)).update(any(Struct.class));
+        awaitExecute(200);
+        verify(storeClient, times(1)).splitRange(eq(LOCAL_STORE_ID), argThat(
+            r -> r.getKvRangeId().equals(id) && r.getVer() == command.getExpectedVer()
                 && r.getSplitKey().equals(command.getSplitKey())));
     }
 
@@ -359,19 +327,20 @@ public class KVStoreBalanceControllerTest {
     public void testDisableBalancerViaLoadRules() {
         KVRangeId id = KVRangeIdUtil.generate();
         Set<KVRangeStoreDescriptor> storeDescriptors = generateDescriptor();
-        when(storeBalancer.balance()).thenReturn(
-            BalanceNow.of(
-                BootstrapCommand.builder().kvRangeId(id).toStore(LOCAL_STORE_ID).boundary(FULL_BOUNDARY).build()));
+        when(storeBalancer.balance()).thenReturn(BalanceNow.of(
+            BootstrapCommand.builder().kvRangeId(id).toStore(LOCAL_STORE_ID).boundary(FULL_BOUNDARY).build()));
         when(storeClient.bootstrap(eq(LOCAL_STORE_ID), any())).thenReturn(new CompletableFuture<>());
 
         storeDescSubject.onNext(storeDescriptors);
-        verify(storeClient, timeout(3000).times(1)).bootstrap(eq(LOCAL_STORE_ID),
+        awaitExecute(200);
+        verify(storeClient, times(1)).bootstrap(eq(LOCAL_STORE_ID),
             argThat(c -> c.getKvRangeId().equals(id) && c.getBoundary().equals(FULL_BOUNDARY)));
 
         loadRuleSubject.onNext(Map.of(storeBalancer.getClass().getName(),
             Struct.newBuilder().putFields("disable", Value.newBuilder().setBoolValue(true).build()).build()));
         reset(storeClient);
-        verify(storeClient, timeout(3000).times(0)).bootstrap(eq(LOCAL_STORE_ID),
+        awaitExecute(200);
+        verify(storeClient, times(0)).bootstrap(eq(LOCAL_STORE_ID),
             argThat(c -> c.getKvRangeId().equals(id) && c.getBoundary().equals(FULL_BOUNDARY)));
     }
 
@@ -393,20 +362,27 @@ public class KVStoreBalanceControllerTest {
         verify(storeBalancer).validate(argThat(s -> !s.containsFields("disable")));
     }
 
-    private Set<KVRangeStoreDescriptor> generateDescriptor() {
-        KVRangeId id = KVRangeIdUtil.generate();
+    private Set<KVRangeStoreDescriptor> generateDescriptor(KVRangeId id, long ver) {
         List<String> voters = Lists.newArrayList(LOCAL_STORE_ID, "store1");
         List<String> learners = Lists.newArrayList();
         List<KVRangeDescriptor> rangeDescriptors =
-            DescriptorUtils.generateRangeDesc(id, Sets.newHashSet(voters), Sets.newHashSet(learners));
+            DescriptorUtils.generateRangeDesc(id, ver, Sets.newHashSet(voters), Sets.newHashSet(learners));
         Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
         for (int i = 0; i < voters.size(); i++) {
-            storeDescriptors.add(KVRangeStoreDescriptor.newBuilder()
-                .setId(voters.get(i))
-                .putStatistics("cpu.usage", 0.1)
-                .addRanges(rangeDescriptors.get(i))
-                .build());
+            storeDescriptors.add(
+                KVRangeStoreDescriptor.newBuilder().setId(voters.get(i)).putStatistics("cpu.usage", 0.1)
+                    .addRanges(rangeDescriptors.get(i)).build());
         }
         return storeDescriptors;
+    }
+
+    private Set<KVRangeStoreDescriptor> generateDescriptor() {
+        return generateDescriptor(KVRangeIdUtil.generate(), 0L);
+    }
+
+    private void awaitExecute(long delayMS) {
+        CompletableFuture<Void> onDone = new CompletableFuture<>();
+        executor.schedule(() -> onDone.complete(null), delayMS, TimeUnit.MILLISECONDS);
+        onDone.join();
     }
 }

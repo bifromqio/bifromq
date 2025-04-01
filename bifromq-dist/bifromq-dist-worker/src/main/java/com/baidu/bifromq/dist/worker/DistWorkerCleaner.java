@@ -19,9 +19,12 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
+import com.baidu.bifromq.basekv.client.exception.BadRequestException;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.InternalErrorException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
-import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceROCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.GCReply;
@@ -82,9 +85,14 @@ class DistWorkerCleaner {
             findByBoundary(FULL_BOUNDARY, distWorkerClient.latestEffectiveRouter());
         rangeSettingList.removeIf(rangeSetting -> !rangeSetting.leader.equals(storeId));
         long reqId = HLC.INST.getPhysical();
-        List<CompletableFuture<GCReply>> replyFutures =
-            rangeSettingList.stream().map(rangeSetting -> doGC(reqId, rangeSetting)).toList();
-        return CompletableFuture.allOf(replyFutures.toArray(new CompletableFuture[0]));
+        List<CompletableFuture<GCReply>> replyFutures = rangeSettingList.stream()
+            .map(rangeSetting -> doGC(reqId, rangeSetting))
+            .toList();
+        return CompletableFuture.allOf(replyFutures.toArray(new CompletableFuture[0]))
+            .exceptionally(e -> {
+                log.debug("[DistWorker] gc failed: {}", e.getMessage());
+                return null;
+            });
     }
 
     private CompletableFuture<GCReply> doGC(long reqId, KVRangeSetting rangeSetting) {
@@ -102,14 +110,15 @@ class DistWorkerCleaner {
                     .build())
                 .build())
             .handle((v, e) -> {
-                if (v.getCode() == ReplyCode.Ok) {
-                    return v.getRoCoProcResult().getDistService().getGc();
+                switch (v.getCode()) {
+                    case Ok -> {
+                        return v.getRoCoProcResult().getDistService().getGc();
+                    }
+                    case TryLater -> throw new TryLaterException();
+                    case BadVersion -> throw new BadVersionException();
+                    case BadRequest -> throw new BadRequestException();
+                    default -> throw new InternalErrorException();
                 }
-                throw new RuntimeException("BaseKV Query failed: " + v.getCode().name());
-            })
-            .exceptionally(e -> {
-                log.debug("[DistWorker] gc failed: rangeId={}", KVRangeIdUtil.toString(rangeSetting.id), e);
-                return GCReply.newBuilder().setResult(GCReply.Result.ERROR).build();
             });
     }
 }

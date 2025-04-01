@@ -32,7 +32,6 @@ message RetainResult{
   enum Code {
     RETAINED = 0;
     CLEARED = 1;
-    ERROR = 2;
   }
   map<string, Code> results = 1; // key: topic
 }
@@ -56,15 +55,8 @@ message MatchError{
 
 }
 
-message Matched{
-  repeated commontype.TopicMessage messages = 1;
-}
-
 message MatchResult{
-  oneof Type{
-    Matched ok = 1;
-    MatchError error = 2;
-  }
+  repeated commontype.TopicMessage messages = 1;
 }
 
 message MatchResultPack{

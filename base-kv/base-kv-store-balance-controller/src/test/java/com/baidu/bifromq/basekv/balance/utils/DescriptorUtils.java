@@ -24,7 +24,10 @@ import java.util.Set;
 
 public class DescriptorUtils {
 
-    public static List<KVRangeDescriptor> generateRangeDesc(KVRangeId id, Set<String> voters, Set<String> learner) {
+    public static List<KVRangeDescriptor> generateRangeDesc(KVRangeId id,
+                                                            long ver,
+                                                            Set<String> voters,
+                                                            Set<String> learner) {
         List<KVRangeDescriptor> descriptors = new ArrayList<>();
         for (int i = 0; i < voters.size() + learner.size(); i++) {
             RaftNodeStatus raftNodeStatus = i == 0 ? RaftNodeStatus.Leader : RaftNodeStatus.Follower;
@@ -32,7 +35,7 @@ public class DescriptorUtils {
                 .setId(id)
                 .setState(StateType.Normal)
                 .setRole(raftNodeStatus)
-                .setVer(1)
+                .setVer(ver)
                 .setConfig(ClusterConfig.newBuilder()
                     .addAllVoters(voters)
                     .addAllLearners(learner)

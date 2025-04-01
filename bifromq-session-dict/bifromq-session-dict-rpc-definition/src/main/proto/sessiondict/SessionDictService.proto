@@ -110,8 +110,12 @@ message SubReply {
     EXCEED_LIMIT = 3;
     NOT_AUTHORIZED = 4;
     TOPIC_FILTER_INVALID = 5;
-    BACK_PRESSURE_REJECTED = 6;
-    ERROR = 7;
+    WILDCARD_NOT_SUPPORTED = 6;
+    SHARED_SUBSCRIPTION_NOT_SUPPORTED = 7;
+    SUBSCRIPTION_IDENTIFIER_NOT_SUPPORTED = 8;
+    BACK_PRESSURE_REJECTED = 9;
+    TRY_LATER = 10;
+    ERROR = 11;
   }
   uint64 reqId = 1;
   Result result = 2;
@@ -126,15 +130,17 @@ message UnsubRequest {
 }
 
 message UnsubReply {
-  enum Result{
+  enum Result {
     OK = 0;
     NO_SUB = 1;
     NO_SESSION = 2;
     NOT_AUTHORIZED = 3;
     TOPIC_FILTER_INVALID = 4;
     BACK_PRESSURE_REJECTED = 5;
-    ERROR = 6;
+    TRY_LATER = 6;
+    ERROR = 7;
   }
+
   uint64 reqId = 1;
   Result result = 2;
 }

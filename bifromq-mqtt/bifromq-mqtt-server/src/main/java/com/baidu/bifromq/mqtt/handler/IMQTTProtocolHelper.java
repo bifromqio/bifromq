@@ -33,44 +33,13 @@ import java.util.Optional;
 import javax.annotation.Nullable;
 
 public interface IMQTTProtocolHelper {
-    record SubTask(String topicFilter, TopicFilterOption option, UserProperties userProperties) {
-    }
-
-    record PubResult(com.baidu.bifromq.dist.client.PubResult distResult, RetainReply.Result retainResult) {
-    }
-
-    enum SubResult {
-        OK,
-        EXISTS,
-        NO_INBOX,
-        EXCEED_LIMIT,
-        NOT_AUTHORIZED,
-        TOPIC_FILTER_INVALID,
-        WILDCARD_NOT_SUPPORTED,
-        SHARED_SUBSCRIPTION_NOT_SUPPORTED,
-        SUBSCRIPTION_IDENTIFIER_NOT_SUPPORTED,
-        BACK_PRESSURE_REJECTED,
-
-        ERROR;
-    }
-
-    enum UnsubResult {
-        OK,
-        NO_SUB,
-        NO_INBOX,
-        NOT_AUTHORIZED,
-        TOPIC_FILTER_INVALID,
-        BACK_PRESSURE_REJECTED,
-        ERROR;
-    }
-
     UserProperties getUserProps(MqttPublishMessage mqttMessage);
 
     UserProperties getUserProps(MqttUnsubscribeMessage mqttMessage);
 
     boolean checkPacketIdUsage();
 
-    ProtocolResponse onInboxTransientError();
+    ProtocolResponse onInboxTransientError(String reason);
 
     Optional<Integer> sessionExpiryIntervalOnDisconnect(MqttMessage disconnectMessage);
 
@@ -145,4 +114,34 @@ public interface IMQTTProtocolHelper {
     ProtocolResponse onQoS2PubHandled(PubResult result, MqttPublishMessage message, UserProperties userProps);
 
     ProtocolResponse onIdleTimeout(int keepAliveTimeSeconds);
+
+    enum SubResult {
+        OK,
+        EXISTS,
+        EXCEED_LIMIT,
+        NOT_AUTHORIZED,
+        TOPIC_FILTER_INVALID,
+        WILDCARD_NOT_SUPPORTED,
+        SHARED_SUBSCRIPTION_NOT_SUPPORTED,
+        SUBSCRIPTION_IDENTIFIER_NOT_SUPPORTED,
+        BACK_PRESSURE_REJECTED,
+        TRY_LATER,
+        ERROR
+    }
+
+    enum UnsubResult {
+        OK,
+        NO_SUB,
+        NOT_AUTHORIZED,
+        TOPIC_FILTER_INVALID,
+        BACK_PRESSURE_REJECTED,
+        TRY_LATER,
+        ERROR
+    }
+
+    record SubTask(String topicFilter, TopicFilterOption option, UserProperties userProperties) {
+    }
+
+    record PubResult(com.baidu.bifromq.dist.client.PubResult distResult, RetainReply.Result retainResult) {
+    }
 }
