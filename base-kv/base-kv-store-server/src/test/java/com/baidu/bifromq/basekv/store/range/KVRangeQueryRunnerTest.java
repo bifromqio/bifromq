@@ -34,6 +34,7 @@ import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.locks.StampedLock;
 import lombok.extern.slf4j.Slf4j;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -52,8 +53,8 @@ public class KVRangeQueryRunnerTest extends MockableTest {
 
     @Test
     public void badVersionQuery() {
-        KVRangeQueryRunner runner =
-            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, Collections.emptyList());
+        KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer,
+            Collections.emptyList(), new StampedLock());
         when(accessor.borrowDataReader()).thenReturn(kvReader);
         when(accessor.version()).thenReturn(1L);
 
@@ -84,8 +85,8 @@ public class KVRangeQueryRunnerTest extends MockableTest {
     }
 
     private void internalErrorByWrongState(State.StateType stateType) {
-        KVRangeQueryRunner runner =
-            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, Collections.emptyList());
+        KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer,
+            Collections.emptyList(), new StampedLock());
         when(accessor.borrowDataReader()).thenReturn(kvReader);
         when(accessor.state()).thenReturn(State.newBuilder().setType(stateType).build());
 
@@ -102,8 +103,8 @@ public class KVRangeQueryRunnerTest extends MockableTest {
 
     @Test
     public void get() {
-        KVRangeQueryRunner runner =
-            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, Collections.emptyList());
+        KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer,
+            Collections.emptyList(), new StampedLock());
         when(accessor.borrowDataReader()).thenReturn(kvReader);
         when(accessor.version()).thenReturn(0L);
         when(accessor.state()).thenReturn(State.newBuilder().setType(State.StateType.Normal).build());
@@ -120,8 +121,8 @@ public class KVRangeQueryRunnerTest extends MockableTest {
 
     @Test
     public void exist() {
-        KVRangeQueryRunner runner =
-            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, Collections.emptyList());
+        KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer,
+            Collections.emptyList(), new StampedLock());
         when(accessor.borrowDataReader()).thenReturn(kvReader);
         when(accessor.version()).thenReturn(0L);
         when(accessor.state()).thenReturn(State.newBuilder().setType(State.StateType.Normal).build());
@@ -137,8 +138,8 @@ public class KVRangeQueryRunnerTest extends MockableTest {
 
     @Test
     public void roCoProc() {
-        KVRangeQueryRunner runner =
-            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, Collections.emptyList());
+        KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer,
+            Collections.emptyList(), new StampedLock());
         ROCoProcInput key = ROCoProcInput.newBuilder().setRaw(ByteString.copyFromUtf8("key")).build();
         ROCoProcOutput value = ROCoProcOutput.newBuilder().setRaw(ByteString.copyFromUtf8("value")).build();
         when(accessor.borrowDataReader()).thenReturn(kvReader);
@@ -161,8 +162,8 @@ public class KVRangeQueryRunnerTest extends MockableTest {
 
     @Test
     public void linearizedRoCoProc() {
-        KVRangeQueryRunner runner =
-            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, Collections.emptyList());
+        KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer,
+            Collections.emptyList(), new StampedLock());
         ROCoProcInput key = ROCoProcInput.newBuilder().setRaw(ByteString.copyFromUtf8("key")).build();
         ROCoProcOutput value = ROCoProcOutput.newBuilder().setRaw(ByteString.copyFromUtf8("value")).build();
         when(accessor.borrowDataReader()).thenReturn(kvReader);
@@ -186,8 +187,8 @@ public class KVRangeQueryRunnerTest extends MockableTest {
 
     @Test
     public void close() {
-        KVRangeQueryRunner runner =
-            new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer, Collections.emptyList());
+        KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer,
+            Collections.emptyList(), new StampedLock());
         ROCoProcInput key = ROCoProcInput.newBuilder().setRaw(ByteString.copyFromUtf8("key")).build();
         when(accessor.borrowDataReader()).thenReturn(kvReader);
         when(accessor.version()).thenReturn(0L);

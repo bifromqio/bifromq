@@ -35,6 +35,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.StampedLock;
 import org.slf4j.Logger;
 
 class KVRangeQueryRunner implements IKVRangeQueryRunner {
@@ -44,6 +45,7 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
     private final Executor executor;
     private final Set<CompletableFuture<?>> runningQueries = Sets.newConcurrentHashSet();
     private final IKVRangeQueryLinearizer linearizer;
+    private final StampedLock queryLock;
     private final AtomicBoolean closed = new AtomicBoolean();
     private final List<IKVRangeSplitHinter> splitHinters;
 
@@ -52,11 +54,13 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
                        Executor executor,
                        IKVRangeQueryLinearizer linearizer,
                        List<IKVRangeSplitHinter> splitHinters,
+                       StampedLock queryLock,
                        String... tags) {
         this.kvRange = kvRange;
         this.coProc = coProc;
         this.executor = executor;
         this.linearizer = linearizer;
+        this.queryLock = queryLock;
         this.splitHinters = splitHinters;
         this.log = SiftLogger.getLogger(KVRangeQueryRunner.class, tags);
     }
@@ -97,7 +101,8 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
         }
     }
 
-    private <ReqT, ResultT> CompletableFuture<ResultT> submit(long ver, QueryFunction<ReqT, ResultT> queryFn,
+    private <ReqT, ResultT> CompletableFuture<ResultT> submit(long ver,
+                                                              QueryFunction<ReqT, ResultT> queryFn,
                                                               boolean linearized) {
         CompletableFuture<ResultT> onDone = new CompletableFuture<>();
         runningQueries.add(onDone);
@@ -137,29 +142,36 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
     private <ReqT, ResultT> CompletableFuture<ResultT> doQuery(long ver,
                                                                QueryFunction<ReqT, ResultT> queryFn) {
         CompletableFuture<ResultT> onDone = new CompletableFuture<>();
-        IKVReader dataReader = kvRange.borrowDataReader();
-        // return the borrowed reader when future completed
-        onDone.whenComplete((v, e) -> kvRange.returnDataReader(dataReader));
-        State state = kvRange.state();
-        if (ver != kvRange.version()) {
-            onDone.completeExceptionally(
-                new KVRangeException.BadVersion("Version Mismatch: expect=" + kvRange.version() + ", actual=" + ver));
-            return onDone;
-        }
-        if (state.getType() == Merged || state.getType() == Removed || state.getType() == ToBePurged) {
-            onDone.completeExceptionally(
-                new KVRangeException.TryLater("Range has been in state: " + state.getType().name().toLowerCase()));
-            return onDone;
-        }
+        long stamp = queryLock.readLock();
         try {
-            return queryFn.apply(dataReader).whenCompleteAsync((v, e) -> {
-                if (e != null) {
-                    onDone.completeExceptionally(e);
-                } else {
-                    onDone.complete(v);
-                }
-            }, executor);
+            IKVReader dataReader = kvRange.borrowDataReader();
+            // return the borrowed reader when future completed
+            onDone.whenComplete((v, e) -> kvRange.returnDataReader(dataReader));
+            State state = kvRange.state();
+            if (ver != kvRange.version()) {
+                queryLock.unlockRead(stamp);
+                onDone.completeExceptionally(
+                    new KVRangeException.BadVersion(
+                        "Version Mismatch: expect=" + kvRange.version() + ", actual=" + ver));
+                return onDone;
+            }
+            if (state.getType() == Merged || state.getType() == Removed || state.getType() == ToBePurged) {
+                queryLock.unlockRead(stamp);
+                onDone.completeExceptionally(
+                    new KVRangeException.TryLater("Range has been in state: " + state.getType().name().toLowerCase()));
+                return onDone;
+            }
+            return queryFn.apply(dataReader)
+                .whenCompleteAsync((v, e) -> {
+                    queryLock.unlockRead(stamp);
+                    if (e != null) {
+                        onDone.completeExceptionally(e);
+                    } else {
+                        onDone.complete(v);
+                    }
+                }, executor);
         } catch (Throwable e) {
+            queryLock.unlockRead(stamp);
             log.debug("Failed to query range", e);
             return CompletableFuture.failedFuture(new KVRangeException.InternalException(e.getMessage()));
         }

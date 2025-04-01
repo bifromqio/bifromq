@@ -123,6 +123,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.StampedLock;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -162,6 +163,7 @@ public class KVRangeFSM implements IKVRangeFSM {
     private final CompletableFuture<Void> destroyedSignal = new CompletableFuture<>();
     private final KVRangeMetricManager metricManager;
     private final List<IKVRangeSplitHinter> splitHinters;
+    private final StampedLock resetLock = new StampedLock();
     private final String[] tags;
     private volatile long zombieAt = -1;
     private IKVRangeMessenger messenger;
@@ -202,7 +204,8 @@ public class KVRangeFSM implements IKVRangeFSM {
 
         long lastAppliedIndex = this.kvRange.lastAppliedIndex();
         this.linearizer = new KVRangeQueryLinearizer(wal::readIndex, queryExecutor, lastAppliedIndex, tags);
-        this.queryRunner = new KVRangeQueryRunner(this.kvRange, coProc, queryExecutor, linearizer, splitHinters, tags);
+        this.queryRunner = new KVRangeQueryRunner(this.kvRange, coProc, queryExecutor, linearizer,
+            splitHinters, resetLock, tags);
         this.statsCollector = new KVRangeStatsCollector(this.kvRange,
             wal, Duration.ofSeconds(opts.getStatsCollectIntervalSec()), bgExecutor);
         this.metricManager = new KVRangeMetricManager(clusterId, hostStoreId, id);
@@ -245,7 +248,7 @@ public class KVRangeFSM implements IKVRangeFSM {
         mgmtTaskRunner.add(() -> {
             if (lifecycle.compareAndSet(Init, Lifecycle.Opening)) {
                 this.messenger = messenger;
-                factSubject.onNext(coProc.reset(kvRange.boundary()));
+                factSubject.onNext(reset(kvRange.boundary()));
                 // start the wal
                 wal.start();
                 this.restorer = new KVRangeRestorer(wal.latestSnapshot(), kvRange, messenger,
@@ -1015,7 +1018,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                             log.debug("Range split completed[taskId={}]", taskId);
                             // reset hinter when boundary changed
                             splitHinters.forEach(hinter -> hinter.reset(leftBoundary));
-                            factSubject.onNext(coProc.reset(leftBoundary));
+                            factSubject.onNext(reset(leftBoundary));
                         } catch (Throwable t) {
                             log.error("Failed to reset hinter or coProc", t);
                             finishCommandWithError(taskId, t);
@@ -1315,7 +1318,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                     try {
                                         // reset hinter when boundary changed
                                         splitHinters.forEach(hinter -> hinter.reset(mergedBoundary));
-                                        factSubject.onNext(coProc.reset(mergedBoundary));
+                                        factSubject.onNext(reset(mergedBoundary));
                                     } catch (Throwable t) {
                                         log.error("Failed to reset hinter and coProc", t);
                                     } finally {
@@ -1360,7 +1363,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                     onDone.complete(() -> {
                         // reset hinter when boundary changed
                         splitHinters.forEach(hinter -> hinter.reset(NULL_BOUNDARY));
-                        factSubject.onNext(coProc.reset(NULL_BOUNDARY));
+                        factSubject.onNext(reset(NULL_BOUNDARY));
                     });
                 } else {
                     Map<String, Boolean> waitingList = Maps.newHashMap(state.getWaitingListMap());
@@ -1454,7 +1457,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 .thenAccept(v -> {
                     linearizer.afterLogApplied(snapshot.getLastAppliedIndex());
                     // reset the co-proc
-                    factSubject.onNext(coProc.reset(snapshot.getBoundary()));
+                    factSubject.onNext(reset(snapshot.getBoundary()));
                     // finish all pending tasks
                     cmdFutures.keySet().forEach(taskId -> finishCommandWithError(taskId,
                         new KVRangeException.TryLater("Restored from snapshot, try again")));
@@ -1690,6 +1693,15 @@ public class KVRangeFSM implements IKVRangeFSM {
                         .build())
                     .build());
             }, fsmExecutor);
+    }
+
+    private Any reset(Boundary boundary) {
+        long stamp = resetLock.writeLock();
+        try {
+            return coProc.reset(boundary);
+        } finally {
+            resetLock.unlockWrite(stamp);
+        }
     }
 
     enum Lifecycle {
