@@ -15,5 +15,11 @@ package com.baidu.bifromq.basekv.localengine;
 
 import java.util.Map;
 
+/**
+ * Descriptor record of a KV space.
+ *
+ * @param id      the id of the space
+ * @param metrics the metrics of the space
+ */
 public record KVSpaceDescriptor(String id, Map<String, Double> metrics) {
 }

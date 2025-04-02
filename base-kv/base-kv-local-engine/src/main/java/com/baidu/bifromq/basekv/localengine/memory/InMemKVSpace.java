@@ -20,6 +20,7 @@ import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVSpaceDescriptor;
 import com.baidu.bifromq.basekv.localengine.SyncContext;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
@@ -28,25 +29,27 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import org.slf4j.Logger;
 
-public class InMemKVSpace<E extends InMemKVEngine<E, T>, T extends InMemKVSpace<E, T>> extends InMemKVSpaceReader
+class InMemKVSpace<E extends InMemKVEngine<E, T>, T extends InMemKVSpace<E, T>> extends InMemKVSpaceReader
     implements IKVSpace {
-    private final E engine;
-    private final BehaviorSubject<Map<ByteString, ByteString>> metadataSubject = BehaviorSubject.create();
-    private final ISyncContext syncContext = new SyncContext();
-    private final Runnable onDestroy;
     protected final String id;
     protected final Map<ByteString, ByteString> metadataMap = new ConcurrentHashMap<>();
     protected final ConcurrentSkipListMap<ByteString, ByteString> rangeData =
         new ConcurrentSkipListMap<>(unsignedLexicographicalComparator());
+    private final E engine;
+    private final BehaviorSubject<Map<ByteString, ByteString>> metadataSubject = BehaviorSubject.create();
+    private final ISyncContext syncContext = new SyncContext();
     protected final ISyncContext.IRefresher metadataRefresher = syncContext.refresher();
+    private final Runnable onDestroy;
 
     protected InMemKVSpace(String id,
                            InMemKVEngineConfigurator configurator,
                            E engine,
                            Runnable onDestroy,
-                           String... tags) {
-        super(id, tags);
+                           KVSpaceOpMeters readOpMeters,
+                           Logger logger) {
+        super(id, readOpMeters, logger);
         this.id = id;
         this.engine = engine;
         this.onDestroy = onDestroy;
@@ -77,6 +80,16 @@ public class InMemKVSpace<E extends InMemKVEngine<E, T>, T extends InMemKVSpace<
         return new KVSpaceDescriptor(id, collectStats());
     }
 
+    @Override
+    public void open() {
+
+    }
+
+    @Override
+    public void close() {
+
+    }
+
     private Map<String, Double> collectStats() {
         Map<String, Double> stats = new HashMap<>();
         stats.put("size", (double) size());
@@ -99,7 +112,7 @@ public class InMemKVSpace<E extends InMemKVEngine<E, T>, T extends InMemKVSpace<
                 if (metadataUpdated) {
                     this.loadMetadata();
                 }
-            });
+            }, opMeters, logger);
     }
 
     private void loadMetadata() {

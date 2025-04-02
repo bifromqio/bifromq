@@ -15,15 +15,22 @@ package com.baidu.bifromq.basekv.localengine.rocksdb;
 
 import static org.awaitility.Awaitility.await;
 
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
+import io.micrometer.core.instrument.Tags;
 import org.mockito.Mockito;
 import org.rocksdb.Snapshot;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testng.annotations.Test;
 
 public class KVSpaceSnapshotTest extends AbstractRawRocksDBTest {
     @Test
     public void gc() {
         Snapshot snapshot = db.getSnapshot();
-        RocksDBKVSpaceSnapshot spaceSnapshot = new RocksDBKVSpaceSnapshot("testSpace", snapshot, cfHandle, db);
+        Logger logger = LoggerFactory.getLogger("testLogger");
+        RocksDBKVSpaceSnapshot spaceSnapshot =
+            new RocksDBKVSpaceSnapshot("testSpace", snapshot, cfHandle, db,
+                new KVSpaceOpMeters("testSpace", Tags.of("tag", "value")), logger);
         spaceSnapshot = null;
         await().forever().until(() -> {
             System.gc();

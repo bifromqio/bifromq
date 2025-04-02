@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
-import static com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters.getTimer;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.toMetaKey;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 
@@ -22,11 +21,9 @@ import com.baidu.bifromq.basekv.localengine.IKVSpaceMetadataWriter;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
-import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMetric;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
-import io.micrometer.core.instrument.Tags;
-import io.micrometer.core.instrument.Timer;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -34,12 +31,10 @@ import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteOptions;
+import org.slf4j.Logger;
 
-class RocksDBKVSpaceWriter<
-    E extends RocksDBKVEngine<E, T, C>,
-    T extends RocksDBKVSpace<E, T, C>,
-    C extends RocksDBKVEngineConfigurator<C>
-    >
+class RocksDBKVSpaceWriter<E extends RocksDBKVEngine<E, T, C>, T extends
+    RocksDBKVSpace<E, T, C>, C extends RocksDBKVEngineConfigurator<C>>
     extends RocksDBKVSpaceReader implements IKVSpaceWriter {
     private final RocksDB db;
     private final ColumnFamilyHandle cfHandle;
@@ -47,32 +42,20 @@ class RocksDBKVSpaceWriter<
     private final E engine;
     private final RocksDBKVSpaceWriterHelper helper;
     private final IWriteStatsRecorder.IRecorder writeStatsRecorder;
-    private final MetricManager metricManager;
 
-
-    RocksDBKVSpaceWriter(String id,
-                         RocksDB db,
-                         ColumnFamilyHandle cfHandle,
-                         E engine,
-                         WriteOptions writeOptions,
-                         ISyncContext syncContext,
-                         IWriteStatsRecorder.IRecorder writeStatsRecorder,
-                         Consumer<Map<ByteString, ByteString>> afterWrite,
-                         String... metricTags) {
-        this(id, db, cfHandle, engine, syncContext,
-            new RocksDBKVSpaceWriterHelper(db, writeOptions), writeStatsRecorder, afterWrite, metricTags);
+    RocksDBKVSpaceWriter(String id, RocksDB db, ColumnFamilyHandle cfHandle, E engine, WriteOptions writeOptions,
+                         ISyncContext syncContext, IWriteStatsRecorder.IRecorder writeStatsRecorder,
+                         Consumer<Map<ByteString, ByteString>> afterWrite, KVSpaceOpMeters opMeters, Logger logger) {
+        this(id, db, cfHandle, engine, syncContext, new RocksDBKVSpaceWriterHelper(db, writeOptions),
+            writeStatsRecorder, afterWrite, opMeters, logger);
     }
 
-    private RocksDBKVSpaceWriter(String id,
-                                 RocksDB db,
-                                 ColumnFamilyHandle cfHandle,
-                                 E engine,
-                                 ISyncContext syncContext,
+    private RocksDBKVSpaceWriter(String id, RocksDB db, ColumnFamilyHandle cfHandle, E engine, ISyncContext syncContext,
                                  RocksDBKVSpaceWriterHelper writerHelper,
                                  IWriteStatsRecorder.IRecorder writeStatsRecorder,
-                                 Consumer<Map<ByteString, ByteString>> afterWrite,
-                                 String... metricTags) {
-        super(id, metricTags);
+                                 Consumer<Map<ByteString, ByteString>> afterWrite, KVSpaceOpMeters opMeters,
+                                 Logger logger) {
+        super(id, opMeters, logger);
         this.db = db;
         this.cfHandle = cfHandle;
         this.engine = engine;
@@ -81,9 +64,7 @@ class RocksDBKVSpaceWriter<
         this.writeStatsRecorder = writeStatsRecorder;
         writerHelper.addMutators(syncContext.mutator());
         writerHelper.addAfterWriteCallback(cfHandle, afterWrite);
-        this.metricManager = new MetricManager();
     }
-
 
     @Override
     public IKVSpaceWriter metadata(ByteString metaKey, ByteString metaValue) {
@@ -157,8 +138,8 @@ class RocksDBKVSpaceWriter<
                     c++;
                 }
             }
-            log.debug("Migrate {} kv to range[{}] from range[{}]: startKey={}, endKey={}",
-                c, targetSpaceId, id, boundary.getStartKey().toStringUtf8(), boundary.getEndKey().toStringUtf8());
+            logger.debug("Migrate {} kv to range[{}] from range[{}]: startKey={}, endKey={}", c, targetSpaceId, id,
+                boundary.getStartKey().toStringUtf8(), boundary.getEndKey().toStringUtf8());
             // clear moved data in left range
             helper.clear(cfHandle(), boundary);
             return targetKVSpaceWriter;
@@ -188,12 +169,12 @@ class RocksDBKVSpaceWriter<
 
     @Override
     public void done() {
-        metricManager.batchWriteCallTimer.record(() -> {
+        opMeters.batchWriteCallTimer.record(() -> {
             try {
                 helper.done();
                 writeStatsRecorder.stop();
             } catch (RocksDBException e) {
-                log.error("Write Batch commit failed", e);
+                logger.error("Write Batch commit failed", e);
                 throw new KVEngineException("Batch commit failed", e);
             }
         });
@@ -232,19 +213,5 @@ class RocksDBKVSpaceWriter<
     @Override
     protected ISyncContext.IRefresher newRefresher() {
         return syncContext.refresher();
-    }
-
-    @Override
-    void close() {
-        // nothing to close
-    }
-
-    private class MetricManager {
-        private final Timer batchWriteCallTimer;
-
-        MetricManager() {
-            Tags tags = Tags.of(metricTags);
-            batchWriteCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "bwrite"));
-        }
     }
 }

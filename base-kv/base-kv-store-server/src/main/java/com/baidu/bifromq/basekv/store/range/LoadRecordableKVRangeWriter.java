@@ -14,13 +14,14 @@
 package com.baidu.bifromq.basekv.store.range;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
+import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVWriter;
 
 public class LoadRecordableKVRangeWriter extends KVRangeWriter {
     private final IKVLoadRecorder recorder;
 
-    public LoadRecordableKVRangeWriter(IKVSpaceWriter spaceWriter, IKVLoadRecorder recorder) {
-        super(spaceWriter);
+    public LoadRecordableKVRangeWriter(KVRangeId id, IKVSpaceWriter spaceWriter, IKVLoadRecorder recorder) {
+        super(id, spaceWriter);
         this.recorder = recorder;
     }
 

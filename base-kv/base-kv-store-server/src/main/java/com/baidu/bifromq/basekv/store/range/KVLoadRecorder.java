@@ -21,7 +21,7 @@ import java.util.function.Supplier;
 
 public class KVLoadRecorder implements IKVLoadRecorder {
     private final long startNanos;
-    private final Map<ByteString, Long> loadDistribution = new HashMap<>();
+    private final Map<ByteString, Long> loadDistribution = new HashMap<>(256);
     private long kvIONanos = 0L;
     private int kvIOs = 0;
 

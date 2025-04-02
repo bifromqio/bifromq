@@ -21,7 +21,6 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.store.api.IKVRangeMetadata;
 import com.baidu.bifromq.basekv.store.util.KVUtil;
-import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import lombok.SneakyThrows;
 
@@ -29,8 +28,8 @@ abstract class AbstractKVRangeMetadata implements IKVRangeMetadata {
     protected final KVRangeId id;
     private final IKVSpaceMetadata keyRangeMetadata;
 
-    AbstractKVRangeMetadata(IKVSpaceMetadata keyRangeMetadata) {
-        this.id = KVRangeIdUtil.fromString(keyRangeMetadata.id());
+    AbstractKVRangeMetadata(KVRangeId id, IKVSpaceMetadata keyRangeMetadata) {
+        this.id = id;
         this.keyRangeMetadata = keyRangeMetadata;
     }
 

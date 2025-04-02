@@ -14,20 +14,14 @@
 package com.baidu.bifromq.basekv.localengine.memory;
 
 import com.baidu.bifromq.basekv.localengine.AbstractKVEngine;
-import java.util.Collections;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
-public abstract class InMemKVEngine<E extends InMemKVEngine<E, T>, T extends InMemKVSpace<E, T>>
-    extends AbstractKVEngine<T> {
+abstract class InMemKVEngine<E extends InMemKVEngine<E, T>, T extends InMemKVSpace<E, T>>
+    extends AbstractKVEngine<T, InMemKVEngineConfigurator> {
     private final String identity;
-    private final Map<String, T> kvSpaceMap = new ConcurrentHashMap<>();
-    private final InMemKVEngineConfigurator configurator;
 
     public InMemKVEngine(String overrideIdentity, InMemKVEngineConfigurator c) {
-        super(overrideIdentity);
-        this.configurator = c;
+        super(overrideIdentity, c);
         if (overrideIdentity != null && !overrideIdentity.trim().isEmpty()) {
             identity = overrideIdentity;
         } else {
@@ -49,17 +43,4 @@ public abstract class InMemKVEngine<E extends InMemKVEngine<E, T>, T extends InM
     public String id() {
         return identity;
     }
-
-    @Override
-    public Map<String, T> spaces() {
-        return Collections.unmodifiableMap(kvSpaceMap);
-    }
-
-    @Override
-    public T createIfMissing(String spaceId) {
-        return kvSpaceMap.computeIfAbsent(spaceId,
-            k -> buildKVSpace(k, configurator, () -> kvSpaceMap.remove(spaceId)));
-    }
-
-    protected abstract T buildKVSpace(String spaceId, InMemKVEngineConfigurator configurator, Runnable onDestroy);
 }

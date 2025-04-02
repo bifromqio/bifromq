@@ -20,6 +20,7 @@ import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
 import com.google.protobuf.ByteString;
 import java.io.File;
 import java.io.IOException;
@@ -39,38 +40,6 @@ import org.slf4j.Logger;
 
 class RocksDBKVSpaceCheckpoint extends RocksDBKVSpaceReader implements IRocksDBKVSpaceCheckpoint {
     private static final Cleaner CLEANER = Cleaner.create();
-
-    private record ClosableResources(
-        String id,
-        String cpId,
-        File cpDir,
-        ColumnFamilyDescriptor cfDesc,
-        ColumnFamilyHandle cfHandle,
-        RocksDB roDB,
-        DBOptions dbOptions,
-        Predicate<String> isLatest,
-        Logger log
-    ) implements Runnable {
-        @Override
-        public void run() {
-            log.debug("Clean up checkpoint[{}] of kvspace[{}]", cpId, id);
-            roDB.destroyColumnFamilyHandle(cfHandle);
-            cfDesc.getOptions().close();
-
-            roDB.close();
-            dbOptions.close();
-
-            if (!isLatest.test(cpId)) {
-                log.debug("delete checkpoint[{}] of kvspace[{}] in path: {}", cpId, id, cpDir.getAbsolutePath());
-                try {
-                    deleteDir(cpDir.toPath());
-                } catch (IOException e) {
-                    log.error("Failed to clean checkpoint at path:{}", cpDir);
-                }
-            }
-        }
-    }
-
     private final String cpId;
     private final DBOptions dbOptions;
     private final RocksDB roDB;
@@ -78,8 +47,13 @@ class RocksDBKVSpaceCheckpoint extends RocksDBKVSpaceReader implements IRocksDBK
     private final ColumnFamilyHandle cfHandle;
     private final Cleaner.Cleanable cleanable;
 
-    RocksDBKVSpaceCheckpoint(String id, String cpId, File cpDir, Predicate<String> isLatest, String... metricTags) {
-        super(id, metricTags);
+    RocksDBKVSpaceCheckpoint(String id,
+                             String cpId,
+                             File cpDir,
+                             Predicate<String> isLatest,
+                             KVSpaceOpMeters opMeters,
+                             Logger logger) {
+        super(id, opMeters, logger);
         this.cpId = cpId;
         try {
             cfDesc = new ColumnFamilyDescriptor(DEFAULT_NS.getBytes());
@@ -102,11 +76,11 @@ class RocksDBKVSpaceCheckpoint extends RocksDBKVSpaceReader implements IRocksDBK
                 roDB,
                 dbOptions,
                 isLatest,
-                log));
+                this.logger));
         } catch (RocksDBException e) {
             throw new KVEngineException("Failed to open checkpoint", e);
         }
-        log.debug("Checkpoint[{}] of kvspace[{}] created", cpId, id);
+        this.logger.debug("Checkpoint[{}] of kvspace[{}] created", cpId, id);
     }
 
     @Override
@@ -156,5 +130,36 @@ class RocksDBKVSpaceCheckpoint extends RocksDBKVSpaceReader implements IRocksDBK
                 return supplier.get();
             }
         };
+    }
+
+    private record ClosableResources(
+        String id,
+        String cpId,
+        File cpDir,
+        ColumnFamilyDescriptor cfDesc,
+        ColumnFamilyHandle cfHandle,
+        RocksDB roDB,
+        DBOptions dbOptions,
+        Predicate<String> isLatest,
+        Logger log
+    ) implements Runnable {
+        @Override
+        public void run() {
+            log.debug("Clean up checkpoint[{}] of kvspace[{}]", cpId, id);
+            roDB.destroyColumnFamilyHandle(cfHandle);
+            cfDesc.getOptions().close();
+
+            roDB.close();
+            dbOptions.close();
+
+            if (!isLatest.test(cpId)) {
+                log.debug("delete checkpoint[{}] of kvspace[{}] in path: {}", cpId, id, cpDir.getAbsolutePath());
+                try {
+                    deleteDir(cpDir.toPath());
+                } catch (IOException e) {
+                    log.error("Failed to clean checkpoint at path:{}", cpDir);
+                }
+            }
+        }
     }
 }

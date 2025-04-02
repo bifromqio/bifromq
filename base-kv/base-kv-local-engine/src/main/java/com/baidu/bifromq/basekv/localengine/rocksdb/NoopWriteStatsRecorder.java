@@ -17,7 +17,7 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
-public class NoopWriteStatsRecorder implements IWriteStatsRecorder {
+class NoopWriteStatsRecorder implements IWriteStatsRecorder {
     public static final IWriteStatsRecorder INSTANCE = new NoopWriteStatsRecorder();
     private static final IRecorder NOOP_RECORDER = new IRecorder() {
         @Override

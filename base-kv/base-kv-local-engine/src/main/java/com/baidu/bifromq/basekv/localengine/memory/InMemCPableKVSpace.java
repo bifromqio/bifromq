@@ -15,11 +15,13 @@ package com.baidu.bifromq.basekv.localengine.memory;
 
 import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceCheckpoint;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.HashMap;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
 
 public class InMemCPableKVSpace extends InMemKVSpace<InMemCPableKVEngine, InMemCPableKVSpace>
     implements ICPableKVSpace {
@@ -29,8 +31,10 @@ public class InMemCPableKVSpace extends InMemKVSpace<InMemCPableKVEngine, InMemC
     protected InMemCPableKVSpace(String id,
                                  InMemKVEngineConfigurator configurator,
                                  InMemCPableKVEngine engine,
-                                 Runnable onDestroy, String... tags) {
-        super(id, configurator, engine, onDestroy, tags);
+                                 Runnable onDestroy,
+                                 KVSpaceOpMeters opMeters,
+                                 Logger logger) {
+        super(id, configurator, engine, onDestroy, opMeters, logger);
         checkpoints = Caffeine.newBuilder().weakValues().build();
     }
 
@@ -39,7 +43,8 @@ public class InMemCPableKVSpace extends InMemKVSpace<InMemCPableKVEngine, InMemC
         synchronized (this) {
             return metadataRefresher.call(() -> {
                 String cpId = UUID.randomUUID().toString();
-                latestCheckpoint = new InMemKVSpaceCheckpoint(id, cpId, new HashMap<>(metadataMap), rangeData.clone());
+                latestCheckpoint = new InMemKVSpaceCheckpoint(id, cpId, new HashMap<>(metadataMap), rangeData.clone(),
+                    opMeters, logger);
                 checkpoints.put(cpId, latestCheckpoint);
                 return cpId;
             });
@@ -47,7 +52,7 @@ public class InMemCPableKVSpace extends InMemKVSpace<InMemCPableKVEngine, InMemC
     }
 
     @Override
-    public Optional<IKVSpaceCheckpoint> open(String checkpointId) {
+    public Optional<IKVSpaceCheckpoint> openCheckpoint(String checkpointId) {
         return Optional.ofNullable(checkpoints.getIfPresent(checkpointId));
     }
 }

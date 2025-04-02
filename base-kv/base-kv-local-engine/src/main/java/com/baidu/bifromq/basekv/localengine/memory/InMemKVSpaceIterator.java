@@ -20,10 +20,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
-public class InMemKVSpaceIterator implements IKVSpaceIterator {
-    private Map.Entry<ByteString, ByteString> currentEntry;
+class InMemKVSpaceIterator implements IKVSpaceIterator {
     private final ConcurrentSkipListMap<ByteString, ByteString> origData;
     private final Boundary boundary;
+    private Map.Entry<ByteString, ByteString> currentEntry;
     private ConcurrentNavigableMap<ByteString, ByteString> dataSource;
 
     public InMemKVSpaceIterator(ConcurrentSkipListMap<ByteString, ByteString> data) {

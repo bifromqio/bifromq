@@ -22,6 +22,7 @@ import com.baidu.bifromq.basekv.localengine.AbstractKVSpaceReader;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import java.lang.ref.Cleaner;
@@ -32,18 +33,10 @@ import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.Snapshot;
+import org.slf4j.Logger;
 
 class RocksDBKVSpaceSnapshot extends AbstractKVSpaceReader implements IRocksDBKVSpaceCheckpoint {
     private static final Cleaner CLEANER = Cleaner.create();
-
-    private record ClosableResources(ReadOptions readOptions, Snapshot snapshot, RocksDB db) implements Runnable {
-        @Override
-        public void run() {
-            readOptions.close();
-            db.releaseSnapshot(snapshot);
-        }
-    }
-
     private static final ISyncContext.IRefresher DUMMY_REFRESHER = new ISyncContext.IRefresher() {
         @Override
         public void runIfNeeded(Runnable runnable) {
@@ -65,8 +58,9 @@ class RocksDBKVSpaceSnapshot extends AbstractKVSpaceReader implements IRocksDBKV
                            Snapshot snapshot,
                            ColumnFamilyHandle cfHandle,
                            RocksDB db,
-                           String... metricTags) {
-        super(id, metricTags);
+                           KVSpaceOpMeters readOpMeters,
+                           Logger logger) {
+        super(id, readOpMeters, logger);
         this.snapshot = snapshot;
         this.cfHandle = cfHandle;
         this.db = db;
@@ -127,5 +121,13 @@ class RocksDBKVSpaceSnapshot extends AbstractKVSpaceReader implements IRocksDBKV
     protected IKVSpaceIterator doNewIterator(Boundary subBoundary) {
         assert isValid(subBoundary);
         return new RocksDBKVSpaceIterator(db, cfHandle, snapshot, subBoundary, DUMMY_REFRESHER);
+    }
+
+    private record ClosableResources(ReadOptions readOptions, Snapshot snapshot, RocksDB db) implements Runnable {
+        @Override
+        public void run() {
+            readOptions.close();
+            db.releaseSnapshot(snapshot);
+        }
     }
 }

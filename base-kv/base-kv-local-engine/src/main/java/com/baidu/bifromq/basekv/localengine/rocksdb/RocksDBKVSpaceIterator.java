@@ -30,20 +30,11 @@ import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDB;
 import org.rocksdb.Snapshot;
 
-public class RocksDBKVSpaceIterator implements IKVSpaceIterator {
+class RocksDBKVSpaceIterator implements IKVSpaceIterator {
     private static final Cleaner CLEANER = Cleaner.create();
-
-    private record State(RocksDBKVEngineIterator rocksItr) implements Runnable {
-        @Override
-        public void run() {
-            rocksItr.close();
-        }
-    }
-
     private final RocksDBKVEngineIterator rocksItr;
     private final ISyncContext.IRefresher refresher;
     private final Cleaner.Cleanable onClose;
-
     public RocksDBKVSpaceIterator(RocksDB db,
                                   ColumnFamilyHandle cfHandle,
                                   Boundary boundary,
@@ -118,5 +109,12 @@ public class RocksDBKVSpaceIterator implements IKVSpaceIterator {
     @Override
     public void close() {
         onClose.clean();
+    }
+
+    private record State(RocksDBKVEngineIterator rocksItr) implements Runnable {
+        @Override
+        public void run() {
+            rocksItr.close();
+        }
     }
 }

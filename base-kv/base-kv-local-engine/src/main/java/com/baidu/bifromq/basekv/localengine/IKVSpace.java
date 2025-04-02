@@ -17,21 +17,32 @@ import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
 import java.util.Map;
 
+/**
+ * The interface of KV space, which is a logical range of key-value pairs.
+ */
 public interface IKVSpace extends IKVSpaceReader {
     Observable<Map<ByteString, ByteString>> metadata();
 
     KVSpaceDescriptor describe();
 
+    /**
+     * Open the space.
+     */
+    void open();
+
+    /**
+     * Close the space.
+     */
+    void close();
 
     /**
      * Destroy the range, after destroy all data and associated resources will be cleared and released. The range object
-     * will transit to destroyed state
+     * will transit to destroyed state.
      */
     void destroy();
 
-
     /**
-     * Get a writer to update range state
+     * Get a writer to update range state.
      *
      * @return the writer object
      */

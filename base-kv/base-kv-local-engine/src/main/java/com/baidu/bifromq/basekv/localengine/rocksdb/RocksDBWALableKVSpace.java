@@ -12,11 +12,13 @@
  */
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
+
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.localengine.IWALableKVSpace;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters;
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMetric;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
@@ -29,6 +31,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.rocksdb.WriteOptions;
+import org.slf4j.Logger;
 
 public class RocksDBWALableKVSpace
     extends RocksDBKVSpace<RocksDBWALableKVEngine, RocksDBWALableKVSpace, RocksDBWALableKVEngineConfigurator>
@@ -43,8 +46,10 @@ public class RocksDBWALableKVSpace
                                  RocksDBWALableKVEngineConfigurator configurator,
                                  RocksDBWALableKVEngine engine,
                                  Runnable onDestroy,
+                                 KVSpaceOpMeters opMeters,
+                                 Logger logger,
                                  String... tags) {
-        super(id, configurator, engine, onDestroy, tags);
+        super(id, configurator, engine, onDestroy, opMeters, logger, tags);
         this.configurator = configurator;
         writeOptions = new WriteOptions().setDisableWAL(false);
         if (!configurator.asyncWALFlush()) {
@@ -54,8 +59,8 @@ public class RocksDBWALableKVSpace
                 0L, TimeUnit.MILLISECONDS,
                 new LinkedBlockingQueue<>(),
                 EnvProvider.INSTANCE.newThreadFactory("kvspace-flusher-" + id)), "flusher", "kvspace",
-            Tags.of(metricTags));
-        metricMgr = new MetricManager();
+            Tags.of(tags));
+        metricMgr = new MetricManager(tags);
     }
 
     @Override
@@ -69,7 +74,7 @@ public class RocksDBWALableKVSpace
         try {
             flushTaskFuture.join();
         } catch (Throwable e) {
-            log.debug("Flush error during closing", e);
+            logger.debug("Flush error during closing", e);
         }
         writeOptions.close();
         metricMgr.close();
@@ -106,14 +111,14 @@ public class RocksDBWALableKVSpace
         flushExecutor.submit(() -> {
             long flashStartAt = System.nanoTime();
             try {
-                log.trace("KVSpace[{}] flush wal start", id);
+                logger.trace("KVSpace[{}] flush wal start", id);
                 try {
                     Timer.Sample start = Timer.start();
                     db.flushWal(configurator.fsyncWAL());
                     start.stop(metricMgr.flushTimer);
-                    log.trace("KVSpace[{}] flush complete", id);
+                    logger.trace("KVSpace[{}] flush complete", id);
                 } catch (Throwable e) {
-                    log.error("KVSpace[{}] flush error", id, e);
+                    logger.error("KVSpace[{}] flush error", id, e);
                     throw new KVEngineException("KVSpace flush error", e);
                 }
                 flushFutureRef.compareAndSet(onDone, null);
@@ -128,7 +133,7 @@ public class RocksDBWALableKVSpace
     private class MetricManager {
         private final Timer flushTimer;
 
-        MetricManager() {
+        MetricManager(String... metricTags) {
             flushTimer = KVSpaceMeters.getTimer(id, KVSpaceMetric.FlushTimer, Tags.of(metricTags));
         }
 

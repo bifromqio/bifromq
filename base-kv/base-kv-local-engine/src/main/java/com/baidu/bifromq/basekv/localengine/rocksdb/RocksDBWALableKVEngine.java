@@ -13,20 +13,23 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
+import org.slf4j.Logger;
+
 public class RocksDBWALableKVEngine
     extends RocksDBKVEngine<RocksDBWALableKVEngine, RocksDBWALableKVSpace, RocksDBWALableKVEngineConfigurator> {
-    private final RocksDBWALableKVEngineConfigurator configurator;
 
     public RocksDBWALableKVEngine(String overrideIdentity, RocksDBWALableKVEngineConfigurator configurator) {
         super(overrideIdentity, configurator);
-        this.configurator = configurator;
     }
 
     @Override
-    protected RocksDBWALableKVSpace buildKVSpace(String spaceId,
-                                                 RocksDBWALableKVEngineConfigurator configurator,
-                                                 Runnable onDestroy,
-                                                 String... tags) {
-        return new RocksDBWALableKVSpace(spaceId, configurator, this, onDestroy, tags);
+    protected RocksDBWALableKVSpace doBuildKVSpace(String spaceId,
+                                                   RocksDBWALableKVEngineConfigurator configurator,
+                                                   Runnable onDestroy,
+                                                   KVSpaceOpMeters opMeters,
+                                                   Logger logger,
+                                                   String... tags) {
+        return new RocksDBWALableKVSpace(spaceId, configurator, this, onDestroy, opMeters, logger, tags);
     }
 }

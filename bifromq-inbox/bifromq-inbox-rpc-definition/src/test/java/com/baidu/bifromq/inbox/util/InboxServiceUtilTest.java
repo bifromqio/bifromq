@@ -17,12 +17,24 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.inbox.record.InboxInstance;
 import com.baidu.bifromq.sysprops.props.InboxDelivererNum;
 import org.testng.annotations.Test;
 
 public class InboxServiceUtilTest {
     private static final String TENANT_ID = "tenant1";
     private static final String INBOX_ID = "inbox123";
+
+    @Test
+    void testParseReceiverId() {
+        String inboxId = "InboxId";
+        long inc = 12345;
+        String receiverId = InboxServiceUtil.receiverId(inboxId, inc);
+        InboxInstance inboxInstance = InboxServiceUtil.parseReceiverId(receiverId);
+        assertEquals(inboxInstance.inboxId(), inboxId);
+        assertEquals(inboxInstance.receiverId(), receiverId);
+        assertEquals(inboxInstance.incarnation(), inc);
+    }
 
     @Test
     void testParseTenantId() {

@@ -15,9 +15,13 @@ package com.baidu.bifromq.basekv.localengine;
 
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * KV Space backed by WAL for durability.
+ */
 public interface IWALableKVSpace extends IKVSpace {
+
     /**
-     * Trigger a flush if underlying storage engine support
+     * Trigger a flush if underlying storage engine support.
      *
      * @return the flush start nanos time
      */

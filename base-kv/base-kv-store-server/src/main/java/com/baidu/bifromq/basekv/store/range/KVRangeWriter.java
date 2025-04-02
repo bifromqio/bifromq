@@ -30,8 +30,8 @@ public class KVRangeWriter extends AbstractKVRangeMetadataUpdatable<KVRangeWrite
     implements IKVRangeWriter<KVRangeWriter> {
     private final IKVSpaceWriter spaceWriter;
 
-    public KVRangeWriter(IKVSpaceWriter spaceWriter) {
-        super(spaceWriter);
+    public KVRangeWriter(KVRangeId id, IKVSpaceWriter spaceWriter) {
+        super(id, spaceWriter);
         this.spaceWriter = spaceWriter;
     }
 
@@ -42,12 +42,14 @@ public class KVRangeWriter extends AbstractKVRangeMetadataUpdatable<KVRangeWrite
 
     @Override
     public IKVRangeMetadataWriter<?> migrateTo(KVRangeId targetRangeId, Boundary boundary) {
-        return new KVRangeMetadataWriter(spaceWriter.migrateTo(KVRangeIdUtil.toString(targetRangeId), boundary));
+        return new KVRangeMetadataWriter(targetRangeId,
+            spaceWriter.migrateTo(KVRangeIdUtil.toString(targetRangeId), boundary));
     }
 
     @Override
     public IKVRangeMetadataWriter<?> migrateFrom(KVRangeId fromRangeId, Boundary boundary) {
-        return new KVRangeMetadataWriter(spaceWriter.migrateFrom(KVRangeIdUtil.toString(fromRangeId), boundary));
+        return new KVRangeMetadataWriter(fromRangeId,
+            spaceWriter.migrateFrom(KVRangeIdUtil.toString(fromRangeId), boundary));
     }
 
     @Override

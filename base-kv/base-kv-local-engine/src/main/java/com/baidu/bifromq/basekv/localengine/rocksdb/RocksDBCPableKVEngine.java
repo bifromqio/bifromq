@@ -14,24 +14,23 @@
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
 import java.io.File;
 import java.nio.file.Files;
+import org.slf4j.Logger;
 
-public class RocksDBCPableKVEngine
-    extends
+public class RocksDBCPableKVEngine extends
     RocksDBKVEngine<RocksDBCPableKVEngine, RocksDBCPableKVSpace, RocksDBCPableKVEngineConfigurator> {
     private final File cpRootDir;
-    private final RocksDBCPableKVEngineConfigurator configurator;
     private MetricManager metricManager;
 
     public RocksDBCPableKVEngine(String overrideIdentity,
                                  RocksDBCPableKVEngineConfigurator configurator) {
         super(overrideIdentity, configurator);
         cpRootDir = new File(configurator.dbCheckpointRootDir());
-        this.configurator = configurator;
         try {
             Files.createDirectories(cpRootDir.getAbsoluteFile().toPath());
         } catch (Throwable e) {
@@ -40,11 +39,13 @@ public class RocksDBCPableKVEngine
     }
 
     @Override
-    protected RocksDBCPableKVSpace buildKVSpace(String spaceId,
-                                                RocksDBCPableKVEngineConfigurator configurator,
-                                                Runnable onDestroy,
-                                                String... tags) {
-        return new RocksDBCPableKVSpace(spaceId, configurator, this, onDestroy, tags);
+    protected RocksDBCPableKVSpace doBuildKVSpace(String spaceId,
+                                                  RocksDBCPableKVEngineConfigurator configurator,
+                                                  Runnable onDestroy,
+                                                  KVSpaceOpMeters opMeters,
+                                                  Logger logger,
+                                                  String... tags) {
+        return new RocksDBCPableKVSpace(spaceId, configurator, this, onDestroy, opMeters, logger, tags);
     }
 
     @Override

@@ -14,9 +14,11 @@
 package com.baidu.bifromq.basekv.localengine.memory;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceCheckpoint;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
 import com.google.protobuf.ByteString;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
+import org.slf4j.Logger;
 
 class InMemKVSpaceCheckpoint extends InMemKVSpaceReader implements IKVSpaceCheckpoint {
     private final String cpId;
@@ -27,8 +29,9 @@ class InMemKVSpaceCheckpoint extends InMemKVSpaceReader implements IKVSpaceCheck
                                      String cpId,
                                      Map<ByteString, ByteString> metadataMap,
                                      ConcurrentSkipListMap<ByteString, ByteString> rangeData,
-                                     String... tags) {
-        super(id, tags);
+                                     KVSpaceOpMeters opMeters,
+                                     Logger logger) {
+        super(id, opMeters, logger);
         this.cpId = cpId;
         this.metadataMap = metadataMap;
         this.rangeData = rangeData;

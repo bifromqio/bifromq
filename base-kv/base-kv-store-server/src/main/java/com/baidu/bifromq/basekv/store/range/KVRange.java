@@ -20,6 +20,7 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.NULL_BOUNDARY;
 
 import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
 import com.baidu.bifromq.basekv.proto.Boundary;
+import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
@@ -39,8 +40,8 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
     private final ConcurrentLinkedQueue<IKVCloseableReader> sharedDataReaders = new ConcurrentLinkedQueue<>();
     private final BehaviorSubject<KVRangeMeta> metaSubject;
 
-    public KVRange(ICPableKVSpace kvSpace) {
-        super(kvSpace);
+    public KVRange(KVRangeId id, ICPableKVSpace kvSpace) {
+        super(id, kvSpace);
         this.kvSpace = kvSpace;
         metaSubject = BehaviorSubject.createDefault(
             new IKVRange.KVRangeMeta(-1L, State.newBuilder().setType(State.StateType.NoUse).build(), NULL_BOUNDARY));
@@ -54,8 +55,8 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
             .subscribe(metaSubject);
     }
 
-    public KVRange(ICPableKVSpace kvSpace, KVRangeSnapshot snapshot) {
-        this(kvSpace);
+    public KVRange(KVRangeId id, ICPableKVSpace kvSpace, KVRangeSnapshot snapshot) {
+        this(id, kvSpace);
         toReseter(snapshot).done();
     }
 
@@ -82,7 +83,7 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
     @Override
     public KVRangeSnapshot checkpoint() {
         String checkpointId = kvSpace.checkpoint();
-        IKVRangeReader kvRangeCheckpoint = new KVRangeCheckpoint(kvSpace.open(checkpointId).get());
+        IKVRangeReader kvRangeCheckpoint = new KVRangeCheckpoint(id, kvSpace.openCheckpoint(checkpointId).get());
         KVRangeSnapshot.Builder builder = KVRangeSnapshot.newBuilder()
             .setVer(kvRangeCheckpoint.version())
             .setId(id)
@@ -96,12 +97,12 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
     @Override
     public boolean hasCheckpoint(KVRangeSnapshot checkpoint) {
         assert checkpoint.getId().equals(id);
-        return checkpoint.hasCheckpointId() && kvSpace.open(checkpoint.getCheckpointId()).isPresent();
+        return checkpoint.hasCheckpointId() && kvSpace.openCheckpoint(checkpoint.getCheckpointId()).isPresent();
     }
 
     @Override
     public IKVRangeCheckpointReader open(KVRangeSnapshot checkpoint) {
-        return new KVRangeCheckpoint(kvSpace.open(checkpoint.getCheckpointId()).get());
+        return new KVRangeCheckpoint(id, kvSpace.openCheckpoint(checkpoint.getCheckpointId()).get());
     }
 
     @SneakyThrows
@@ -126,12 +127,12 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
 
     @Override
     public IKVRangeWriter<?> toWriter() {
-        return new KVRangeWriter(kvSpace.toWriter());
+        return new KVRangeWriter(id, kvSpace.toWriter());
     }
 
     @Override
     public IKVRangeWriter<?> toWriter(IKVLoadRecorder recorder) {
-        return new LoadRecordableKVRangeWriter(kvSpace.toWriter(), recorder);
+        return new LoadRecordableKVRangeWriter(id, kvSpace.toWriter(), recorder);
     }
 
     @Override

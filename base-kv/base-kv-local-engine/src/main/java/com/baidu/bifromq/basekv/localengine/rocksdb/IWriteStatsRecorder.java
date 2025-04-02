@@ -13,7 +13,11 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
-public interface IWriteStatsRecorder {
+interface IWriteStatsRecorder {
+    IRecorder newRecorder();
+
+    void reset();
+
     interface IRecorder {
         void recordPut();
 
@@ -25,8 +29,4 @@ public interface IWriteStatsRecorder {
 
         void stop();
     }
-
-    IRecorder newRecorder();
-
-    void reset();
 }

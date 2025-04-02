@@ -30,11 +30,6 @@ import java.util.function.Supplier;
 
 public class KVSpaceMeters {
     private static final Cleaner CLEANER = Cleaner.create();
-
-    private record MeterKey(String id, KVSpaceMetric metric, Tags tags) {
-
-    }
-
     private static final Cache<MeterKey, Meter> METERS = Caffeine.newBuilder().weakValues().build();
 
     public static Timer getTimer(String id, KVSpaceMetric metric, Tags tags) {
@@ -62,6 +57,10 @@ public class KVSpaceMeters {
                 .tags(tags)
                 .tags("kvspace", id)
                 .register(Metrics.globalRegistry)));
+    }
+
+    private record MeterKey(String id, KVSpaceMetric metric, Tags tags) {
+
     }
 
     private record State(Meter meter) implements Runnable {
@@ -212,8 +211,7 @@ public class KVSpaceMeters {
 
         @Override
         public String toString() {
-            return "GaugeWrapper[" +
-                "delegate=" + delegate + ']';
+            return "GaugeWrapper[delegate=" + delegate + "]";
         }
     }
 }

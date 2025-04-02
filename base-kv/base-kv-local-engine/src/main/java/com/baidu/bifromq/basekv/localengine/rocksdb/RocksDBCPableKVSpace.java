@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
+import static com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters.getGauge;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.LATEST_CP_KEY;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -21,6 +22,7 @@ import com.baidu.bifromq.basekv.localengine.IKVSpaceCheckpoint;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters;
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMetric;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.micrometer.core.instrument.Gauge;
@@ -40,6 +42,7 @@ import lombok.SneakyThrows;
 import org.rocksdb.Checkpoint;
 import org.rocksdb.FlushOptions;
 import org.rocksdb.WriteOptions;
+import org.slf4j.Logger;
 
 public class RocksDBCPableKVSpace
     extends RocksDBKVSpace<RocksDBCPableKVEngine, RocksDBCPableKVSpace, RocksDBCPableKVEngineConfigurator>
@@ -60,15 +63,17 @@ public class RocksDBCPableKVSpace
                                 RocksDBCPableKVEngineConfigurator configurator,
                                 RocksDBCPableKVEngine engine,
                                 Runnable onDestroy,
+                                KVSpaceOpMeters opMeters,
+                                Logger logger,
                                 String... tags) {
-        super(id, configurator, engine, onDestroy, tags);
+        super(id, configurator, engine, onDestroy, opMeters, logger, tags);
         this.engine = engine;
         cpRootDir = new File(configurator.dbCheckpointRootDir(), id);
         this.checkpoint = Checkpoint.create(db);
         checkpoints = Caffeine.newBuilder().weakValues().build();
         writeOptions = new WriteOptions().setDisableWAL(true);
         Files.createDirectories(cpRootDir.getAbsoluteFile().toPath());
-        metricMgr = new MetricManager();
+        metricMgr = new MetricManager(tags);
     }
 
     @Override
@@ -89,17 +94,17 @@ public class RocksDBCPableKVSpace
     }
 
     @Override
-    public Optional<IKVSpaceCheckpoint> open(String checkpointId) {
+    public Optional<IKVSpaceCheckpoint> openCheckpoint(String checkpointId) {
         return Optional.ofNullable(checkpoints.getIfPresent(checkpointId));
     }
 
     @Override
     protected void doClose() {
-        log.debug("Flush RocksDBCPableKVSpace[{}] before closing", id);
+        logger.debug("Flush RocksDBCPableKVSpace[{}] before closing", id);
         try (FlushOptions flushOptions = new FlushOptions().setWaitForFlush(true)) {
             db.flush(flushOptions);
         } catch (Throwable e) {
-            log.error("Flush RocksDBCPableKVSpace[{}] error", id, e);
+            logger.error("Flush RocksDBCPableKVSpace[{}] error", id, e);
         }
         metricMgr.close();
         checkpoints.asMap().forEach((cpId, cp) -> cp.close());
@@ -114,7 +119,7 @@ public class RocksDBCPableKVSpace
         try {
             deleteDir(cpRootDir.toPath());
         } catch (IOException e) {
-            log.error("Failed to delete checkpoint root dir: {}", cpRootDir, e);
+            logger.error("Failed to delete checkpoint root dir: {}", cpRootDir, e);
         }
     }
 
@@ -128,20 +133,20 @@ public class RocksDBCPableKVSpace
         String cpId = genCheckpointId();
         File cpDir = Paths.get(cpRootDir.getAbsolutePath(), cpId).toFile();
         try {
-            log.debug("KVSpace[{}] checkpoint start: checkpointId={}", id, cpId);
+            logger.debug("KVSpace[{}] checkpoint start: checkpointId={}", id, cpId);
             // flush before checkpointing
             db.put(cfHandle, LATEST_CP_KEY, cpId.getBytes());
-            log.debug("KVSpace[{}] flush start", id);
+            logger.debug("KVSpace[{}] flush start", id);
             try (FlushOptions flushOptions = new FlushOptions().setWaitForFlush(true)) {
                 db.flush(flushOptions, cfHandle);
-                log.debug("KVSpace[{}] flush complete", id);
+                logger.debug("KVSpace[{}] flush complete", id);
             } catch (Throwable e) {
-                log.error("KVSpace[{}] flush error", id, e);
+                logger.error("KVSpace[{}] flush error", id, e);
                 throw new KVEngineException("KVSpace flush error", e);
             }
             checkpoint.createCheckpoint(cpDir.toString());
             latestCheckpointId.set(cpId);
-            return new RocksDBKVSpaceCheckpoint(id, cpId, cpDir, this::isLatest, metricTags);
+            return new RocksDBKVSpaceCheckpoint(id, cpId, cpDir, this::isLatest, opMeters, logger);
         } catch (Throwable e) {
             throw new KVEngineException("Checkpoint key range error", e);
         }
@@ -159,15 +164,15 @@ public class RocksDBCPableKVSpace
                     try {
                         cleanCheckpoint(obsoleteId);
                     } catch (Throwable e) {
-                        log.error("Clean checkpoint[{}] for kvspace[{}] error", obsoleteId, id, e);
+                        logger.error("Clean checkpoint[{}] for kvspace[{}] error", obsoleteId, id, e);
                     }
                 }
-                log.debug("Load latest checkpoint[{}] of kvspace[{}] in engine[{}] at path[{}]",
+                logger.debug("Load latest checkpoint[{}] of kvspace[{}] in engine[{}] at path[{}]",
                     cpId, id, engine.id(), cpDir);
                 latestCheckpointId.set(cpId);
-                return new RocksDBKVSpaceCheckpoint(id, cpId, cpDir, this::isLatest, metricTags);
+                return new RocksDBKVSpaceCheckpoint(id, cpId, cpDir, this::isLatest, opMeters, logger);
             } catch (Throwable e) {
-                log.warn("Failed to load latest checkpoint, checkpoint now", e);
+                logger.warn("Failed to load latest checkpoint, checkpoint now", e);
             }
         }
         return doCheckpoint();
@@ -207,11 +212,11 @@ public class RocksDBCPableKVSpace
     }
 
     private void cleanCheckpoint(String cpId) {
-        log.debug("Delete checkpoint[{}] of kvspace[{}]", cpId, id);
+        logger.debug("Delete checkpoint[{}] of kvspace[{}]", cpId, id);
         try {
             deleteDir(checkpointDir(cpId).toPath());
         } catch (IOException e) {
-            log.error("Failed to clean checkpoint[{}] for kvspace[{}] at path:{}", cpId, id, checkpointDir(cpId));
+            logger.error("Failed to clean checkpoint[{}] for kvspace[{}] at path:{}", cpId, id, checkpointDir(cpId));
         }
     }
 
@@ -219,10 +224,9 @@ public class RocksDBCPableKVSpace
         private final Gauge checkpointGauge; // hold a strong reference
         private final Timer checkpointTimer;
 
-        MetricManager() {
+        MetricManager(String... metricTags) {
             Tags tags = Tags.of(metricTags);
-            checkpointGauge =
-                KVSpaceMeters.getGauge(id, KVSpaceMetric.CheckpointNumGauge, checkpoints::estimatedSize, tags);
+            checkpointGauge = getGauge(id, KVSpaceMetric.CheckpointNumGauge, checkpoints::estimatedSize, tags);
             checkpointTimer = KVSpaceMeters.getTimer(id, KVSpaceMetric.CheckpointTimer, tags);
         }
 

@@ -18,13 +18,15 @@ import com.baidu.bifromq.basekv.localengine.IKVSpaceMetadataWriter;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Consumer;
+import org.slf4j.Logger;
 
-public class InMemKVSpaceWriter<E extends InMemKVEngine<E, T>, T extends InMemKVSpace<E, T>> extends InMemKVSpaceReader
+class InMemKVSpaceWriter<E extends InMemKVEngine<E, T>, T extends InMemKVSpace<E, T>> extends InMemKVSpaceReader
     implements IKVSpaceWriter {
     private final Map<ByteString, ByteString> metadataMap;
     private final ConcurrentSkipListMap<ByteString, ByteString> rangeData;
@@ -37,8 +39,10 @@ public class InMemKVSpaceWriter<E extends InMemKVEngine<E, T>, T extends InMemKV
                        E engine,
                        ISyncContext syncContext,
                        Consumer<Boolean> afterWrite,
-                       String... tags) {
-        this(id, metadataMap, rangeData, engine, syncContext, new InMemKVSpaceWriterHelper(), afterWrite, tags);
+                       KVSpaceOpMeters readOpMeters,
+                       Logger logger) {
+        this(id, metadataMap, rangeData, engine, syncContext, new InMemKVSpaceWriterHelper(),
+            afterWrite, readOpMeters, logger);
     }
 
     private InMemKVSpaceWriter(String id,
@@ -48,8 +52,9 @@ public class InMemKVSpaceWriter<E extends InMemKVEngine<E, T>, T extends InMemKV
                                ISyncContext syncContext,
                                InMemKVSpaceWriterHelper writerHelper,
                                Consumer<Boolean> afterWrite,
-                               String... tags) {
-        super(id, tags);
+                               KVSpaceOpMeters readOpMeters,
+                               Logger logger) {
+        super(id, readOpMeters, logger);
         this.metadataMap = metadataMap;
         this.rangeData = rangeData;
         this.engine = engine;
@@ -136,7 +141,14 @@ public class InMemKVSpaceWriter<E extends InMemKVEngine<E, T>, T extends InMemKV
 
     @Override
     public void done() {
-        helper.done();
+        opMeters.batchWriteCallTimer.record(() -> {
+            try {
+                helper.done();
+            } catch (Throwable e) {
+                logger.error("Write Batch commit failed", e);
+                throw new KVEngineException("Batch commit failed", e);
+            }
+        });
     }
 
     @Override

@@ -13,14 +13,21 @@
 
 package com.baidu.bifromq.basekv.localengine.memory;
 
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
+import org.slf4j.Logger;
+
 public class InMemWALableKVEngine extends InMemKVEngine<InMemWALableKVEngine, InMemWALableKVSpace> {
     public InMemWALableKVEngine(String overrideIdentity, InMemKVEngineConfigurator c) {
         super(overrideIdentity, c);
     }
 
     @Override
-    protected InMemWALableKVSpace buildKVSpace(String spaceId, InMemKVEngineConfigurator configurator,
-                                               Runnable onDestroy) {
-        return new InMemWALableKVSpace(spaceId, configurator, this, onDestroy);
+    protected InMemWALableKVSpace doBuildKVSpace(String spaceId,
+                                                 InMemKVEngineConfigurator configurator,
+                                                 Runnable onDestroy,
+                                                 KVSpaceOpMeters opMeters,
+                                                 Logger logger,
+                                                 String... tags) {
+        return new InMemWALableKVSpace(spaceId, configurator, this, onDestroy, opMeters, logger);
     }
 }

@@ -14,6 +14,9 @@
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
 import static com.baidu.bifromq.basekv.localengine.IKVEngine.DEFAULT_NS;
+import static com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters.getCounter;
+import static com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters.getGauge;
+import static com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters.getTimer;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.META_SECTION_END;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.META_SECTION_START;
 import static com.baidu.bifromq.basekv.localengine.rocksdb.Keys.fromMetaKey;
@@ -29,8 +32,8 @@ import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
 import com.baidu.bifromq.basekv.localengine.KVSpaceDescriptor;
 import com.baidu.bifromq.basekv.localengine.SyncContext;
-import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters;
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMetric;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Counter;
@@ -69,6 +72,7 @@ import org.rocksdb.DBOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteOptions;
+import org.slf4j.Logger;
 
 abstract class RocksDBKVSpace<
     E extends RocksDBKVEngine<E, T, C>,
@@ -82,7 +86,6 @@ abstract class RocksDBKVSpace<
     private final AtomicReference<State> state = new AtomicReference<>(State.Init);
     private final File keySpaceDBDir;
     private final DBOptions dbOptions;
-    private final C configurator;
     private final ColumnFamilyDescriptor cfDesc;
     private final IWriteStatsRecorder writeStats;
     private final ExecutorService compactionExecutor;
@@ -92,7 +95,7 @@ abstract class RocksDBKVSpace<
     private final BehaviorSubject<Map<ByteString, ByteString>> metadataSubject = createDefault(emptyMap());
     private final ISyncContext syncContext = new SyncContext();
     private final ISyncContext.IRefresher metadataRefresher = syncContext.refresher();
-    private final MetricManager metricMgr;
+    private final SpaceMetrics spaceMetrics;
     private volatile long lastCompactAt;
     private volatile long nextCompactAt;
 
@@ -101,10 +104,11 @@ abstract class RocksDBKVSpace<
                           C configurator,
                           E engine,
                           Runnable onDestroy,
+                          KVSpaceOpMeters opMeters,
+                          Logger logger,
                           String... tags) {
-        super(id, tags);
+        super(id, opMeters, logger);
         this.onDestroy = onDestroy;
-        this.configurator = configurator;
         this.writeStats = configurator.heuristicCompaction() ? new RocksDBKVSpaceCompactionTrigger(id,
             configurator.compactMinTombstoneKeys(),
             configurator.compactMinTombstoneRanges(),
@@ -114,7 +118,7 @@ abstract class RocksDBKVSpace<
         compactionExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry, new ThreadPoolExecutor(1, 1,
                 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
                 EnvProvider.INSTANCE.newThreadFactory("kvspace-compactor-" + id)),
-            "compactor", "kvspace", Tags.of(metricTags));
+            "compactor", "kvspace", Tags.of(tags));
         dbOptions = configurator.dbOptions();
         keySpaceDBDir = new File(configurator.dbRootDir(), id);
         try {
@@ -128,7 +132,7 @@ abstract class RocksDBKVSpace<
         } catch (Throwable e) {
             throw new KVEngineException("Failed to initialize RocksDBKVSpace", e);
         }
-        metricMgr = new MetricManager(tags);
+        spaceMetrics = new SpaceMetrics(Tags.of(tags).and("spaceId", id));
     }
 
     protected static void deleteDir(Path path) throws IOException {
@@ -147,11 +151,10 @@ abstract class RocksDBKVSpace<
         });
     }
 
-    public T open() {
+    public void open() {
         if (state.compareAndSet(State.Init, State.Opening)) {
             doLoad();
         }
-        return (T) this;
     }
 
     public Observable<Map<ByteString, ByteString>> metadata() {
@@ -220,10 +223,10 @@ abstract class RocksDBKVSpace<
     @Override
     public IKVSpaceWriter toWriter() {
         return new RocksDBKVSpaceWriter<>(id, db, cfHandle, engine, writeOptions(), syncContext,
-            writeStats.newRecorder(), this::updateMetadata, metricTags);
+            writeStats.newRecorder(), this::updateMetadata, opMeters, logger);
     }
 
-    void close() {
+    public void close() {
         if (state.compareAndSet(State.Opening, State.Closing)) {
             try {
                 doClose();
@@ -238,8 +241,8 @@ abstract class RocksDBKVSpace<
     }
 
     protected void doClose() {
-        log.debug("Close key range[{}]", id);
-        metricMgr.close();
+        logger.debug("Close key range[{}]", id);
+        spaceMetrics.close();
         synchronized (compacting) {
             db.destroyColumnFamilyHandle(cfHandle);
         }
@@ -247,7 +250,7 @@ abstract class RocksDBKVSpace<
         try {
             db.syncWal();
         } catch (RocksDBException e) {
-            log.error("SyncWAL RocksDBKVSpace[{}] error", id, e);
+            logger.error("SyncWAL RocksDBKVSpace[{}] error", id, e);
         }
         db.close();
         dbOptions.close();
@@ -259,7 +262,7 @@ abstract class RocksDBKVSpace<
         try {
             deleteDir(keySpaceDBDir.toPath());
         } catch (IOException e) {
-            log.error("Failed to delete key range dir: {}", keySpaceDBDir, e);
+            logger.error("Failed to delete key range dir: {}", keySpaceDBDir, e);
         }
     }
 
@@ -282,10 +285,10 @@ abstract class RocksDBKVSpace<
         if (state.get() != State.Opening) {
             return;
         }
-        metricMgr.compactionSchedCounter.increment();
+        spaceMetrics.compactionSchedCounter.increment();
         if (compacting.compareAndSet(false, true)) {
-            compactionExecutor.execute(metricMgr.compactionTimer.wrap(() -> {
-                log.debug("KeyRange[{}] compaction start", id);
+            compactionExecutor.execute(spaceMetrics.compactionTimer.wrap(() -> {
+                logger.debug("KeyRange[{}] compaction start", id);
                 lastCompactAt = System.nanoTime();
                 writeStats.reset();
                 try (CompactRangeOptions options = new CompactRangeOptions()
@@ -296,9 +299,9 @@ abstract class RocksDBKVSpace<
                             db.compactRange(cfHandle, null, null, options);
                         }
                     }
-                    log.debug("KeyRange[{}] compacted", id);
+                    logger.debug("KeyRange[{}] compacted", id);
                 } catch (Throwable e) {
-                    log.error("KeyRange[{}] compaction error", id, e);
+                    logger.error("KeyRange[{}] compaction error", id, e);
                 } finally {
                     compacting.set(false);
                     if (nextCompactAt > lastCompactAt) {
@@ -315,7 +318,7 @@ abstract class RocksDBKVSpace<
         Init, Opening, Destroying, Closing, Terminated
     }
 
-    private class MetricManager {
+    private class SpaceMetrics {
         private final Gauge blockCacheSizeGauge;
         private final Gauge tableReaderSizeGauge;
         private final Gauge memtableSizeGauges;
@@ -323,49 +326,44 @@ abstract class RocksDBKVSpace<
         private final Counter compactionSchedCounter;
         private final Timer compactionTimer;
 
-        MetricManager(String... tags) {
-            Tags metricTags = Tags.of(tags);
-            compactionSchedCounter = KVSpaceMeters.getCounter(id, KVSpaceMetric.CompactionCounter, metricTags);
-            compactionTimer = KVSpaceMeters.getTimer(id, KVSpaceMetric.CompactionTimer, metricTags);
-
-            blockCacheSizeGauge = KVSpaceMeters.getGauge(id, KVSpaceMetric.BlockCache, () -> {
+        SpaceMetrics(Tags metricTags) {
+            compactionSchedCounter = getCounter(id, KVSpaceMetric.CompactionCounter, metricTags);
+            compactionTimer = getTimer(id, KVSpaceMetric.CompactionTimer, metricTags);
+            blockCacheSizeGauge = getGauge(id, KVSpaceMetric.BlockCache, () -> {
                 try {
                     if (!((BlockBasedTableConfig) cfDesc.getOptions().tableFormatConfig()).noBlockCache()) {
                         return db.getLongProperty(cfHandle, "rocksdb.block-cache-usage");
                     }
                     return 0;
                 } catch (RocksDBException e) {
-                    log.warn("Unable to get long property {}", "rocksdb.block-cache-usage", e);
+                    logger.warn("Unable to get long property {}", "rocksdb.block-cache-usage", e);
                     return 0;
                 }
             }, metricTags);
-
-            tableReaderSizeGauge = KVSpaceMeters.getGauge(id, KVSpaceMetric.TableReader, () -> {
+            tableReaderSizeGauge = getGauge(id, KVSpaceMetric.TableReader, () -> {
                 try {
                     return db.getLongProperty(cfHandle, "rocksdb.estimate-table-readers-mem");
                 } catch (RocksDBException e) {
-                    log.warn("Unable to get long property {}", "rocksdb.estimate-table-readers-mem", e);
+                    logger.warn("Unable to get long property {}", "rocksdb.estimate-table-readers-mem", e);
                     return 0;
                 }
             }, metricTags);
-
-            memtableSizeGauges = KVSpaceMeters.getGauge(id, KVSpaceMetric.MemTable, () -> {
+            memtableSizeGauges = getGauge(id, KVSpaceMetric.MemTable, () -> {
                 try {
                     return db.getLongProperty(cfHandle, "rocksdb.cur-size-all-mem-tables");
                 } catch (RocksDBException e) {
-                    log.warn("Unable to get long property {}", "rocksdb.cur-size-all-mem-tables", e);
+                    logger.warn("Unable to get long property {}", "rocksdb.cur-size-all-mem-tables", e);
                     return 0;
                 }
             }, metricTags);
-
-            pinedMemorySizeGauges = KVSpaceMeters.getGauge(id, KVSpaceMetric.PinnedMem, () -> {
+            pinedMemorySizeGauges = getGauge(id, KVSpaceMetric.PinnedMem, () -> {
                 try {
                     if (!((BlockBasedTableConfig) cfDesc.getOptions().tableFormatConfig()).noBlockCache()) {
                         return db.getLongProperty(cfHandle, "rocksdb.block-cache-pinned-usage");
                     }
                     return 0;
                 } catch (RocksDBException e) {
-                    log.warn("Unable to get long property {}", "rocksdb.block-cache-pinned-usage", e);
+                    logger.warn("Unable to get long property {}", "rocksdb.block-cache-pinned-usage", e);
                     return 0;
                 }
             }, metricTags);

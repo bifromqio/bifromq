@@ -17,7 +17,7 @@ import java.lang.ref.Cleaner;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class AutoCleaner {
+class AutoCleaner {
     private static final Cleaner CLEANER = Cleaner.create();
 
     public static <T extends AutoCloseable, O> T autoRelease(T object, O owner) {

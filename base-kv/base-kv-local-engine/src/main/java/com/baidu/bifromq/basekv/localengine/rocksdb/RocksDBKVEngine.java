@@ -25,28 +25,21 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.Collections;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Stream;
 
-public abstract class RocksDBKVEngine<
+abstract class RocksDBKVEngine<
     E extends RocksDBKVEngine<E, T, C>,
     T extends RocksDBKVSpace<E, T, C>,
     C extends RocksDBKVEngineConfigurator<C>
-    > extends AbstractKVEngine<T> {
+    > extends AbstractKVEngine<T, C> {
     private final File dbRootDir;
-    private final C configurator;
-    private final ConcurrentMap<String, T> kvSpaceMap = new ConcurrentHashMap<>();
     private final String identity;
     private final boolean isCreate;
     private MetricManager metricManager;
 
     public RocksDBKVEngine(String overrideIdentity, C configurator) {
-        super(overrideIdentity);
-        this.configurator = configurator;
+        super(overrideIdentity, configurator);
         dbRootDir = new File(configurator.dbRootDir());
         try {
             Files.createDirectories(dbRootDir.getAbsoluteFile().toPath());
@@ -57,14 +50,14 @@ public abstract class RocksDBKVEngine<
         }
     }
 
-    @Override
-    public T createIfMissing(String spaceId) {
-        assertStarted();
-        return kvSpaceMap.computeIfAbsent(spaceId,
-            k -> buildKVSpace(spaceId, configurator, () -> kvSpaceMap.remove(spaceId), metricTags).open());
+    private static boolean isEmpty(Path path) throws IOException {
+        if (Files.isDirectory(path)) {
+            try (Stream<Path> entries = Files.list(path)) {
+                return entries.findFirst().isEmpty();
+            }
+        }
+        return false;
     }
-
-    protected abstract T buildKVSpace(String spaceId, C configurator, Runnable onDestroy, String... tags);
 
     @Override
     protected void doStart(String... tags) {
@@ -80,16 +73,10 @@ public abstract class RocksDBKVEngine<
     }
 
     @Override
-    public Map<String, T> spaces() {
-        assertStarted();
-        return Collections.unmodifiableMap(kvSpaceMap);
-    }
-
-    @Override
     protected void doStop() {
         log.info("Stopping RocksDBKVEngine[{}]", identity);
+        super.doStop();
         metricManager.close();
-        kvSpaceMap.values().forEach(RocksDBKVSpace::close);
     }
 
     @Override
@@ -102,8 +89,7 @@ public abstract class RocksDBKVEngine<
             paths.filter(Files::isDirectory)
                 .map(Path::getFileName)
                 .map(Path::toString)
-                .forEach(keySpaceId -> kvSpaceMap.put(keySpaceId,
-                    buildKVSpace(keySpaceId, configurator, () -> kvSpaceMap.remove(keySpaceId), metricTags).open()));
+                .forEach(this::load);
         } catch (Throwable e) {
             log.error("Failed to load existing key spaces", e);
         }
@@ -121,15 +107,6 @@ public abstract class RocksDBKVEngine<
         } catch (IndexOutOfBoundsException | IOException e) {
             throw new KVEngineException("Failed to read IDENTITY file", e);
         }
-    }
-
-    private static boolean isEmpty(Path path) throws IOException {
-        if (Files.isDirectory(path)) {
-            try (Stream<Path> entries = Files.list(path)) {
-                return entries.findFirst().isEmpty();
-            }
-        }
-        return false;
     }
 
     private class MetricManager {

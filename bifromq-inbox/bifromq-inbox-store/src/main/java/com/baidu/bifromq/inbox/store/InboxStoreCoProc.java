@@ -481,7 +481,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                 BatchTouchReply.Builder replyBuilder,
                                 IKVReader reader,
                                 IKVWriter writer) {
-        Map<String, Set<InboxMetadata>> toBeCached = new HashMap<>();
+        Map<String, Set<InboxMetadata>> toBeCached = new HashMap<>(128);
         for (BatchTouchRequest.Params params : request.getParamsList()) {
             Optional<InboxMetadata> metadataOpt =
                 tenantStates.get(params.getTenantId(), params.getInboxId(), params.getIncarnation());

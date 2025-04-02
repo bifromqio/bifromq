@@ -25,15 +25,12 @@ import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.store.util.KVUtil;
-import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 
 abstract class AbstractKVRangeMetadataUpdatable<T extends AbstractKVRangeMetadataUpdatable<T>>
     extends AbstractKVRangeMetadata implements IKVRangeMetadataUpdatable<T> {
-    protected final KVRangeId id;
 
-    AbstractKVRangeMetadataUpdatable(IKVSpaceMetadata keyRangeMetadata) {
-        super(keyRangeMetadata);
-        this.id = KVRangeIdUtil.fromString(keyRangeMetadata.id());
+    AbstractKVRangeMetadataUpdatable(KVRangeId id, IKVSpaceMetadata keyRangeMetadata) {
+        super(id, keyRangeMetadata);
     }
 
     @Override

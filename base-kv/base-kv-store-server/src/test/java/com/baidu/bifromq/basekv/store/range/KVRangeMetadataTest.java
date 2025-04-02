@@ -32,7 +32,7 @@ public class KVRangeMetadataTest extends AbstractKVRangeTest {
     public void initWithNoData() {
         KVRangeId id = KVRangeIdUtil.generate();
         ICPableKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(id));
-        IKVRange accessor = new KVRange(keyRange);
+        IKVRange accessor = new KVRange(id, keyRange);
         assertEquals(accessor.id(), id);
         assertEquals(accessor.version(), -1);
         assertEquals(accessor.lastAppliedIndex(), -1);
@@ -49,7 +49,7 @@ public class KVRangeMetadataTest extends AbstractKVRangeTest {
             .setBoundary(FULL_BOUNDARY)
             .build();
         ICPableKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
-        IKVRange accessor = new KVRange(keyRange).toReseter(snapshot).done();
+        IKVRange accessor = new KVRange(snapshot.getId(), keyRange).toReseter(snapshot).done();
 
         assertEquals(accessor.version(), snapshot.getVer());
         assertEquals(accessor.boundary(), snapshot.getBoundary());
@@ -62,7 +62,7 @@ public class KVRangeMetadataTest extends AbstractKVRangeTest {
         try {
             KVRangeId rangeId = KVRangeIdUtil.generate();
             ICPableKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(rangeId));
-            IKVRange kvRange = new KVRange(keyRange);
+            IKVRange kvRange = new KVRange(rangeId, keyRange);
             Maybe<IKVRange.KVRangeMeta> metaMayBe = kvRange.metadata().firstElement();
             keyRange.destroy();
             assertNull(metaMayBe.timeout(5, TimeUnit.SECONDS).blockingGet());
@@ -85,7 +85,7 @@ public class KVRangeMetadataTest extends AbstractKVRangeTest {
             .setBoundary(FULL_BOUNDARY)
             .build();
         ICPableKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
-        IKVRange accessor = new KVRange(keyRange).toReseter(snapshot).done();
+        IKVRange accessor = new KVRange(snapshot.getId(), keyRange).toReseter(snapshot).done();
 
         lastAppliedIndex = 11;
         accessor.toWriter().lastAppliedIndex(lastAppliedIndex).done();

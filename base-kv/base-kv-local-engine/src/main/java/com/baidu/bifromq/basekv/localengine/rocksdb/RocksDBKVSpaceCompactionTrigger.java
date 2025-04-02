@@ -19,15 +19,10 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Tags;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class RocksDBKVSpaceCompactionTrigger implements IWriteStatsRecorder {
-    public interface CompactionScheduler {
-        boolean schedule();
-    }
-
+class RocksDBKVSpaceCompactionTrigger implements IWriteStatsRecorder {
     private final AtomicInteger totalKeyCount = new AtomicInteger();
     private final AtomicInteger totalTombstoneKeyCount = new AtomicInteger();
     private final AtomicInteger totalTombstoneRangeCount = new AtomicInteger();
-
     private final int minTombstoneKeysTrigger;
     private final int minTombstoneRangesTrigger;
     private final double minTombstoneKeysRatioTrigger;
@@ -35,7 +30,6 @@ public class RocksDBKVSpaceCompactionTrigger implements IWriteStatsRecorder {
     private final Gauge totalKeysGauge;
     private final Gauge totalTombstoneKeysGauge;
     private final Gauge totalTombstoneRangesGauge;
-
     public RocksDBKVSpaceCompactionTrigger(String id,
                                            int minTombstoneKeysTrigger,
                                            int minTombstoneRangesTrigger,
@@ -64,6 +58,10 @@ public class RocksDBKVSpaceCompactionTrigger implements IWriteStatsRecorder {
         totalKeyCount.set(0);
         totalTombstoneKeyCount.set(0);
         totalTombstoneRangeCount.set(0);
+    }
+
+    public interface CompactionScheduler {
+        boolean schedule();
     }
 
     class WriteStatsRecorder implements IRecorder {

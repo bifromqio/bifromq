@@ -13,34 +13,21 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
-import static com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters.getTimer;
-
-import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMetric;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
 import com.baidu.bifromq.basekv.proto.Boundary;
-import com.baidu.bifromq.logger.SiftLogger;
 import com.google.protobuf.ByteString;
-import io.micrometer.core.instrument.Tags;
-import io.micrometer.core.instrument.Timer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 
 public abstract class AbstractKVSpaceReader implements IKVSpaceReader {
-    protected final Logger log;
     protected final String id;
-    protected final String[] metricTags;
-    private final MetricManager metricMgr;
+    protected final KVSpaceOpMeters opMeters;
+    protected final Logger logger;
 
-    protected AbstractKVSpaceReader(String id, String... tags) {
+    protected AbstractKVSpaceReader(String id, KVSpaceOpMeters opMeters, Logger logger) {
         this.id = id;
-        List<String> allTags = new ArrayList<>(Arrays.asList(tags));
-        allTags.add("spaceId");
-        allTags.add(id);
-        this.metricTags = allTags.toArray(String[]::new);
-        this.metricMgr = new MetricManager(Tags.of(metricTags));
-        this.log = SiftLogger.getLogger(getClass(), allTags.toArray(String[]::new));
+        this.opMeters = opMeters;
+        this.logger = logger;
     }
 
     @Override
@@ -50,7 +37,7 @@ public abstract class AbstractKVSpaceReader implements IKVSpaceReader {
 
     @Override
     public final Optional<ByteString> metadata(ByteString metaKey) {
-        return metricMgr.metadataCallTimer.record(() -> doMetadata(metaKey));
+        return opMeters.metadataCallTimer.record(() -> doMetadata(metaKey));
     }
 
     protected abstract Optional<ByteString> doMetadata(ByteString metaKey);
@@ -62,35 +49,35 @@ public abstract class AbstractKVSpaceReader implements IKVSpaceReader {
 
     @Override
     public final long size(Boundary boundary) {
-        return metricMgr.sizeCallTimer.record(() -> doSize(boundary));
+        return opMeters.sizeCallTimer.record(() -> doSize(boundary));
     }
 
     protected abstract long doSize(Boundary boundary);
 
     @Override
     public final boolean exist(ByteString key) {
-        return metricMgr.existCallTimer.record(() -> doExist(key));
+        return opMeters.existCallTimer.record(() -> doExist(key));
     }
 
     protected abstract boolean doExist(ByteString key);
 
     @Override
     public final Optional<ByteString> get(ByteString key) {
-        return metricMgr.getCallTimer.record(() -> doGet(key));
+        return opMeters.getCallTimer.record(() -> doGet(key));
     }
 
     protected abstract Optional<ByteString> doGet(ByteString key);
 
     @Override
     public final IKVSpaceIterator newIterator() {
-        return metricMgr.iterNewCallTimer.record(() -> new MonitoredKeyRangeIterator(doNewIterator()));
+        return opMeters.iterNewCallTimer.record(() -> new MonitoredKeyRangeIterator(doNewIterator()));
     }
 
     protected abstract IKVSpaceIterator doNewIterator();
 
     @Override
     public final IKVSpaceIterator newIterator(Boundary subBoundary) {
-        return metricMgr.iterNewCallTimer.record(() -> new MonitoredKeyRangeIterator(doNewIterator(subBoundary)));
+        return opMeters.iterNewCallTimer.record(() -> new MonitoredKeyRangeIterator(doNewIterator(subBoundary)));
     }
 
     protected abstract IKVSpaceIterator doNewIterator(Boundary subBoundary);
@@ -119,74 +106,42 @@ public abstract class AbstractKVSpaceReader implements IKVSpaceReader {
 
         @Override
         public void next() {
-            metricMgr.iterNextCallTimer.record(delegate::next);
+            opMeters.iterNextCallTimer.record(delegate::next);
         }
 
         @Override
         public void prev() {
-            metricMgr.iterPrevCallTimer.record(delegate::prev);
+            opMeters.iterPrevCallTimer.record(delegate::prev);
         }
 
         @Override
         public void seekToFirst() {
-            metricMgr.iterSeekToFirstCallTimer.record(delegate::seekToFirst);
+            opMeters.iterSeekToFirstCallTimer.record(delegate::seekToFirst);
         }
 
         @Override
         public void seekToLast() {
-            metricMgr.iterSeekToLastCallTimer.record(delegate::seekToLast);
+            opMeters.iterSeekToLastCallTimer.record(delegate::seekToLast);
         }
 
         @Override
         public void seek(ByteString target) {
-            metricMgr.iterSeekCallTimer.record(() -> delegate.seek(target));
+            opMeters.iterSeekCallTimer.record(() -> delegate.seek(target));
         }
 
         @Override
         public void seekForPrev(ByteString target) {
-            metricMgr.iterSeekForPrevCallTimer.record(() -> delegate.seekForPrev(target));
+            opMeters.iterSeekForPrevCallTimer.record(() -> delegate.seekForPrev(target));
         }
 
         @Override
         public void refresh() {
-            metricMgr.iterRefreshTimer.record(delegate::refresh);
+            opMeters.iterRefreshTimer.record(delegate::refresh);
         }
 
         @Override
         public void close() {
             delegate.close();
-        }
-    }
-
-    private class MetricManager {
-        private final Timer metadataCallTimer;
-        private final Timer sizeCallTimer;
-        private final Timer existCallTimer;
-        private final Timer getCallTimer;
-        private final Timer iterNewCallTimer;
-        private final Timer iterSeekCallTimer;
-        private final Timer iterSeekForPrevCallTimer;
-        private final Timer iterSeekToFirstCallTimer;
-        private final Timer iterSeekToLastCallTimer;
-        private final Timer iterNextCallTimer;
-        private final Timer iterPrevCallTimer;
-        private final Timer iterRefreshTimer;
-
-        MetricManager(Tags tags) {
-            metadataCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "metadata"));
-
-            sizeCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "size"));
-            existCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "exist"));
-            getCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "get"));
-            iterNewCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "newitr"));
-
-            iterSeekCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "seek"));
-            iterSeekForPrevCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "pseek"));
-            iterSeekToFirstCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "fseek"));
-            iterSeekToLastCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "lseek"));
-            iterNextCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "next"));
-            iterPrevCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "prev"));
-            iterRefreshTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "refresh"));
         }
     }
 }

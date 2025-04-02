@@ -19,6 +19,7 @@ import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_VER_BYTE
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceReader;
 import com.baidu.bifromq.basekv.proto.Boundary;
+import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.State;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
@@ -26,8 +27,8 @@ import java.util.Optional;
 public class KVRangeCheckpoint extends AbstractKVRangeMetadata implements IKVRangeCheckpointReader {
     private final IKVSpaceReader keyRangeCheckpoint;
 
-    KVRangeCheckpoint(IKVSpaceReader keyRangeCheckpoint) {
-        super(keyRangeCheckpoint);
+    KVRangeCheckpoint(KVRangeId id, IKVSpaceReader keyRangeCheckpoint) {
+        super(id, keyRangeCheckpoint);
         this.keyRangeCheckpoint = keyRangeCheckpoint;
     }
 

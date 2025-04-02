@@ -15,16 +15,18 @@ package com.baidu.bifromq.basekv.localengine.memory;
 
 import com.baidu.bifromq.basekv.localengine.AbstractKVSpaceReader;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import java.util.Map;
 import java.util.Optional;
 import java.util.SortedMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import org.slf4j.Logger;
 
-public abstract class InMemKVSpaceReader extends AbstractKVSpaceReader {
-    protected InMemKVSpaceReader(String id, String... tags) {
-        super(id, tags);
+abstract class InMemKVSpaceReader extends AbstractKVSpaceReader {
+    protected InMemKVSpaceReader(String id, KVSpaceOpMeters readOpMeters, Logger logger) {
+        super(id, readOpMeters, logger);
     }
 
     protected abstract Map<ByteString, ByteString> metadataMap();

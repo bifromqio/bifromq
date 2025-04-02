@@ -13,33 +13,43 @@
 
 package com.baidu.bifromq.basekv.localengine;
 
+import static com.google.common.collect.Lists.newArrayList;
+
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
 import com.baidu.bifromq.logger.SiftLogger;
+import com.google.common.collect.Iterables;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Tags;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 
-public abstract class AbstractKVEngine<T extends IKVSpace> implements IKVEngine<T> {
-    protected enum State {
-        INIT, STARTING, STARTED, FATAL_FAILURE, STOPPING, STOPPED
-    }
-
+/**
+ * The abstract class of KVEngine.
+ *
+ * @param <T> the type of KV space created by the engine
+ * @param <C> the type of configurator
+ */
+public abstract class AbstractKVEngine<T extends IKVSpace, C extends IKVEngineConfigurator> implements IKVEngine<T> {
     protected final String overrideIdentity;
+    protected final C configurator;
+    private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
+    private final Map<String, T> kvSpaceMap = new ConcurrentHashMap<>();
     protected Logger log;
     protected String[] metricTags;
-    private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private Gauge gauge;
 
-    public AbstractKVEngine(String overrideIdentity) {
+    public AbstractKVEngine(String overrideIdentity, C configurator) {
         this.overrideIdentity = overrideIdentity;
-    }
-
-    protected State state() {
-        return state.get();
+        this.configurator = configurator;
     }
 
     @Override
-    public void start(String... tags) {
+    public final void start(String... tags) {
         if (state.compareAndSet(State.INIT, State.STARTING)) {
             try {
                 log = SiftLogger.getLogger(this.getClass(), tags);
@@ -64,7 +74,7 @@ public abstract class AbstractKVEngine<T extends IKVSpace> implements IKVEngine<
     }
 
     @Override
-    public void stop() {
+    public final void stop() {
         assertStarted();
         if (state.compareAndSet(State.STARTED, State.STOPPING)) {
             try {
@@ -76,9 +86,54 @@ public abstract class AbstractKVEngine<T extends IKVSpace> implements IKVEngine<
         }
     }
 
-    protected abstract void doStop();
+    protected void doStop() {
+        kvSpaceMap.values().forEach(IKVSpace::close);
+    }
 
     protected void assertStarted() {
         assert state.get() == State.STARTED : "Not started";
+    }
+
+    @Override
+    public final Map<String, T> spaces() {
+        assertStarted();
+        return Collections.unmodifiableMap(kvSpaceMap);
+    }
+
+    @Override
+    public final T createIfMissing(String spaceId) {
+        assertStarted();
+        return kvSpaceMap.computeIfAbsent(spaceId,
+            k -> {
+                T space = buildKVSpace(spaceId, configurator, () -> kvSpaceMap.remove(spaceId), metricTags);
+                space.open();
+                return space;
+            });
+    }
+
+    protected final void load(String spaceId) {
+        T space = buildKVSpace(spaceId, configurator, () -> kvSpaceMap.remove(spaceId), metricTags);
+        space.open();
+        T prev = kvSpaceMap.put(spaceId, space);
+        assert prev == null;
+    }
+
+    private T buildKVSpace(String spaceId, C configurator, Runnable onDestroy, String... tags) {
+        String[] tagList =
+            newArrayList(Iterables.concat(List.of(tags), List.of("spaceId", spaceId))).toArray(String[]::new);
+        KVSpaceOpMeters opMeters = new KVSpaceOpMeters(spaceId, Tags.of(tagList));
+        Logger logger = SiftLogger.getLogger("space.logger", tagList);
+        return doBuildKVSpace(spaceId, configurator, onDestroy, opMeters, logger, tagList);
+    }
+
+    protected abstract T doBuildKVSpace(String spaceId,
+                                        C configurator,
+                                        Runnable onDestroy,
+                                        KVSpaceOpMeters opMeters,
+                                        Logger logger,
+                                        String... tags);
+
+    private enum State {
+        INIT, STARTING, STARTED, FATAL_FAILURE, STOPPING, STOPPED
     }
 }

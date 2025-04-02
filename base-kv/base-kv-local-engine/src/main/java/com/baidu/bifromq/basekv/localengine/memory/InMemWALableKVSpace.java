@@ -14,7 +14,9 @@
 package com.baidu.bifromq.basekv.localengine.memory;
 
 import com.baidu.bifromq.basekv.localengine.IWALableKVSpace;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
 import java.util.concurrent.CompletableFuture;
+import org.slf4j.Logger;
 
 public class InMemWALableKVSpace extends InMemKVSpace<InMemWALableKVEngine, InMemWALableKVSpace>
     implements IWALableKVSpace {
@@ -22,8 +24,9 @@ public class InMemWALableKVSpace extends InMemKVSpace<InMemWALableKVEngine, InMe
                                   InMemKVEngineConfigurator configurator,
                                   InMemWALableKVEngine engine,
                                   Runnable onDestroy,
-                                  String... tags) {
-        super(id, configurator, engine, onDestroy, tags);
+                                  KVSpaceOpMeters opMeters,
+                                  Logger logger) {
+        super(id, configurator, engine, onDestroy, opMeters, logger);
     }
 
     @Override

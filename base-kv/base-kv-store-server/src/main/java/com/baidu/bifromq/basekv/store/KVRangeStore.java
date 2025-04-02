@@ -190,7 +190,7 @@ public class KVRangeStore implements IKVRangeStore {
                 KVRangeId rangeId = KVRangeIdUtil.fromString(id);
                 if (walStorageEngine.has(rangeId)) {
                     IKVRangeWALStore walStore = walStorageEngine.get(rangeId);
-                    IKVRange range = new KVRange(keyRange);
+                    IKVRange range = new KVRange(rangeId, keyRange);
                     // verify the integrity of wal and range state
                     if (!validate(range, walStore)) {
                         log.warn("Destroy inconsistent KVRange: {}", id);
@@ -545,7 +545,7 @@ public class KVRangeStore implements IKVRangeStore {
             if (walStore == null) {
                 walStore = walStorageEngine.create(rangeId, walSnapshot);
             }
-            putAndOpen(loadKVRangeFSM(rangeId, new KVRange(keyRange), walStore));
+            putAndOpen(loadKVRangeFSM(rangeId, new KVRange(rangeId, keyRange), walStore));
         }
     }
 
@@ -588,7 +588,7 @@ public class KVRangeStore implements IKVRangeStore {
             id,
             rangeId,
             coProcFactory,
-            new KVRange(kvRangeEngine.createIfMissing(KVRangeIdUtil.toString(rangeId)), rangeSnapshot),
+            new KVRange(rangeId, kvRangeEngine.createIfMissing(KVRangeIdUtil.toString(rangeId)), rangeSnapshot),
             walStore,
             queryExecutor,
             bgTaskExecutor,

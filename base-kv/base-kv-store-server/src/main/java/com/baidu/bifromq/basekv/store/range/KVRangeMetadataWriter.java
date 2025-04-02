@@ -20,6 +20,7 @@ import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_VER_BYTE
 import com.baidu.bifromq.basekv.localengine.IKVSpaceMetadataUpdatable;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceMetadataWriter;
 import com.baidu.bifromq.basekv.proto.Boundary;
+import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.State;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
@@ -28,8 +29,8 @@ public class KVRangeMetadataWriter extends AbstractKVRangeMetadataUpdatable<KVRa
     implements IKVRangeMetadataWriter<KVRangeMetadataWriter> {
     private final IKVSpaceMetadataWriter keyRangeMetadataWriter;
 
-    KVRangeMetadataWriter(IKVSpaceMetadataWriter keyRangeMetadataWriter) {
-        super(keyRangeMetadataWriter);
+    KVRangeMetadataWriter(KVRangeId id, IKVSpaceMetadataWriter keyRangeMetadataWriter) {
+        super(id, keyRangeMetadataWriter);
         this.keyRangeMetadataWriter = keyRangeMetadataWriter;
     }
 

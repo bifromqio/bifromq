@@ -20,6 +20,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basekv.localengine.TestUtil;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
+import io.micrometer.core.instrument.Tags;
 import java.io.File;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
@@ -33,15 +35,18 @@ import org.rocksdb.Checkpoint;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testng.annotations.Test;
 
 public class KVSpaceCheckpointTest extends AbstractRawRocksDBTest {
 
-    private String spaceId = "testSpace";
+    private final String spaceId = "testSpace";
     private ColumnFamilyOptions cfOptions;
     private ColumnFamilyHandle cfHandle;
     private Path cpRootDir;
     private Checkpoint checkpoint;
+    private Logger logger;
 
     @Mock
     private Predicate<String> isLatest;
@@ -54,6 +59,7 @@ public class KVSpaceCheckpointTest extends AbstractRawRocksDBTest {
         cpRootDir = Files.createTempDirectory("");
         cfOptions = new ColumnFamilyOptions();
         cfHandle = db.createColumnFamily(new ColumnFamilyDescriptor(spaceId.getBytes(), cfOptions));
+        logger = LoggerFactory.getLogger("testLogger");
     }
 
     @Override
@@ -73,7 +79,8 @@ public class KVSpaceCheckpointTest extends AbstractRawRocksDBTest {
         checkpoint.createCheckpoint(cpDir.getAbsolutePath());
 
         RocksDBKVSpaceCheckpoint spaceSnapshot =
-            new RocksDBKVSpaceCheckpoint("testSpace", cpId, cpDir, id -> false);
+            new RocksDBKVSpaceCheckpoint("testSpace", cpId, cpDir, id -> false,
+                new KVSpaceOpMeters("testSpace", Tags.of("tag", "value")), logger);
         spaceSnapshot = null;
         await().forever().until(() -> {
             System.gc();
@@ -89,7 +96,8 @@ public class KVSpaceCheckpointTest extends AbstractRawRocksDBTest {
         checkpoint.createCheckpoint(cpDir.getAbsolutePath());
         when(isLatest.test(any())).thenReturn(true);
         RocksDBKVSpaceCheckpoint spaceSnapshot =
-            new RocksDBKVSpaceCheckpoint("testSpace", cpId, cpDir, isLatest);
+            new RocksDBKVSpaceCheckpoint("testSpace", cpId, cpDir, isLatest,
+                new KVSpaceOpMeters("testSpace", Tags.of("tag", "value")), logger);
         spaceSnapshot = null;
         await().forever().until(() -> {
             System.gc();

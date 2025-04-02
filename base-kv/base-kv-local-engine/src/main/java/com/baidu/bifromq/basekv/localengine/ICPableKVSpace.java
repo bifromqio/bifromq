@@ -15,9 +15,12 @@ package com.baidu.bifromq.basekv.localengine;
 
 import java.util.Optional;
 
+/**
+ * KV space supports checkpoint.
+ */
 public interface ICPableKVSpace extends IKVSpace {
     /**
-     * Make a checkpoint of the current range state
+     * Make a checkpoint of the current range state.
      *
      * @return global unique id of the checkpoint
      */
@@ -31,5 +34,5 @@ public interface ICPableKVSpace extends IKVSpace {
      * @param checkpointId the checkpoint id
      * @return the range object for accessing the checkpoint
      */
-    Optional<IKVSpaceCheckpoint> open(String checkpointId);
+    Optional<IKVSpaceCheckpoint> openCheckpoint(String checkpointId);
 }

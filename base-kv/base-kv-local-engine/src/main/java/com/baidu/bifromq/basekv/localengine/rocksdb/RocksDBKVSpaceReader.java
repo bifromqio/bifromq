@@ -27,6 +27,7 @@ import com.baidu.bifromq.basekv.localengine.AbstractKVSpaceReader;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.google.protobuf.ByteString;
 import java.util.Optional;
@@ -35,10 +36,12 @@ import org.rocksdb.Range;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.Slice;
+import org.slf4j.Logger;
 
-public abstract class RocksDBKVSpaceReader extends AbstractKVSpaceReader {
-    protected RocksDBKVSpaceReader(String id, String... tags) {
-        super(id, tags);
+abstract class RocksDBKVSpaceReader extends AbstractKVSpaceReader {
+
+    protected RocksDBKVSpaceReader(String id, KVSpaceOpMeters opMeters, Logger logger) {
+        super(id, opMeters, logger);
     }
 
     protected abstract RocksDB db();
@@ -86,6 +89,4 @@ public abstract class RocksDBKVSpaceReader extends AbstractKVSpaceReader {
         assert isValid(subBoundary);
         return new RocksDBKVSpaceIterator(db(), cfHandle(), subBoundary, newRefresher());
     }
-
-    abstract void close();
 }

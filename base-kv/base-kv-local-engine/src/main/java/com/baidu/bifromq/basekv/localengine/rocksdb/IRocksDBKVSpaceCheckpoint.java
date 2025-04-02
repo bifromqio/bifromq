@@ -15,6 +15,6 @@ package com.baidu.bifromq.basekv.localengine.rocksdb;
 
 import com.baidu.bifromq.basekv.localengine.IKVSpaceCheckpoint;
 
-public interface IRocksDBKVSpaceCheckpoint extends IKVSpaceCheckpoint {
+interface IRocksDBKVSpaceCheckpoint extends IKVSpaceCheckpoint {
     void close();
 }
