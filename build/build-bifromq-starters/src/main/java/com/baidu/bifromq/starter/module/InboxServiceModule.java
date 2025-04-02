@@ -46,6 +46,14 @@ import java.util.concurrent.ScheduledExecutorService;
 import javax.inject.Singleton;
 
 public class InboxServiceModule extends AbstractModule {
+    @Override
+    protected void configure() {
+        bind(new TypeLiteral<Optional<IInboxServer>>() {
+        }).toProvider(InboxServerProvider.class).in(Singleton.class);
+        bind(new TypeLiteral<Optional<IInboxStore>>() {
+        }).toProvider(InboxStoreProvider.class).in(Singleton.class);
+    }
+
     private static class InboxServerProvider implements Provider<Optional<IInboxServer>> {
         private final StandaloneConfig config;
         private final ServiceInjector injector;
@@ -73,6 +81,7 @@ public class InboxServiceModule extends AbstractModule {
                 .inboxStoreClient(
                     injector.getInstance(Key.get(IBaseKVStoreClient.class, Names.named("inboxStoreClient"))))
                 .workerThreads(serverConfig.getWorkerThreads())
+                .idleSeconds(serverConfig.getIdleSeconds())
                 .attributes(serverConfig.getAttributes())
                 .defaultGroupTags(serverConfig.getDefaultGroups())
                 .build());
@@ -125,13 +134,5 @@ public class InboxServiceModule extends AbstractModule {
                 .attributes(storeConfig.getAttributes())
                 .build());
         }
-    }
-
-    @Override
-    protected void configure() {
-        bind(new TypeLiteral<Optional<IInboxServer>>() {
-        }).toProvider(InboxServerProvider.class).in(Singleton.class);
-        bind(new TypeLiteral<Optional<IInboxStore>>() {
-        }).toProvider(InboxStoreProvider.class).in(Singleton.class);
     }
 }

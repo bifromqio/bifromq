@@ -137,7 +137,8 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
         super.handlerAdded(ctx);
-        touchIdleTimeMS = Duration.ofSeconds(keepAliveTimeSeconds).dividedBy(2).toMillis();
+        touchIdleTimeMS = Duration.ofSeconds(keepAliveTimeSeconds).plusSeconds(willMessage() != null
+            ? Math.min(sessionExpirySeconds, willMessage().getDelaySeconds()) : sessionExpirySeconds).toMillis();
         if (sessionPresent) {
             AttachRequest.Builder reqBuilder = AttachRequest.newBuilder()
                 .setReqId(System.nanoTime())

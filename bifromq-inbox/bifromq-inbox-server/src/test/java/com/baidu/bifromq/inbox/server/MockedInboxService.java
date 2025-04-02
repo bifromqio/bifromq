@@ -130,6 +130,7 @@ public abstract class MockedInboxService {
             .withValue(RPCContext.CUSTOM_METADATA_CTX_KEY, metaData)
             .attach();
         inboxService = InboxService.builder()
+            .idleSeconds(5)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
             .inboxClient(inboxClient)

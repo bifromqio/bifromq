@@ -23,6 +23,9 @@ import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetai
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.basescheduler.exception.BatcherUnavailableException;
 import com.baidu.bifromq.dist.client.IDistClient;
@@ -122,6 +125,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final IInboxUnsubScheduler unsubScheduler;
     private final IInboxStoreGCProcessor inboxGCProc;
     private final DelayTaskRunner<TenantInboxInstance, ExpireSessionTask> delayTaskRunner;
+    private final int idleSeconds;
 
     @Builder
     InboxService(IEventCollector eventCollector,
@@ -142,7 +146,8 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                  IInboxDeleteScheduler deleteScheduler,
                  IInboxSubScheduler subScheduler,
                  IInboxUnsubScheduler unsubScheduler,
-                 IInboxTouchScheduler touchScheduler) {
+                 IInboxTouchScheduler touchScheduler,
+                 int idleSeconds) {
         this.eventCollector = eventCollector;
         this.resourceThrottler = resourceThrottler;
         this.settingProvider = settingProvider;
@@ -163,6 +168,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         this.touchScheduler = touchScheduler;
         this.inboxGCProc = new InboxStoreGCProcessor(inboxClient, inboxStoreClient);
         this.delayTaskRunner = new DelayTaskRunner<>(TenantInboxInstance::compareTo, HLC.INST::getPhysical);
+        this.idleSeconds = idleSeconds;
     }
 
     @Override
@@ -268,7 +274,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     }
 
     private Duration idleTimeout(int keepAliveSeconds) {
-        return Duration.ofMillis((long) (Duration.ofSeconds(keepAliveSeconds).toMillis() * 1.5));
+        return Duration.ofSeconds(keepAliveSeconds + idleSeconds);
     }
 
     @Override
@@ -675,6 +681,8 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             fetchScheduler.close();
             insertScheduler.close();
             commitScheduler.close();
+
+            delayTaskRunner.shutdown();
             state.set(State.STOPPED);
         }
     }
@@ -856,6 +864,14 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         return CompletableFuture.completedFuture(null);
                     })
                     .exceptionally(e -> {
+                        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException
+                            || e instanceof BadVersionException || e.getCause() instanceof BadVersionException
+                            || e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+                            // retry delete later
+                            delayTaskRunner.reg(tenantInboxInstance, Duration.ofSeconds(idleSeconds),
+                                new ExpireSessionTask(tenantInboxInstance, version, 0, client, null));
+                            return null;
+                        }
                         log.debug("Failed to delete inbox", e);
                         return null;
                     });

@@ -49,6 +49,7 @@ public class InboxServerBuilder {
     Map<String, String> attributes = new HashMap<>();
     Set<String> defaultGroupTags = new HashSet<>();
     int workerThreads;
+    int idleSeconds = 5;
 
     public IInboxServer build() {
         Preconditions.checkNotNull(rpcServerBuilder, "RPC Server Builder is null");

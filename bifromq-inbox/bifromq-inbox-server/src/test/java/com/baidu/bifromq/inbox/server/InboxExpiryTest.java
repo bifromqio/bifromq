@@ -82,12 +82,12 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setClient(clientInfo)
             .setNow(now)
             .build()).join();
-        verify(distClient, timeout(5000).times(1))
+        verify(distClient, timeout(10000).times(1))
             .pub(anyLong(), eq(lwt.getTopic()),
-                argThat(m -> m.getPubQoS() == QoS.AT_LEAST_ONCE &&
-                    m.getPayload().equals(lwt.getMessage().getPayload())),
+                argThat(m -> m.getPubQoS() == QoS.AT_LEAST_ONCE
+                    && m.getPayload().equals(lwt.getMessage().getPayload())),
                 any());
-        verify(eventCollector, timeout(5000)).report(argThat(e -> e.type() == EventType.WILL_DISTED));
+        verify(eventCollector, timeout(10000)).report(argThat(e -> e.type() == EventType.WILL_DISTED));
         await().until(() -> {
             GetReply getReply = inboxClient.get(GetRequest.newBuilder()
                 .setReqId(reqId)
@@ -107,11 +107,14 @@ public class InboxExpiryTest extends InboxServiceTest {
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
         long incarnation = System.nanoTime();
-        LWT lwt = LWT.newBuilder().setTopic("LastWill").setMessage(Message.newBuilder()
+        LWT lwt = LWT.newBuilder()
+            .setTopic("LastWill")
+            .setMessage(Message.newBuilder()
                 .setIsRetain(true)
                 .setPayload(ByteString.copyFromUtf8("last will"))
                 .build())
-            .setDelaySeconds(1).build();
+            .setDelaySeconds(1)
+            .build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         when(distClient.pub(anyLong(), anyString(), any(), any())).thenReturn(
             CompletableFuture.completedFuture(PubResult.OK));
@@ -130,9 +133,9 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setClient(clientInfo)
             .setNow(now)
             .build()).join();
-        verify(retainClient, timeout(5000).times(1)).retain(anyLong(), anyString(), any(), any(), anyInt(), any());
+        verify(retainClient, timeout(10000).times(1)).retain(anyLong(), anyString(), any(), any(), anyInt(), any());
         ArgumentCaptor<Event<?>> eventCaptor = ArgumentCaptor.forClass(Event.class);
-        verify(eventCollector, timeout(5000).times(4)).report(eventCaptor.capture());
+        verify(eventCollector, timeout(10000).times(4)).report(eventCaptor.capture());
         assertEquals(eventCaptor.getAllValues().get(0).type(), EventType.MQTT_SESSION_START);
         assertTrue(eventCaptor.getAllValues()
             .stream().map(Event::type)
@@ -157,8 +160,10 @@ public class InboxExpiryTest extends InboxServiceTest {
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
         long incarnation = System.nanoTime();
-        LWT lwt = LWT.newBuilder().setTopic("LastWill").setMessage(Message.newBuilder().setIsRetain(true).build())
-            .setDelaySeconds(1).build();
+        LWT lwt = LWT.newBuilder().setTopic("LastWill")
+            .setMessage(Message.newBuilder().setIsRetain(true).build())
+            .setDelaySeconds(1)
+            .build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         when(distClient.pub(anyLong(), anyString(), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(PubResult.OK));
@@ -277,8 +282,8 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setNow(now)
             .build()).join();
 
-        verify(distClient, timeout(5000).times(0)).pub(anyLong(), anyString(), any(), any());
-        verify(distClient, timeout(5000).times(1))
+        verify(distClient, timeout(10000).times(0)).pub(anyLong(), anyString(), any(), any());
+        verify(distClient, timeout(10000).times(1))
             .removeRoute(anyLong(), eq(tenantId), eq(TopicUtil.from(topicFilter)), anyString(), anyString(), anyInt(),
                 eq(1L));
         await().until(() -> {

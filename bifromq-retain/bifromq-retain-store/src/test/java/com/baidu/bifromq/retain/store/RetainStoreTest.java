@@ -254,9 +254,9 @@ public class RetainStoreTest {
         await().until(() -> {
             boolean found = false;
             for (Meter meter : meterRegistry.getMeters()) {
-                if (meter.getId().getType() == Meter.Type.GAUGE &&
-                    meter.getId().getName().equals(gaugeMetric.metricName) &&
-                    Objects.equals(meter.getId().getTag("tenantId"), tenantId)) {
+                if (meter.getId().getType() == Meter.Type.GAUGE
+                    && meter.getId().getName().equals(gaugeMetric.metricName)
+                    && Objects.equals(meter.getId().getTag("tenantId"), tenantId)) {
                     found = true;
                 }
             }
@@ -268,9 +268,9 @@ public class RetainStoreTest {
         AtomicReference<Gauge> holder = new AtomicReference<>();
         await().atMost(Duration.ofSeconds(20)).until(() -> {
             for (Meter meter : meterRegistry.getMeters()) {
-                if (meter.getId().getType() == Meter.Type.GAUGE &&
-                    meter.getId().getName().equals(gaugeMetric.metricName) &&
-                    Objects.equals(meter.getId().getTag("tenantId"), tenantId)) {
+                if (meter.getId().getType() == Meter.Type.GAUGE
+                    && meter.getId().getName().equals(gaugeMetric.metricName)
+                    && Objects.equals(meter.getId().getTag("tenantId"), tenantId)) {
                     holder.set((Gauge) meter);
                     break;
                 }

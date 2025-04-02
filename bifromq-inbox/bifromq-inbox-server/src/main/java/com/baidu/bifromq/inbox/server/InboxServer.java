@@ -44,6 +44,7 @@ class InboxServer implements IInboxServer {
 
     InboxServer(InboxServerBuilder builder) {
         this.inboxService = InboxService.builder()
+            .idleSeconds(builder.idleSeconds)
             .eventCollector(builder.eventCollector)
             .resourceThrottler(builder.resourceThrottler)
             .settingProvider(builder.settingProvider)

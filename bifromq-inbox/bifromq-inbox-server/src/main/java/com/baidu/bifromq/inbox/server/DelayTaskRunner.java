@@ -27,33 +27,33 @@ import java.util.function.Supplier;
 import javax.annotation.concurrent.NotThreadSafe;
 
 @NotThreadSafe
-class DelayTaskRunner<Key extends Comparable<Key>, Task extends Runnable> {
-    private record SortKey<Key extends Comparable<Key>>(Key key, long deadlineTS) {
-    }
-
-    private record DelayedTask<Task extends Runnable>(Task task, Duration delayInterval) {
-
-    }
-
+class DelayTaskRunner<KeyT extends Comparable<KeyT>, TaskT extends Runnable> {
     // sorted by deadlineTS and then inboxId
-    private final TreeMap<SortKey<Key>, DelayedTask<Task>> sortedDeadlines;
+    private final TreeMap<SortKey<KeyT>, DelayedTask<TaskT>> sortedDeadlines;
     // key: inboxId, value: deadlineTS
-    private final HashMap<Key, Long> deadLines = new HashMap<>();
+    private final HashMap<KeyT, Long> deadLines = new HashMap<>();
     private final Supplier<Long> currentMillisSupplier;
     private final ScheduledExecutorService executor;
     private long nextTriggerTS;
     private ScheduledFuture<?> triggerTask;
     private volatile boolean isShutdown;
 
-    DelayTaskRunner(Comparator<Key> comparator, Supplier<Long> currentMillisSupplier) {
+    DelayTaskRunner(Comparator<KeyT> comparator, Supplier<Long> currentMillisSupplier) {
         this.currentMillisSupplier = currentMillisSupplier;
-        this.sortedDeadlines = new TreeMap<>(
-            Comparator.comparingLong((SortKey<Key> sk) -> sk.deadlineTS).thenComparing(sk -> sk.key, comparator));
+        this.sortedDeadlines = new TreeMap<>(Comparator.comparingLong((SortKey<KeyT> sk) -> sk.deadlineTS)
+            .thenComparing(sk -> sk.k, comparator));
         executor = Executors.newSingleThreadScheduledExecutor(
             EnvProvider.INSTANCE.newThreadFactory("deadline-trigger"));
     }
 
-    public void reg(Key key, Duration delayInterval, Task task) {
+    /**
+     * Register a task to be triggered after the specified delay.
+     *
+     * @param key           the key under monitoring
+     * @param delayInterval the delay interval
+     * @param task          the task to be triggered
+     */
+    public void reg(KeyT key, Duration delayInterval, TaskT task) {
         assert !delayInterval.isNegative();
         executor.submit(() -> {
             if (isShutdown) {
@@ -74,7 +74,7 @@ class DelayTaskRunner<Key extends Comparable<Key>, Task extends Runnable> {
             deadLines.put(key, deadlineTS);
             sortedDeadlines.put(new SortKey<>(key, deadlineTS), new DelayedTask<>(task, delayInterval));
 
-            Map.Entry<SortKey<Key>, DelayedTask<Task>> firstEntry = sortedDeadlines.firstEntry();
+            Map.Entry<SortKey<KeyT>, DelayedTask<TaskT>> firstEntry = sortedDeadlines.firstEntry();
             long earliestDeadline = firstEntry.getKey().deadlineTS;
             if (nextTriggerTS == 0 || earliestDeadline < nextTriggerTS) {
                 // postpone trigger task
@@ -88,11 +88,11 @@ class DelayTaskRunner<Key extends Comparable<Key>, Task extends Runnable> {
     }
 
     /**
-     * Update the monitored deadline for the provided key
+     * Update the monitored deadline for the provided key.
      *
      * @param key the key under monitoring
      */
-    public void touch(Key key) {
+    public void touch(KeyT key) {
         executor.submit(() -> {
             if (isShutdown) {
                 return;
@@ -102,7 +102,7 @@ class DelayTaskRunner<Key extends Comparable<Key>, Task extends Runnable> {
                 return;
             }
             deadLines.remove(key);
-            DelayedTask<Task> delayedTask = sortedDeadlines.remove(new SortKey<>(key, prevDeadlineTS));
+            DelayedTask<TaskT> delayedTask = sortedDeadlines.remove(new SortKey<>(key, prevDeadlineTS));
             assert delayedTask != null;
 
             long now = currentMillisSupplier.get();
@@ -110,7 +110,7 @@ class DelayTaskRunner<Key extends Comparable<Key>, Task extends Runnable> {
             deadLines.put(key, deadlineTS);
             sortedDeadlines.put(new SortKey<>(key, deadlineTS),
                 new DelayedTask<>(delayedTask.task, delayedTask.delayInterval));
-            Map.Entry<SortKey<Key>, DelayedTask<Task>> firstEntry = sortedDeadlines.firstEntry();
+            Map.Entry<SortKey<KeyT>, DelayedTask<TaskT>> firstEntry = sortedDeadlines.firstEntry();
 
             long earliestDeadline = firstEntry.getKey().deadlineTS;
             if (nextTriggerTS == 0 || earliestDeadline < nextTriggerTS) {
@@ -124,7 +124,12 @@ class DelayTaskRunner<Key extends Comparable<Key>, Task extends Runnable> {
         });
     }
 
-    public void unreg(Key key) {
+    /**
+     * Unregister the monitored deadline for the provided key.
+     *
+     * @param key the key under monitoring
+     */
+    public void unreg(KeyT key) {
         executor.submit(() -> {
             if (isShutdown) {
                 return;
@@ -136,7 +141,7 @@ class DelayTaskRunner<Key extends Comparable<Key>, Task extends Runnable> {
             deadLines.remove(key);
             sortedDeadlines.remove(new SortKey<>(key, prevDeadlineTS));
 
-            Map.Entry<SortKey<Key>, DelayedTask<Task>> firstEntry = sortedDeadlines.firstEntry();
+            Map.Entry<SortKey<KeyT>, DelayedTask<TaskT>> firstEntry = sortedDeadlines.firstEntry();
             if (firstEntry == null) {
                 nextTriggerTS = 0;
                 if (triggerTask != null) {
@@ -167,10 +172,10 @@ class DelayTaskRunner<Key extends Comparable<Key>, Task extends Runnable> {
 
     private void trigger() {
         long now = currentMillisSupplier.get();
-        Map.Entry<SortKey<Key>, DelayedTask<Task>> entry;
+        Map.Entry<SortKey<KeyT>, DelayedTask<TaskT>> entry;
         while ((entry = sortedDeadlines.firstEntry()) != null) {
             if (entry.getKey().deadlineTS <= now) {
-                deadLines.remove(entry.getKey().key);
+                deadLines.remove(entry.getKey().k);
                 sortedDeadlines.remove(entry.getKey());
                 entry.getValue().task.run();
             } else {
@@ -186,5 +191,12 @@ class DelayTaskRunner<Key extends Comparable<Key>, Task extends Runnable> {
 
     private long deadline(long now, Duration delayInterval) {
         return delayInterval.plusMillis(now).toMillis();
+    }
+
+    private record SortKey<K extends Comparable<K>>(K k, long deadlineTS) {
+    }
+
+    private record DelayedTask<T extends Runnable>(T task, Duration delayInterval) {
+
     }
 }

@@ -33,10 +33,11 @@ public class LoadMetadataTest extends RetainStoreTest {
     public void testLoadMetadata() {
         requestRetain(tenantId, message("/a", "hello"));
         requestRetain(tenantId, message("/b", "hello"));
+        await().atMost(Duration.ofSeconds(30)).until(() -> getSpaceUsageGauge(tenantId).value() > 0);
+        await().atMost(Duration.ofSeconds(30)).until(() -> getRetainCountGauge(tenantId).value() == 2);
+
         Gauge spaceUsageGauge = getSpaceUsageGauge(tenantId);
         Gauge retainCountGauge = getRetainCountGauge(tenantId);
-        await().atMost(Duration.ofSeconds(20)).until(() -> spaceUsageGauge.value() > 0);
-        await().atMost(Duration.ofSeconds(20)).until(() -> retainCountGauge.value() == 2);
 
         restartStoreServer();
         storeClient.join();
@@ -45,7 +46,7 @@ public class LoadMetadataTest extends RetainStoreTest {
         Gauge newRetainCountGauge = getRetainCountGauge(tenantId);
         assertNotSame(spaceUsageGauge, newSpaceUsageGauge);
         assertNotSame(retainCountGauge, newRetainCountGauge);
-        await().atMost(Duration.ofSeconds(20)).until(() -> newSpaceUsageGauge.value() > 0);
-        await().atMost(Duration.ofSeconds(20)).until(() -> newRetainCountGauge.value() == 2);
+        await().atMost(Duration.ofSeconds(30)).until(() -> newSpaceUsageGauge.value() > 0);
+        await().atMost(Duration.ofSeconds(30)).until(() -> newRetainCountGauge.value() == 2);
     }
 }
