@@ -77,6 +77,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.Nullable;
@@ -105,6 +106,8 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     private long qos0ConfirmUpToSeq;
     private long inboxConfirmedUpToSeq = -1;
     private IInboxClient.IInboxReader inboxReader;
+    private long touchRetryCount = 0;
+    private long lastTouch = 0;
     private long touchIdleTimeMS;
     private ScheduledFuture<?> touchTimeout;
 
@@ -137,8 +140,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
         super.handlerAdded(ctx);
-        touchIdleTimeMS = Duration.ofSeconds(keepAliveTimeSeconds).plusSeconds(willMessage() != null
-            ? Math.min(sessionExpirySeconds, willMessage().getDelaySeconds()) : sessionExpirySeconds).toMillis();
+        touchIdleTimeMS = Duration.ofSeconds(keepAliveTimeSeconds).plusSeconds(
+            willMessage() != null ? Math.min(sessionExpirySeconds, willMessage().getDelaySeconds()) :
+                sessionExpirySeconds).toMillis();
         if (sessionPresent) {
             AttachRequest.Builder reqBuilder = AttachRequest.newBuilder()
                 .setReqId(System.nanoTime())
@@ -533,17 +537,15 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     }
 
     private void pubQoS0Message(InboxMessage inboxMsg) {
-        boolean isDup = isDuplicateMessage(inboxMsg.getMsg()
-                .getPublisher(), inboxMsg.getMsg()
-                .getMessage(),
+        boolean isDup = isDuplicateMessage(inboxMsg.getMsg().getPublisher(), inboxMsg.getMsg().getMessage(),
             qoS0TimestampsByMQTTPublisher);
         inboxMsg.getMatchedTopicFilterMap()
             .forEach((topicFilter, option) -> pubQoS0Message(topicFilter, option, inboxMsg.getMsg(), isDup));
     }
 
     private void pubQoS0Message(String topicFilter, TopicFilterOption option, TopicMessage topicMsg, boolean isDup) {
-        addFgTask(authProvider.checkPermission(clientInfo(), buildSubAction(topicFilter, option.getQos())))
-            .thenAccept(checkResult -> {
+        addFgTask(authProvider.checkPermission(clientInfo(), buildSubAction(topicFilter, option.getQos()))).thenAccept(
+            checkResult -> {
                 String topic = topicMsg.getTopic();
                 Message message = topicMsg.getMessage();
                 ClientInfo publisher = topicMsg.getPublisher();
@@ -559,8 +561,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         boolean isDup = isDuplicateMessage(inboxMsg.getMsg().getPublisher(), inboxMsg.getMsg().getMessage(),
             qoS12TimestampsByMQTTPublisher);
         int i = 0;
-        for (Map.Entry<String, TopicFilterOption> entry : inboxMsg.getMatchedTopicFilterMap()
-            .entrySet()) {
+        for (Map.Entry<String, TopicFilterOption> entry : inboxMsg.getMatchedTopicFilterMap().entrySet()) {
             String topicFilter = entry.getKey();
             TopicFilterOption option = entry.getValue();
             long seq = inboxMsg.getSeq();
@@ -608,6 +609,10 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     }
 
     private void rescheduleTouch() {
+        rescheduleTouch(touchIdleTimeMS);
+    }
+
+    private void rescheduleTouch(long delayMS) {
         if (!ctx.channel().isActive()) {
             return;
         }
@@ -625,7 +630,18 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     .build())
                 .thenAcceptAsync(v -> {
                     switch (v.getCode()) {
-                        case OK, TRY_LATER -> rescheduleTouch();
+                        case OK -> {
+                            touchRetryCount = 0;
+                            lastTouch = System.currentTimeMillis();
+                            rescheduleTouch();
+                        }
+                        case TRY_LATER -> {
+                            if (touchRetryCount < 5) {
+                                rescheduleTouch(ThreadLocalRandom.current().nextLong(0, 5000L));
+                                touchRetryCount++;
+                                // stop retry after 5 times
+                            }
+                        }
                         case NO_INBOX, CONFLICT ->
                             handleProtocolResponse(helper().onInboxTransientError(v.getCode().name()));
                         default -> {
@@ -633,6 +649,6 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                         }
                     }
                 }, ctx.executor());
-        }, touchIdleTimeMS, TimeUnit.MILLISECONDS);
+        }, delayMS + ThreadLocalRandom.current().nextLong(0, 500L), TimeUnit.MILLISECONDS);
     }
 }
