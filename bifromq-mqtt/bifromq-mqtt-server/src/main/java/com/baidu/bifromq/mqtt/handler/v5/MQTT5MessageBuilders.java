@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.mqtt.handler.v5;
 
-import static io.netty.util.internal.ObjectUtil.checkPositive;
-
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.MQTTSessionHandler;
@@ -154,11 +152,11 @@ public class MQTT5MessageBuilders {
         private final MqttProperties.UserProperties userProperties = new MqttProperties.UserProperties();
         private String clientId;
         private Long sessionExpiryInterval;
-        private int receiveMaximum;
+        private Integer receiveMaximum;
         private Byte maximumQos;
         private Boolean retain;
         private Long maximumPacketSize;
-        private int topicAliasMaximum;
+        private Integer topicAliasMaximum;
         private String reasonString;
         private Boolean wildcardSubscriptionAvailable;
         private Boolean subscriptionIdentifiersAvailable;
@@ -180,7 +178,7 @@ public class MQTT5MessageBuilders {
                 props.add(new MqttProperties.IntegerProperty(
                     MqttProperties.MqttPropertyType.SESSION_EXPIRY_INTERVAL.value(), sessionExpiryInterval.intValue()));
             }
-            if (receiveMaximum > 0) {
+            if (receiveMaximum != null) {
                 props.add(new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.RECEIVE_MAXIMUM.value(),
                     receiveMaximum));
             }
@@ -193,8 +191,11 @@ public class MQTT5MessageBuilders {
                     new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.MAXIMUM_PACKET_SIZE.value(),
                         maximumPacketSize.intValue()));
             }
-            props.add(new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.TOPIC_ALIAS_MAXIMUM.value(),
-                topicAliasMaximum));
+            if (topicAliasMaximum != null) {
+                props.add(
+                    new MqttProperties.IntegerProperty(MqttProperties.MqttPropertyType.TOPIC_ALIAS_MAXIMUM.value(),
+                        topicAliasMaximum));
+            }
             if (reasonString != null) {
                 props.add(new MqttProperties.StringProperty(MqttProperties.MqttPropertyType.REASON_STRING.value(),
                     reasonString));
@@ -253,7 +254,7 @@ public class MQTT5MessageBuilders {
         }
 
         public ConnAckPropertiesBuilder receiveMaximum(int value) {
-            this.receiveMaximum = checkPositive(value, "value");
+            this.receiveMaximum = value;
             return this;
         }
 
@@ -271,7 +272,7 @@ public class MQTT5MessageBuilders {
         }
 
         public ConnAckPropertiesBuilder maximumPacketSize(long size) {
-            this.maximumPacketSize = checkPositive(size, "size");
+            this.maximumPacketSize = size;
             return this;
         }
 

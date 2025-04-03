@@ -194,7 +194,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                             return reply.getCode() != ExpireReply.Code.TRY_LATER;
                                         }, 1000, 5000)
                                     .exceptionally(e -> {
-                                        log.error("Failed to expire inbox", e);
+                                        log.debug("Failed to expire inbox", e);
                                         return ExpireReply.newBuilder()
                                             .setReqId(reqId)
                                             .setCode(ExpireReply.Code.ERROR)
