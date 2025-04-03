@@ -45,6 +45,7 @@ import com.baidu.bifromq.mqtt.handler.condition.DirectMemPressureCondition;
 import com.baidu.bifromq.mqtt.handler.condition.HeapMemPressureCondition;
 import com.baidu.bifromq.mqtt.handler.record.GoAway;
 import com.baidu.bifromq.mqtt.utils.AuthUtil;
+import com.baidu.bifromq.mqtt.utils.IMQTTMessageSizer;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT3AuthData;
 import com.baidu.bifromq.plugin.authprovider.type.Ok;
@@ -293,6 +294,12 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                     .statement("MQTT3.1.1 not enabled")
                     .clientInfo(clientInfo));
         }
+        if (IMQTTMessageSizer.mqtt3().lastWillSize(message) > settings.maxLastWillSize) {
+            return new GoAway(getLocal(ProtocolViolation.class)
+                .statement("Too large connect packet")
+                .clientInfo(clientInfo));
+        }
+
         if (message.variableHeader().isWillFlag()) {
             if (!TopicUtil.isValidTopic(message.payload().willTopic(),
                 settings.maxTopicLevelLength,
@@ -357,19 +364,22 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
 
     @Override
     protected GoAway onCleanSessionFailed(ClientInfo clientInfo) {
-        return new GoAway(MqttMessageBuilders
-            .connAck()
+        return new GoAway(MqttMessageBuilders.connAck()
             .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
-            .build(), getLocal(InboxTransientError.class).clientInfo(clientInfo));
+            .build(),
+            getLocal(InboxTransientError.class)
+                .reason("Unable to expire previous session, Try later")
+                .clientInfo(clientInfo));
     }
 
     @Override
     protected GoAway onGetSessionFailed(ClientInfo clientInfo) {
-        return new GoAway(MqttMessageBuilders
-            .connAck()
+        return new GoAway(MqttMessageBuilders.connAck()
             .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
             .build(),
-            getLocal(InboxTransientError.class).clientInfo(clientInfo));
+            getLocal(InboxTransientError.class)
+                .reason("Unable to retrieve previous session, Try later")
+                .clientInfo(clientInfo));
     }
 
     @Override

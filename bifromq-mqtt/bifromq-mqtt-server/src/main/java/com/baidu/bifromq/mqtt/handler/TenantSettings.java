@@ -13,15 +13,13 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.baidu.bifromq.type.QoS;
-
 import static com.baidu.bifromq.plugin.settingprovider.Setting.DebugModeEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ForceTransient;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.InBoundBandWidth;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MQTT3Enabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MQTT4Enabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MQTT5Enabled;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxLastWillBytes;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxResendTimes;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxSessionExpirySeconds;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicAlias;
@@ -45,6 +43,9 @@ import static com.baidu.bifromq.plugin.settingprovider.Setting.SharedSubscriptio
 import static com.baidu.bifromq.plugin.settingprovider.Setting.SubscriptionIdentifierEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.WildcardSubscriptionEnabled;
 
+import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.type.QoS;
+
 public class TenantSettings {
     public final boolean mqtt3Enabled;
     public final boolean mqtt4Enabled;
@@ -62,6 +63,7 @@ public class TenantSettings {
     public final int maxTopicLevels;
     public final int maxTopicLength;
     public final int maxPacketSize;
+    public final int maxLastWillSize;
     public final int maxTopicAlias;
     public final long inboundBandwidth;
     public final long outboundBandwidth;
@@ -92,6 +94,7 @@ public class TenantSettings {
         maxTopicLevels = provider.provide(MaxTopicLevels, tenantId);
         maxTopicLength = provider.provide(MaxTopicLength, tenantId);
         maxPacketSize = provider.provide(MaxUserPayloadBytes, tenantId);
+        maxLastWillSize = Math.min(provider.provide(MaxLastWillBytes, tenantId), maxPacketSize);
         maxTopicAlias = provider.provide(MaxTopicAlias, tenantId);
         inboundBandwidth = provider.provide(InBoundBandWidth, tenantId);
         outboundBandwidth = provider.provide(OutBoundBandWidth, tenantId);

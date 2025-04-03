@@ -21,6 +21,7 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_ERROR;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.RESOURCE_THROTTLED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_CLIENT_IDENTIFIER_NOT_VALID;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_MALFORMED_PACKET;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PACKET_TOO_LARGE;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PROTOCOL_ERROR;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_QUOTA_EXCEEDED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_MOVED;
@@ -29,6 +30,7 @@ import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.SERVER
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -80,6 +82,10 @@ import org.testng.annotations.Test;
 
 public class MQTT5ConnectHandlerTest extends MockableTest {
 
+    private final String serverId = "serverId";
+    private final int keepAlive = 2;
+    private final String remoteIp = "127.0.0.1";
+    private final int remotePort = 8888;
     private MQTT5ConnectHandler connectHandler;
     private EmbeddedChannel channel;
     @Mock
@@ -90,15 +96,10 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
     private IInboxClient inboxClient;
     @Mock
     private IEventCollector eventCollector;
-
     @Mock
     private IResourceThrottler resourceThrottler;
-
-    private ISettingProvider settingProvider = Setting::current;
-    private final String serverId = "serverId";
-    private final int keepAlive = 2;
-    private final String remoteIp = "127.0.0.1";
-    private final int remotePort = 8888;
+    @Mock
+    private ISettingProvider settingProvider;
     private MQTTSessionContext sessionContext;
 
     @BeforeMethod(alwaysRun = true)
@@ -106,6 +107,8 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         connectHandler = new MQTT5ConnectHandler();
         when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
         when(clientBalancer.needRedirect(any())).thenReturn(Optional.empty());
+        when(settingProvider.provide(any(Setting.class), anyString())).thenAnswer(
+            invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
         sessionContext = MQTTSessionContext.builder()
             .serverId(serverId)
             .defaultKeepAliveTimeSeconds(keepAlive)
@@ -119,8 +122,10 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         channel = new EmbeddedChannel(true, true, new ChannelInitializer<>() {
             @Override
             protected void initChannel(Channel ch) {
-                ch.attr(ChannelAttrs.MQTT_SESSION_CTX).set(sessionContext);
-                ch.attr(ChannelAttrs.PEER_ADDR).set(new InetSocketAddress(remoteIp, remotePort));
+                ch.attr(ChannelAttrs.MQTT_SESSION_CTX)
+                    .set(sessionContext);
+                ch.attr(ChannelAttrs.PEER_ADDR)
+                    .set(new InetSocketAddress(remoteIp, remotePort));
                 ChannelPipeline pipeline = ch.pipeline();
                 pipeline.addLast(connectHandler);
             }
@@ -138,7 +143,8 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         MqttConnAckMessage connAckMessage = channel.readOutbound();
-        assertEquals(connAckMessage.variableHeader().connectReturnCode(),
+        assertEquals(connAckMessage.variableHeader()
+                .connectReturnCode(),
             CONNECTION_REFUSED_CLIENT_IDENTIFIER_NOT_VALID);
         verify(eventCollector).report(argThat(event -> event.type() == MALFORMED_CLIENT_IDENTIFIER));
         assertFalse(channel.isOpen());
@@ -155,7 +161,8 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         MqttConnAckMessage connAckMessage = channel.readOutbound();
-        assertEquals(connAckMessage.variableHeader().connectReturnCode(),
+        assertEquals(connAckMessage.variableHeader()
+                .connectReturnCode(),
             CONNECTION_REFUSED_CLIENT_IDENTIFIER_NOT_VALID);
         verify(eventCollector).report(argThat(event -> event.type() == MALFORMED_CLIENT_IDENTIFIER));
         assertFalse(channel.isOpen());
@@ -172,7 +179,8 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         MqttConnAckMessage connAckMessage = channel.readOutbound();
-        assertEquals(connAckMessage.variableHeader().connectReturnCode(),
+        assertEquals(connAckMessage.variableHeader()
+                .connectReturnCode(),
             CONNECTION_REFUSED_MALFORMED_PACKET);
         verify(eventCollector).report(argThat(event -> event.type() == MALFORMED_USERNAME));
         assertFalse(channel.isOpen());
@@ -191,7 +199,8 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         MqttConnAckMessage connAckMessage = channel.readOutbound();
-        assertEquals(connAckMessage.variableHeader().connectReturnCode(),
+        assertEquals(connAckMessage.variableHeader()
+                .connectReturnCode(),
             CONNECTION_REFUSED_PROTOCOL_ERROR);
         verify(eventCollector).report(argThat(event -> event.type() == PROTOCOL_ERROR));
         assertFalse(channel.isOpen());
@@ -209,7 +218,8 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         MqttConnAckMessage connAckMessage = channel.readOutbound();
-        assertEquals(connAckMessage.variableHeader().connectReturnCode(),
+        assertEquals(connAckMessage.variableHeader()
+                .connectReturnCode(),
             CONNECTION_REFUSED_MALFORMED_PACKET);
         verify(eventCollector).report(argThat(event -> event.type() == MALFORMED_WILL_TOPIC));
         assertFalse(channel.isOpen());
@@ -245,8 +255,10 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         verify(authProvider).extendedAuth(authDataCaptor.capture());
         MQTT5ExtendedAuthData authData = authDataCaptor.getValue();
         assertTrue(authData.hasInitial());
-        assertEquals(authData.getInitial().getAuthMethod(), "authMethod");
-        assertEquals(authData.getInitial().getAuthData(), ByteString.copyFromUtf8("authData"));
+        assertEquals(authData.getInitial()
+            .getAuthMethod(), "authMethod");
+        assertEquals(authData.getInitial()
+            .getAuthData(), ByteString.copyFromUtf8("authData"));
     }
 
     @Test
@@ -258,7 +270,9 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         when(resourceThrottler.hasResource("tenantId", TenantResourceType.TotalConnections)).thenReturn(false);
         when(authProvider.auth(any(MQTT5AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT5AuthResult.newBuilder()
-                .setSuccess(Success.newBuilder().setTenantId("tenantId").build())
+                .setSuccess(Success.newBuilder()
+                    .setTenantId("tenantId")
+                    .build())
                 .build()));
         when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
             .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
@@ -268,12 +282,15 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         MqttConnAckMessage connAckMessage = channel.readOutbound();
-        assertEquals(connAckMessage.variableHeader().connectReturnCode(),
+        assertEquals(connAckMessage.variableHeader()
+                .connectReturnCode(),
             CONNECTION_REFUSED_QUOTA_EXCEEDED);
         verify(eventCollector).report(argThat(event -> event.type() == OUT_OF_TENANT_RESOURCE &&
-            ((OutOfTenantResource) event).reason().equals(TenantResourceType.TotalConnections.name())));
+            ((OutOfTenantResource) event).reason()
+                .equals(TenantResourceType.TotalConnections.name())));
         verify(eventCollector).report(argThat(event -> event.type() == RESOURCE_THROTTLED &&
-            ((ResourceThrottled) event).reason().equals(TenantResourceType.TotalConnections.name())));
+            ((ResourceThrottled) event).reason()
+                .equals(TenantResourceType.TotalConnections.name())));
         assertFalse(channel.isOpen());
     }
 
@@ -286,7 +303,9 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         when(resourceThrottler.hasResource("tenantId", TenantResourceType.TotalSessionMemoryBytes)).thenReturn(false);
         when(authProvider.auth(any(MQTT5AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT5AuthResult.newBuilder()
-                .setSuccess(Success.newBuilder().setTenantId("tenantId").build())
+                .setSuccess(Success.newBuilder()
+                    .setTenantId("tenantId")
+                    .build())
                 .build()));
         when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
             .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
@@ -296,12 +315,15 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         MqttConnAckMessage connAckMessage = channel.readOutbound();
-        assertEquals(connAckMessage.variableHeader().connectReturnCode(),
+        assertEquals(connAckMessage.variableHeader()
+                .connectReturnCode(),
             CONNECTION_REFUSED_QUOTA_EXCEEDED);
         verify(eventCollector).report(argThat(event -> event.type() == OUT_OF_TENANT_RESOURCE &&
-            ((OutOfTenantResource) event).reason().equals(TenantResourceType.TotalSessionMemoryBytes.name())));
+            ((OutOfTenantResource) event).reason()
+                .equals(TenantResourceType.TotalSessionMemoryBytes.name())));
         verify(eventCollector).report(argThat(event -> event.type() == RESOURCE_THROTTLED &&
-            ((ResourceThrottled) event).reason().equals(TenantResourceType.TotalSessionMemoryBytes.name())));
+            ((ResourceThrottled) event).reason()
+                .equals(TenantResourceType.TotalSessionMemoryBytes.name())));
         assertFalse(channel.isOpen());
     }
 
@@ -314,7 +336,9 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         when(resourceThrottler.hasResource("tenantId", TenantResourceType.TotalConnectPerSecond)).thenReturn(false);
         when(authProvider.auth(any(MQTT5AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT5AuthResult.newBuilder()
-                .setSuccess(Success.newBuilder().setTenantId("tenantId").build())
+                .setSuccess(Success.newBuilder()
+                    .setTenantId("tenantId")
+                    .build())
                 .build()));
         when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
             .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
@@ -324,12 +348,15 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         MqttConnAckMessage connAckMessage = channel.readOutbound();
-        assertEquals(connAckMessage.variableHeader().connectReturnCode(),
+        assertEquals(connAckMessage.variableHeader()
+                .connectReturnCode(),
             CONNECTION_REFUSED_QUOTA_EXCEEDED);
         verify(eventCollector).report(argThat(event -> event.type() == OUT_OF_TENANT_RESOURCE &&
-            ((OutOfTenantResource) event).reason().equals(TenantResourceType.TotalConnectPerSecond.name())));
+            ((OutOfTenantResource) event).reason()
+                .equals(TenantResourceType.TotalConnectPerSecond.name())));
         verify(eventCollector).report(argThat(event -> event.type() == RESOURCE_THROTTLED &&
-            ((ResourceThrottled) event).reason().equals(TenantResourceType.TotalConnectPerSecond.name())));
+            ((ResourceThrottled) event).reason()
+                .equals(TenantResourceType.TotalConnectPerSecond.name())));
         assertFalse(channel.isOpen());
     }
 
@@ -341,7 +368,9 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
             .build();
         when(authProvider.auth(any(MQTT5AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT5AuthResult.newBuilder()
-                .setSuccess(Success.newBuilder().setTenantId("tenantId").build())
+                .setSuccess(Success.newBuilder()
+                    .setTenantId("tenantId")
+                    .build())
                 .build()));
         when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
             .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
@@ -353,13 +382,18 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         MqttConnAckMessage connAckMessage = channel.readOutbound();
-        assertEquals(connAckMessage.variableHeader().connectReturnCode(),
+        assertEquals(connAckMessage.variableHeader()
+                .connectReturnCode(),
             CONNECTION_REFUSED_SERVER_MOVED);
-        assertEquals(connAckMessage.variableHeader().properties().getProperty(SERVER_REFERENCE.value()).value(),
+        assertEquals(connAckMessage.variableHeader()
+                .properties()
+                .getProperty(SERVER_REFERENCE.value())
+                .value(),
             "server1");
         assertFalse(channel.isOpen());
         verify(eventCollector).report(argThat(e -> e.type() == EventType.SERVER_REDIRECTED
-            && ((Redirect) e).isPermanent() && ((Redirect) e).serverReference().equals("server1")));
+            && ((Redirect) e).isPermanent() && ((Redirect) e).serverReference()
+            .equals("server1")));
     }
 
     @Test
@@ -370,7 +404,9 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
             .build();
         when(authProvider.auth(any(MQTT5AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT5AuthResult.newBuilder()
-                .setSuccess(Success.newBuilder().setTenantId("tenantId").build())
+                .setSuccess(Success.newBuilder()
+                    .setTenantId("tenantId")
+                    .build())
                 .build()));
         when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
             .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
@@ -382,11 +418,44 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         MqttConnAckMessage connAckMessage = channel.readOutbound();
-        assertEquals(connAckMessage.variableHeader().connectReturnCode(),
+        assertEquals(connAckMessage.variableHeader()
+                .connectReturnCode(),
             CONNECTION_REFUSED_USE_ANOTHER_SERVER);
-        assertNull(connAckMessage.variableHeader().properties().getProperty(SERVER_REFERENCE.value()));
+        assertNull(connAckMessage.variableHeader()
+            .properties()
+            .getProperty(SERVER_REFERENCE.value()));
         assertFalse(channel.isOpen());
         verify(eventCollector).report(argThat(e -> e.type() == EventType.SERVER_REDIRECTED
             && !((Redirect) e).isPermanent() && ((Redirect) e).serverReference() == null));
+    }
+
+    @Test
+    public void overSizedLastWill() {
+        when(settingProvider.provide(eq(Setting.MaxLastWillBytes), anyString())).thenReturn(128);
+        MqttConnectMessage connMsg = MqttMessageBuilders.connect()
+            .clientId("client")
+            .protocolVersion(MqttVersion.MQTT_5)
+            .willFlag(true)
+            .willTopic("topic")
+            .willMessage(new byte[1024])
+            .build();
+        when(authProvider.auth(any(MQTT5AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT5AuthResult.newBuilder()
+                .setSuccess(Success.newBuilder()
+                    .setTenantId("tenantId")
+                    .build())
+                .build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
+            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
+        channel.writeInbound(connMsg);
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        MqttConnAckMessage connAckMessage = channel.readOutbound();
+        assertEquals(connAckMessage.variableHeader()
+            .connectReturnCode(), CONNECTION_REFUSED_PACKET_TOO_LARGE);
+        assertFalse(channel.isOpen());
+        verify(eventCollector).report(argThat(e -> e.type() == EventType.PROTOCOL_VIOLATION));
     }
 }

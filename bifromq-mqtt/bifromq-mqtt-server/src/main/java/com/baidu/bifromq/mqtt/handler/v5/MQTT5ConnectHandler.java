@@ -365,8 +365,8 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 this.isAuthing = false;
                 final InetSocketAddress clientAddress = ChannelAttrs.socketAddress(ctx.channel());
                 switch (authResult.getTypeCase()) {
-                    case SUCCESS -> extendedAuthFuture.complete(ok(authResult.getSuccess(), buildClientInfo(
-                        clientAddress, authResult.getSuccess())));
+                    case SUCCESS -> extendedAuthFuture.complete(ok(authResult.getSuccess(),
+                        buildClientInfo(clientAddress, authResult.getSuccess())));
                     case CONTINUE -> {
                         Continue authContinue = authResult.getContinue();
                         MQTT5MessageBuilders.AuthBuilder authBuilder = MQTT5MessageBuilders
@@ -456,8 +456,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                     .peerAddress(ChannelAttrs.socketAddress(ctx.channel()))));
                 case DISCONNECT -> handleGoAway(GoAway.now(getLocal(EnhancedAuthAbortByClient.class)));
                 default -> handleGoAway(GoAway.now(getLocal(ProtocolError.class)
-                    .statement("Unexpected control packet during enhanced auth: "
-                        + message.fixedHeader().messageType())
+                    .statement("Unexpected control packet during enhanced auth: " + message.fixedHeader().messageType())
                     .peerAddress(ChannelAttrs.socketAddress(ctx.channel()))));
             }
         } else {
@@ -482,8 +481,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 }
                 case DISCONNECT -> handleGoAway(GoAway.now(getLocal(EnhancedAuthAbortByClient.class)));
                 default -> handleGoAway(GoAway.now(getLocal(ProtocolError.class)
-                    .statement("Unexpected control packet during enhanced auth: "
-                        + message.fixedHeader().messageType())
+                    .statement("Unexpected control packet during enhanced auth: " + message.fixedHeader().messageType())
                     .peerAddress(ChannelAttrs.socketAddress(ctx.channel()))));
             }
         }
@@ -503,8 +501,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 .clientInfo(clientInfo),
             getLocal(ResourceThrottled.class)
                 .reason(resourceType.name())
-                .clientInfo(clientInfo)
-        );
+                .clientInfo(clientInfo));
     }
 
     @Override
@@ -520,17 +517,16 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                     .statement("MQTT5 not enabled")
                     .clientInfo(clientInfo));
         }
-        if (IMQTTMessageSizer.mqtt5().sizeOf(message).encodedBytes() > settings.maxPacketSize) {
+        if (IMQTTMessageSizer.mqtt5().lastWillSize(message) > settings.maxLastWillSize) {
             return new GoAway(MqttMessageBuilders.connAck()
                 .returnCode(CONNECTION_REFUSED_PACKET_TOO_LARGE)
                 .properties(MQTT5MessageBuilders.connAckProperties()
                     .reasonString("Too large connect packet: max=" + settings.maxPacketSize)
                     .build())
                 .build(),
-                getLocal(ProtocolError.class)
-                    .statement("Too large packet")
-                    .peerAddress(ChannelAttrs.socketAddress(ctx.channel()))
-            );
+                getLocal(ProtocolViolation.class)
+                    .statement("Too large connect packet")
+                    .clientInfo(clientInfo));
         }
         Optional<Integer> requestMaxPacketSize = maximumPacketSize(message.variableHeader().properties());
         if (requestMaxPacketSize.isPresent()) {
@@ -541,10 +537,9 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                         .reasonString("Invalid max packet size: " + requestMaxPacketSize.get())
                         .build())
                     .build(),
-                    getLocal(ProtocolError.class)
+                    getLocal(ProtocolViolation.class)
                         .statement("Invalid max packet size:" + requestMaxPacketSize.get())
-                        .peerAddress(ChannelAttrs.socketAddress(ctx.channel()))
-                );
+                        .clientInfo(clientInfo));
             }
             if (requestMaxPacketSize.get() > settings.maxPacketSize) {
                 return new GoAway(MqttMessageBuilders
@@ -554,10 +549,9 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                         .reasonString("Max packet size: " + settings.maxPacketSize)
                         .build())
                     .build(),
-                    getLocal(ProtocolError.class)
+                    getLocal(ProtocolViolation.class)
                         .statement("Invalid max packet size: " + requestMaxPacketSize.get())
-                        .peerAddress(ChannelAttrs.socketAddress(ctx.channel()))
-                );
+                        .clientInfo(clientInfo));
             }
         }
         Optional<Integer> topicAliasMaximum = topicAliasMaximum(message.variableHeader().properties());
@@ -657,9 +651,10 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
 
     @Override
     protected int getSessionExpiryInterval(MqttConnectMessage message, TenantSettings settings) {
-        Optional<Integer> requestSEI = Optional.ofNullable(
-            (MqttProperties.IntegerProperty) message.variableHeader().properties()
-                .getProperty(SESSION_EXPIRY_INTERVAL.value())).map(MqttProperties.MqttProperty::value);
+        Optional<Integer> requestSEI = Optional.ofNullable((MqttProperties.IntegerProperty) message.variableHeader()
+                .properties()
+                .getProperty(SESSION_EXPIRY_INTERVAL.value()))
+            .map(MqttProperties.MqttProperty::value);
         int assignedSEI = settings.forceTransient ? 0 : requestSEI.orElse(0);
         return Math.min(assignedSEI, settings.maxSEI);
     }
@@ -673,7 +668,9 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 .reasonString("Unable to expire previous session, Try later")
                 .build())
             .build(),
-            getLocal(InboxTransientError.class).clientInfo(clientInfo));
+            getLocal(InboxTransientError.class)
+                .reason("Unable to expire previous session, Try later")
+                .clientInfo(clientInfo));
     }
 
     @Override
@@ -685,7 +682,9 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 .reasonString("Unable to retrieve previous session, Try later")
                 .build())
             .build(),
-            getLocal(InboxTransientError.class).clientInfo(clientInfo));
+            getLocal(InboxTransientError.class)
+                .reason("Unable to retrieve previous session, Try later")
+                .clientInfo(clientInfo));
     }
 
     @Override

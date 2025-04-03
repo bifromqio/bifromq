@@ -22,6 +22,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNull;
 
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.mqtt.MockableTest;
@@ -61,6 +62,10 @@ import org.testng.annotations.Test;
 
 public class MQTT3ConnectHandlerTest extends MockableTest {
 
+    private final String serverId = "serverId";
+    private final int keepAlive = 2;
+    private final String remoteIp = "127.0.0.1";
+    private final int remotePort = 8888;
     private MQTT3ConnectHandler connectHandler;
     private EmbeddedChannel channel;
     @Mock
@@ -71,15 +76,10 @@ public class MQTT3ConnectHandlerTest extends MockableTest {
     private IInboxClient inboxClient;
     @Mock
     private IEventCollector eventCollector;
-
     @Mock
     private IResourceThrottler resourceThrottler;
-
-    private ISettingProvider settingProvider = Setting::current;
-    private final String serverId = "serverId";
-    private final int keepAlive = 2;
-    private final String remoteIp = "127.0.0.1";
-    private final int remotePort = 8888;
+    @Mock
+    private ISettingProvider settingProvider;
     private MQTTSessionContext sessionContext;
 
     @BeforeMethod(alwaysRun = true)
@@ -87,6 +87,8 @@ public class MQTT3ConnectHandlerTest extends MockableTest {
         connectHandler = new MQTT3ConnectHandler();
         when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
         when(clientBalancer.needRedirect(any())).thenReturn(Optional.empty());
+        when(settingProvider.provide(any(Setting.class), anyString())).thenAnswer(
+            invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
         sessionContext = MQTTSessionContext.builder()
             .serverId(serverId)
             .defaultKeepAliveTimeSeconds(keepAlive)
@@ -100,8 +102,10 @@ public class MQTT3ConnectHandlerTest extends MockableTest {
         channel = new EmbeddedChannel(true, true, new ChannelInitializer<>() {
             @Override
             protected void initChannel(Channel ch) {
-                ch.attr(ChannelAttrs.MQTT_SESSION_CTX).set(sessionContext);
-                ch.attr(ChannelAttrs.PEER_ADDR).set(new InetSocketAddress(remoteIp, remotePort));
+                ch.attr(ChannelAttrs.MQTT_SESSION_CTX)
+                    .set(sessionContext);
+                ch.attr(ChannelAttrs.PEER_ADDR)
+                    .set(new InetSocketAddress(remoteIp, remotePort));
                 ChannelPipeline pipeline = ch.pipeline();
                 pipeline.addLast(connectHandler);
             }
@@ -115,25 +119,28 @@ public class MQTT3ConnectHandlerTest extends MockableTest {
             .clientId("client")
             .protocolVersion(MqttVersion.MQTT_3_1_1)
             .build();
-        when(authProvider.auth(any(MQTT3AuthData.class)))
-            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
-                .setOk(Ok.newBuilder().setTenantId("tenantId").build())
+        when(authProvider.auth(any(MQTT3AuthData.class))).thenReturn(CompletableFuture.completedFuture(
+            MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTenantId("tenantId")
+                    .build())
                 .build()));
-        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
-            .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn))).thenReturn(
+            CompletableFuture.completedFuture(CheckResult.newBuilder()
                 .setGranted(Granted.getDefaultInstance())
                 .build()));
-        when(clientBalancer.needRedirect(any())).thenReturn(
-            Optional.of(new Redirection(true, Optional.of("server1"))));
+        when(clientBalancer.needRedirect(any())).thenReturn(Optional.of(new Redirection(true, Optional.of("server1"))));
         channel.writeInbound(connMsg);
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         MqttConnAckMessage connAckMessage = channel.readOutbound();
-        assertEquals(connAckMessage.variableHeader().connectReturnCode(),
-            CONNECTION_REFUSED_SERVER_UNAVAILABLE);
+        assertEquals(connAckMessage.variableHeader()
+            .connectReturnCode(), CONNECTION_REFUSED_SERVER_UNAVAILABLE);
         assertFalse(channel.isOpen());
-        verify(eventCollector).report(argThat(e -> e.type() == EventType.SERVER_REDIRECTED
-            && ((Redirect) e).isPermanent() && ((Redirect) e).serverReference().equals("server1")));
+        verify(eventCollector).report(argThat(
+            e -> e.type() == EventType.SERVER_REDIRECTED && ((Redirect) e).isPermanent() &&
+                ((Redirect) e).serverReference()
+                    .equals("server1")));
     }
 
     @Test
@@ -142,24 +149,54 @@ public class MQTT3ConnectHandlerTest extends MockableTest {
             .clientId("client")
             .protocolVersion(MqttVersion.MQTT_3_1_1)
             .build();
+        when(authProvider.auth(any(MQTT3AuthData.class))).thenReturn(CompletableFuture.completedFuture(
+            MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTenantId("tenantId")
+                    .build())
+                .build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn))).thenReturn(
+            CompletableFuture.completedFuture(CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()));
+        when(clientBalancer.needRedirect(any())).thenReturn(Optional.of(new Redirection(false, Optional.empty())));
+        channel.writeInbound(connMsg);
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        MqttConnAckMessage connAckMessage = channel.readOutbound();
+        assertEquals(connAckMessage.variableHeader()
+            .connectReturnCode(), CONNECTION_REFUSED_SERVER_UNAVAILABLE);
+        assertFalse(channel.isOpen());
+        verify(eventCollector).report(
+            argThat(e -> e.type() == EventType.SERVER_REDIRECTED && !((Redirect) e).isPermanent()));
+    }
+
+    @Test
+    public void overSizedLastWill() {
+        when(settingProvider.provide(eq(Setting.MaxLastWillBytes), anyString())).thenReturn(128);
+        MqttConnectMessage connMsg = MqttMessageBuilders.connect()
+            .clientId("client")
+            .protocolVersion(MqttVersion.MQTT_3_1_1)
+            .willFlag(true)
+            .willTopic("topic")
+            .willMessage(new byte[1024])
+            .build();
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
-                .setOk(Ok.newBuilder().setTenantId("tenantId").build())
+                .setOk(Ok.newBuilder()
+                    .setTenantId("tenantId")
+                    .build())
                 .build()));
         when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn)))
             .thenReturn(CompletableFuture.completedFuture(CheckResult.newBuilder()
                 .setGranted(Granted.getDefaultInstance())
                 .build()));
-        when(clientBalancer.needRedirect(any())).thenReturn(
-            Optional.of(new Redirection(false, Optional.empty())));
         channel.writeInbound(connMsg);
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
         MqttConnAckMessage connAckMessage = channel.readOutbound();
-        assertEquals(connAckMessage.variableHeader().connectReturnCode(),
-            CONNECTION_REFUSED_SERVER_UNAVAILABLE);
+        assertNull(connAckMessage);
         assertFalse(channel.isOpen());
-        verify(eventCollector).report(argThat(e -> e.type() == EventType.SERVER_REDIRECTED
-            && !((Redirect) e).isPermanent()));
+        verify(eventCollector).report(argThat(e -> e.type() == EventType.PROTOCOL_VIOLATION));
     }
 }

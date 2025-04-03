@@ -69,6 +69,17 @@ public class MQTT3MessageSizer implements IMQTTMessageSizer {
         }
     }
 
+    @Override
+    public int lastWillSize(MqttConnectMessage message) {
+        MqttConnectPayload payload = message.payload();
+        int size = 0;
+        if (message.variableHeader().isWillFlag()) {
+            size += IMQTTMessageSizer.sizeUTF8EncodedString(payload.willTopic());
+            size += IMQTTMessageSizer.sizeBinary(payload.willMessageInBytes());
+        }
+        return size;
+    }
+
     private int sizeConnPayload(MqttConnectMessage message) {
         MqttConnectPayload payload = message.payload();
         int clientIdBytes = IMQTTMessageSizer.sizeUTF8EncodedString(payload.clientIdentifier());
@@ -77,10 +88,7 @@ public class MQTT3MessageSizer implements IMQTTMessageSizer {
         int passwordBytes =
             message.variableHeader().hasPassword() ? IMQTTMessageSizer.sizeBinary(payload.passwordInBytes()) : 0;
         int payloadSize = clientIdBytes + usernameBytes + passwordBytes;
-        if (message.variableHeader().isWillFlag()) {
-            payloadSize += IMQTTMessageSizer.sizeUTF8EncodedString(payload.willTopic());
-            payloadSize += IMQTTMessageSizer.sizeBinary(payload.willMessageInBytes());
-        }
+        payloadSize += lastWillSize(message);
         return payloadSize;
     }
 

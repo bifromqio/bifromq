@@ -15,6 +15,7 @@ package com.baidu.bifromq.mqtt.utils;
 
 import static io.netty.buffer.ByteBufUtil.utf8Bytes;
 
+import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttFixedHeader;
 import io.netty.handler.codec.mqtt.MqttMessage;
 
@@ -23,23 +24,6 @@ import io.netty.handler.codec.mqtt.MqttMessage;
  */
 public interface IMQTTMessageSizer {
     int MIN_CONTROL_PACKET_SIZE = 16;
-
-    interface MqttMessageSize {
-        int encodedBytes();
-
-        int encodedBytes(boolean includeUserProps, boolean includeReasonString);
-    }
-
-    static IMQTTMessageSizer mqtt3() {
-        return MQTT3MessageSizer.INSTANCE;
-    }
-
-    static IMQTTMessageSizer mqtt5() {
-        return MQTT5MessageSizer.INSTANCE;
-    }
-
-    MqttMessageSize sizeOf(MqttMessage message);
-
     IMQTTMessageSizer.MqttMessageSize TWO_BYTES_REMAINING_LENGTH =
         new IMQTTMessageSizer.MqttMessageSize() {
             @Override
@@ -52,7 +36,6 @@ public interface IMQTTMessageSizer {
                 return 4;
             }
         };
-
     IMQTTMessageSizer.MqttMessageSize ZERO_BYTES_REMAINING_LENGTH =
         new IMQTTMessageSizer.MqttMessageSize() {
             @Override
@@ -66,26 +49,12 @@ public interface IMQTTMessageSizer {
             }
         };
 
-    /**
-     * Calculate the size of the message by the fixed header from decoded mqtt message.
-     *
-     * @param header the fixed header of the message
-     * @return the size of the message
-     */
-    default int sizeByHeader(MqttFixedHeader header) {
-        int remainingLength = header.remainingLength();
-        int fixedHeaderSize = 1;
-        int remainingLengthSize = 1; // at least one byte
-        if (remainingLength > 127) {
-            remainingLengthSize = 2;
-            if (remainingLength > 16383) {
-                remainingLengthSize = 3;
-                if (remainingLength > 2097151) {
-                    remainingLengthSize = 4;
-                }
-            }
-        }
-        return fixedHeaderSize + remainingLengthSize + remainingLength;
+    static IMQTTMessageSizer mqtt3() {
+        return MQTT3MessageSizer.INSTANCE;
+    }
+
+    static IMQTTMessageSizer mqtt5() {
+        return MQTT5MessageSizer.INSTANCE;
     }
 
     static int sizeBinary(byte[] binary) {
@@ -110,5 +79,37 @@ public interface IMQTTMessageSizer {
             bytes++;
         } while (i > 0);
         return bytes;
+    }
+
+    MqttMessageSize sizeOf(MqttMessage message);
+
+    int lastWillSize(MqttConnectMessage message);
+
+    /**
+     * Calculate the size of the message by the fixed header from decoded mqtt message.
+     *
+     * @param header the fixed header of the message
+     * @return the size of the message
+     */
+    default int sizeByHeader(MqttFixedHeader header) {
+        int remainingLength = header.remainingLength();
+        int fixedHeaderSize = 1;
+        int remainingLengthSize = 1; // at least one byte
+        if (remainingLength > 127) {
+            remainingLengthSize = 2;
+            if (remainingLength > 16383) {
+                remainingLengthSize = 3;
+                if (remainingLength > 2097151) {
+                    remainingLengthSize = 4;
+                }
+            }
+        }
+        return fixedHeaderSize + remainingLengthSize + remainingLength;
+    }
+
+    interface MqttMessageSize {
+        int encodedBytes();
+
+        int encodedBytes(boolean includeUserProps, boolean includeReasonString);
     }
 }

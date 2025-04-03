@@ -165,6 +165,19 @@ public class MQTT5MessageSizer implements IMQTTMessageSizer {
         }
     }
 
+    @Override
+    public int lastWillSize(MqttConnectMessage message) {
+        MqttConnectPayload payload = message.payload();
+        int size = 0;
+        if (message.variableHeader().isWillFlag()) {
+            size += IMQTTMessageSizer.sizeUTF8EncodedString(payload.willTopic());
+            size += IMQTTMessageSizer.sizeBinary(payload.willMessageInBytes());
+            MqttPropertiesBytes willPropBytes = sizeMqttProperties(payload.willProperties());
+            size += willPropBytes.minBytes + willPropBytes.reasonStringBytes + willPropBytes.userPropsBytes;
+        }
+        return size;
+    }
+
     private MqttVarHeaderBytes sizeConnVarHeader(MqttConnectVariableHeader header) {
         MqttPropertiesBytes propsBytes = sizeMqttProperties(header.properties());
         // 6 bytes for UTF8 encoded string(MQTT)
