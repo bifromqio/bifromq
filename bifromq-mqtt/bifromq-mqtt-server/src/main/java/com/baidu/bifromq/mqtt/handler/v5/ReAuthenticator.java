@@ -26,6 +26,7 @@ import com.baidu.bifromq.mqtt.utils.AuthUtil;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.Continue;
 import com.baidu.bifromq.plugin.authprovider.type.MQTT5ExtendedAuthData;
+import com.baidu.bifromq.plugin.authprovider.type.Success;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ReAuthFailed;
 import com.baidu.bifromq.type.ClientInfo;
@@ -157,9 +158,14 @@ public class ReAuthenticator implements IReAuthenticator {
                 switch (authResult.getTypeCase()) {
                     case SUCCESS -> {
                         isStarting = false;
-                        responder.accept(response(MQTT5MessageBuilders.auth(origAuthMethod)
+                        Success success = authResult.getSuccess();
+                        MQTT5MessageBuilders.AuthBuilder authBuilder = MQTT5MessageBuilders.auth(origAuthMethod)
                             .reasonCode(MQTT5AuthReasonCode.Success)
-                            .build()));
+                            .userProperties(success.getUserProps());
+                        if (success.hasAuthData()) {
+                            authBuilder.authData(success.getAuthData());
+                        }
+                        responder.accept(response(authBuilder.build()));
                     }
                     case CONTINUE -> {
                         Continue authContinue = authResult.getContinue();

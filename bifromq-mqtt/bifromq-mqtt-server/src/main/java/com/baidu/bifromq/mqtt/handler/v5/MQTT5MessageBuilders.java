@@ -121,11 +121,6 @@ public class MQTT5MessageBuilders {
         }
 
         public MqttMessage build() {
-            MqttFixedHeader fixedHeader = new MqttFixedHeader(MqttMessageType.AUTH,
-                false,
-                MqttQoS.AT_MOST_ONCE,
-                false,
-                0);
             MQTT5MessageUtils.MqttPropertiesBuilder propsBuilder = MQTT5MessageUtils.mqttProps();
             propsBuilder.addAuthMethod(authMethod);
             if (authData != null) {
@@ -138,6 +133,11 @@ public class MQTT5MessageBuilders {
                 propsBuilder.addUserProperties(userProps);
             }
             MqttProperties mqttProperties = propsBuilder.build();
+            MqttFixedHeader fixedHeader = new MqttFixedHeader(MqttMessageType.AUTH,
+                false,
+                MqttQoS.AT_MOST_ONCE,
+                false,
+                0);
             if (mqttProperties.isEmpty() && reasonCode == MQTT5AuthReasonCode.Success) {
                 // The Reason Code and Property Length can be omitted if the Reason Code is 0x00 (Success) and there are no Properties. In this case the AUTH has a Remaining Length of 0
                 return new MqttMessage(fixedHeader);

@@ -73,6 +73,7 @@ import com.baidu.bifromq.util.TopicUtil;
 import com.baidu.bifromq.util.UTF8Util;
 import com.bifromq.plugin.resourcethrottler.TenantResourceType;
 import com.google.common.base.Strings;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.UnsafeByteOperations;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
@@ -151,7 +152,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                         if (requestClientId.isEmpty()) {
                             requestClientId = ctx.channel().id().asLongText();
                         }
-                        return ok(ClientInfo.newBuilder()
+                        ClientInfo clientInfo = ClientInfo.newBuilder()
                             .setTenantId(ok.getTenantId())
                             .setType(MQTT_TYPE_VALUE)
                             .putAllMetadata(ok.getAttrsMap()) // custom attrs
@@ -165,7 +166,8 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                                     .map(InetSocketAddress::toString)
                                     .orElse(""))
                             .putMetadata(MQTT_CLIENT_BROKER_KEY, ChannelAttrs.mqttSessionContext(ctx).serverId)
-                            .build());
+                            .build();
+                        return ok(clientInfo);
                     }
                     case REJECT -> {
                         Reject reject = authResult.getReject();
@@ -220,12 +222,14 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
     }
 
     @Override
-    protected CompletableFuture<AuthResult> checkConnectPermission(MqttConnectMessage message, ClientInfo clientInfo) {
+    protected CompletableFuture<AuthResult> checkConnectPermission(MqttConnectMessage message,
+                                                                   SuccessInfo successInfo) {
+        ClientInfo clientInfo = successInfo.clientInfo();
         return authProvider.checkPermission(clientInfo, buildConnAction(UserProperties.getDefaultInstance()))
             .thenApply(checkResult -> {
                 switch (checkResult.getTypeCase()) {
                     case GRANTED -> {
-                        return AuthResult.ok(clientInfo);
+                        return AuthResult.ok(successInfo);
                     }
                     case DENIED -> {
                         return goAway(MqttMessageBuilders
@@ -421,7 +425,10 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                                              int keepAliveSeconds,
                                              int sessionExpiryInterval,
                                              boolean sessionExists,
-                                             ClientInfo clientInfo) {
+                                             ClientInfo clientInfo,
+                                             Optional<String> responseInfo, // ignore
+                                             Optional<ByteString> authData, // ignore
+                                             UserProperties userProperties) { // ignore
         return MqttMessageBuilders
             .connAck()
             .sessionPresent(sessionExists)

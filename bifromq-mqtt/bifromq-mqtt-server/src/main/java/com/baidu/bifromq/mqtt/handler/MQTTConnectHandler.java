@@ -45,6 +45,7 @@ import com.baidu.bifromq.mqtt.session.IMQTTPersistentSession;
 import com.baidu.bifromq.mqtt.session.IMQTTTransientSession;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.IMQTTMessageSizer;
+import com.baidu.bifromq.plugin.authprovider.type.Success;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.channelclosed.ProtocolError;
@@ -52,8 +53,10 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientconnected.Client
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.sysprops.props.SanityCheckMqttUtf8String;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.UserProperties;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.bifromq.plugin.resourcethrottler.TenantResourceType;
+import com.google.protobuf.ByteString;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
@@ -64,6 +67,7 @@ import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageType;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -118,7 +122,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                         return CompletableFuture.completedFuture(okOrGoAway);
                     }
                     // check conn permission
-                    return checkConnectPermission(connMsg, okOrGoAway.clientInfo);
+                    return checkConnectPermission(connMsg, okOrGoAway.successInfo);
                 }, ctx.executor())
                 .thenComposeAsync(okOrGoAway -> {
                     if (okOrGoAway.goAway != null) {
@@ -126,18 +130,18 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                         return CompletableFuture.completedFuture(null);
                     } else {
                         // check tenant resource
-                        ClientInfo clientInfo = okOrGoAway.clientInfo;
+                        ClientInfo clientInfo = okOrGoAway.successInfo.clientInfo;
                         String tenantId = clientInfo.getTenantId();
                         if (!resourceThrottler.hasResource(tenantId, TotalConnections)) {
-                            handleGoAway(onNoEnoughResources(connMsg, TotalConnections, okOrGoAway.clientInfo));
+                            handleGoAway(onNoEnoughResources(connMsg, TotalConnections, clientInfo));
                             return CompletableFuture.completedFuture(null);
                         }
                         if (!resourceThrottler.hasResource(tenantId, TotalSessionMemoryBytes)) {
-                            handleGoAway(onNoEnoughResources(connMsg, TotalSessionMemoryBytes, okOrGoAway.clientInfo));
+                            handleGoAway(onNoEnoughResources(connMsg, TotalSessionMemoryBytes, clientInfo));
                             return CompletableFuture.completedFuture(null);
                         }
                         if (!resourceThrottler.hasResource(tenantId, TotalConnectPerSecond)) {
-                            handleGoAway(onNoEnoughResources(connMsg, TotalConnectPerSecond, okOrGoAway.clientInfo));
+                            handleGoAway(onNoEnoughResources(connMsg, TotalConnectPerSecond, clientInfo));
                             return CompletableFuture.completedFuture(null);
                         }
                         TenantSettings settings = new TenantSettings(tenantId, settingProvider);
@@ -165,7 +169,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                         keepAliveSeconds,
                                         false,
                                         willMessage,
-                                        clientInfo,
+                                        okOrGoAway.successInfo,
                                         ctx);
 
                                 } else {
@@ -176,7 +180,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                         sessionExpiryInterval,
                                         null,
                                         willMessage,
-                                        clientInfo,
+                                        okOrGoAway.successInfo,
                                         ctx);
                                 }
                                 return CompletableFuture.completedFuture(null);
@@ -212,7 +216,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                     keepAliveSeconds,
                                                     reply.getCode() == ExpireReply.Code.OK,
                                                     willMessage,
-                                                    clientInfo,
+                                                    okOrGoAway.successInfo,
                                                     ctx);
                                             } else {
                                                 setupPersistentSessionHandler(connMsg,
@@ -222,7 +226,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                     sessionExpiryInterval,
                                                     null,
                                                     willMessage,
-                                                    clientInfo,
+                                                    okOrGoAway.successInfo,
                                                     ctx);
                                             }
                                         }
@@ -272,7 +276,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                     inbox.getIncarnation(),
                                                     inbox.getVersion()),
                                                 willMessage,
-                                                clientInfo,
+                                                okOrGoAway.successInfo,
                                                 ctx);
                                         }
                                         case NO_INBOX -> {
@@ -284,7 +288,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                     keepAliveSeconds,
                                                     false,
                                                     willMessage,
-                                                    clientInfo,
+                                                    okOrGoAway.successInfo,
                                                     ctx);
                                             } else {
                                                 setupPersistentSessionHandler(connMsg,
@@ -294,7 +298,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                     sessionExpiryInterval,
                                                     null,
                                                     willMessage,
-                                                    clientInfo,
+                                                    okOrGoAway.successInfo,
                                                     ctx);
                                             }
                                         }
@@ -323,7 +327,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
     protected abstract CompletableFuture<AuthResult> authenticate(MqttConnectMessage message);
 
     protected abstract CompletableFuture<AuthResult> checkConnectPermission(MqttConnectMessage message,
-                                                                            ClientInfo clientInfo);
+                                                                            SuccessInfo successInfo);
 
     protected abstract void handleMqttMessage(MqttMessage message);
 
@@ -370,9 +374,10 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                               int keepAliveSeconds,
                                               boolean sessionExists,
                                               LWT willMessage,
-                                              ClientInfo clientInfo,
+                                              SuccessInfo successInfo,
                                               ChannelHandlerContext ctx) {
         int maxPacketSize = maxPacketSize(connMsg, settings);
+        ClientInfo clientInfo = successInfo.clientInfo;
         clientInfo = clientInfo.toBuilder()
             .putMetadata(MQTT_CLIENT_SESSION_TYPE, MQTT_CLIENT_SESSION_TYPE_T_VALUE)
             .build();
@@ -401,8 +406,9 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
         ClientInfo finalClientInfo = clientInfo;
         sessionHandler.awaitInitialized()
             .thenAcceptAsync(v -> {
-                ctx.writeAndFlush(onConnected(connMsg, settings,
-                    userSessionId, keepAliveSeconds, 0, false, finalClientInfo));
+                ctx.writeAndFlush(onConnected(connMsg, settings, userSessionId, keepAliveSeconds,
+                    0, false, finalClientInfo,
+                    successInfo.responseInfo, successInfo.authData, successInfo.userProperties));
                 // report client connected event
                 eventCollector.report(getLocal(ClientConnected.class)
                     .serverId(sessionCtx.serverId)
@@ -426,9 +432,10 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                int sessionExpiryInterval,
                                                @Nullable ExistingSession existingSession,
                                                @Nullable LWT willMessage,
-                                               ClientInfo clientInfo,
+                                               SuccessInfo successInfo,
                                                ChannelHandlerContext ctx) {
         int maxPacketSize = maxPacketSize(connMsg, settings);
+        ClientInfo clientInfo = successInfo.clientInfo;
         clientInfo = clientInfo.toBuilder()
             .putMetadata(MQTT_CLIENT_SESSION_TYPE, MQTT_CLIENT_SESSION_TYPE_P_VALUE)
             .build();
@@ -459,9 +466,9 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
         ClientInfo finalClientInfo = clientInfo;
         sessionHandler.awaitInitialized()
             .thenAcceptAsync(v -> {
-                ctx.writeAndFlush(onConnected(connMsg,
-                    settings, userSessionId, keepAliveSeconds, sessionExpiryInterval, existingSession != null,
-                    finalClientInfo));
+                ctx.writeAndFlush(onConnected(connMsg, settings, userSessionId, keepAliveSeconds, sessionExpiryInterval,
+                    existingSession != null, finalClientInfo, successInfo.responseInfo, successInfo.authData,
+                    successInfo.userProperties));
                 // report client connected event
                 eventCollector.report(getLocal(ClientConnected.class)
                     .serverId(sessionCtx.serverId)
@@ -484,7 +491,10 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                       int keepAliveSeconds,
                                                       int sessionExpiryInterval,
                                                       boolean sessionExists,
-                                                      ClientInfo clientInfo);
+                                                      ClientInfo clientInfo,
+                                                      Optional<String> responseInfo, // mqtt5
+                                                      Optional<ByteString> authData, // mqtt5
+                                                      UserProperties userProperties); // mqtt5
 
     protected void handleGoAway(GoAway goAway) {
         assert ctx.executor().inEventLoop();
@@ -529,13 +539,40 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
 
     }
 
-    public record AuthResult(ClientInfo clientInfo, GoAway goAway) {
+    public record SuccessInfo(ClientInfo clientInfo,
+                              Optional<String> responseInfo, // mqtt5
+                              Optional<ByteString> authData, // mqtt5
+                              UserProperties userProperties) { //mqtt5
+        public static SuccessInfo of(ClientInfo clientInfo) {
+            return new SuccessInfo(clientInfo, Optional.empty(), Optional.empty(), UserProperties.getDefaultInstance());
+        }
+    }
+
+    public record AuthResult(SuccessInfo successInfo, GoAway goAway) {
         public static AuthResult goAway(MqttMessage farewell, Event<?>... reasons) {
             return new AuthResult(null, new GoAway(farewell, reasons));
         }
 
+        public static AuthResult goAwayNow(MqttMessage farewell, Event<?>... reasons) {
+            return new AuthResult(null, GoAway.now(farewell, reasons));
+        }
+
+        public static AuthResult ok(Success success, ClientInfo clientInfo) {
+            Optional<String> respInfo = Optional.ofNullable(success.hasResponseInfo()
+                ? success.getResponseInfo() : null);
+            Optional<ByteString> authData =
+                Optional.ofNullable(success.hasAuthData() ? success.getAuthData() : null);
+            SuccessInfo successInfo =
+                new SuccessInfo(clientInfo, respInfo, authData, success.getUserProps());
+            return new AuthResult(successInfo, null);
+        }
+
         public static AuthResult ok(ClientInfo clientInfo) {
-            return new AuthResult(clientInfo, null);
+            return new AuthResult(SuccessInfo.of(clientInfo), null);
+        }
+
+        public static AuthResult ok(SuccessInfo successInfo) {
+            return new AuthResult(successInfo, null);
         }
     }
 }

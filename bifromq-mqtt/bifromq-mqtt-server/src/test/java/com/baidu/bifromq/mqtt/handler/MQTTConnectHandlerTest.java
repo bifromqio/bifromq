@@ -26,8 +26,6 @@ import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.mqtt.MockableTest;
 import com.baidu.bifromq.mqtt.handler.record.GoAway;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
-import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
-import com.baidu.bifromq.plugin.authprovider.type.Denied;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
@@ -49,21 +47,19 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class MQTTConnectHandlerTest extends MockableTest {
+    private final String serverId = "serverId";
+    private final int keepAlive = 2;
+    private final String remoteIp = "127.0.0.1";
+    private final int remotePort = 8888;
+    private final ISettingProvider settingProvider = Setting::current;
     private MQTTConnectHandler connectHandler;
     private EmbeddedChannel channel;
     @Mock
     private IInboxClient inboxClient;
     @Mock
     private IEventCollector eventCollector;
-
     @Mock
     private IResourceThrottler resourceThrottler;
-
-    private ISettingProvider settingProvider = Setting::current;
-    private final String serverId = "serverId";
-    private final int keepAlive = 2;
-    private final String remoteIp = "127.0.0.1";
-    private final int remotePort = 8888;
     private MQTTSessionContext sessionContext;
 
     @BeforeMethod(alwaysRun = true)
@@ -127,8 +123,8 @@ public class MQTTConnectHandlerTest extends MockableTest {
         when(connectHandler.sanityCheck(connMsg)).thenReturn(null);
         when(connectHandler.authenticate(connMsg)).thenReturn(
             CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
-        when(connectHandler.checkConnectPermission(eq(connMsg), eq(clientInfo))).thenReturn(
-            CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.goAway(null)));
+        when(connectHandler.checkConnectPermission(eq(connMsg), eq(MQTTConnectHandler.SuccessInfo.of(clientInfo))))
+            .thenReturn(CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.goAway(null)));
         channel.writeInbound(connMsg);
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runScheduledPendingTasks();
@@ -147,8 +143,8 @@ public class MQTTConnectHandlerTest extends MockableTest {
         when(connectHandler.sanityCheck(connMsg)).thenReturn(null);
         when(connectHandler.authenticate(connMsg)).thenReturn(
             CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
-        when(connectHandler.checkConnectPermission(eq(connMsg), eq(clientInfo))).thenReturn(
-            CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
+        when(connectHandler.checkConnectPermission(eq(connMsg), eq(MQTTConnectHandler.SuccessInfo.of(clientInfo))))
+            .thenReturn(CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
         when(connectHandler.onNoEnoughResources(connMsg, TotalConnections, clientInfo)).thenReturn(new GoAway());
         when(resourceThrottler.hasResource(tenantId, TotalConnections)).thenReturn(false);
         channel.writeInbound(connMsg);
@@ -169,8 +165,8 @@ public class MQTTConnectHandlerTest extends MockableTest {
         when(connectHandler.sanityCheck(connMsg)).thenReturn(null);
         when(connectHandler.authenticate(connMsg)).thenReturn(
             CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
-        when(connectHandler.checkConnectPermission(eq(connMsg), eq(clientInfo))).thenReturn(
-            CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
+        when(connectHandler.checkConnectPermission(eq(connMsg), eq(MQTTConnectHandler.SuccessInfo.of(clientInfo))))
+            .thenReturn(CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
         when(connectHandler.onNoEnoughResources(connMsg, TotalSessionMemoryBytes, clientInfo)).thenReturn(new GoAway());
         when(resourceThrottler.hasResource(tenantId, TotalSessionMemoryBytes)).thenReturn(false);
         channel.writeInbound(connMsg);
@@ -191,8 +187,8 @@ public class MQTTConnectHandlerTest extends MockableTest {
         when(connectHandler.sanityCheck(connMsg)).thenReturn(null);
         when(connectHandler.authenticate(connMsg)).thenReturn(
             CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
-        when(connectHandler.checkConnectPermission(eq(connMsg), eq(clientInfo))).thenReturn(
-            CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
+        when(connectHandler.checkConnectPermission(eq(connMsg), eq(MQTTConnectHandler.SuccessInfo.of(clientInfo))))
+            .thenReturn(CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
         when(connectHandler.onNoEnoughResources(connMsg, TotalConnectPerSecond, clientInfo)).thenReturn(new GoAway());
         when(resourceThrottler.hasResource(tenantId, TotalConnectPerSecond)).thenReturn(false);
         channel.writeInbound(connMsg);
@@ -212,8 +208,8 @@ public class MQTTConnectHandlerTest extends MockableTest {
         when(connectHandler.sanityCheck(connMsg)).thenReturn(null);
         when(connectHandler.authenticate(connMsg)).thenReturn(
             CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
-        when(connectHandler.checkConnectPermission(eq(connMsg), eq(clientInfo))).thenReturn(
-            CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
+        when(connectHandler.checkConnectPermission(eq(connMsg), eq(MQTTConnectHandler.SuccessInfo.of(clientInfo))))
+            .thenReturn(CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
         when(connectHandler.validate(eq(connMsg), any(), eq(clientInfo))).thenReturn(new GoAway());
         channel.writeInbound(connMsg);
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
@@ -232,8 +228,8 @@ public class MQTTConnectHandlerTest extends MockableTest {
         when(connectHandler.sanityCheck(connMsg)).thenReturn(null);
         when(connectHandler.authenticate(connMsg)).thenReturn(
             CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
-        when(connectHandler.checkConnectPermission(eq(connMsg), eq(clientInfo))).thenReturn(
-            CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
+        when(connectHandler.checkConnectPermission(eq(connMsg), eq(MQTTConnectHandler.SuccessInfo.of(clientInfo))))
+            .thenReturn(CompletableFuture.completedFuture(MQTTConnectHandler.AuthResult.ok(clientInfo)));
         when(connectHandler.needRedirect(clientInfo)).thenReturn(new GoAway());
         channel.writeInbound(connMsg);
         channel.advanceTimeBy(6, TimeUnit.SECONDS);

@@ -43,6 +43,7 @@ message Success{
   map<string, string> attrs = 3; // additional attributes filled by auth provider plugin which will be copied to ClientInfo
   optional string ResponseInfo = 4; // for mqtt5 request/response use case
   commontype.UserProperties userProps = 5; // user properties return back via mqtt5 connack
+  optional bytes authData = 6; // the final authData to be sent back to client
 }
 
 message Failed{
