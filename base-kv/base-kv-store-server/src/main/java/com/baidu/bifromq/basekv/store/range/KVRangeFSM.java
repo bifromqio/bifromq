@@ -69,6 +69,7 @@ import com.baidu.bifromq.basekv.proto.SplitRange;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.proto.TransferLeadership;
 import com.baidu.bifromq.basekv.proto.WALRaftMessages;
+import com.baidu.bifromq.basekv.raft.exception.LeaderTransferException;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.RaftMessage;
@@ -950,12 +951,6 @@ public class KVRangeFSM implements IKVRangeFSM {
                             "Transfer leader abort, range is in state:" + state.getType().name())));
                     break;
                 }
-                if (!wal.clusterConfig().getVotersList().contains(request.getNewLeader())
-                    && !wal.clusterConfig().getNextVotersList().contains(request.getNewLeader())) {
-                    onDone.complete(
-                        () -> finishCommandWithError(taskId, new KVRangeException.BadRequest("Invalid Leader")));
-                    break;
-                }
                 log.info("Transferring leader[term={}, index={}, taskId={}, ver={}, state={}]: newLeader={}",
                     logTerm, logIndex, taskId, ver, state, request.getNewLeader());
                 wal.transferLeadership(request.getNewLeader())
@@ -963,8 +958,14 @@ public class KVRangeFSM implements IKVRangeFSM {
                         if (e != null) {
                             log.debug("Failed to transfer leadership[newLeader={}] due to {}",
                                 request.getNewLeader(), e.getMessage());
-                            finishCommandWithError(taskId, new KVRangeException.TryLater(
-                                "Failed to transfer leadership", e));
+                            if (e instanceof LeaderTransferException.NotFoundOrQualifiedException
+                                || e.getCause() instanceof LeaderTransferException.NotFoundOrQualifiedException) {
+                                finishCommandWithError(taskId, new KVRangeException.BadRequest(
+                                    "Failed to transfer leadership", e));
+                            } else {
+                                finishCommandWithError(taskId, new KVRangeException.TryLater(
+                                    "Failed to transfer leadership", e));
+                            }
                         } else {
                             finishCommand(taskId);
                         }
@@ -1387,7 +1388,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                     || state.getType() == Removed
                     || state.getType() == ToBePurged) {
                     onDone.complete(() -> finishCommandWithError(taskId,
-                        new KVRangeException.BadRequest("Range is in state:" + state.getType().name())));
+                        new KVRangeException.TryLater(
+                            "Range is being merge or has been merged: state=" + state.getType().name())));
                     break;
                 }
                 try {

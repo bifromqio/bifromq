@@ -90,12 +90,14 @@ class MutatePipeline extends ResponsePipeline<KVRangeRWRequest, KVRangeRWReply> 
                 if (e instanceof KVRangeStoreException.KVRangeNotFoundException
                     || e.getCause() instanceof KVRangeStoreException.KVRangeNotFoundException
                     || e instanceof KVRangeException.TryLater || e.getCause() instanceof KVRangeException.TryLater) {
+                    log.debug("RW request needs retry: reqId={}", request.getReqId(), e);
                     return KVRangeRWReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(ReplyCode.TryLater)
                         .build();
                 }
                 if (e instanceof KVRangeException.BadRequest || e.getCause() instanceof KVRangeException.BadRequest) {
+                    log.debug("Bad RW request: reqId={}", request.getReqId(), e);
                     return KVRangeRWReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(ReplyCode.BadRequest)
