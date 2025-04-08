@@ -58,6 +58,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByCli
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
+import com.baidu.bifromq.sysprops.props.PersistentSessionDetachTimeoutSecond;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
@@ -88,6 +89,8 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler implements IMQTTPersistentSession {
+    private static final long TouchTimeoutMillis = Duration.ofSeconds(
+        PersistentSessionDetachTimeoutSecond.INSTANCE.get()).multipliedBy(2).dividedBy(3).toMillis();
     private final int sessionExpirySeconds;
     private final boolean sessionPresent;
     private final long incarnation;
@@ -106,9 +109,8 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     private long qos0ConfirmUpToSeq;
     private long inboxConfirmedUpToSeq = -1;
     private IInboxClient.IInboxReader inboxReader;
-    private long touchRetryCount = 0;
-    private long lastTouch = 0;
-    private long touchIdleTimeMS;
+    private boolean disconnectByClient = false;
+    private int touchRetryCount;
     private ScheduledFuture<?> touchTimeout;
 
     protected MQTTPersistentSessionHandler(TenantSettings settings,
@@ -140,16 +142,12 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
         super.handlerAdded(ctx);
-        touchIdleTimeMS = Duration.ofSeconds(keepAliveTimeSeconds).plusSeconds(
-            willMessage() != null ? Math.min(sessionExpirySeconds, willMessage().getDelaySeconds()) :
-                sessionExpirySeconds).toMillis();
         if (sessionPresent) {
             AttachRequest.Builder reqBuilder = AttachRequest.newBuilder()
                 .setReqId(System.nanoTime())
                 .setInboxId(userSessionId)
                 .setIncarnation(incarnation)
                 .setVersion(version)
-                .setKeepAliveSeconds(keepAliveTimeSeconds)
                 .setExpirySeconds(sessionExpirySeconds)
                 .setClient(clientInfo())
                 .setNow(HLC.INST.getPhysical());
@@ -180,7 +178,6 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                 .setReqId(System.nanoTime())
                 .setInboxId(userSessionId)
                 .setIncarnation(incarnation)
-                .setKeepAliveSeconds(keepAliveTimeSeconds)
                 .setExpirySeconds(sessionExpirySeconds)
                 .setLimit(settings.inboxQueueLength)
                 .setDropOldest(settings.inboxDropOldest)
@@ -217,11 +214,25 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         if (remainInboxSize > 0) {
             memUsage.addAndGet(-remainInboxSize);
         }
+        if (!disconnectByClient) {
+            int finalSEI = settings.forceTransient ? 0 : Math.min(sessionExpirySeconds, settings.maxSEI);
+            inboxClient.detach(DetachRequest.newBuilder()
+                .setReqId(System.nanoTime())
+                .setInboxId(userSessionId)
+                .setIncarnation(incarnation)
+                .setVersion(version)
+                .setExpirySeconds(finalSEI)
+                .setDiscardLWT(false)
+                .setClient(clientInfo)
+                .setNow(HLC.INST.getPhysical())
+                .build());
+        }
         ctx.fireChannelInactive();
     }
 
     @Override
     protected final ProtocolResponse handleDisconnect(MqttMessage message) {
+        disconnectByClient = true;
         Optional<Integer> requestSEI = helper().sessionExpiryIntervalOnDisconnect(message);
         int finalSEI = settings.forceTransient ? 0 : Math.min(requestSEI.orElse(sessionExpirySeconds), settings.maxSEI);
         if (helper().isNormalDisconnect(message)) {
@@ -609,7 +620,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     }
 
     private void rescheduleTouch() {
-        rescheduleTouch(touchIdleTimeMS);
+        rescheduleTouch(ThreadLocalRandom.current().nextLong(TouchTimeoutMillis / 2, TouchTimeoutMillis));
     }
 
     private void rescheduleTouch(long delayMS) {
@@ -632,7 +643,6 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     switch (v.getCode()) {
                         case OK -> {
                             touchRetryCount = 0;
-                            lastTouch = System.currentTimeMillis();
                             rescheduleTouch();
                         }
                         case TRY_LATER -> {
@@ -649,6 +659,6 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                         }
                     }
                 }, ctx.executor());
-        }, delayMS + ThreadLocalRandom.current().nextLong(0, 500L), TimeUnit.MILLISECONDS);
+        }, delayMS, TimeUnit.MILLISECONDS);
     }
 }

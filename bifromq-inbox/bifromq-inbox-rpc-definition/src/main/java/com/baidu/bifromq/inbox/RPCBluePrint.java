@@ -19,10 +19,12 @@ import com.baidu.bifromq.baserpc.BluePrint;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
+import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireRequest;
 import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
+import com.baidu.bifromq.inbox.rpc.proto.SendLWTRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
@@ -54,6 +56,10 @@ public class RPCBluePrint {
         .methodSemantic(InboxServiceGrpc.getSubMethod(), BluePrint.WCHUnaryMethod.<SubRequest>builder()
             .keyHashFunc(request -> getDelivererKey(request.getTenantId(), request.getInboxId())).build())
         .methodSemantic(InboxServiceGrpc.getUnsubMethod(), BluePrint.WCHUnaryMethod.<UnsubRequest>builder()
+            .keyHashFunc(request -> getDelivererKey(request.getTenantId(), request.getInboxId())).build())
+        .methodSemantic(InboxServiceGrpc.getSendLWTMethod(), BluePrint.WCHUnaryMethod.<SendLWTRequest>builder()
+            .keyHashFunc(request -> getDelivererKey(request.getTenantId(), request.getInboxId())).build())
+        .methodSemantic(InboxServiceGrpc.getDeleteMethod(), BluePrint.WCHUnaryMethod.<DeleteRequest>builder()
             .keyHashFunc(request -> getDelivererKey(request.getTenantId(), request.getInboxId())).build())
         .methodSemantic(InboxServiceGrpc.getCommitMethod(), BluePrint.WCHUnaryMethod
             .<CommitRequest>builder()

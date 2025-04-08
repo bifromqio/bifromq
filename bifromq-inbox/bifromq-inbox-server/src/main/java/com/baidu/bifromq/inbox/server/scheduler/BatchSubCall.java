@@ -18,7 +18,6 @@ import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
@@ -30,19 +29,19 @@ import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
+import com.baidu.bifromq.inbox.storage.proto.Replica;
 import java.time.Duration;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
-    protected BatchSubCall(KVRangeId rangeId,
-                           IBaseKVStoreClient distWorkerClient,
-                           Duration pipelineExpiryTime) {
-        super(rangeId, distWorkerClient, pipelineExpiryTime);
+    protected BatchSubCall(IBaseKVStoreClient distWorkerClient,
+                           Duration pipelineExpiryTime,
+                           MutationCallBatcherKey batcherKey) {
+        super(distWorkerClient, pipelineExpiryTime, batcherKey);
     }
 
     @Override
@@ -51,9 +50,14 @@ class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
     }
 
     @Override
-    protected RWCoProcInput makeBatch(Iterator<SubRequest> subRequestIterator) {
-        BatchSubRequest.Builder reqBuilder = BatchSubRequest.newBuilder();
-        subRequestIterator.forEachRemaining(request -> {
+    protected RWCoProcInput makeBatch(Iterable<ICallTask<SubRequest, SubReply, MutationCallBatcherKey>> callTasks) {
+        BatchSubRequest.Builder reqBuilder = BatchSubRequest.newBuilder()
+            .setLeader(Replica.newBuilder()
+                .setRangeId(batcherKey.id)
+                .setStoreId(batcherKey.leaderStoreId)
+                .build());
+        callTasks.forEach(call -> {
+            SubRequest request = call.call();
             BatchSubRequest.Params.Builder paramsBuilder = BatchSubRequest.Params.newBuilder()
                 .setTenantId(request.getTenantId())
                 .setInboxId(request.getInboxId())

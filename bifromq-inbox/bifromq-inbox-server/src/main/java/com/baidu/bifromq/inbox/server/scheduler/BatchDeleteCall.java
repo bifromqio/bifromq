@@ -14,42 +14,55 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.record.InboxInstance;
 import com.baidu.bifromq.inbox.record.TenantInboxInstance;
+import com.baidu.bifromq.inbox.rpc.proto.DeleteReply;
+import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchDeleteReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchDeleteRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import java.time.Duration;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
 
-class BatchDeleteCall extends BatchMutationCall<BatchDeleteRequest.Params, BatchDeleteReply.Result> {
+@Slf4j
+class BatchDeleteCall extends BatchMutationCall<DeleteRequest, DeleteReply> {
 
-    protected BatchDeleteCall(KVRangeId rangeId,
-                              IBaseKVStoreClient distWorkerClient,
-                              Duration pipelineExpiryTime) {
-        super(rangeId, distWorkerClient, pipelineExpiryTime);
+    protected BatchDeleteCall(IBaseKVStoreClient distWorkerClient,
+                              Duration pipelineExpiryTime,
+                              MutationCallBatcherKey batcherKey) {
+        super(distWorkerClient, pipelineExpiryTime, batcherKey);
     }
 
     @Override
-    protected MutationCallTaskBatch<BatchDeleteRequest.Params, BatchDeleteReply.Result> newBatch(String storeId,
-                                                                                                 long ver) {
+    protected MutationCallTaskBatch<DeleteRequest, DeleteReply> newBatch(String storeId,
+                                                                         long ver) {
         return new BatchDeleteCallTask(storeId, ver);
     }
 
     @Override
-    protected RWCoProcInput makeBatch(Iterator<BatchDeleteRequest.Params> reqIterator) {
+    protected RWCoProcInput makeBatch(
+        Iterable<ICallTask<DeleteRequest, DeleteReply, MutationCallBatcherKey>> callTasks) {
         BatchDeleteRequest.Builder reqBuilder = BatchDeleteRequest.newBuilder();
-        reqIterator.forEachRemaining(reqBuilder::addParams);
-
+        callTasks.forEach(call -> {
+            DeleteRequest request = call.call();
+            BatchDeleteRequest.Params.Builder paramsBuilder = BatchDeleteRequest.Params.newBuilder()
+                .setTenantId(request.getTenantId())
+                .setInboxId(request.getInboxId())
+                .setIncarnation(request.getIncarnation()) // new incarnation
+                .setVersion(request.getVersion());
+            reqBuilder.addParams(paramsBuilder.build());
+        });
         long reqId = System.nanoTime();
         return RWCoProcInput.newBuilder()
             .setInboxService(InboxServiceRWCoProcInput.newBuilder()
@@ -60,27 +73,64 @@ class BatchDeleteCall extends BatchMutationCall<BatchDeleteRequest.Params, Batch
     }
 
     @Override
-    protected void handleOutput(
-        Queue<ICallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result, MutationCallBatcherKey>> batchedTasks,
-        RWCoProcOutput output) {
-        ICallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result, MutationCallBatcherKey> callTask;
+    protected void handleOutput(Queue<ICallTask<DeleteRequest, DeleteReply, MutationCallBatcherKey>> batchedTasks,
+                                RWCoProcOutput output) {
+        ICallTask<DeleteRequest, DeleteReply, MutationCallBatcherKey> callTask;
         assert batchedTasks.size() == output.getInboxService().getBatchDelete().getResultCount();
 
         int i = 0;
         while ((callTask = batchedTasks.poll()) != null) {
-            callTask.resultPromise().complete(output.getInboxService().getBatchDelete().getResult(i++));
+            BatchDeleteReply.Result result = output.getInboxService().getBatchDelete().getResult(i++);
+            DeleteReply.Builder replyBuilder = DeleteReply.newBuilder().setReqId(callTask.call().getReqId());
+            switch (result.getCode()) {
+                case OK -> callTask.resultPromise().complete(replyBuilder
+                    .setCode(DeleteReply.Code.OK)
+                    .putAllTopicFilters(result.getTopicFiltersMap())
+                    .build());
+                case NO_INBOX -> callTask.resultPromise().complete(replyBuilder
+                    .setCode(DeleteReply.Code.NO_INBOX)
+                    .build());
+                case CONFLICT -> callTask.resultPromise().complete(replyBuilder
+                    .setCode(DeleteReply.Code.CONFLICT)
+                    .build());
+                default -> {
+                    log.error("Unexpected delete result: {}", result.getCode());
+                    callTask.resultPromise().complete(replyBuilder
+                        .setCode(DeleteReply.Code.ERROR)
+                        .build());
+                }
+            }
         }
     }
 
     @Override
-    protected void handleException(
-        ICallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result, MutationCallBatcherKey> callTask,
-        Throwable e) {
+    protected void handleException(ICallTask<DeleteRequest, DeleteReply, MutationCallBatcherKey> callTask,
+                                   Throwable e) {
+        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+            callTask.resultPromise().complete(DeleteReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(DeleteReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+            callTask.resultPromise().complete(DeleteReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(DeleteReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+            callTask.resultPromise().complete(DeleteReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(DeleteReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
         callTask.resultPromise().completeExceptionally(e);
     }
 
-    private static class BatchDeleteCallTask extends
-        MutationCallTaskBatch<BatchDeleteRequest.Params, BatchDeleteReply.Result> {
+    private static class BatchDeleteCallTask extends MutationCallTaskBatch<DeleteRequest, DeleteReply> {
         private final Set<TenantInboxInstance> inboxes = new HashSet<>();
 
         private BatchDeleteCallTask(String storeId, long ver) {
@@ -89,7 +139,7 @@ class BatchDeleteCall extends BatchMutationCall<BatchDeleteRequest.Params, Batch
 
         @Override
         protected void add(
-            ICallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result, MutationCallBatcherKey> callTask) {
+            ICallTask<DeleteRequest, DeleteReply, MutationCallBatcherKey> callTask) {
             super.add(callTask);
             inboxes.add(new TenantInboxInstance(
                 callTask.call().getTenantId(),
@@ -99,7 +149,7 @@ class BatchDeleteCall extends BatchMutationCall<BatchDeleteRequest.Params, Batch
 
         @Override
         protected boolean isBatchable(
-            ICallTask<BatchDeleteRequest.Params, BatchDeleteReply.Result, MutationCallBatcherKey> callTask) {
+            ICallTask<DeleteRequest, DeleteReply, MutationCallBatcherKey> callTask) {
             return !inboxes.contains(new TenantInboxInstance(
                 callTask.call().getTenantId(),
                 new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))

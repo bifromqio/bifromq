@@ -16,7 +16,6 @@ package com.baidu.bifromq.inbox.server.scheduler;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basescheduler.ICallTask;
@@ -26,17 +25,19 @@ import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
+import com.baidu.bifromq.inbox.storage.proto.Replica;
 import com.baidu.bifromq.type.ClientInfo;
 import java.time.Duration;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
 
 class BatchCreateCall extends BatchMutationCall<CreateRequest, CreateReply> {
 
-    protected BatchCreateCall(KVRangeId rangeId, IBaseKVStoreClient distWorkerClient, Duration pipelineExpiryTime) {
-        super(rangeId, distWorkerClient, pipelineExpiryTime);
+    protected BatchCreateCall(IBaseKVStoreClient distWorkerClient,
+                              Duration pipelineExpiryTime,
+                              MutationCallBatcherKey batcherKey) {
+        super(distWorkerClient, pipelineExpiryTime, batcherKey);
     }
 
     @Override
@@ -45,16 +46,21 @@ class BatchCreateCall extends BatchMutationCall<CreateRequest, CreateReply> {
     }
 
     @Override
-    protected RWCoProcInput makeBatch(Iterator<CreateRequest> reqIterator) {
-        BatchCreateRequest.Builder reqBuilder = BatchCreateRequest.newBuilder();
-        reqIterator.forEachRemaining(request -> {
+    protected RWCoProcInput makeBatch(
+        Iterable<ICallTask<CreateRequest, CreateReply, MutationCallBatcherKey>> callTasks) {
+        BatchCreateRequest.Builder reqBuilder = BatchCreateRequest.newBuilder()
+            .setLeader(Replica.newBuilder()
+                .setRangeId(batcherKey.id)
+                .setStoreId(batcherKey.leaderStoreId)
+                .build());
+        callTasks.forEach(call -> {
+            CreateRequest request = call.call();
             ClientInfo client = request.getClient();
             String tenantId = client.getTenantId();
             BatchCreateRequest.Params.Builder paramsBuilder = BatchCreateRequest.Params.newBuilder()
                 .setInboxId(request.getInboxId())
                 .setIncarnation(request.getIncarnation()) // new incarnation
                 .setExpirySeconds(request.getExpirySeconds())
-                .setKeepAliveSeconds(request.getKeepAliveSeconds())
                 .setLimit(request.getLimit())
                 .setDropOldest(request.getDropOldest())
                 .setClient(client)

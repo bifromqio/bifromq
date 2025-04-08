@@ -18,7 +18,6 @@ import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
@@ -29,6 +28,7 @@ import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcInput;
 import com.baidu.bifromq.dist.rpc.proto.MatchRoute;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
+import com.google.common.collect.Iterables;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -40,16 +40,18 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchReply> {
-    BatchUnmatchCall(KVRangeId rangeId,
-                     IBaseKVStoreClient distWorkerClient,
-                     Duration pipelineExpiryTime) {
-        super(rangeId, distWorkerClient, pipelineExpiryTime);
+    BatchUnmatchCall(IBaseKVStoreClient distWorkerClient,
+                     Duration pipelineExpiryTime,
+                     MutationCallBatcherKey batcherKey) {
+        super(distWorkerClient, pipelineExpiryTime, batcherKey);
     }
 
     @Override
-    protected RWCoProcInput makeBatch(Iterator<UnmatchRequest> reqIterator) {
+    protected RWCoProcInput makeBatch(
+        Iterable<ICallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey>> callTasks) {
         BatchUnmatchRequest.Builder reqBuilder = BatchUnmatchRequest.newBuilder();
         Map<String, BatchUnmatchRequest.TenantBatch.Builder> builders = new HashMap<>();
+        Iterator<UnmatchRequest> reqIterator = Iterables.transform(callTasks, ICallTask::call).iterator();
         while (reqIterator.hasNext()) {
             UnmatchRequest unmatchReq = reqIterator.next();
             builders.computeIfAbsent(unmatchReq.getTenantId(), k -> BatchUnmatchRequest.TenantBatch.newBuilder())

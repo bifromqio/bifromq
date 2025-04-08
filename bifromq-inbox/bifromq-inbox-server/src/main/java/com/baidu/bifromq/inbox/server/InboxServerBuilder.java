@@ -17,10 +17,6 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.baidu.bifromq.retain.client.IRetainClient;
-import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.base.Preconditions;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,17 +35,12 @@ import lombok.experimental.Accessors;
 @Setter
 public class InboxServerBuilder {
     RPCServerBuilder rpcServerBuilder;
-    IEventCollector eventCollector;
-    IResourceThrottler resourceThrottler;
-    ISettingProvider settingProvider;
     IInboxClient inboxClient;
     IDistClient distClient;
-    IRetainClient retainClient;
     IBaseKVStoreClient inboxStoreClient;
     Map<String, String> attributes = new HashMap<>();
     Set<String> defaultGroupTags = new HashSet<>();
     int workerThreads;
-    int idleSeconds = 5;
 
     public IInboxServer build() {
         Preconditions.checkNotNull(rpcServerBuilder, "RPC Server Builder is null");

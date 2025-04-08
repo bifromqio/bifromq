@@ -39,7 +39,6 @@ public class LoadExistingTest extends InboxStoreTest {
         requestCreate(BatchCreateRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
-            .setKeepAliveSeconds(5)
             .setExpirySeconds(10)
             .setClient(client)
             .setNow(now)

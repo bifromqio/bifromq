@@ -92,8 +92,8 @@ public class MessageUtil {
     }
 
 
-    public static InboxServiceRWCoProcInput buildTouchRequest(long reqId, BatchTouchRequest request) {
-        return InboxServiceRWCoProcInput.newBuilder()
+    public static InboxServiceROCoProcInput buildTouchRequest(long reqId, BatchTouchRequest request) {
+        return InboxServiceROCoProcInput.newBuilder()
             .setReqId(reqId)
             .setBatchTouch(request)
             .build();

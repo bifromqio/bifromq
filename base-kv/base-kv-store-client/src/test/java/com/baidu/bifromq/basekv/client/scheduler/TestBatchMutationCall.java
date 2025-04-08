@@ -14,10 +14,10 @@
 package com.baidu.bifromq.basekv.client.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basescheduler.ICallTask;
+import com.google.common.collect.Iterables;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.HashSet;
@@ -26,10 +26,10 @@ import java.util.Queue;
 import java.util.Set;
 
 public class TestBatchMutationCall extends BatchMutationCall<ByteString, ByteString> {
-    protected TestBatchMutationCall(KVRangeId rangeId,
-                                    IBaseKVStoreClient storeClient,
-                                    Duration pipelineExpiryTime) {
-        super(rangeId, storeClient, pipelineExpiryTime);
+    protected TestBatchMutationCall(IBaseKVStoreClient storeClient,
+                                    Duration pipelineExpiryTime,
+                                    MutationCallBatcherKey batcherKey) {
+        super(storeClient, pipelineExpiryTime, batcherKey);
     }
 
     @Override
@@ -38,7 +38,9 @@ public class TestBatchMutationCall extends BatchMutationCall<ByteString, ByteStr
     }
 
     @Override
-    protected RWCoProcInput makeBatch(Iterator<ByteString> byteStringIterator) {
+    protected RWCoProcInput makeBatch(
+        Iterable<ICallTask<ByteString, ByteString, MutationCallBatcherKey>> batchedTasks) {
+        Iterator<ByteString> byteStringIterator = Iterables.transform(batchedTasks, ICallTask::call).iterator();
         ByteString finalBS = byteStringIterator.hasNext() ? byteStringIterator.next() : ByteString.empty();
         while (byteStringIterator.hasNext()) {
             finalBS = finalBS.concat(ByteString.copyFromUtf8("_")).concat(byteStringIterator.next());

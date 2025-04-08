@@ -1,0 +1,13 @@
+syntax = "proto3";
+import "basekv/Type.proto";
+
+option java_multiple_files = true;
+option java_package = "com.baidu.bifromq.inbox.storage.proto";
+option java_outer_classname = "RunnerIdProtos";
+
+package inboxservice;
+
+message Replica {
+  basekv.KVRangeId rangeId = 1;
+  string storeId = 2;
+}

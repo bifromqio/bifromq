@@ -35,7 +35,6 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.util.TopicUtil;
 import java.time.Duration;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -56,7 +55,8 @@ public class BatchMatchCallTest {
         rangeId = KVRangeId.newBuilder().setId(1).build();
         storeClient = mock(IBaseKVStoreClient.class);
         settingProvider = mock(ISettingProvider.class);
-        batchMatchCall = new BatchMatchCall(rangeId, storeClient, Duration.ofMinutes(1), settingProvider);
+        batchMatchCall = new BatchMatchCall(storeClient, Duration.ofMinutes(1), settingProvider,
+            new MutationCallBatcherKey(rangeId, "leaderStoreId", 1L));
     }
 
     @Test
@@ -81,13 +81,42 @@ public class BatchMatchCallTest {
             .setIncarnation(1L)
             .build();
 
+        class CallTask implements ICallTask<MatchRequest, MatchReply, MutationCallBatcherKey> {
+            final MatchRequest request;
+
+            CallTask(MatchRequest request) {
+                this.request = request;
+            }
+
+            @Override
+            public MatchRequest call() {
+                return request;
+            }
+
+            @Override
+            public CompletableFuture<MatchReply> resultPromise() {
+                return null;
+            }
+
+            @Override
+            public MutationCallBatcherKey batcherKey() {
+                return null;
+            }
+
+            @Override
+            public long ts() {
+                return 0;
+            }
+        }
+
         // contain duplicate request
-        Iterator<MatchRequest> iterator = List.of(request1, request1, request2).iterator();
+        Iterable<ICallTask<MatchRequest, MatchReply, MutationCallBatcherKey>> callTasks =
+            List.of(new CallTask(request1), new CallTask(request1), new CallTask(request2));
 
         when(settingProvider.provide(Setting.MaxSharedGroupMembers, "tenant1")).thenReturn(100);
         when(settingProvider.provide(Setting.MaxSharedGroupMembers, "tenant2")).thenReturn(200);
 
-        RWCoProcInput input = batchMatchCall.makeBatch(iterator);
+        RWCoProcInput input = batchMatchCall.makeBatch(callTasks);
 
         BatchMatchRequest batchRequest = input.getDistService().getBatchMatch();
         assertEquals(batchRequest.getRequestsCount(), 2);

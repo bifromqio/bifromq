@@ -37,6 +37,6 @@ class MatchCallBatcher extends MutationCallBatcher<MatchRequest, MatchReply> {
 
     @Override
     protected IBatchCall<MatchRequest, MatchReply, MutationCallBatcherKey> newBatch() {
-        return new BatchMatchCall(batcherKey.id, storeClient, Duration.ofMinutes(5), settingProvider);
+        return new BatchMatchCall(storeClient, Duration.ofMinutes(5), settingProvider, batcherKey);
     }
 }

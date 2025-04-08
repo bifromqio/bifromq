@@ -43,6 +43,10 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-retain-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
             <artifactId>base-kv-meta-service</artifactId>
         </dependency>
         <dependency>
@@ -79,10 +83,6 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-inbox-gc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-sysprops</artifactId>
         </dependency>
         <dependency>
@@ -92,6 +92,10 @@
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-plugin-event-collector-helper</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-plugin-resource-throttler</artifactId>
         </dependency>
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>

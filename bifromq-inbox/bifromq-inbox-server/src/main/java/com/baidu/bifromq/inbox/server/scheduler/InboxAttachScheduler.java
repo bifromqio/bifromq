@@ -63,7 +63,7 @@ public class InboxAttachScheduler extends MutationCallScheduler<AttachRequest, A
 
         @Override
         protected IBatchCall<AttachRequest, AttachReply, MutationCallBatcherKey> newBatch() {
-            return new BatchAttachCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
+            return new BatchAttachCall(storeClient, Duration.ofMinutes(5), batcherKey);
         }
     }
 }

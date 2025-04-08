@@ -18,7 +18,6 @@ import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
@@ -30,19 +29,19 @@ import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
+import com.baidu.bifromq.inbox.storage.proto.Replica;
 import java.time.Duration;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class BatchUnsubCall extends BatchMutationCall<UnsubRequest, UnsubReply> {
-    protected BatchUnsubCall(KVRangeId rangeId,
-                             IBaseKVStoreClient distWorkerClient,
-                             Duration pipelineExpiryTime) {
-        super(rangeId, distWorkerClient, pipelineExpiryTime);
+    protected BatchUnsubCall(IBaseKVStoreClient distWorkerClient,
+                             Duration pipelineExpiryTime,
+                             MutationCallBatcherKey batcherKey) {
+        super(distWorkerClient, pipelineExpiryTime, batcherKey);
     }
 
     @Override
@@ -51,16 +50,23 @@ class BatchUnsubCall extends BatchMutationCall<UnsubRequest, UnsubReply> {
     }
 
     @Override
-    protected RWCoProcInput makeBatch(Iterator<UnsubRequest> unsubRequestIterator) {
-        BatchUnsubRequest.Builder reqBuilder = BatchUnsubRequest.newBuilder();
-        unsubRequestIterator.forEachRemaining(request -> reqBuilder.addParams(BatchUnsubRequest.Params.newBuilder()
-            .setTenantId(request.getTenantId())
-            .setInboxId(request.getInboxId())
-            .setIncarnation(request.getIncarnation())
-            .setVersion(request.getVersion())
-            .setTopicFilter(request.getTopicFilter())
-            .setNow(request.getNow())
-            .build()));
+    protected RWCoProcInput makeBatch(Iterable<ICallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey>> callTasks) {
+        BatchUnsubRequest.Builder reqBuilder = BatchUnsubRequest.newBuilder()
+            .setLeader(Replica.newBuilder()
+                .setRangeId(batcherKey.id)
+                .setStoreId(batcherKey.leaderStoreId)
+                .build());
+        callTasks.forEach(call -> {
+            UnsubRequest request = call.call();
+            reqBuilder.addParams(BatchUnsubRequest.Params.newBuilder()
+                .setTenantId(request.getTenantId())
+                .setInboxId(request.getInboxId())
+                .setIncarnation(request.getIncarnation())
+                .setVersion(request.getVersion())
+                .setTopicFilter(request.getTopicFilter())
+                .setNow(request.getNow())
+                .build());
+        });
         long reqId = System.nanoTime();
         return RWCoProcInput.newBuilder()
             .setInboxService(InboxServiceRWCoProcInput.newBuilder()

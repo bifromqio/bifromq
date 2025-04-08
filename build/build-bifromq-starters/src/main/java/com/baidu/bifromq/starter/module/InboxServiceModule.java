@@ -72,16 +72,11 @@ public class InboxServiceModule extends AbstractModule {
             }
             return Optional.of(IInboxServer.builder()
                 .rpcServerBuilder(injector.getInstance(RPCServerBuilder.class))
-                .eventCollector(injector.getInstance(EventCollectorManager.class))
-                .resourceThrottler(injector.getInstance(ResourceThrottlerManager.class))
-                .settingProvider(injector.getInstance(SettingProviderManager.class))
                 .inboxClient(injector.getInstance(IInboxClient.class))
                 .distClient(injector.getInstance(IDistClient.class))
-                .retainClient(injector.getInstance(IRetainClient.class))
                 .inboxStoreClient(
                     injector.getInstance(Key.get(IBaseKVStoreClient.class, Names.named("inboxStoreClient"))))
                 .workerThreads(serverConfig.getWorkerThreads())
-                .idleSeconds(serverConfig.getIdleSeconds())
                 .attributes(serverConfig.getAttributes())
                 .defaultGroupTags(serverConfig.getDefaultGroups())
                 .build());
@@ -108,16 +103,20 @@ public class InboxServiceModule extends AbstractModule {
                 .rpcServerBuilder(injector.getInstance(RPCServerBuilder.class))
                 .agentHost(injector.getInstance(IAgentHost.class))
                 .metaService(injector.getInstance(IBaseKVMetaService.class))
+                .distClient(injector.getInstance(IDistClient.class))
                 .inboxClient(injector.getInstance(IInboxClient.class))
+                .retainClient(injector.getInstance(IRetainClient.class))
                 .inboxStoreClient(
                     injector.getInstance(Key.get(IBaseKVStoreClient.class, Names.named("inboxStoreClient"))))
                 .settingProvider(injector.getInstance(SettingProviderManager.class))
                 .eventCollector(injector.getInstance(EventCollectorManager.class))
+                .resourceThrottler(injector.getInstance(ResourceThrottlerManager.class))
                 .tickerThreads(storeConfig.getTickerThreads())
                 .workerThreads(storeConfig.getWorkerThreads())
                 .bgTaskExecutor(
                     injector.getInstance(Key.get(ScheduledExecutorService.class, Names.named("bgTaskScheduler"))))
                 .loadEstimateWindow(Duration.ofSeconds(InboxStoreLoadEstimationWindowSeconds.INSTANCE.get()))
+                .expireRateLimit(storeConfig.getExpireRateLimit())
                 .gcInterval(
                     Duration.ofSeconds(storeConfig.getGcIntervalSeconds()))
                 .balancerRetryDelay(Duration.ofMillis(

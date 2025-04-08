@@ -22,7 +22,7 @@ import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basescheduler.exception.BatcherUnavailableException;
-import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
+import com.baidu.bifromq.inbox.rpc.proto.DeleteReply;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireRequest;
 import com.baidu.bifromq.inbox.rpc.proto.GetReply;
@@ -57,7 +57,7 @@ public class MockedInboxExpireTest extends MockedInboxService {
             .setIncarnation(123)
             .setVersion(1)
             .setClient(ClientInfo.newBuilder()
-                .setTenantId("tenantId")
+                .setTenantId(tenantId)
                 .build())
             .build();
         when(getScheduler.schedule(any()))
@@ -66,7 +66,7 @@ public class MockedInboxExpireTest extends MockedInboxService {
                 .setCode(GetReply.Code.EXIST)
                 .addInbox(inboxVersion)
                 .build()));
-        when(detachScheduler.schedule(any()))
+        when(deleteScheduler.schedule(any()))
             .thenReturn(CompletableFuture.failedFuture(new BatcherUnavailableException("Mocked")));
 
         StreamObserver<ExpireReply> streamObserver = mock(StreamObserver.class);
@@ -81,14 +81,11 @@ public class MockedInboxExpireTest extends MockedInboxService {
             reply.getReqId() == reqId && reply.getCode() == ExpireReply.Code.TRY_LATER));
         verify(streamObserver).onCompleted();
 
-        verify(detachScheduler).schedule(argThat(req ->
-            req.getClient().equals(inboxVersion.getClient()) &&
-                req.getInboxId().equals(inboxId) &&
-                req.getIncarnation() == inboxVersion.getIncarnation() &&
-                req.getVersion() == inboxVersion.getVersion() &&
-                req.getExpirySeconds() == 0 &&
-                !req.getDiscardLWT() &&
-                req.getNow() == now
+        verify(deleteScheduler).schedule(argThat(req ->
+            req.getTenantId().equals(inboxVersion.getClient().getTenantId())
+                && req.getInboxId().equals(inboxId)
+                && req.getIncarnation() == inboxVersion.getIncarnation()
+                && req.getVersion() == inboxVersion.getVersion()
         ));
     }
 
@@ -116,20 +113,20 @@ public class MockedInboxExpireTest extends MockedInboxService {
                 .addInbox(inboxVersion)
                 .addInbox(inboxVersion1)
                 .build()));
-        when(detachScheduler.schedule(any()))
+        when(deleteScheduler.schedule(any()))
             .thenReturn(
-                CompletableFuture.completedFuture(DetachReply.newBuilder()
+                CompletableFuture.completedFuture(DeleteReply.newBuilder()
                     .setReqId(reqId)
-                    .setCode(DetachReply.Code.OK)
+                    .setCode(DeleteReply.Code.OK)
                     .build()),
-                CompletableFuture.completedFuture(DetachReply.newBuilder()
+                CompletableFuture.completedFuture(DeleteReply.newBuilder()
                     .setReqId(reqId)
-                    .setCode(DetachReply.Code.ERROR)
+                    .setCode(DeleteReply.Code.ERROR)
                     .build()));
         StreamObserver<ExpireReply> streamObserver = mock(StreamObserver.class);
         inboxService.expire(ExpireRequest.newBuilder().setReqId(reqId).build(), streamObserver);
 
-        verify(detachScheduler, times(2)).schedule(any());
+        verify(deleteScheduler, times(2)).schedule(any());
         verify(streamObserver).onNext(argThat(reply ->
             reply.getReqId() == reqId && reply.getCode() == ExpireReply.Code.ERROR));
         verify(streamObserver).onCompleted();
@@ -159,10 +156,10 @@ public class MockedInboxExpireTest extends MockedInboxService {
                 .addInbox(inboxVersion)
                 .addInbox(inboxVersion1)
                 .build()));
-        when(detachScheduler.schedule(any()))
-            .thenReturn(CompletableFuture.completedFuture(DetachReply.newBuilder()
+        when(deleteScheduler.schedule(any()))
+            .thenReturn(CompletableFuture.completedFuture(DeleteReply.newBuilder()
                 .setReqId(reqId)
-                .setCode(DetachReply.Code.OK)
+                .setCode(DeleteReply.Code.OK)
                 .build()));
         StreamObserver<ExpireReply> streamObserver = mock(StreamObserver.class);
         inboxService.expire(ExpireRequest.newBuilder().setReqId(reqId).build(), streamObserver);

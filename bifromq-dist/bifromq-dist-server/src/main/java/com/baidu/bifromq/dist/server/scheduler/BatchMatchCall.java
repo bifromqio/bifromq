@@ -18,7 +18,6 @@ import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
@@ -32,6 +31,7 @@ import com.baidu.bifromq.dist.rpc.proto.MatchRoute;
 import com.baidu.bifromq.dist.rpc.proto.TenantOption;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.google.common.collect.Iterables;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -45,18 +45,19 @@ import lombok.extern.slf4j.Slf4j;
 class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> {
     private final ISettingProvider settingProvider;
 
-    BatchMatchCall(KVRangeId rangeId,
-                   IBaseKVStoreClient distWorkerClient,
+    BatchMatchCall(IBaseKVStoreClient distWorkerClient,
                    Duration pipelineExpiryTime,
-                   ISettingProvider settingProvider) {
-        super(rangeId, distWorkerClient, pipelineExpiryTime);
+                   ISettingProvider settingProvider,
+                   MutationCallBatcherKey batcherKey) {
+        super(distWorkerClient, pipelineExpiryTime, batcherKey);
         this.settingProvider = settingProvider;
     }
 
     @Override
-    protected RWCoProcInput makeBatch(Iterator<MatchRequest> reqIterator) {
+    protected RWCoProcInput makeBatch(Iterable<ICallTask<MatchRequest, MatchReply, MutationCallBatcherKey>> callTasks) {
         BatchMatchRequest.Builder reqBuilder = BatchMatchRequest.newBuilder();
         Map<String, BatchMatchRequest.TenantBatch.Builder> builders = new HashMap<>();
+        Iterator<MatchRequest> reqIterator = Iterables.transform(callTasks, ICallTask::call).iterator();
         while (reqIterator.hasNext()) {
             MatchRequest matchReq = reqIterator.next();
             builders.computeIfAbsent(matchReq.getTenantId(), k -> BatchMatchRequest.TenantBatch.newBuilder()

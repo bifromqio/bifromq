@@ -18,7 +18,6 @@ import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
@@ -29,17 +28,17 @@ import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
+import com.baidu.bifromq.inbox.storage.proto.Replica;
 import java.time.Duration;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
 
 class BatchCommitCall extends BatchMutationCall<CommitRequest, CommitReply> {
-    protected BatchCommitCall(KVRangeId rangeId,
-                              IBaseKVStoreClient storeClient,
-                              Duration pipelineExpiryTime) {
-        super(rangeId, storeClient, pipelineExpiryTime);
+    protected BatchCommitCall(IBaseKVStoreClient storeClient,
+                              Duration pipelineExpiryTime,
+                              MutationCallBatcherKey batcherKey) {
+        super(storeClient, pipelineExpiryTime, batcherKey);
     }
 
     @Override
@@ -48,9 +47,15 @@ class BatchCommitCall extends BatchMutationCall<CommitRequest, CommitReply> {
     }
 
     @Override
-    protected RWCoProcInput makeBatch(Iterator<CommitRequest> reqIterator) {
-        BatchCommitRequest.Builder reqBuilder = BatchCommitRequest.newBuilder();
-        reqIterator.forEachRemaining(req -> {
+    protected RWCoProcInput makeBatch(
+        Iterable<ICallTask<CommitRequest, CommitReply, MutationCallBatcherKey>> callTasks) {
+        BatchCommitRequest.Builder reqBuilder = BatchCommitRequest.newBuilder()
+            .setLeader(Replica.newBuilder()
+                .setRangeId(batcherKey.id)
+                .setStoreId(batcherKey.leaderStoreId)
+                .build());
+        callTasks.forEach(call -> {
+            CommitRequest req = call.call();
             BatchCommitRequest.Params.Builder paramsBuilder = BatchCommitRequest.Params.newBuilder()
                 .setTenantId(req.getTenantId())
                 .setInboxId(req.getInboxId())

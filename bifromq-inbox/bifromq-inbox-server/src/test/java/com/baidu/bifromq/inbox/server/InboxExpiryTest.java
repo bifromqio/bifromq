@@ -52,7 +52,8 @@ import org.testng.annotations.Test;
 
 public class InboxExpiryTest extends InboxServiceTest {
     @Test(groups = "integration")
-    public void lwtPub() {
+    public void lwtPubAfterDetachTimeout() {
+        // detach timeout is 2s
         clearInvocations(distClient, eventCollector);
         long now = System.nanoTime();
         long reqId = System.nanoTime();
@@ -74,7 +75,6 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setReqId(reqId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
-            .setKeepAliveSeconds(1)
             .setExpirySeconds(2)
             .setLimit(10)
             .setDropOldest(true)
@@ -125,7 +125,6 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setReqId(reqId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
-            .setKeepAliveSeconds(1)
             .setExpirySeconds(2)
             .setLimit(10)
             .setDropOldest(true)
@@ -177,7 +176,6 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setReqId(reqId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
-            .setKeepAliveSeconds(1)
             .setExpirySeconds(2)
             .setLimit(10)
             .setDropOldest(true)
@@ -220,7 +218,6 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setReqId(reqId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
-            .setKeepAliveSeconds(10)
             .setExpirySeconds(10)
             .setLimit(10)
             .setDropOldest(true)
@@ -258,7 +255,6 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setReqId(reqId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
-            .setKeepAliveSeconds(1)
             .setExpirySeconds(2)
             .setLimit(10)
             .setDropOldest(true)

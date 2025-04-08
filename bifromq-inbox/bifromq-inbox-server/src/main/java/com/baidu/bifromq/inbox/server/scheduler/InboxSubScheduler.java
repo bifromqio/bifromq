@@ -61,7 +61,7 @@ public class InboxSubScheduler extends MutationCallScheduler<SubRequest, SubRepl
 
         @Override
         protected IBatchCall<SubRequest, SubReply, MutationCallBatcherKey> newBatch() {
-            return new BatchSubCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
+            return new BatchSubCall(storeClient, Duration.ofMinutes(5), batcherKey);
         }
     }
 }

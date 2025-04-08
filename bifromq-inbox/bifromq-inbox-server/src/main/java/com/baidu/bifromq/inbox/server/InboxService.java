@@ -16,30 +16,20 @@ package com.baidu.bifromq.inbox.server;
 import static com.baidu.bifromq.baserpc.server.UnaryResponse.response;
 import static com.baidu.bifromq.inbox.util.InboxServiceUtil.getDelivererKey;
 import static com.baidu.bifromq.inbox.util.InboxServiceUtil.receiverId;
-import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
-import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainEnabled;
-import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetainMessageSpaceBytes;
-import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetainTopics;
 
-import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.client.exception.BadVersionException;
-import com.baidu.bifromq.basekv.client.exception.TryLaterException;
-import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.basescheduler.exception.BatcherUnavailableException;
 import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.record.InboxInstance;
-import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
+import com.baidu.bifromq.inbox.rpc.proto.DeleteReply;
+import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireAllReply;
@@ -51,6 +41,8 @@ import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetchHint;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetched;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
+import com.baidu.bifromq.inbox.rpc.proto.SendLWTReply;
+import com.baidu.bifromq.inbox.rpc.proto.SendLWTRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
@@ -68,51 +60,30 @@ import com.baidu.bifromq.inbox.server.scheduler.IInboxDetachScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxFetchScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxGetScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxInsertScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.IInboxSendLWTScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxSubScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxTouchScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxUnsubScheduler;
-import com.baidu.bifromq.inbox.storage.proto.BatchDeleteReply;
-import com.baidu.bifromq.inbox.storage.proto.BatchDeleteRequest;
-import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
-import com.baidu.bifromq.inbox.store.gc.IInboxStoreGCProcessor;
-import com.baidu.bifromq.inbox.store.gc.InboxStoreGCProcessor;
-import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
-import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.WillDistError;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.disthandling.WillDisted;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.MsgRetained;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.MsgRetainedError;
-import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.RetainMsgCleared;
-import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.subbroker.CheckReply;
 import com.baidu.bifromq.plugin.subbroker.CheckRequest;
-import com.baidu.bifromq.retain.client.IRetainClient;
-import com.baidu.bifromq.retain.rpc.proto.RetainReply;
-import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.util.TopicUtil;
-import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import io.grpc.stub.StreamObserver;
-import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.annotation.Nullable;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
-    private final ISettingProvider settingProvider;
-    private final IEventCollector eventCollector;
-    private final IResourceThrottler resourceThrottler;
     private final IInboxClient inboxClient;
     private final IDistClient distClient;
-    private final IRetainClient retainClient;
     private final InboxFetcherRegistry registry = new InboxFetcherRegistry();
     private final IInboxFetchScheduler fetchScheduler;
     private final IInboxGetScheduler getScheduler;
+    private final IInboxSendLWTScheduler sendLWTScheduler;
     private final IInboxCheckSubScheduler checkSubScheduler;
     private final IInboxInsertScheduler insertScheduler;
     private final IInboxCommitScheduler commitScheduler;
@@ -123,19 +94,13 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final IInboxDeleteScheduler deleteScheduler;
     private final IInboxSubScheduler subScheduler;
     private final IInboxUnsubScheduler unsubScheduler;
-    private final IInboxStoreGCProcessor inboxGCProc;
-    private final DelayTaskRunner<TenantInboxInstance, ExpireSessionTask> delayTaskRunner;
-    private final int idleSeconds;
+    private final ITenantGCRunner tenantGCRunner;
 
     @Builder
-    InboxService(IEventCollector eventCollector,
-                 IResourceThrottler resourceThrottler,
-                 ISettingProvider settingProvider,
-                 IInboxClient inboxClient,
+    InboxService(IInboxClient inboxClient,
                  IDistClient distClient,
-                 IRetainClient retainClient,
-                 IBaseKVStoreClient inboxStoreClient,
                  IInboxGetScheduler getScheduler,
+                 IInboxSendLWTScheduler sendLWTScheduler,
                  IInboxCheckSubScheduler checkSubScheduler,
                  IInboxFetchScheduler fetchScheduler,
                  IInboxInsertScheduler insertScheduler,
@@ -147,14 +112,11 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                  IInboxSubScheduler subScheduler,
                  IInboxUnsubScheduler unsubScheduler,
                  IInboxTouchScheduler touchScheduler,
-                 int idleSeconds) {
-        this.eventCollector = eventCollector;
-        this.resourceThrottler = resourceThrottler;
-        this.settingProvider = settingProvider;
+                 ITenantGCRunner tenantGCRunner) {
         this.inboxClient = inboxClient;
         this.distClient = distClient;
-        this.retainClient = retainClient;
         this.getScheduler = getScheduler;
+        this.sendLWTScheduler = sendLWTScheduler;
         this.checkSubScheduler = checkSubScheduler;
         this.fetchScheduler = fetchScheduler;
         this.insertScheduler = insertScheduler;
@@ -166,9 +128,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         this.subScheduler = subScheduler;
         this.unsubScheduler = unsubScheduler;
         this.touchScheduler = touchScheduler;
-        this.inboxGCProc = new InboxStoreGCProcessor(inboxClient, inboxStoreClient);
-        this.delayTaskRunner = new DelayTaskRunner<>(TenantInboxInstance::compareTo, HLC.INST::getPhysical);
-        this.idleSeconds = idleSeconds;
+        this.tenantGCRunner = tenantGCRunner;
     }
 
     @Override
@@ -202,29 +162,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         .setCode(CreateReply.Code.ERROR)
                         .build();
                 }
-            })
-            .whenComplete((v, e) -> {
-                //reg a deadline for this inbox
-                if (v != null && v.getCode() == CreateReply.Code.OK) {
-                    TenantInboxInstance tenantInboxInstance = new TenantInboxInstance(request.getClient().getTenantId(),
-                        new InboxInstance(request.getInboxId(), request.getIncarnation()));
-                    LWT lwt = request.hasLwt() ? request.getLwt() : null;
-                    if (lwt != null) {
-                        delayTaskRunner.reg(tenantInboxInstance,
-                            idleTimeout(request.getKeepAliveSeconds()).plusSeconds(lwt.getDelaySeconds()),
-                            new ExpireSessionTask(tenantInboxInstance, 0,
-                                request.getExpirySeconds(),
-                                request.getClient(),
-                                lwt));
-                    } else {
-                        delayTaskRunner.reg(tenantInboxInstance,
-                            idleTimeout(request.getKeepAliveSeconds()).plusSeconds(request.getExpirySeconds()),
-                            new ExpireSessionTask(tenantInboxInstance, 0,
-                                request.getExpirySeconds(),
-                                request.getClient(),
-                                null));
-                    }
-                }
             }), responseObserver);
     }
 
@@ -246,79 +183,32 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         .setCode(AttachReply.Code.ERROR)
                         .build();
                 }
-            })
-            .whenComplete((v, e) -> {
-                //reg a deadline for this inbox
-                if (v != null && v.getCode() == AttachReply.Code.OK) {
-                    TenantInboxInstance tenantInboxInstance = new TenantInboxInstance(request.getClient().getTenantId(),
-                        new InboxInstance(request.getInboxId(), request.getIncarnation()));
-                    LWT lwt = request.hasLwt() ? request.getLwt() : null;
-                    if (lwt != null) {
-                        delayTaskRunner.reg(tenantInboxInstance,
-                            idleTimeout(request.getKeepAliveSeconds()).plusSeconds(lwt.getDelaySeconds()),
-                            new ExpireSessionTask(tenantInboxInstance,
-                                request.getVersion() + 1,
-                                request.getExpirySeconds(), request.getClient(),
-                                lwt));
-                    } else {
-                        delayTaskRunner.reg(tenantInboxInstance,
-                            idleTimeout(request.getKeepAliveSeconds()).plusSeconds(request.getExpirySeconds()),
-                            new ExpireSessionTask(tenantInboxInstance,
-                                request.getVersion() + 1,
-                                request.getExpirySeconds(),
-                                request.getClient(),
-                                null));
-                    }
-                }
             }), responseObserver);
-    }
-
-    private Duration idleTimeout(int keepAliveSeconds) {
-        return Duration.ofSeconds(keepAliveSeconds + idleSeconds);
     }
 
     @Override
     public void detach(DetachRequest request, StreamObserver<DetachReply> responseObserver) {
-        response(tenantId -> detach(request), responseObserver);
-    }
-
-    private CompletableFuture<DetachReply> detach(DetachRequest request) {
         log.trace("Handling detach {}", request);
-        return detachScheduler.schedule(request)
+        response(tenantId -> detachScheduler.schedule(request)
             .exceptionally(e -> {
                 if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
                     return DetachReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(DetachReply.Code.TRY_LATER)
                         .build();
-                } else {
-                    log.debug("Failed to detach inbox", e);
+                }
+                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
                     return DetachReply.newBuilder()
                         .setReqId(request.getReqId())
-                        .setCode(DetachReply.Code.ERROR)
+                        .setCode(DetachReply.Code.BACK_PRESSURE_REJECTED)
                         .build();
                 }
-            })
-            .whenComplete((reply, e) -> {
-                if (reply == null || reply.getCode() != DetachReply.Code.OK) {
-                    return;
-                }
-                TenantInboxInstance tenantInboxInstance = new TenantInboxInstance(request.getClient().getTenantId(),
-                    new InboxInstance(request.getInboxId(), request.getIncarnation()));
-                delayTaskRunner.unreg(tenantInboxInstance);
-                LWT lwt = reply.hasLwt() ? reply.getLwt() : null;
-                if (lwt != null) {
-                    assert lwt.getDelaySeconds() > 0;
-                    delayTaskRunner.reg(tenantInboxInstance,
-                        Duration.ofSeconds(Math.min(lwt.getDelaySeconds(), request.getExpirySeconds())),
-                        new ExpireSessionTask(tenantInboxInstance, request.getVersion() + 1, request.getExpirySeconds(),
-                            request.getClient(), lwt));
-                } else {
-                    delayTaskRunner.reg(tenantInboxInstance, Duration.ofSeconds(request.getExpirySeconds()),
-                        new ExpireSessionTask(tenantInboxInstance, request.getVersion() + 1, request.getExpirySeconds(),
-                            request.getClient(), null));
-                }
-            });
+                log.debug("Failed to detach inbox", e);
+                return DetachReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(DetachReply.Code.ERROR)
+                    .build();
+            }), responseObserver);
     }
 
     @Override
@@ -337,14 +227,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         .setReqId(request.getReqId())
                         .setCode(TouchReply.Code.ERROR)
                         .build();
-                }
-            })
-            .whenComplete((v, e) -> {
-                //update monitored deadline record
-                if (v != null && v.getCode() == TouchReply.Code.OK) {
-                    TenantInboxInstance tenantInboxInstance = new TenantInboxInstance(request.getTenantId(),
-                        new InboxInstance(request.getInboxId(), request.getIncarnation()));
-                    delayTaskRunner.touch(tenantInboxInstance);
                 }
             }), responseObserver);
     }
@@ -410,17 +292,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     .setReqId(request.getReqId())
                     .setCode(SubReply.Code.ERROR)
                     .build();
-            })
-            .whenComplete((v, e) -> {
-                //update monitored deadline record
-                if (v != null
-                    && (v.getCode() == SubReply.Code.OK
-                    || v.getCode() == SubReply.Code.EXISTS
-                    || v.getCode() == SubReply.Code.EXCEED_LIMIT)) {
-                    TenantInboxInstance tenantInboxInstance = new TenantInboxInstance(request.getTenantId(),
-                        new InboxInstance(request.getInboxId(), request.getIncarnation()));
-                    delayTaskRunner.touch(tenantInboxInstance);
-                }
             }), responseObserver);
     }
 
@@ -476,14 +347,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     .setReqId(request.getReqId())
                     .setCode(UnsubReply.Code.ERROR)
                     .build();
-            })
-            .whenComplete((v, e) -> {
-                //update monitored deadline record
-                if (v != null && v.getCode() == UnsubReply.Code.OK) {
-                    TenantInboxInstance tenantInboxInstance = new TenantInboxInstance(request.getTenantId(),
-                        new InboxInstance(request.getInboxId(), request.getIncarnation()));
-                    delayTaskRunner.touch(tenantInboxInstance);
-                }
             }), responseObserver);
     }
 
@@ -518,24 +381,22 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             .thenCompose(reply -> {
                 switch (reply.getCode()) {
                     case EXIST -> {
-                        List<CompletableFuture<DetachReply>> detachTasks =
-                            reply.getInboxList().stream().map(inboxVersion -> detach(DetachRequest.newBuilder()
+                        List<CompletableFuture<DeleteReply>> deleteFutures = reply.getInboxList().stream()
+                            .map(inboxVersion -> delete(DeleteRequest.newBuilder()
                                 .setReqId(request.getReqId())
+                                .setTenantId(request.getTenantId())
                                 .setInboxId(request.getInboxId())
                                 .setIncarnation(inboxVersion.getIncarnation())
                                 .setVersion(inboxVersion.getVersion())
-                                .setExpirySeconds(0) // detach now
-                                .setDiscardLWT(false)
-                                .setClient(inboxVersion.getClient())
-                                .setNow(request.getNow())
-                                .build())).toList();
-                        return CompletableFuture.allOf(detachTasks.toArray(CompletableFuture[]::new))
-                            .thenApply(v -> detachTasks.stream().map(CompletableFuture::join).toList())
-                            .thenApply((detachReplies) -> {
-                                if (detachReplies.stream().anyMatch(r ->
-                                    r.getCode() != DetachReply.Code.OK && r.getCode() != DetachReply.Code.NO_INBOX)) {
-                                    if (detachReplies.stream()
-                                        .anyMatch(r -> r.getCode() == DetachReply.Code.TRY_LATER)) {
+                                .build()))
+                            .toList();
+                        return CompletableFuture.allOf(deleteFutures.toArray(CompletableFuture[]::new))
+                            .thenApply(v -> deleteFutures.stream().map(CompletableFuture::join).toList())
+                            .thenApply((deleteReplies) -> {
+                                if (deleteReplies.stream().anyMatch(r ->
+                                    r.getCode() != DeleteReply.Code.OK && r.getCode() != DeleteReply.Code.NO_INBOX)) {
+                                    if (deleteReplies.stream()
+                                        .anyMatch(r -> r.getCode() == DeleteReply.Code.TRY_LATER)) {
                                         // Any detach reply is TRY_LATER
                                         return ExpireReply.newBuilder()
                                             .setReqId(request.getReqId())
@@ -580,20 +441,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     @Override
     public void expireAll(ExpireAllRequest request, StreamObserver<ExpireAllReply> responseObserver) {
         log.trace("Handling expireAll {}", request);
-        response(tenantId ->
-            inboxGCProc.gc(request.getReqId(), request.getTenantId(), request.getExpirySeconds(), request.getNow())
-                .thenApply(result -> ExpireAllReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(result == IInboxStoreGCProcessor.Result.OK
-                        ? ExpireAllReply.Code.OK : ExpireAllReply.Code.ERROR)
-                    .build())
-                .exceptionally(e -> {
-                    log.debug("Failed to expire all", e);
-                    return ExpireAllReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setCode(ExpireAllReply.Code.ERROR)
-                        .build();
-                }), responseObserver);
+        response(tenantId -> tenantGCRunner.expire(request), responseObserver);
     }
 
     @Override
@@ -647,15 +495,77 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         .setCode(CommitReply.Code.ERROR)
                         .build();
                 }
-            })
-            .whenComplete((v, e) -> {
-                // update monitored deadline record
-                if (v != null && v.getCode() == CommitReply.Code.OK) {
-                    TenantInboxInstance tenantInboxInstance = new TenantInboxInstance(request.getTenantId(),
-                        new InboxInstance(request.getInboxId(), request.getIncarnation()));
-                    delayTaskRunner.touch(tenantInboxInstance);
-                }
             }), responseObserver);
+    }
+
+    @Override
+    public void sendLWT(SendLWTRequest request, StreamObserver<SendLWTReply> responseObserver) {
+        log.trace("Handling send lwt {}", request);
+        response(tenantId -> sendLWTScheduler.schedule(request)
+            .exceptionally(e -> {
+                if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
+                    return SendLWTReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(SendLWTReply.Code.TRY_LATER)
+                        .build();
+                }
+                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                    return SendLWTReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(SendLWTReply.Code.BACK_PRESSURE_REJECTED)
+                        .build();
+                }
+                log.debug("Failed to send LWT", e);
+                return SendLWTReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(SendLWTReply.Code.ERROR)
+                    .build();
+            }), responseObserver);
+    }
+
+    @Override
+    public void delete(DeleteRequest request, StreamObserver<DeleteReply> responseObserver) {
+        log.trace("Handling delete {}", request);
+        response(tenantId -> delete(request), responseObserver);
+    }
+
+    private CompletableFuture<DeleteReply> delete(DeleteRequest request) {
+        return deleteScheduler.schedule(request)
+            .thenCompose(result -> {
+                if (result.getCode() == DeleteReply.Code.OK) {
+                    List<CompletableFuture<UnmatchResult>> unmatchFutures =
+                        result.getTopicFiltersMap().entrySet().stream()
+                            .map(e -> unmatch(System.nanoTime(),
+                                request.getTenantId(),
+                                request.getInboxId(),
+                                request.getIncarnation(),
+                                e.getKey(),
+                                e.getValue()))
+                            .toList();
+                    return CompletableFuture.allOf(unmatchFutures.toArray(CompletableFuture[]::new))
+                        .thenApply(v -> result);
+                }
+                return CompletableFuture.completedFuture(result);
+            })
+            .exceptionally(e -> {
+                if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
+                    return DeleteReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(DeleteReply.Code.TRY_LATER)
+                        .build();
+                }
+                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                    return DeleteReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(DeleteReply.Code.BACK_PRESSURE_REJECTED)
+                        .build();
+                }
+                log.debug("Failed to delete", e);
+                return DeleteReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(DeleteReply.Code.ERROR)
+                    .build();
+            });
     }
 
     public void start() {
@@ -682,7 +592,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             insertScheduler.close();
             commitScheduler.close();
 
-            delayTaskRunner.shutdown();
             state.set(State.STOPPED);
         }
     }
@@ -693,210 +602,5 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         STARTED,
         STOPPING,
         STOPPED
-    }
-
-    private class ExpireSessionTask implements Runnable {
-        private final TenantInboxInstance tenantInboxInstance;
-        private final int expireSeconds;
-        private final LWT lwt;
-        private final ClientInfo client;
-        private final long version;
-
-        ExpireSessionTask(TenantInboxInstance tenantInboxInstance,
-                          long version,
-                          int expireSeconds,
-                          ClientInfo client,
-                          @Nullable LWT lwt) {
-            this.tenantInboxInstance = tenantInboxInstance;
-            this.expireSeconds = expireSeconds;
-            this.client = client;
-            this.lwt = lwt;
-            this.version = version;
-        }
-
-        @Override
-        public void run() {
-            long reqId = HLC.INST.getPhysical();
-            if (lwt != null) {
-                CompletableFuture<PubResult> distLWTFuture = distClient.pub(reqId,
-                    lwt.getTopic(),
-                    lwt.getMessage().toBuilder()
-                        .setTimestamp(HLC.INST.get()) // refresh the timestamp
-                        .build(),
-                    client);
-                CompletableFuture<RetainReply.Result> retainLWTFuture;
-                boolean willRetain = lwt.getMessage().getIsRetain();
-                boolean retainEnabled = settingProvider.provide(RetainEnabled, client.getTenantId());
-                if (willRetain) {
-                    if (!retainEnabled) {
-                        eventCollector.report(getLocal(MsgRetainedError.class)
-                            .reqId(reqId)
-                            .topic(lwt.getTopic())
-                            .qos(lwt.getMessage().getPubQoS())
-                            .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
-                            .size(lwt.getMessage().getPayload().size())
-                            .reason("Retain Disabled")
-                            .clientInfo(client));
-                        retainLWTFuture = CompletableFuture.completedFuture(RetainReply.Result.ERROR);
-                    } else {
-                        retainLWTFuture = retain(reqId, lwt, client)
-                            .thenApply(v -> {
-                                switch (v) {
-                                    case RETAINED -> eventCollector.report(getLocal(MsgRetained.class)
-                                        .topic(lwt.getTopic())
-                                        .qos(lwt.getMessage().getPubQoS())
-                                        .isLastWill(true)
-                                        .size(lwt.getMessage().getPayload().size())
-                                        .clientInfo(client));
-                                    case CLEARED -> eventCollector.report(getLocal(RetainMsgCleared.class)
-                                        .topic(lwt.getTopic())
-                                        .isLastWill(true)
-                                        .clientInfo(client));
-                                    case BACK_PRESSURE_REJECTED ->
-                                        eventCollector.report(getLocal(MsgRetainedError.class)
-                                            .topic(lwt.getTopic())
-                                            .qos(lwt.getMessage().getPubQoS())
-                                            .isLastWill(true)
-                                            .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
-                                            .size(lwt.getMessage().getPayload().size())
-                                            .reason("Server Busy")
-                                            .clientInfo(client));
-                                    case EXCEED_LIMIT -> eventCollector.report(getLocal(MsgRetainedError.class)
-                                        .topic(lwt.getTopic())
-                                        .qos(lwt.getMessage().getPubQoS())
-                                        .isLastWill(true)
-                                        .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
-                                        .size(lwt.getMessage().getPayload().size())
-                                        .reason("Exceed Limit")
-                                        .clientInfo(client));
-                                    case ERROR -> eventCollector.report(getLocal(MsgRetainedError.class)
-                                        .topic(lwt.getTopic())
-                                        .qos(lwt.getMessage().getPubQoS())
-                                        .isLastWill(true)
-                                        .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
-                                        .size(lwt.getMessage().getPayload().size())
-                                        .reason("Internal Error")
-                                        .clientInfo(client));
-                                    default -> {
-                                        // never happen
-                                    }
-                                }
-                                return v;
-                            });
-                    }
-                } else {
-                    retainLWTFuture = CompletableFuture.completedFuture(RetainReply.Result.RETAINED);
-                }
-                CompletableFuture.allOf(distLWTFuture, retainLWTFuture)
-                    .thenAccept(v -> {
-                        PubResult distResult = distLWTFuture.join();
-                        boolean retry = distResult == PubResult.TRY_LATER;
-                        if (!retry) {
-                            if (willRetain && retainEnabled) {
-                                retry = retainLWTFuture.join() == RetainReply.Result.TRY_LATER;
-                            }
-                        }
-                        if (retry) {
-                            // Delay some time and retry
-                            delayTaskRunner.reg(tenantInboxInstance, Duration.ofSeconds(lwt.getDelaySeconds()),
-                                new ExpireSessionTask(tenantInboxInstance, version, expireSeconds, client, lwt));
-                        } else {
-                            switch (distResult) {
-                                case OK, NO_MATCH -> {
-                                    eventCollector.report(getLocal(WillDisted.class)
-                                        .reqId(reqId)
-                                        .topic(lwt.getTopic())
-                                        .qos(lwt.getMessage().getPubQoS())
-                                        .size(lwt.getMessage().getPayload().size())
-                                        .clientInfo(client));
-                                    if (lwt.getDelaySeconds() >= expireSeconds) {
-                                        delayTaskRunner.reg(tenantInboxInstance, Duration.ZERO,
-                                            new ExpireSessionTask(tenantInboxInstance, version, 0, client, null));
-                                    } else {
-                                        delayTaskRunner.reg(tenantInboxInstance,
-                                            Duration.ofSeconds(expireSeconds - lwt.getDelaySeconds()),
-                                            new ExpireSessionTask(tenantInboxInstance, version, 0, client, null));
-                                    }
-                                }
-                                case BACK_PRESSURE_REJECTED -> {
-                                    eventCollector.report(getLocal(WillDistError.class)
-                                        .reqId(reqId)
-                                        .topic(lwt.getTopic())
-                                        .qos(lwt.getMessage().getPubQoS())
-                                        .size(lwt.getMessage().getPayload().size())
-                                        .reason("Server Busy")
-                                        .clientInfo(client));
-                                    if (lwt.getDelaySeconds() >= expireSeconds) {
-                                        delayTaskRunner.reg(tenantInboxInstance, Duration.ZERO,
-                                            new ExpireSessionTask(tenantInboxInstance, version, 0, client, null));
-                                    } else {
-                                        delayTaskRunner.reg(tenantInboxInstance,
-                                            Duration.ofSeconds(expireSeconds - lwt.getDelaySeconds()),
-                                            new ExpireSessionTask(tenantInboxInstance, version, 0, client, null));
-                                    }
-                                }
-                                default -> {
-                                    // do nothing
-                                }
-                            }
-                        }
-                    });
-            } else {
-                deleteScheduler.schedule(BatchDeleteRequest.Params.newBuilder()
-                        .setTenantId(tenantInboxInstance.tenantId())
-                        .setInboxId(tenantInboxInstance.instance().inboxId())
-                        .setIncarnation(tenantInboxInstance.instance().incarnation())
-                        .setVersion(version)
-                        .build())
-                    .thenCompose(result -> {
-                        if (result.getCode() == BatchDeleteReply.Code.OK) {
-                            List<CompletableFuture<UnmatchResult>> unmatchFutures =
-                                result.getTopicFiltersMap().entrySet().stream()
-                                    .map(e -> unmatch(System.nanoTime(),
-                                        tenantInboxInstance.tenantId(),
-                                        tenantInboxInstance.instance().inboxId(),
-                                        tenantInboxInstance.instance().incarnation(),
-                                        e.getKey(),
-                                        e.getValue()))
-                                    .toList();
-                            return CompletableFuture.allOf(unmatchFutures.toArray(CompletableFuture[]::new));
-                        }
-                        return CompletableFuture.completedFuture(null);
-                    })
-                    .exceptionally(e -> {
-                        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException
-                            || e instanceof BadVersionException || e.getCause() instanceof BadVersionException
-                            || e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
-                            // retry delete later
-                            delayTaskRunner.reg(tenantInboxInstance, Duration.ofSeconds(idleSeconds),
-                                new ExpireSessionTask(tenantInboxInstance, version, 0, client, null));
-                            return null;
-                        }
-                        log.debug("Failed to delete inbox", e);
-                        return null;
-                    });
-            }
-        }
-
-        private CompletableFuture<RetainReply.Result> retain(long reqId, LWT lwt, ClientInfo publisher) {
-            if (!resourceThrottler.hasResource(publisher.getTenantId(), TotalRetainTopics)) {
-                eventCollector.report(getLocal(OutOfTenantResource.class)
-                    .reason(TotalRetainTopics.name())
-                    .clientInfo(publisher));
-                return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
-            }
-            if (!resourceThrottler.hasResource(publisher.getTenantId(), TotalRetainMessageSpaceBytes)) {
-                eventCollector.report(getLocal(OutOfTenantResource.class)
-                    .reason(TotalRetainMessageSpaceBytes.name())
-                    .clientInfo(publisher));
-                return CompletableFuture.completedFuture(RetainReply.Result.EXCEED_LIMIT);
-            }
-
-            return retainClient.retain(reqId, lwt.getTopic(),
-                lwt.getMessage().getPubQoS(),
-                lwt.getMessage().getPayload(),
-                lwt.getMessage().getExpiryInterval(),
-                publisher).thenApply(RetainReply::getResult);
-        }
     }
 }

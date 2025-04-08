@@ -18,7 +18,6 @@ import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
@@ -27,6 +26,7 @@ import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainResult;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcInput;
+import com.google.common.collect.Iterables;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.Map;
@@ -36,12 +36,16 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class BatchRetainCall extends BatchMutationCall<RetainRequest, RetainReply> {
 
-    protected BatchRetainCall(KVRangeId rangeId, IBaseKVStoreClient retainStoreClient, Duration pipelineExpiryTime) {
-        super(rangeId, retainStoreClient, pipelineExpiryTime);
+    protected BatchRetainCall(IBaseKVStoreClient retainStoreClient,
+                              Duration pipelineExpiryTime,
+                              MutationCallBatcherKey batcherKey) {
+        super(retainStoreClient, pipelineExpiryTime, batcherKey);
     }
 
     @Override
-    protected RWCoProcInput makeBatch(Iterator<RetainRequest> retainRequestIterator) {
+    protected RWCoProcInput makeBatch(
+        Iterable<ICallTask<RetainRequest, RetainReply, MutationCallBatcherKey>> callTasks) {
+        Iterator<RetainRequest> retainRequestIterator = Iterables.transform(callTasks, ICallTask::call).iterator();
         return RWCoProcInput.newBuilder().setRetainService(RetainServiceRWCoProcInput.newBuilder()
             .setBatchRetain(BatchRetainCallHelper.makeBatch(retainRequestIterator)).build()).build();
     }

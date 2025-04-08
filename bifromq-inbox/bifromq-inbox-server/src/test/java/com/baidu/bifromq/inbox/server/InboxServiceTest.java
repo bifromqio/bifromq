@@ -60,6 +60,7 @@ import org.testng.annotations.BeforeMethod;
 
 @Slf4j
 public abstract class InboxServiceTest {
+    private final int tickerThreads = 2;
     protected IInboxClient inboxClient;
     @Mock
     protected IEventCollector eventCollector;
@@ -79,7 +80,6 @@ public abstract class InboxServiceTest {
     private IInboxStore inboxStore;
     private IInboxServer inboxServer;
     private IRPCServer rpcServer;
-    private final int tickerThreads = 2;
     private ScheduledExecutorService bgTaskExecutor;
     private AutoCloseable closeable;
 
@@ -124,12 +124,17 @@ public abstract class InboxServiceTest {
             .rpcServerBuilder(rpcServerBuilder)
             .agentHost(agentHost)
             .metaService(metaService)
+            .distClient(distClient)
+            .inboxClient(inboxClient)
+            .retainClient(retainClient)
             .inboxStoreClient(inboxStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
+            .resourceThrottler(resourceThrottler)
             .storeOptions(kvRangeStoreOptions)
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
+            .detachTimeout(Duration.ofSeconds(2))
             .balancerFactoryConfig(
                 Map.of(RangeBootstrapBalancerFactory.class.getName(), Struct.getDefaultInstance()))
             .build();
@@ -137,10 +142,6 @@ public abstract class InboxServiceTest {
             .rpcServerBuilder(rpcServerBuilder)
             .inboxClient(inboxClient)
             .distClient(distClient)
-            .retainClient(retainClient)
-            .resourceThrottler(resourceThrottler)
-            .eventCollector(eventCollector)
-            .settingProvider(settingProvider)
             .inboxStoreClient(inboxStoreClient)
             .build();
         rpcServer = rpcServerBuilder.build();

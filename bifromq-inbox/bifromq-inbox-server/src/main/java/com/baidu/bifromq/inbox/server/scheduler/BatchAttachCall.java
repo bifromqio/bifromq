@@ -18,7 +18,6 @@ import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
@@ -30,9 +29,9 @@ import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
+import com.baidu.bifromq.inbox.storage.proto.Replica;
 import java.time.Duration;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -40,10 +39,10 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class BatchAttachCall extends BatchMutationCall<AttachRequest, AttachReply> {
 
-    protected BatchAttachCall(KVRangeId rangeId,
-                              IBaseKVStoreClient distWorkerClient,
-                              Duration pipelineExpiryTime) {
-        super(rangeId, distWorkerClient, pipelineExpiryTime);
+    protected BatchAttachCall(IBaseKVStoreClient distWorkerClient,
+                              Duration pipelineExpiryTime,
+                              MutationCallBatcherKey batcherKey) {
+        super(distWorkerClient, pipelineExpiryTime, batcherKey);
     }
 
     @Override
@@ -53,15 +52,20 @@ class BatchAttachCall extends BatchMutationCall<AttachRequest, AttachReply> {
 
 
     @Override
-    protected RWCoProcInput makeBatch(Iterator<AttachRequest> reqIterator) {
-        BatchAttachRequest.Builder reqBuilder = BatchAttachRequest.newBuilder();
-        reqIterator.forEachRemaining(request -> {
+    protected RWCoProcInput makeBatch(
+        Iterable<ICallTask<AttachRequest, AttachReply, MutationCallBatcherKey>> callTasks) {
+        BatchAttachRequest.Builder reqBuilder = BatchAttachRequest.newBuilder()
+            .setLeader(Replica.newBuilder()
+                .setRangeId(batcherKey.id)
+                .setStoreId(batcherKey.leaderStoreId)
+                .build());
+        callTasks.forEach(call -> {
+            AttachRequest request = call.call();
             BatchAttachRequest.Params.Builder paramsBuilder = BatchAttachRequest.Params.newBuilder()
                 .setInboxId(request.getInboxId())
                 .setIncarnation(request.getIncarnation()) // new incarnation
                 .setVersion(request.getVersion())
                 .setExpirySeconds(request.getExpirySeconds())
-                .setKeepAliveSeconds(request.getKeepAliveSeconds())
                 .setClient(request.getClient())
                 .setNow(request.getNow());
             if (request.hasLwt()) {
@@ -82,16 +86,15 @@ class BatchAttachCall extends BatchMutationCall<AttachRequest, AttachReply> {
     protected void handleOutput(Queue<ICallTask<AttachRequest, AttachReply, MutationCallBatcherKey>> batchedTasks,
                                 RWCoProcOutput output) {
         ICallTask<AttachRequest, AttachReply, MutationCallBatcherKey> callTask;
-        assert batchedTasks.size() == output.getInboxService().getBatchAttach().getResultCount();
+        assert batchedTasks.size() == output.getInboxService().getBatchAttach().getCodeCount();
 
         int i = 0;
         while ((callTask = batchedTasks.poll()) != null) {
-            BatchAttachReply.Result result = output.getInboxService().getBatchAttach().getResult(i++);
+            BatchAttachReply.Code code = output.getInboxService().getBatchAttach().getCode(i++);
             AttachReply.Builder replyBuilder = AttachReply.newBuilder().setReqId(callTask.call().getReqId());
-            switch (result.getCode()) {
+            switch (code) {
                 case OK -> callTask.resultPromise().complete(replyBuilder
                     .setCode(AttachReply.Code.OK)
-                    .addAllTopicFilters(result.getTopicFilterList())
                     .build());
                 case NO_INBOX -> callTask.resultPromise().complete(replyBuilder
                     .setCode(AttachReply.Code.NO_INBOX)
@@ -100,7 +103,7 @@ class BatchAttachCall extends BatchMutationCall<AttachRequest, AttachReply> {
                     .setCode(AttachReply.Code.CONFLICT)
                     .build());
                 default -> {
-                    log.error("Unexpected attach result: {}", result.getCode());
+                    log.error("Unexpected attach result: {}", code);
                     callTask.resultPromise().complete(replyBuilder
                         .setCode(AttachReply.Code.ERROR)
                         .build());

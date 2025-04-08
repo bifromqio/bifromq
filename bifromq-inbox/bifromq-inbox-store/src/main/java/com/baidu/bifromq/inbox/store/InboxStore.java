@@ -21,9 +21,6 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.baserpc.client.IConnectable;
-import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.store.gc.IInboxStoreGCProcessor;
-import com.baidu.bifromq.inbox.store.gc.InboxStoreGCProcessor;
 import com.baidu.bifromq.inbox.store.spi.IInboxStoreBalancerFactory;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
@@ -44,33 +41,36 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class InboxStore implements IInboxStore {
-    private enum Status {
-        INIT, STARTING, STARTED, STOPPING, STOPPED
-    }
-
+    protected final InboxStoreCoProcFactory coProcFactory;
     private final String clusterId;
     private final ExecutorService rpcExecutor;
     private final IBaseKVStoreServer storeServer;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final IBaseKVStoreClient inboxStoreClient;
-    private final IInboxClient inboxClient;
     private final KVStoreBalanceController balanceController;
     private final AsyncRunner jobRunner;
     private final ScheduledExecutorService jobScheduler;
     private final boolean jobExecutorOwner;
     private final Duration gcInterval;
     private final List<IInboxStoreBalancerFactory> effectiveBalancerFactories = new LinkedList<>();
-    protected final InboxStoreCoProcFactory coProcFactory;
     private IInboxStoreGCProcessor inboxStoreGCProc;
     private volatile CompletableFuture<Void> gcJob;
 
     InboxStore(InboxStoreBuilder builder) {
         this.clusterId = builder.clusterId;
         this.inboxStoreClient = builder.inboxStoreClient;
-        this.inboxClient = builder.inboxClient;
         this.gcInterval = builder.gcInterval;
         coProcFactory =
-            new InboxStoreCoProcFactory(builder.settingProvider, builder.eventCollector, builder.loadEstimateWindow);
+            new InboxStoreCoProcFactory(
+                builder.distClient,
+                builder.inboxClient,
+                builder.retainClient,
+                builder.settingProvider,
+                builder.eventCollector,
+                builder.resourceThrottler,
+                builder.detachTimeout,
+                builder.loadEstimateWindow,
+                builder.expireRateLimit);
         Map<String, IInboxStoreBalancerFactory> loadedFactories = BaseHookLoader.load(IInboxStoreBalancerFactory.class);
         for (String factoryName : builder.balancerFactoryConfig.keySet()) {
             if (!loadedFactories.containsKey(factoryName)) {
@@ -127,7 +127,6 @@ class InboxStore implements IInboxStore {
         start();
     }
 
-
     public String id() {
         return storeServer.storeId(clusterId);
     }
@@ -138,7 +137,7 @@ class InboxStore implements IInboxStore {
             storeServer.start();
             balanceController.start(storeServer.storeId(clusterId));
             status.compareAndSet(Status.STARTING, Status.STARTED);
-            this.inboxStoreGCProc = new InboxStoreGCProcessor(inboxClient, inboxStoreClient, id());
+            this.inboxStoreGCProc = new InboxStoreGCProcessor(inboxStoreClient, id());
             inboxStoreClient
                 .connState()
                 // observe the first READY state
@@ -186,11 +185,15 @@ class InboxStore implements IInboxStore {
             }
             long reqId = HLC.INST.getPhysical();
             log.debug("Start GC job, reqId={}", reqId);
-            gcJob = inboxStoreGCProc.gc(reqId, null, null, HLC.INST.getPhysical())
+            gcJob = inboxStoreGCProc.gc(reqId, HLC.INST.getPhysical())
                 .handle((v, e) -> {
                     scheduleGC(gcInterval);
                     return null;
                 });
         });
+    }
+
+    private enum Status {
+        INIT, STARTING, STARTED, STOPPING, STOPPED
     }
 }

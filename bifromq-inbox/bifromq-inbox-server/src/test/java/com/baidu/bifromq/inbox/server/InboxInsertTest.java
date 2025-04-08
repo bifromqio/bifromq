@@ -56,21 +56,18 @@ public class InboxInsertTest extends InboxServiceTest {
         long reqId = System.nanoTime();
         CreateReply createReply = inboxClient.create(
             CreateRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).setIncarnation(incarnation)
-                .setKeepAliveSeconds(5).setExpirySeconds(5).setLimit(10).setDropOldest(true).setClient(clientInfo)
-                .setNow(now).build()).join();
+                .setExpirySeconds(5).setLimit(10).setDropOldest(true).setClient(clientInfo).setNow(now).build()).join();
         assertEquals(createReply.getReqId(), reqId);
         assertEquals(createReply.getCode(), CreateReply.Code.OK);
 
         IDeliverer writer = inboxClient.open(delivererKey);
         DeliveryRequest.Builder reqBuilder = DeliveryRequest.newBuilder();
         Message msg = Message.newBuilder().setPubQoS(QoS.AT_LEAST_ONCE).build();
-        TopicMessagePack.PublisherPack publisherPack =
-            TopicMessagePack.PublisherPack.newBuilder().addMessage(msg).build();
-        TopicMessagePack pack = TopicMessagePack.newBuilder().setTopic("topic").addMessage(publisherPack).build();
-        MatchInfo matchInfo = MatchInfo.newBuilder()
-            .setReceiverId(receiverId(inboxId, incarnation))
-            .setMatcher(TopicUtil.from("topic"))
+        TopicMessagePack.PublisherPack publisherPack = TopicMessagePack.PublisherPack.newBuilder().addMessage(msg)
             .build();
+        TopicMessagePack pack = TopicMessagePack.newBuilder().setTopic("topic").addMessage(publisherPack).build();
+        MatchInfo matchInfo = MatchInfo.newBuilder().setReceiverId(receiverId(inboxId, incarnation))
+            .setMatcher(TopicUtil.from("topic")).build();
         reqBuilder.putPackage(tenantId, DeliveryPackage.newBuilder()
             .addPack(DeliveryPack.newBuilder().setMessagePack(pack).addMatchInfo(matchInfo).build()).build());
 
@@ -117,21 +114,18 @@ public class InboxInsertTest extends InboxServiceTest {
         long reqId = System.nanoTime();
         CreateReply createReply = inboxClient.create(
             CreateRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).setIncarnation(incarnation)
-                .setKeepAliveSeconds(5).setExpirySeconds(5).setLimit(10).setDropOldest(true).setClient(clientInfo)
-                .setNow(now).build()).join();
+                .setExpirySeconds(5).setLimit(10).setDropOldest(true).setClient(clientInfo).setNow(now).build()).join();
         assertEquals(createReply.getReqId(), reqId);
         assertEquals(createReply.getCode(), CreateReply.Code.OK);
 
         IDeliverer writer = inboxClient.open(delivererKey);
         Message msg = Message.newBuilder().setPubQoS(QoS.AT_LEAST_ONCE).build();
-        TopicMessagePack.PublisherPack publisherPack =
-            TopicMessagePack.PublisherPack.newBuilder().addMessage(msg).build();
+        TopicMessagePack.PublisherPack publisherPack = TopicMessagePack.PublisherPack.newBuilder().addMessage(msg)
+            .build();
         TopicMessagePack pack1 = TopicMessagePack.newBuilder().setTopic("topic").addMessage(publisherPack).build();
         TopicMessagePack pack2 = TopicMessagePack.newBuilder().setTopic("topic").addMessage(publisherPack).build();
-        MatchInfo matchInfo = MatchInfo.newBuilder()
-            .setReceiverId(receiverId(inboxId, incarnation))
-            .setMatcher(TopicUtil.from("topic"))
-            .build();
+        MatchInfo matchInfo = MatchInfo.newBuilder().setReceiverId(receiverId(inboxId, incarnation))
+            .setMatcher(TopicUtil.from("topic")).build();
         DeliveryRequest req1 = DeliveryRequest.newBuilder().putPackage(tenantId, DeliveryPackage.newBuilder()
             .addPack(DeliveryPack.newBuilder().setMessagePack(pack1).addMatchInfo(matchInfo).build()).build()).build();
         DeliveryRequest req2 = DeliveryRequest.newBuilder().putPackage(tenantId, DeliveryPackage.newBuilder()

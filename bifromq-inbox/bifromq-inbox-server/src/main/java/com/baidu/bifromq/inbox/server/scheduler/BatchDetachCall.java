@@ -18,7 +18,6 @@ import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
@@ -30,9 +29,9 @@ import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchDetachReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchDetachRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
+import com.baidu.bifromq.inbox.storage.proto.Replica;
 import java.time.Duration;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -40,10 +39,10 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
 
-    protected BatchDetachCall(KVRangeId rangeId,
-                              IBaseKVStoreClient distWorkerClient,
-                              Duration pipelineExpiryTime) {
-        super(rangeId, distWorkerClient, pipelineExpiryTime);
+    protected BatchDetachCall(IBaseKVStoreClient distWorkerClient,
+                              Duration pipelineExpiryTime,
+                              MutationCallBatcherKey batcherKey) {
+        super(distWorkerClient, pipelineExpiryTime, batcherKey);
     }
 
     @Override
@@ -52,9 +51,15 @@ class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
     }
 
     @Override
-    protected RWCoProcInput makeBatch(Iterator<DetachRequest> reqIterator) {
-        BatchDetachRequest.Builder reqBuilder = BatchDetachRequest.newBuilder();
-        reqIterator.forEachRemaining(request -> {
+    protected RWCoProcInput makeBatch(
+        Iterable<ICallTask<DetachRequest, DetachReply, MutationCallBatcherKey>> callTasks) {
+        BatchDetachRequest.Builder reqBuilder = BatchDetachRequest.newBuilder()
+            .setLeader(Replica.newBuilder()
+                .setRangeId(batcherKey.id)
+                .setStoreId(batcherKey.leaderStoreId)
+                .build());
+        for (ICallTask<DetachRequest, DetachReply, MutationCallBatcherKey> callTask : callTasks) {
+            DetachRequest request = callTask.call();
             BatchDetachRequest.Params.Builder paramsBuilder = BatchDetachRequest.Params.newBuilder()
                 .setTenantId(request.getClient().getTenantId())
                 .setInboxId(request.getInboxId())
@@ -63,8 +68,11 @@ class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
                 .setExpirySeconds(request.getExpirySeconds())
                 .setDiscardLWT(request.getDiscardLWT())
                 .setNow(request.getNow());
+            if (request.hasSender()) {
+                paramsBuilder.setSender(request.getSender());
+            }
             reqBuilder.addParams(paramsBuilder.build());
-        });
+        }
 
         long reqId = System.nanoTime();
         return RWCoProcInput.newBuilder()
@@ -79,25 +87,18 @@ class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
     protected void handleOutput(Queue<ICallTask<DetachRequest, DetachReply, MutationCallBatcherKey>> batchedTasks,
                                 RWCoProcOutput output) {
         ICallTask<DetachRequest, DetachReply, MutationCallBatcherKey> callTask;
-        assert batchedTasks.size() == output.getInboxService().getBatchDetach().getResultCount();
+        assert batchedTasks.size() == output.getInboxService().getBatchDetach().getCodeCount();
 
         int i = 0;
         while ((callTask = batchedTasks.poll()) != null) {
-            BatchDetachReply.Result result = output.getInboxService().getBatchDetach().getResult(i++);
+            BatchDetachReply.Code code = output.getInboxService().getBatchDetach().getCode(i++);
             DetachReply.Builder replyBuilder = DetachReply.newBuilder().setReqId(callTask.call().getReqId());
-            switch (result.getCode()) {
-                case OK -> {
-                    replyBuilder
-                        .setCode(DetachReply.Code.OK)
-                        .addAllTopicFilters(result.getTopicFilterList());
-                    if (result.hasLwt()) {
-                        replyBuilder.setLwt(result.getLwt());
-                    }
-                }
+            switch (code) {
+                case OK -> replyBuilder.setCode(DetachReply.Code.OK);
                 case NO_INBOX -> replyBuilder.setCode(DetachReply.Code.NO_INBOX);
                 case CONFLICT -> replyBuilder.setCode(DetachReply.Code.CONFLICT);
                 default -> {
-                    log.error("Unexpected detach result: {}", result.getCode());
+                    log.error("Unexpected detach result: {}", code);
                     replyBuilder.setCode(DetachReply.Code.ERROR);
                 }
             }
@@ -142,16 +143,14 @@ class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
         @Override
         protected void add(ICallTask<DetachRequest, DetachReply, MutationCallBatcherKey> callTask) {
             super.add(callTask);
-            inboxes.add(new TenantInboxInstance(
-                callTask.call().getClient().getTenantId(),
+            inboxes.add(new TenantInboxInstance(callTask.call().getClient().getTenantId(),
                 new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))
             );
         }
 
         @Override
         protected boolean isBatchable(ICallTask<DetachRequest, DetachReply, MutationCallBatcherKey> callTask) {
-            return !inboxes.contains(new TenantInboxInstance(
-                callTask.call().getClient().getTenantId(),
+            return !inboxes.contains(new TenantInboxInstance(callTask.call().getClient().getTenantId(),
                 new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))
             );
         }

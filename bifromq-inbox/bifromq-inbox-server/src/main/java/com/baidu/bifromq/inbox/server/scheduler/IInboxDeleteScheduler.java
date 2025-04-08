@@ -14,8 +14,8 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
-import com.baidu.bifromq.inbox.storage.proto.BatchDeleteReply;
-import com.baidu.bifromq.inbox.storage.proto.BatchDeleteRequest;
+import com.baidu.bifromq.inbox.rpc.proto.DeleteReply;
+import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
 
-public interface IInboxDeleteScheduler extends IBatchCallScheduler<BatchDeleteRequest.Params, BatchDeleteReply.Result> {
+public interface IInboxDeleteScheduler extends IBatchCallScheduler<DeleteRequest, DeleteReply> {
 }

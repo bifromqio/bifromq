@@ -16,53 +16,46 @@ package com.baidu.bifromq.inbox.server.scheduler;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
-import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
-import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
+import com.baidu.bifromq.basekv.client.scheduler.BatchQueryCall;
+import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
-import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
+import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
-import com.baidu.bifromq.inbox.record.InboxInstance;
-import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.rpc.proto.TouchReply;
 import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchTouchReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchTouchRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
+import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import java.time.Duration;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Queue;
-import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class BatchTouchCall extends BatchMutationCall<TouchRequest, TouchReply> {
+class BatchTouchCall extends BatchQueryCall<TouchRequest, TouchReply> {
     protected BatchTouchCall(KVRangeId rangeId,
-                             IBaseKVStoreClient distWorkerClient,
+                             IBaseKVStoreClient storeClient,
                              Duration pipelineExpiryTime) {
-        super(rangeId, distWorkerClient, pipelineExpiryTime);
+        super(rangeId, storeClient, false, pipelineExpiryTime);
     }
 
     @Override
-    protected MutationCallTaskBatch<TouchRequest, TouchReply> newBatch(String storeId, long ver) {
-        return new BatchTouchCallTask(storeId, ver);
-    }
-
-    @Override
-    protected RWCoProcInput makeBatch(Iterator<TouchRequest> touchIterator) {
+    protected ROCoProcInput makeBatch(Iterator<TouchRequest> reqIterator) {
         BatchTouchRequest.Builder reqBuilder = BatchTouchRequest.newBuilder();
-        touchIterator.forEachRemaining(request -> reqBuilder.addParams(BatchTouchRequest.Params.newBuilder()
-            .setTenantId(request.getTenantId())
-            .setInboxId(request.getInboxId())
-            .setIncarnation(request.getIncarnation())
-            .setVersion(request.getVersion())
-            .setNow(request.getNow())
-            .build()));
+        reqIterator.forEachRemaining(
+            request -> reqBuilder
+                .addParams(BatchTouchRequest.Params.newBuilder()
+                    .setTenantId(request.getTenantId())
+                    .setInboxId(request.getInboxId())
+                    .setIncarnation(request.getIncarnation())
+                    .setVersion(request.getVersion())
+                    .setNow(request.getNow())
+                    .build()));
         long reqId = System.nanoTime();
-        return RWCoProcInput.newBuilder()
-            .setInboxService(InboxServiceRWCoProcInput.newBuilder()
+        return ROCoProcInput.newBuilder()
+            .setInboxService(InboxServiceROCoProcInput.newBuilder()
                 .setReqId(reqId)
                 .setBatchTouch(reqBuilder.build())
                 .build())
@@ -70,31 +63,39 @@ class BatchTouchCall extends BatchMutationCall<TouchRequest, TouchReply> {
     }
 
     @Override
-    protected void handleOutput(Queue<ICallTask<TouchRequest, TouchReply, MutationCallBatcherKey>> batchedTasks,
-                                RWCoProcOutput output) {
+    protected void handleOutput(Queue<ICallTask<TouchRequest, TouchReply, QueryCallBatcherKey>> batchedTasks,
+                                ROCoProcOutput output) {
+        ICallTask<TouchRequest, TouchReply, QueryCallBatcherKey> task;
         assert batchedTasks.size() == output.getInboxService().getBatchTouch().getCodeCount();
-        ICallTask<TouchRequest, TouchReply, MutationCallBatcherKey> callTask;
         int i = 0;
-        while ((callTask = batchedTasks.poll()) != null) {
-            TouchReply.Builder replyBuilder = TouchReply.newBuilder().setReqId(callTask.call().getReqId());
-            BatchTouchReply.Code result = output.getInboxService().getBatchTouch().getCode(i++);
-            switch (result) {
-                case OK -> callTask.resultPromise().complete(replyBuilder.setCode(TouchReply.Code.OK).build());
-                case NO_INBOX ->
-                    callTask.resultPromise().complete(replyBuilder.setCode(TouchReply.Code.NO_INBOX).build());
-                case CONFLICT ->
-                    callTask.resultPromise().complete(replyBuilder.setCode(TouchReply.Code.CONFLICT).build());
+        while ((task = batchedTasks.poll()) != null) {
+            BatchTouchReply.Code code = output.getInboxService().getBatchTouch().getCode(i++);
+            switch (code) {
+                case OK -> task.resultPromise().complete(TouchReply.newBuilder()
+                    .setReqId(task.call().getReqId())
+                    .setCode(TouchReply.Code.OK)
+                    .build());
+                case NO_INBOX -> task.resultPromise().complete(TouchReply.newBuilder()
+                    .setReqId(task.call().getReqId())
+                    .setCode(TouchReply.Code.NO_INBOX)
+                    .build());
+                case CONFLICT -> task.resultPromise().complete(TouchReply.newBuilder()
+                    .setReqId(task.call().getReqId())
+                    .setCode(TouchReply.Code.CONFLICT)
+                    .build());
                 default -> {
-                    log.error("Unexpected touch result: {}", result);
-                    callTask.resultPromise().complete(replyBuilder.setCode(TouchReply.Code.ERROR).build());
+                    log.error("Unexpected touch reply code: {}", code);
+                    task.resultPromise().complete(TouchReply.newBuilder()
+                        .setReqId(task.call().getReqId())
+                        .setCode(TouchReply.Code.ERROR)
+                        .build());
                 }
             }
         }
     }
 
     @Override
-    protected void handleException(ICallTask<TouchRequest, TouchReply, MutationCallBatcherKey> callTask,
-                                   Throwable e) {
+    protected void handleException(ICallTask<TouchRequest, TouchReply, QueryCallBatcherKey> callTask, Throwable e) {
         if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
             callTask.resultPromise().complete(TouchReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
@@ -117,30 +118,5 @@ class BatchTouchCall extends BatchMutationCall<TouchRequest, TouchReply> {
             return;
         }
         callTask.resultPromise().completeExceptionally(e);
-    }
-
-    private static class BatchTouchCallTask extends MutationCallTaskBatch<TouchRequest, TouchReply> {
-        private final Set<TenantInboxInstance> inboxes = new HashSet<>();
-
-        private BatchTouchCallTask(String storeId, long ver) {
-            super(storeId, ver);
-        }
-
-        @Override
-        protected void add(ICallTask<TouchRequest, TouchReply, MutationCallBatcherKey> callTask) {
-            super.add(callTask);
-            inboxes.add(new TenantInboxInstance(
-                callTask.call().getTenantId(),
-                new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))
-            );
-        }
-
-        @Override
-        protected boolean isBatchable(ICallTask<TouchRequest, TouchReply, MutationCallBatcherKey> callTask) {
-            return !inboxes.contains(new TenantInboxInstance(
-                callTask.call().getTenantId(),
-                new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))
-            );
-        }
     }
 }

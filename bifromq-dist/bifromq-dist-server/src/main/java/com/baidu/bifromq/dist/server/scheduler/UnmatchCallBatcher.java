@@ -32,6 +32,6 @@ class UnmatchCallBatcher extends MutationCallBatcher<UnmatchRequest, UnmatchRepl
 
     @Override
     protected IBatchCall<UnmatchRequest, UnmatchReply, MutationCallBatcherKey> newBatch() {
-        return new BatchUnmatchCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
+        return new BatchUnmatchCall(storeClient, Duration.ofMinutes(5), batcherKey);
     }
 }

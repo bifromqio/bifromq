@@ -1,6 +1,7 @@
 syntax = "proto3";
 import "commontype/ClientInfo.proto";
 import "commontype/TopicMessage.proto";
+import "inboxservice/Replica.proto";
 import "inboxservice/TopicFilterOption.proto";
 import "inboxservice/LWT.proto";
 import "inboxservice/InboxFetched.proto";
@@ -23,10 +24,9 @@ message BatchGetRequest{
 message InboxVersion{
   uint64 incarnation = 1;
   uint64 version = 2; // state version
-  uint32 keepAliveSeconds = 3;
-  uint32 expirySeconds = 4;
-  optional LWT lwt = 5;
-  commontype.ClientInfo client = 6;
+  uint32 expirySeconds = 3;
+  optional LWT lwt = 4;
+  commontype.ClientInfo client = 5;
 }
 message BatchGetReply{
   message Result{
@@ -68,6 +68,7 @@ message BatchCreateRequest{
     uint64 now = 9;
   }
   repeated Params params = 1;
+  Replica leader = 2; // the leader replica
 }
 
 message BatchCreateReply{
@@ -86,6 +87,7 @@ message BatchAttachRequest{
     uint64 now = 8;
   }
   repeated Params params = 1;
+  Replica leader = 2; // the leader replica
 }
 
 message BatchAttachReply{
@@ -94,11 +96,7 @@ message BatchAttachReply{
     NO_INBOX = 1;
     CONFLICT = 2;
   }
-  message Result{
-    Code code = 1;
-    repeated string topicFilter = 2; // current subscription of the inbox
-  }
-  repeated Result result = 1;
+  repeated Code code = 1;
 }
 
 message BatchDetachRequest{
@@ -110,8 +108,10 @@ message BatchDetachRequest{
     uint32 expirySeconds = 5;
     bool discardLWT = 6;
     uint64 now = 7;
+    optional Replica sender = 8; // the replica on which the detach task is running to trigger the detach request
   }
   repeated Params params = 1;
+  Replica leader = 2; // the leader replica
 }
 
 message BatchDetachReply{
@@ -120,13 +120,7 @@ message BatchDetachReply{
     NO_INBOX = 1;
     CONFLICT = 2;
   }
-  message Result{
-    Code code = 1;
-    optional LWT lwt = 2; // the lwt to be triggered if any
-    repeated string topicFilter = 3; // current subscription of the inbox
-  }
-  repeated Result result = 1;
-
+  repeated Code code = 1;
 }
 
 message BatchTouchRequest{
@@ -183,6 +177,7 @@ message BatchSubRequest{
     uint64 now = 7;
   }
   repeated Params params = 1;
+  Replica leader = 2; // the leader replica
 }
 
 message BatchSubReply{
@@ -206,6 +201,7 @@ message BatchUnsubRequest{
     uint64 now = 6;
   }
   repeated Params params = 1;
+  Replica leader = 2; // the leader replica
 }
 
 message BatchUnsubReply{
@@ -282,6 +278,7 @@ message BatchCommitRequest{
     uint64 now = 8;
   }
   repeated Params params = 1;
+  Replica leader = 2; // the leader replica
 }
 
 message BatchCommitReply{
@@ -293,21 +290,42 @@ message BatchCommitReply{
   repeated Code code = 1;
 }
 
-message GCRequest {
-  optional string tenantId = 1;
-  optional uint32 expirySeconds = 2;
-  uint64 now = 3;
-}
-
-message GCReply {
-  message GCCandidate{
+message BatchSendLWTRequest{
+  message Params{
+    string tenantId = 1;
     string inboxId = 2;
     uint64 incarnation = 3;
     uint64 version = 4;
-    uint32 expirySeconds = 5;
-    commontype.ClientInfo client = 6;
+    uint64 now = 5;
   }
-  repeated GCCandidate candidate = 1;
+  repeated Params params = 1;
+}
+
+message BatchSendLWTReply{
+  enum Code{
+    OK = 0;
+    NO_INBOX = 1;
+    CONFLICT = 2;
+    TRY_LATER = 3;
+    ERROR = 4;
+  }
+  repeated Code code = 1;
+}
+
+message ExpireTenantRequest{
+  string tenantId = 1;
+  uint32 expirySeconds = 2;
+  uint64 now = 3;
+}
+
+message ExpireTenantReply{
+}
+
+message GCRequest {
+  uint64 now = 1;
+}
+
+message GCReply {
 }
 
 message CollectMetricsRequest{
@@ -327,12 +345,11 @@ message InboxServiceRWCoProcInput{
     BatchCreateRequest batchCreate = 2;
     BatchAttachRequest batchAttach = 3;
     BatchDetachRequest batchDetach = 4;
-    BatchTouchRequest batchTouch = 5;
-    BatchDeleteRequest batchDelete = 6;
-    BatchSubRequest batchSub = 7;
-    BatchUnsubRequest batchUnsub = 8;
-    BatchInsertRequest batchInsert = 9;
-    BatchCommitRequest batchCommit = 10;
+    BatchDeleteRequest batchDelete = 5;
+    BatchSubRequest batchSub = 6;
+    BatchUnsubRequest batchUnsub = 7;
+    BatchInsertRequest batchInsert = 8;
+    BatchCommitRequest batchCommit = 9;
   }
 }
 
@@ -342,12 +359,12 @@ message InboxServiceRWCoProcOutput{
     BatchCreateReply batchCreate = 2;
     BatchAttachReply batchAttach = 3;
     BatchDetachReply batchDetach = 4;
-    BatchTouchReply batchTouch = 5;
-    BatchDeleteReply batchDelete = 6;
-    BatchSubReply batchSub = 7;
-    BatchUnsubReply batchUnsub = 8;
-    BatchInsertReply batchInsert = 9;
-    BatchCommitReply batchCommit = 10;
+    BatchDeleteReply batchDelete = 5;
+    BatchSubReply batchSub = 6;
+    BatchUnsubReply batchUnsub = 7;
+    BatchInsertReply batchInsert = 8;
+    BatchCommitReply batchCommit = 9;
+    ExpireTenantReply expireTenant = 10;
   }
 }
 
@@ -356,8 +373,11 @@ message InboxServiceROCoProcInput{
   oneof input{
     BatchGetRequest batchGet = 2;
     BatchFetchRequest batchFetch = 3;
-    GCRequest gc = 4;
-    BatchCheckSubRequest batchCheckSub = 5;
+    BatchCheckSubRequest batchCheckSub = 4;
+    BatchTouchRequest batchTouch = 5;
+    BatchSendLWTRequest batchSendLWT = 6;
+    ExpireTenantRequest expireTenant = 7;
+    GCRequest gc = 8;
   }
 }
 
@@ -366,7 +386,10 @@ message InboxServiceROCoProcOutput{
   oneof output{
     BatchGetReply batchGet = 2;
     BatchFetchReply batchFetch = 3;
-    GCReply gc = 4;
-    BatchCheckSubReply batchCheckSub = 5;
+    BatchCheckSubReply batchCheckSub = 4;
+    BatchTouchReply batchTouch = 5;
+    BatchSendLWTReply batchSendLWT = 6;
+    ExpireTenantReply expireTenant = 7;
+    GCReply gc = 8;
   }
 }

@@ -19,7 +19,6 @@ import com.baidu.bifromq.basekv.client.exception.BadRequestException;
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.InternalErrorException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
@@ -31,7 +30,6 @@ import com.github.benmanes.caffeine.cache.RemovalListener;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
@@ -39,12 +37,14 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class BatchMutationCall<ReqT, RespT> implements IBatchCall<ReqT, RespT, MutationCallBatcherKey> {
-    private final KVRangeId rangeId;
+    protected final MutationCallBatcherKey batcherKey;
     private final LoadingCache<String, IMutationPipeline> storePipelines;
     private final Deque<MutationCallTaskBatch<ReqT, RespT>> batchCallTasks = new ArrayDeque<>();
 
-    protected BatchMutationCall(KVRangeId rangeId, IBaseKVStoreClient storeClient, Duration pipelineExpiryTime) {
-        this.rangeId = rangeId;
+    protected BatchMutationCall(IBaseKVStoreClient storeClient,
+                                Duration pipelineExpiryTime,
+                                MutationCallBatcherKey batcherKey) {
+        this.batcherKey = batcherKey;
         storePipelines = Caffeine.newBuilder()
             .evictionListener((RemovalListener<String, IMutationPipeline>) (key, value, cause) -> {
                 if (value != null) {
@@ -59,7 +59,7 @@ public abstract class BatchMutationCall<ReqT, RespT> implements IBatchCall<ReqT,
     public final void add(ICallTask<ReqT, RespT, MutationCallBatcherKey> callTask) {
         MutationCallTaskBatch<ReqT, RespT> lastBatchCallTask;
         MutationCallBatcherKey batcherKey = callTask.batcherKey();
-        assert callTask.batcherKey().id.equals(rangeId);
+        assert callTask.batcherKey().id.equals(batcherKey.id);
         if ((lastBatchCallTask = batchCallTasks.peekLast()) != null) {
             if (lastBatchCallTask.storeId.equals(batcherKey.leaderStoreId) && lastBatchCallTask.ver == batcherKey.ver) {
                 if (!lastBatchCallTask.isBatchable(callTask)) {
@@ -83,7 +83,7 @@ public abstract class BatchMutationCall<ReqT, RespT> implements IBatchCall<ReqT,
         return new MutationCallTaskBatch<>(storeId, ver);
     }
 
-    protected abstract RWCoProcInput makeBatch(Iterator<ReqT> reqIterator);
+    protected abstract RWCoProcInput makeBatch(Iterable<ICallTask<ReqT, RespT, MutationCallBatcherKey>> batchedTasks);
 
     protected abstract void handleOutput(Queue<ICallTask<ReqT, RespT, MutationCallBatcherKey>> batchedTasks,
                                          RWCoProcOutput output);
@@ -119,13 +119,13 @@ public abstract class BatchMutationCall<ReqT, RespT> implements IBatchCall<ReqT,
     }
 
     private CompletableFuture<Void> fireBatchCall(MutationCallTaskBatch<ReqT, RespT> batchCallTask) {
-        RWCoProcInput input = makeBatch(batchCallTask.batchedTasks.stream().map(ICallTask::call).iterator());
+        RWCoProcInput input = makeBatch(batchCallTask.batchedTasks);
         long reqId = System.nanoTime();
         return storePipelines.get(batchCallTask.storeId)
             .execute(KVRangeRWRequest.newBuilder()
                 .setReqId(reqId)
                 .setVer(batchCallTask.ver)
-                .setKvRangeId(rangeId)
+                .setKvRangeId(batcherKey.id)
                 .setRwCoProc(input)
                 .build())
             .thenApply(reply -> {

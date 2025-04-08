@@ -16,7 +16,6 @@ package com.baidu.bifromq.inbox.server.scheduler;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basescheduler.ICallTask;
@@ -28,13 +27,14 @@ import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
 import java.time.Duration;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Queue;
 import java.util.Set;
 
 class BatchInsertCall extends BatchMutationCall<InboxSubMessagePack, InboxInsertResult> {
-    protected BatchInsertCall(KVRangeId rangeId, IBaseKVStoreClient storeClient, Duration pipelineExpiryTime) {
-        super(rangeId, storeClient, pipelineExpiryTime);
+    protected BatchInsertCall(IBaseKVStoreClient storeClient,
+                              Duration pipelineExpiryTime,
+                              MutationCallBatcherKey batcherKey) {
+        super(storeClient, pipelineExpiryTime, batcherKey);
     }
 
     @Override
@@ -43,9 +43,10 @@ class BatchInsertCall extends BatchMutationCall<InboxSubMessagePack, InboxInsert
     }
 
     @Override
-    protected RWCoProcInput makeBatch(Iterator<InboxSubMessagePack> messagePackIterator) {
+    protected RWCoProcInput makeBatch(
+        Iterable<ICallTask<InboxSubMessagePack, InboxInsertResult, MutationCallBatcherKey>> callTasks) {
         BatchInsertRequest.Builder reqBuilder = BatchInsertRequest.newBuilder();
-        messagePackIterator.forEachRemaining(reqBuilder::addInboxSubMsgPack);
+        callTasks.forEach(call -> reqBuilder.addInboxSubMsgPack(call.call()));
         long reqId = System.nanoTime();
         return RWCoProcInput.newBuilder()
             .setInboxService(InboxServiceRWCoProcInput.newBuilder()

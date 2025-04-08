@@ -56,7 +56,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .setReqId(reqId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
-            .setKeepAliveSeconds(5)
             .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
@@ -79,7 +78,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
 
         InboxVersion inboxVersion = getReply.getInbox(0);
         assertEquals(inboxVersion.getIncarnation(), incarnation);
-        assertEquals(inboxVersion.getKeepAliveSeconds(), 5);
         assertEquals(inboxVersion.getExpirySeconds(), 5);
         assertEquals(inboxVersion.getVersion(), 0);
         assertEquals(inboxVersion.getLwt(), lwt);
@@ -109,7 +107,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .setReqId(reqId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
-            .setKeepAliveSeconds(5)
             .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
@@ -131,7 +128,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
 
         InboxVersion inboxVersion = getReply.getInbox(0);
         assertEquals(inboxVersion.getIncarnation(), incarnation);
-        assertEquals(inboxVersion.getKeepAliveSeconds(), 5);
         assertEquals(inboxVersion.getExpirySeconds(), 5);
         assertEquals(inboxVersion.getVersion(), 0);
         assertFalse(inboxVersion.hasLwt());
@@ -152,7 +148,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setVersion(1)
-            .setKeepAliveSeconds(5)
             .setExpirySeconds(5)
             .setClient(clientInfo)
             .setNow(now)
@@ -175,7 +170,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .setReqId(reqId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
-            .setKeepAliveSeconds(5)
             .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
@@ -189,7 +183,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setVersion(1) // mismatched version
-            .setKeepAliveSeconds(5)
             .setExpirySeconds(5)
             .setClient(clientInfo)
             .setNow(now)
@@ -212,7 +205,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .setReqId(reqId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
-            .setKeepAliveSeconds(5)
             .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
@@ -225,7 +217,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setVersion(0)
-            .setKeepAliveSeconds(1)
             .setExpirySeconds(1)
             .setLwt(lwt)
             .setClient(clientInfo)
@@ -246,7 +237,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
 
         InboxVersion inboxVersion = getReply.getInbox(0);
         assertEquals(inboxVersion.getIncarnation(), incarnation);
-        assertEquals(inboxVersion.getKeepAliveSeconds(), 1);
         assertEquals(inboxVersion.getExpirySeconds(), 1);
         assertEquals(inboxVersion.getVersion(), 1);
         assertEquals(inboxVersion.getLwt(), lwt);
@@ -267,7 +257,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .setReqId(reqId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
-            .setKeepAliveSeconds(5)
             .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
@@ -281,7 +270,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setVersion(0)
-            .setKeepAliveSeconds(1)
             .setExpirySeconds(1)
             .setClient(clientInfo)
             .setNow(now)
@@ -301,7 +289,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
 
         InboxVersion inboxVersion = getReply.getInbox(0);
         assertEquals(inboxVersion.getIncarnation(), incarnation);
-        assertEquals(inboxVersion.getKeepAliveSeconds(), 1);
         assertEquals(inboxVersion.getExpirySeconds(), 1);
         assertEquals(inboxVersion.getVersion(), 1);
         assertFalse(inboxVersion.hasLwt());
@@ -342,7 +329,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .setReqId(reqId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
-            .setKeepAliveSeconds(5)
             .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
@@ -376,7 +362,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .setReqId(reqId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
-            .setKeepAliveSeconds(5)
             .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
@@ -396,7 +381,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .build()).join();
         assertEquals(detachReply.getReqId(), reqId);
         assertEquals(detachReply.getCode(), DetachReply.Code.OK);
-        assertEquals(detachReply.getLwt(), lwt);
 
         GetReply getReply = inboxClient.get(GetRequest.newBuilder()
             .setReqId(reqId)
@@ -410,7 +394,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
 
         InboxVersion inboxVersion = getReply.getInbox(0);
         assertEquals(inboxVersion.getIncarnation(), incarnation);
-        assertEquals(inboxVersion.getKeepAliveSeconds(), 5);
         assertEquals(inboxVersion.getExpirySeconds(), 1);
         assertEquals(inboxVersion.getVersion(), 1);
         assertEquals(inboxVersion.getLwt(), lwt);
@@ -431,7 +414,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .setReqId(reqId)
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
-            .setKeepAliveSeconds(5)
             .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
@@ -452,7 +434,6 @@ public class InboxAdminRPCTest extends InboxServiceTest {
             .build()).join();
         assertEquals(detachReply.getReqId(), reqId);
         assertEquals(detachReply.getCode(), DetachReply.Code.OK);
-        assertFalse(detachReply.hasLwt());
 
         GetReply getReply = inboxClient.get(GetRequest.newBuilder()
             .setReqId(reqId)
@@ -466,10 +447,8 @@ public class InboxAdminRPCTest extends InboxServiceTest {
 
         InboxVersion inboxVersion = getReply.getInbox(0);
         assertEquals(inboxVersion.getIncarnation(), incarnation);
-        assertEquals(inboxVersion.getKeepAliveSeconds(), 5);
         assertEquals(inboxVersion.getExpirySeconds(), 1);
         assertEquals(inboxVersion.getVersion(), 1);
-        assertFalse(detachReply.hasLwt());
         assertEquals(inboxVersion.getClient(), clientInfo);
     }
 }

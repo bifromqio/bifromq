@@ -78,7 +78,7 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
         inboxClient.create(CreateRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).setIncarnation(incarnation)
-            .setKeepAliveSeconds(5).setExpirySeconds(5).setLimit(10).setDropOldest(true).setLwt(lwt)
+            .setExpirySeconds(5).setLimit(10).setDropOldest(true).setLwt(lwt)
             .setClient(clientInfo).setNow(now).build()).join();
 
         String topicFilter = "/a/b/c";
@@ -103,7 +103,7 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
         inboxClient.create(CreateRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).setIncarnation(incarnation)
-            .setKeepAliveSeconds(5).setExpirySeconds(5).setLimit(10).setDropOldest(true).setLwt(lwt)
+            .setExpirySeconds(5).setLimit(10).setDropOldest(true).setLwt(lwt)
             .setClient(clientInfo).setNow(now).build()).join();
 
         when(distClient.addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
@@ -147,7 +147,7 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
         inboxClient.create(CreateRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).setIncarnation(incarnation)
-            .setKeepAliveSeconds(5).setExpirySeconds(5).setLimit(10).setDropOldest(true).setLwt(lwt)
+            .setExpirySeconds(5).setLimit(10).setDropOldest(true).setLwt(lwt)
             .setClient(clientInfo).setNow(now).build()).join();
 
         String topicFilter = "/a/b/c";
@@ -172,7 +172,7 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
         inboxClient.create(CreateRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).setIncarnation(incarnation)
-            .setKeepAliveSeconds(5).setExpirySeconds(5).setLimit(10).setDropOldest(true).setLwt(lwt)
+            .setExpirySeconds(5).setLimit(10).setDropOldest(true).setLwt(lwt)
             .setClient(clientInfo).setNow(now).build()).join();
 
         when(settingProvider.provide(Setting.MaxTopicFiltersPerInbox, tenantId)).thenReturn(1);
@@ -217,7 +217,7 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
         inboxClient.create(CreateRequest.newBuilder().setReqId(reqId).setInboxId(inboxId).setIncarnation(incarnation)
-            .setKeepAliveSeconds(5).setExpirySeconds(5).setLimit(10).setDropOldest(true).setLwt(lwt)
+            .setExpirySeconds(5).setLimit(10).setDropOldest(true).setLwt(lwt)
             .setClient(clientInfo).setNow(now).build()).join();
         when(distClient.addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
             anyLong())).thenReturn(CompletableFuture.completedFuture(MatchResult.OK));

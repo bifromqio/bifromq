@@ -89,6 +89,7 @@ public abstract class MQTTTest {
     protected ISettingProvider settingProvider;
     @Mock
     protected IClientBalancer clientBalancer;
+    protected String tenantId;
     private IAgentHost agentHost;
     private ICRDTService crdtService;
     private IRPCServiceTrafficService trafficService;
@@ -112,10 +113,9 @@ public abstract class MQTTTest {
     private IMQTTBroker mqttBroker;
     private ISubBrokerManager inboxBrokerMgr;
     private PluginManager pluginMgr;
-    private int tickerThreads = 2;
+    private final int tickerThreads = 2;
     private ScheduledExecutorService bgTaskExecutor;
     private AutoCloseable closeable;
-    protected String tenantId;
 
     protected MQTTTest() {
     }
@@ -169,9 +169,13 @@ public abstract class MQTTTest {
             .rpcServerBuilder(rpcServerBuilder)
             .agentHost(agentHost)
             .metaService(metaService)
+            .distClient(distClient)
+            .inboxClient(inboxClient)
+            .retainClient(retainClient)
             .inboxStoreClient(inboxStoreKVStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
+            .resourceThrottler(resourceThrottler)
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(new KVRangeStoreOptions()
@@ -188,12 +192,8 @@ public abstract class MQTTTest {
             .build();
         inboxServer = IInboxServer.builder()
             .rpcServerBuilder(rpcServerBuilder)
-            .eventCollector(eventCollector)
-            .resourceThrottler(resourceThrottler)
-            .settingProvider(settingProvider)
             .inboxClient(inboxClient)
             .distClient(distClient)
-            .retainClient(retainClient)
             .inboxStoreClient(inboxStoreKVStoreClient)
             .build();
         retainStoreKVStoreClient = IBaseKVStoreClient

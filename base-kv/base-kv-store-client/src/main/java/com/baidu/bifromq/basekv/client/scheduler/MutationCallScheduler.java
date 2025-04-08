@@ -46,8 +46,8 @@ public abstract class MutationCallScheduler<ReqT, RespT>
     }
 
     @Override
-    protected final Optional<MutationCallBatcherKey> find(ReqT subCall) {
-        Optional<KVRangeSetting> rangeSetting = findByKey(rangeKey(subCall), storeClient.latestEffectiveRouter());
+    protected final Optional<MutationCallBatcherKey> find(ReqT call) {
+        Optional<KVRangeSetting> rangeSetting = findByKey(rangeKey(call), storeClient.latestEffectiveRouter());
         return rangeSetting.map(setting -> new MutationCallBatcherKey(setting.id, setting.leader, setting.ver));
     }
 

@@ -24,6 +24,7 @@ import com.baidu.bifromq.inbox.server.scheduler.InboxDetachScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxFetchScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxGetScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxInsertScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.InboxSendLWTScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxSubScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxTouchScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxUnSubScheduler;
@@ -44,15 +45,10 @@ class InboxServer implements IInboxServer {
 
     InboxServer(InboxServerBuilder builder) {
         this.inboxService = InboxService.builder()
-            .idleSeconds(builder.idleSeconds)
-            .eventCollector(builder.eventCollector)
-            .resourceThrottler(builder.resourceThrottler)
-            .settingProvider(builder.settingProvider)
             .inboxClient(builder.inboxClient)
             .distClient(builder.distClient)
-            .retainClient(builder.retainClient)
-            .inboxStoreClient(builder.inboxStoreClient)
             .getScheduler(new InboxGetScheduler(builder.inboxStoreClient))
+            .sendLWTScheduler(new InboxSendLWTScheduler(builder.inboxStoreClient))
             .checkSubScheduler(new InboxCheckSubScheduler(builder.inboxStoreClient))
             .fetchScheduler(new InboxFetchScheduler(builder.inboxStoreClient))
             .insertScheduler(new InboxInsertScheduler(builder.inboxStoreClient))
@@ -64,6 +60,7 @@ class InboxServer implements IInboxServer {
             .subScheduler(new InboxSubScheduler(builder.inboxStoreClient))
             .unsubScheduler(new InboxUnSubScheduler(builder.inboxStoreClient))
             .touchScheduler(new InboxTouchScheduler(builder.inboxStoreClient))
+            .tenantGCRunner(new TenantGCRunner(builder.inboxStoreClient))
             .build();
         if (builder.workerThreads == 0) {
             rpcExecutor = MoreExecutors.newDirectExecutorService();

@@ -23,8 +23,12 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeCoProcFactory;
 import com.baidu.bifromq.basekv.store.api.IKVRangeSplitHinter;
 import com.baidu.bifromq.basekv.store.range.hinter.MutationKVLoadBasedSplitHinter;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.dist.client.IDistClient;
+import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
+import com.baidu.bifromq.retain.client.IRetainClient;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
@@ -32,17 +36,35 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
+    private final IDistClient distClient;
+    private final IInboxClient inboxClient;
+    private final IRetainClient retainClient;
     private final ISettingProvider settingProvider;
     private final IEventCollector eventCollector;
+    private final IResourceThrottler resourceThrottler;
+    private final Duration detachTimeout;
     private final Duration loadEstWindow;
+    private final int expireRateLimit;
 
 
-    public InboxStoreCoProcFactory(ISettingProvider settingProvider,
+    public InboxStoreCoProcFactory(IDistClient distClient,
+                                   IInboxClient inboxClient,
+                                   IRetainClient retainClient,
+                                   ISettingProvider settingProvider,
                                    IEventCollector eventCollector,
-                                   Duration loadEstimateWindow) {
+                                   IResourceThrottler resourceThrottler,
+                                   Duration detachTimeout,
+                                   Duration loadEstimateWindow,
+                                   int expireRateLimit) {
+        this.distClient = distClient;
+        this.inboxClient = inboxClient;
+        this.retainClient = retainClient;
         this.settingProvider = settingProvider;
         this.eventCollector = eventCollector;
+        this.resourceThrottler = resourceThrottler;
+        this.detachTimeout = detachTimeout;
         this.loadEstWindow = loadEstimateWindow;
+        this.expireRateLimit = expireRateLimit;
     }
 
     @Override
@@ -60,7 +82,18 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
                                        String storeId,
                                        KVRangeId id,
                                        Supplier<IKVCloseableReader> rangeReaderProvider) {
-        return new InboxStoreCoProc(clusterId, storeId, id, settingProvider, eventCollector, rangeReaderProvider);
+        return new InboxStoreCoProc(clusterId,
+            storeId,
+            id,
+            distClient,
+            inboxClient,
+            retainClient,
+            settingProvider,
+            eventCollector,
+            resourceThrottler,
+            rangeReaderProvider,
+            detachTimeout,
+            expireRateLimit);
     }
 
     public void close() {

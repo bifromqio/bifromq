@@ -22,6 +22,8 @@ import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
+import com.baidu.bifromq.inbox.rpc.proto.DeleteReply;
+import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireAllReply;
@@ -31,6 +33,8 @@ import com.baidu.bifromq.inbox.rpc.proto.ExpireRequest;
 import com.baidu.bifromq.inbox.rpc.proto.GetReply;
 import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
+import com.baidu.bifromq.inbox.rpc.proto.SendLWTReply;
+import com.baidu.bifromq.inbox.rpc.proto.SendLWTRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.rpc.proto.TouchReply;
@@ -182,6 +186,30 @@ final class InboxClient implements IInboxClient {
                 return UnsubReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setCode(UnsubReply.Code.ERROR)
+                    .build();
+            });
+    }
+
+    @Override
+    public CompletableFuture<SendLWTReply> sendLWT(SendLWTRequest request) {
+        return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getSendLWTMethod())
+            .exceptionally(e -> {
+                log.debug("Failed to sendLWT", e);
+                return SendLWTReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(SendLWTReply.Code.ERROR)
+                    .build();
+            });
+    }
+
+    @Override
+    public CompletableFuture<DeleteReply> delete(DeleteRequest request) {
+        return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getDeleteMethod())
+            .exceptionally(e -> {
+                log.debug("Failed to delete inbox", e);
+                return DeleteReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(DeleteReply.Code.ERROR)
                     .build();
             });
     }

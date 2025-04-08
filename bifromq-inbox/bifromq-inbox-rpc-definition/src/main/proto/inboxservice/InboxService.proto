@@ -3,6 +3,7 @@ import "commontype/ClientInfo.proto";
 import "subbroker/type.proto";
 import "inboxservice/InboxFetched.proto";
 import "inboxservice/LWT.proto";
+import "inboxservice/Replica.proto";
 import "inboxservice/TopicFilterOption.proto";
 import "inboxservice/InboxStoreCoProc.proto";
 
@@ -24,6 +25,8 @@ service InboxService {
   rpc fetch(stream InboxFetchHint) returns (stream InboxFetched);
   rpc commit(CommitRequest) returns(CommitReply);
 
+  rpc sendLWT (SendLWTRequest) returns (SendLWTReply);
+  rpc delete (DeleteRequest) returns (DeleteReply);
   rpc expire (ExpireRequest) returns (ExpireReply);
   rpc expireAll (ExpireAllRequest) returns (ExpireAllReply);
   rpc checkSubscriptions(subbroker.CheckRequest) returns (subbroker.CheckReply);
@@ -54,10 +57,9 @@ message AttachRequest {
   uint64 incarnation = 3;
   uint64 version = 4;
   uint32 expirySeconds = 5;
-  uint32 keepAliveSeconds = 6;
-  optional inboxservice.LWT lwt = 7;
-  commontype.ClientInfo client = 8; // the owner client
-  uint64 now = 9;
+  optional inboxservice.LWT lwt = 6;
+  commontype.ClientInfo client = 7; // the owner client
+  uint64 now = 8;
 }
 
 message AttachReply {
@@ -70,7 +72,6 @@ message AttachReply {
   }
   uint64 reqId = 1;
   Code code = 2;
-  repeated string topicFilters = 3; // existing subscriptions
 }
 
 message DetachRequest {
@@ -82,6 +83,7 @@ message DetachRequest {
   bool discardLWT = 6;
   commontype.ClientInfo client = 7;
   uint64 now = 8;
+  optional Replica sender = 9; // if the request is triggered by detach task on the replica
 }
 
 message DetachReply {
@@ -89,13 +91,12 @@ message DetachReply {
     OK = 0;
     NO_INBOX = 1;
     CONFLICT = 2;
-    TRY_LATER = 3;
-    ERROR = 4;
+    BACK_PRESSURE_REJECTED = 3;
+    TRY_LATER = 4;
+    ERROR = 5;
   }
   uint64 reqId = 1;
   Code code = 2;
-  repeated string topicFilters = 3; // existing subscriptions
-  optional LWT lwt = 4; // the lwt to trigger if not being discard
 }
 
 message CreateRequest {
@@ -103,12 +104,11 @@ message CreateRequest {
   string inboxId = 2;
   uint64 incarnation = 3;
   uint32 expirySeconds = 4;
-  uint32 keepAliveSeconds = 5;
-  uint32 limit = 6;
-  bool dropOldest = 7;
-  optional inboxservice.LWT lwt = 8;
-  commontype.ClientInfo client = 9;
-  uint64 now = 10;
+  uint32 limit = 5;
+  bool dropOldest = 6;
+  optional inboxservice.LWT lwt = 7;
+  commontype.ClientInfo client = 8;
+  uint64 now = 9;
 }
 
 message CreateReply {
@@ -137,24 +137,6 @@ message TouchReply {
     CONFLICT = 2;
     TRY_LATER = 3;
     ERROR = 4;
-  }
-  uint64 reqId = 1;
-  Code code = 2;
-}
-
-message ExpireRequest {
-  uint64 reqId = 1;
-  string tenantId = 2;
-  string inboxId = 3;
-  uint64 now = 4;
-}
-
-message ExpireReply {
-  enum Code {
-    OK = 0;
-    NOT_FOUND = 1;
-    TRY_LATER = 2;
-    ERROR = 3;
   }
   uint64 reqId = 1;
   Code code = 2;
@@ -260,6 +242,68 @@ message CommitReply {
   Code code = 2;
 }
 
+message SendLWTRequest {
+  uint64 reqId = 1;
+  string tenantId = 2;
+  string inboxId = 3;
+  uint64 incarnation = 4;
+  uint64 version = 5;
+  uint64 now = 6;
+}
+
+message SendLWTReply {
+  enum Code {
+    OK = 0;
+    NO_INBOX = 1;
+    CONFLICT = 2;
+    BACK_PRESSURE_REJECTED = 3;
+    TRY_LATER = 4;
+    ERROR = 5;
+  }
+  uint64 reqId = 1;
+  Code code = 2;
+}
+
+message DeleteRequest {
+  uint64 reqId = 1;
+  string tenantId = 2;
+  string inboxId = 3;
+  uint64 incarnation = 4;
+  uint64 version = 5;
+}
+
+message DeleteReply {
+  enum Code {
+    OK = 0;
+    NO_INBOX = 1;
+    CONFLICT = 2;
+    BACK_PRESSURE_REJECTED = 3;
+    TRY_LATER = 4;
+    ERROR = 5;
+  }
+  uint64 reqId = 1;
+  Code code = 2;
+  map<string, TopicFilterOption> topicFilters = 3;
+}
+
+message ExpireRequest {
+  uint64 reqId = 1;
+  string tenantId = 2;
+  string inboxId = 3;
+  uint64 now = 4;
+}
+
+message ExpireReply {
+  enum Code {
+    OK = 0;
+    NOT_FOUND = 1;
+    TRY_LATER = 2;
+    ERROR = 3;
+  }
+  uint64 reqId = 1;
+  Code code = 2;
+}
+
 message ExpireAllRequest {
   uint64 reqId = 1;
   string tenantId = 2;
@@ -270,7 +314,8 @@ message ExpireAllRequest {
 message ExpireAllReply {
   enum Code {
     OK = 0;
-    ERROR = 1;
+    TRY_LATER = 1;
+    ERROR = 2;
   }
   uint64 reqId = 1;
   Code code = 2;

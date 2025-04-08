@@ -35,7 +35,6 @@ public class LoadSubStatsTest extends InboxStoreTest {
         requestCreate(BatchCreateRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
-            .setKeepAliveSeconds(5)
             .setExpirySeconds(5)
             .setClient(client)
             .setNow(now)

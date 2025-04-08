@@ -50,6 +50,7 @@ import com.baidu.bifromq.baserpc.client.IConnectable;
 import com.baidu.bifromq.baserpc.server.IRPCServer;
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
+import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
@@ -84,10 +85,12 @@ import com.baidu.bifromq.metrics.TenantMetric;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
+import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessagePack;
+import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Struct;
 import io.micrometer.core.instrument.Gauge;
@@ -131,11 +134,17 @@ abstract class InboxStoreTest {
     private final int tickerThreads = 2;
     public Path dbRootDir;
     @Mock
+    protected IDistClient distClient;
+    @Mock
     protected IInboxClient inboxClient;
+    @Mock
+    protected IRetainClient retainClient;
     @Mock
     protected ISettingProvider settingProvider;
     @Mock
     protected IEventCollector eventCollector;
+    @Mock
+    protected IResourceThrottler resourceThrottler;
     protected SimpleMeterRegistry meterRegistry;
     protected IBaseKVStoreClient storeClient;
     protected IInboxStore testStore;
@@ -204,10 +213,13 @@ abstract class InboxStoreTest {
             .rpcServerBuilder(rpcServerBuilder)
             .agentHost(agentHost)
             .metaService(metaService)
+            .distClient(distClient)
             .inboxClient(inboxClient)
+            .retainClient(retainClient)
             .inboxStoreClient(storeClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
+            .resourceThrottler(resourceThrottler)
             .storeOptions(options)
             .tickerThreads(tickerThreads)
             .balancerFactoryConfig(Map.of(RangeBootstrapBalancerFactory.class.getName(), Struct.getDefaultInstance()))
@@ -291,7 +303,7 @@ abstract class InboxStoreTest {
         return reply.getRwCoProcResult().getInboxService();
     }
 
-    protected GCReply requestGCScan(GCRequest request) {
+    protected GCReply requestGC(GCRequest request) {
         long reqId = ThreadLocalRandom.current().nextInt();
         InboxServiceROCoProcInput input = InboxServiceROCoProcInput.newBuilder()
             .setReqId(reqId)
@@ -331,7 +343,7 @@ abstract class InboxStoreTest {
         return output.getBatchFetch().getResultList();
     }
 
-    protected List<BatchAttachReply.Result> requestAttach(BatchAttachRequest.Params... params) {
+    protected List<BatchAttachReply.Code> requestAttach(BatchAttachRequest.Params... params) {
         assert params.length > 0;
         long reqId = ThreadLocalRandom.current().nextInt();
         ByteString routeKey = inboxStartKeyPrefix(params[0].getClient().getTenantId(), params[0].getInboxId());
@@ -340,11 +352,11 @@ abstract class InboxStoreTest {
         InboxServiceRWCoProcOutput output = mutate(routeKey, input);
         assertTrue(output.hasBatchAttach());
         assertEquals(output.getReqId(), reqId);
-        assertEquals(params.length, output.getBatchAttach().getResultCount());
-        return output.getBatchAttach().getResultList();
+        assertEquals(params.length, output.getBatchAttach().getCodeCount());
+        return output.getBatchAttach().getCodeList();
     }
 
-    protected List<BatchDetachReply.Result> requestDetach(BatchDetachRequest.Params... params) {
+    protected List<BatchDetachReply.Code> requestDetach(BatchDetachRequest.Params... params) {
         assert params.length > 0;
         long reqId = ThreadLocalRandom.current().nextInt();
         ByteString routeKey = inboxStartKeyPrefix(params[0].getTenantId(), params[0].getInboxId());
@@ -353,8 +365,8 @@ abstract class InboxStoreTest {
         InboxServiceRWCoProcOutput output = mutate(routeKey, input);
         assertTrue(output.hasBatchDetach());
         assertEquals(output.getReqId(), reqId);
-        assertEquals(params.length, output.getBatchDetach().getResultCount());
-        return output.getBatchDetach().getResultList();
+        assertEquals(params.length, output.getBatchDetach().getCodeCount());
+        return output.getBatchDetach().getCodeList();
     }
 
     protected List<Boolean> requestCreate(BatchCreateRequest.Params... params) {
@@ -413,10 +425,10 @@ abstract class InboxStoreTest {
         assert params.length > 0;
         long reqId = ThreadLocalRandom.current().nextInt();
         ByteString routeKey = inboxStartKeyPrefix(params[0].getTenantId(), params[0].getInboxId());
-        InboxServiceRWCoProcInput input = MessageUtil.buildTouchRequest(reqId, BatchTouchRequest.newBuilder()
+        InboxServiceROCoProcInput input = MessageUtil.buildTouchRequest(reqId, BatchTouchRequest.newBuilder()
             .addAllParams(List.of(params))
             .build());
-        InboxServiceRWCoProcOutput output = mutate(routeKey, input);
+        InboxServiceROCoProcOutput output = query(routeKey, input);
         assertTrue(output.hasBatchTouch());
         assertEquals(output.getReqId(), reqId);
         return output.getBatchTouch().getCodeList();

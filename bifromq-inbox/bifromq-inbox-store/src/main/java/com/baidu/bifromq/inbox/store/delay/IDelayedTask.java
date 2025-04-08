@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024. The BifroMQ Authors. All Rights Reserved.
+ * Copyright (c) 2025. The BifroMQ Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -11,15 +11,18 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.inbox.store.gc;
+package com.baidu.bifromq.inbox.store.delay;
 
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-import javax.annotation.Nullable;
 
-public interface IInboxStoreGCProcessor {
-    enum Result {
-        OK, ERROR;
-    }
+/**
+ * Interface for delayed task.
+ *
+ * @param <KeyT> the type of the key
+ */
+public interface IDelayedTask<KeyT> {
+    CompletableFuture<Void> run(KeyT key, IDelayTaskRunner<KeyT> runner);
 
-    CompletableFuture<Result> gc(long reqId, @Nullable String tenantId, @Nullable Integer expirySeconds, long now);
+    Duration getDelay();
 }

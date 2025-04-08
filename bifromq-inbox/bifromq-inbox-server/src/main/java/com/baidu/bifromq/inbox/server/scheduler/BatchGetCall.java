@@ -110,6 +110,5 @@ class BatchGetCall extends BatchQueryCall<GetRequest, GetReply> {
             return;
         }
         callTask.resultPromise().completeExceptionally(e);
-
     }
 }

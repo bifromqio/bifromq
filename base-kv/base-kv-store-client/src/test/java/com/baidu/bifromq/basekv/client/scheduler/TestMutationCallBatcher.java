@@ -33,6 +33,6 @@ public class TestMutationCallBatcher extends MutationCallBatcher<ByteString, Byt
 
     @Override
     protected IBatchCall<ByteString, ByteString, MutationCallBatcherKey> newBatch() {
-        return new TestBatchMutationCall(batcherKey.id, storeClient, pipelineExpiry);
+        return new TestBatchMutationCall(storeClient, pipelineExpiry, batcherKey);
     }
 }

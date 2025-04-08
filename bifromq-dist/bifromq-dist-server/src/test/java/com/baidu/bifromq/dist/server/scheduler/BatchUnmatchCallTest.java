@@ -32,7 +32,6 @@ import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
 import com.baidu.bifromq.util.TopicUtil;
 import java.time.Duration;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
@@ -50,7 +49,8 @@ public class BatchUnmatchCallTest {
     void setUp() {
         rangeId = KVRangeId.newBuilder().setId(1).build();
         storeClient = mock(IBaseKVStoreClient.class);
-        batchUnmatchCall = new BatchUnmatchCall(rangeId, storeClient, Duration.ofMinutes(1));
+        batchUnmatchCall = new BatchUnmatchCall(storeClient, Duration.ofMinutes(1),
+            new MutationCallBatcherKey(rangeId, "leaderStoreId", 1L));
     }
 
     @Test
@@ -75,8 +75,37 @@ public class BatchUnmatchCallTest {
             .setIncarnation(1L)
             .build();
 
+        class CallTask implements ICallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey> {
+            final UnmatchRequest request;
+
+            CallTask(UnmatchRequest request) {
+                this.request = request;
+            }
+
+            @Override
+            public UnmatchRequest call() {
+                return request;
+            }
+
+            @Override
+            public CompletableFuture<UnmatchReply> resultPromise() {
+                return null;
+            }
+
+            @Override
+            public MutationCallBatcherKey batcherKey() {
+                return null;
+            }
+
+            @Override
+            public long ts() {
+                return 0;
+            }
+        }
+
         // contain duplicate request
-        Iterator<UnmatchRequest> iterator = List.of(request1, request1, request2).iterator();
+        Iterable<ICallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey>> iterator =
+            List.of(new CallTask(request1), new CallTask(request1), new CallTask(request2));
 
         RWCoProcInput input = batchUnmatchCall.makeBatch(iterator);
 

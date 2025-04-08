@@ -62,7 +62,7 @@ public class InboxInsertScheduler extends MutationCallScheduler<InboxSubMessageP
 
         @Override
         protected IBatchCall<InboxSubMessagePack, InboxInsertResult, MutationCallBatcherKey> newBatch() {
-            return new BatchInsertCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
+            return new BatchInsertCall(storeClient, Duration.ofMinutes(5), batcherKey);
         }
     }
 }
