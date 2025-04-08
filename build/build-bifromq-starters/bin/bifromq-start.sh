@@ -159,6 +159,7 @@ eval JVM_GC=("$JVM_GC_OPTS")
 if [ -z "$JVM_HEAP_OPTS" ]; then
   MEMORY_FRACTION=70 # Percentage of total memory to use
   HEAP_MEMORY=$(($MEMORY / 100 * $MEMORY_FRACTION))
+  SOFT_MAX_HEAP_MEMORY=$(($HEAP_MEMORY * 80 / 100))
   MIN_HEAP_MEMORY=$(($HEAP_MEMORY / 2))
 
   # Calculate max direct memory based on total memory
@@ -169,7 +170,7 @@ if [ -z "$JVM_HEAP_OPTS" ]; then
   MAX_META_SPACE_MEMORY=500m
 
   # Set heap options
-  JVM_HEAP_OPTS="-Xms$(memory_in_mb ${MIN_HEAP_MEMORY})m -Xmx$(memory_in_mb ${HEAP_MEMORY})m -XX:MetaspaceSize=${META_SPACE_MEMORY} -XX:MaxMetaspaceSize=${MAX_META_SPACE_MEMORY} -XX:MaxDirectMemorySize=${MAX_DIRECT_MEMORY}"
+  JVM_HEAP_OPTS="-Xms$(memory_in_mb ${MIN_HEAP_MEMORY})m -Xmx$(memory_in_mb ${HEAP_MEMORY})m -XX:SoftMaxHeapSize=$(memory_in_mb ${SOFT_MAX_HEAP_MEMORY})m -XX:MetaspaceSize=${META_SPACE_MEMORY} -XX:MaxMetaspaceSize=${MAX_META_SPACE_MEMORY} -XX:MaxDirectMemorySize=${MAX_DIRECT_MEMORY}"
 fi
 
 EXTRA_JVM_OPTS="$EXTRA_JVM_OPTS -Dio.netty.tryReflectionSetAccessible=true -Dio.netty.allocator.cacheTrimIntervalMillis=5000 --add-opens java.base/java.nio=ALL-UNNAMED"

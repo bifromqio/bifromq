@@ -136,6 +136,7 @@ if "" == "%JVM_HEAP_OPTS%" (
     set MEMORY_FRACTION=70
     set /a HEAP_MEMORY=!MEMORY!/100*!MEMORY_FRACTION!
     set /a MIN_HEAP_MEMORY=!HEAP_MEMORY!/2
+    set /a SOFT_MAX_HEAP_MEMORY=!HEAP_MEMORY! * 80 / 100
 
     rem Calculate max direct memory based on total memory
     rem Percentage of total memory to use for max direct memory
@@ -146,7 +147,8 @@ if "" == "%JVM_HEAP_OPTS%" (
     set MAX_META_SPACE_MEMORY=500m
     call :memory_in_mb XMS !MIN_HEAP_MEMORY!
     call :memory_in_mb XMX !HEAP_MEMORY!
-    set JVM_HEAP_OPTS="-Xms!XMS!m -Xmx!XMX!m -XX:MetaspaceSize=!META_SPACE_MEMORY! -XX:MaxMetaspaceSize=!MAX_META_SPACE_MEMORY! -XX:MaxDirectMemorySize=!MAX_DIRECT_MEMORY!"
+    call :memory_in_mb SXMX !SOFT_MAX_HEAP_MEMORY!
+    set JVM_HEAP_OPTS="-Xms!XMS!m -Xmx!XMX!m -XX:SoftMaxHeapSize=!SXMX!m -XX:MetaspaceSize=!META_SPACE_MEMORY! -XX:MaxMetaspaceSize=!MAX_META_SPACE_MEMORY! -XX:MaxDirectMemorySize=!MAX_DIRECT_MEMORY!"
 )
 
 rem Generic jvm settings you want to add
