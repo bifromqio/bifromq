@@ -87,11 +87,20 @@ public class MQTT3ConnectHandlerTest extends MockableTest {
         connectHandler = new MQTT3ConnectHandler();
         when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
         when(clientBalancer.needRedirect(any())).thenReturn(Optional.empty());
-        when(settingProvider.provide(any(Setting.class), anyString())).thenAnswer(
-            invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
+        when(settingProvider.provide(any(Setting.class), anyString()))
+            .thenAnswer(invocation -> {
+                Setting setting = invocation.getArgument(0);
+                switch (setting) {
+                    case MinKeepAliveSeconds -> {
+                        return keepAlive;
+                    }
+                    default -> {
+                        return ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1));
+                    }
+                }
+            });
         sessionContext = MQTTSessionContext.builder()
             .serverId(serverId)
-            .defaultKeepAliveTimeSeconds(keepAlive)
             .authProvider(authProvider)
             .inboxClient(inboxClient)
             .eventCollector(eventCollector)

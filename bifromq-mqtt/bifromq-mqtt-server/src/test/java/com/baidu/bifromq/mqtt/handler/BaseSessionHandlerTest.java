@@ -181,21 +181,20 @@ public abstract class BaseSessionHandlerTest extends MockableTest {
         when(oomCondition.meet()).thenReturn(false);
         when(clientBalancer.needRedirect(any())).thenReturn(Optional.empty());
         sessionContext = MQTTSessionContext.builder()
-                .serverId(serverId)
-                .ticker(testTicker)
-                .defaultKeepAliveTimeSeconds(2)
-                .distClient(distClient)
-                .retainClient(retainClient)
-                .authProvider(authProvider)
-                .localDistService(localDistService)
-                .localSessionRegistry(localSessionRegistry)
-                .sessionDictClient(sessionDictClient)
-                .clientBalancer(clientBalancer)
-                .inboxClient(inboxClient)
-                .eventCollector(eventCollector)
-                .resourceThrottler(resourceThrottler)
-                .settingProvider(settingProvider)
-                .build();
+            .serverId(serverId)
+            .ticker(testTicker)
+            .distClient(distClient)
+            .retainClient(retainClient)
+            .authProvider(authProvider)
+            .localDistService(localDistService)
+            .localSessionRegistry(localSessionRegistry)
+            .sessionDictClient(sessionDictClient)
+            .clientBalancer(clientBalancer)
+            .inboxClient(inboxClient)
+            .eventCollector(eventCollector)
+            .resourceThrottler(resourceThrottler)
+            .settingProvider(settingProvider)
+            .build();
         mockSettings();
     }
 
@@ -225,8 +224,18 @@ public abstract class BaseSessionHandlerTest extends MockableTest {
 
     protected void mockSettings() {
         Mockito.lenient().when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
-        Mockito.lenient().when(settingProvider.provide(any(Setting.class), anyString())).thenAnswer(
-            invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
+        Mockito.lenient().when(settingProvider.provide(any(Setting.class), anyString()))
+            .thenAnswer(invocation -> {
+                Setting setting = invocation.getArgument(0);
+                switch (setting) {
+                    case MinKeepAliveSeconds -> {
+                        return 2;
+                    }
+                    default -> {
+                        return ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1));
+                    }
+                }
+            });
         Mockito.lenient().when(settingProvider.provide(eq(InBoundBandWidth), anyString())).thenReturn(51200 * 1024L);
         Mockito.lenient().when(settingProvider.provide(eq(OutBoundBandWidth), anyString())).thenReturn(51200 * 1024L);
         Mockito.lenient().when(settingProvider.provide(eq(ForceTransient), anyString())).thenReturn(false);

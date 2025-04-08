@@ -51,9 +51,11 @@ public class MQTTConnectHandlerTest extends MockableTest {
     private final int keepAlive = 2;
     private final String remoteIp = "127.0.0.1";
     private final int remotePort = 8888;
-    private final ISettingProvider settingProvider = Setting::current;
     private MQTTConnectHandler connectHandler;
     private EmbeddedChannel channel;
+
+    @Mock
+    private ISettingProvider settingProvider;
     @Mock
     private IInboxClient inboxClient;
     @Mock
@@ -65,9 +67,20 @@ public class MQTTConnectHandlerTest extends MockableTest {
     @BeforeMethod(alwaysRun = true)
     public void setup() {
         connectHandler = Mockito.spy(MQTTConnectHandler.class);
+        when(settingProvider.provide(any(Setting.class), anyString()))
+            .thenAnswer(invocation -> {
+                Setting setting = invocation.getArgument(0);
+                switch (setting) {
+                    case MinKeepAliveSeconds -> {
+                        return keepAlive;
+                    }
+                    default -> {
+                        return ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1));
+                    }
+                }
+            });
         sessionContext = MQTTSessionContext.builder()
             .serverId(serverId)
-            .defaultKeepAliveTimeSeconds(keepAlive)
             .inboxClient(inboxClient)
             .eventCollector(eventCollector)
             .resourceThrottler(resourceThrottler)

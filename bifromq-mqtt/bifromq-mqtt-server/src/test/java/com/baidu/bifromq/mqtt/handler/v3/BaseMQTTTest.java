@@ -166,6 +166,7 @@ public abstract class BaseMQTTTest {
     public void setup() {
         closeable = MockitoAnnotations.openMocks(this);
         when(clientBalancer.needRedirect(any())).thenReturn(Optional.empty());
+
         testTicker = new TestTicker();
         sessionRegistry = new LocalSessionRegistry();
         ILocalTopicRouter router = new LocalTopicRouter(serverId, distClient);
@@ -183,7 +184,6 @@ public abstract class BaseMQTTTest {
             .clientBalancer(clientBalancer)
             .localSessionRegistry(sessionRegistry)
             .localDistService(distService)
-            .defaultKeepAliveTimeSeconds(300)
             .ticker(testTicker)
             .serverId(serverId)
             .build();
@@ -220,8 +220,18 @@ public abstract class BaseMQTTTest {
 
     protected void mockSettings() {
         Mockito.lenient().when(resourceThrottler.hasResource(anyString(), any())).thenReturn(true);
-        Mockito.lenient().when(settingProvider.provide(any(Setting.class), anyString())).thenAnswer(
-            invocation -> ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1)));
+        Mockito.lenient().when(settingProvider.provide(any(Setting.class), anyString()))
+            .thenAnswer(invocation -> {
+                Setting setting = invocation.getArgument(0);
+                switch (setting) {
+                    case MinKeepAliveSeconds -> {
+                        return 2;
+                    }
+                    default -> {
+                        return ((Setting) invocation.getArgument(0)).current(invocation.getArgument(1));
+                    }
+                }
+            });
         Mockito.lenient().when(settingProvider.provide(eq(InBoundBandWidth), anyString())).thenReturn(51200 * 1024L);
         Mockito.lenient().when(settingProvider.provide(eq(OutBoundBandWidth), anyString())).thenReturn(51200 * 1024L);
         Mockito.lenient().when(settingProvider.provide(eq(ForceTransient), anyString())).thenReturn(false);

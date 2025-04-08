@@ -32,7 +32,6 @@ public class MQTTServerConfig {
     private int maxDisconnPerSec = 1000;
     private int maxMsgByteSize = 256 * 1024;
     private int maxConnBandwidth = 512 * 1024;
-    private int defaultKeepAliveSec = 300;
     private int bossELGThreads = 1;
     private int workerELGThreads = Math.max(2, EnvProvider.INSTANCE.availableProcessors() / 2);
 

@@ -98,7 +98,6 @@ class MQTTBroker implements IMQTTBroker {
                 .retainClient(builder.retainClient)
                 .sessionDictClient(builder.sessionDictClient)
                 .clientBalancer(builder.clientBalancer)
-                .defaultKeepAliveTimeSeconds(builder.defaultKeepAliveSeconds)
                 .build();
             log.info("Starting MQTT broker");
             log.debug("Starting server channel");

@@ -23,6 +23,6 @@ public final class PersistentSessionDetachTimeoutSecond extends BifroMQSysProp<I
     public static final PersistentSessionDetachTimeoutSecond INSTANCE = new PersistentSessionDetachTimeoutSecond();
 
     private PersistentSessionDetachTimeoutSecond() {
-        super("persistent_session_detach_timeout_second", Math.max(60, 600), IntegerParser.POSITIVE);
+        super("persistent_session_detach_timeout_second", 300, IntegerParser.from(60, 600));
     }
 }

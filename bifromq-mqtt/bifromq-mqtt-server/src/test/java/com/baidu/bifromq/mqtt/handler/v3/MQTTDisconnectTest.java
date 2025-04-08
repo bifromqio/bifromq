@@ -24,18 +24,20 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_STO
 import static com.baidu.bifromq.plugin.eventcollector.EventType.PROTOCOL_VIOLATION;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
+import com.baidu.bifromq.plugin.settingprovider.Setting;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
-import org.testng.Assert;
 import org.testng.annotations.Test;
 
 @Slf4j
@@ -54,7 +56,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
 
         channel.writeInbound(MQTTMessageUtils.disconnectMessage());
 
-        Assert.assertFalse(channel.isActive());
+        assertFalse(channel.isActive());
         verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, BY_CLIENT, MQTT_SESSION_STOP);
     }
 
@@ -73,7 +75,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
         assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_ACCEPTED);
 
         channel.writeInbound(MQTTMessageUtils.disconnectMessage());
-        Assert.assertFalse(channel.isActive());
+        assertFalse(channel.isActive());
         verifyEvent(CLIENT_CONNECTED, BY_CLIENT);
     }
 
@@ -82,19 +84,19 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
         mockAuthPass();
         mockSessionReg();
         mockInboxExpire(ExpireReply.Code.NOT_FOUND);
-        MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
+        MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true, "testClientId", 60);
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
 
-        channel.advanceTimeBy(50, TimeUnit.SECONDS);
-        testTicker.advanceTimeBy(50, TimeUnit.SECONDS);
+        channel.advanceTimeBy(100, TimeUnit.SECONDS);
+        testTicker.advanceTimeBy(100, TimeUnit.SECONDS);
         channel.runPendingTasks();
-        Assert.assertFalse(channel.isActive());
+        assertFalse(channel.isActive());
         verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, IDLE, MQTT_SESSION_STOP);
     }
 
     @Test
-    public void idle2() {
+    public void noKeepAlive() {
         mockAuthPass();
         mockSessionReg();
         mockInboxExpire(ExpireReply.Code.NOT_FOUND);
@@ -103,45 +105,31 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
 
-        channel.advanceTimeBy(sessionContext.defaultKeepAliveTimeSeconds * 2L, TimeUnit.SECONDS);
-        testTicker.advanceTimeBy(sessionContext.defaultKeepAliveTimeSeconds * 2L, TimeUnit.SECONDS);
+        int keepAlive = settingProvider.provide(Setting.MinKeepAliveSeconds, tenantId);
+        channel.advanceTimeBy(keepAlive * 2L, TimeUnit.SECONDS);
+        testTicker.advanceTimeBy(keepAlive * 2L, TimeUnit.SECONDS);
         channel.runPendingTasks();
-        Assert.assertFalse(channel.isActive());
-        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, IDLE, MQTT_SESSION_STOP);
+        assertTrue(channel.isActive());
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED);
     }
 
     @Test
-    public void idle3() {
+    public void enforceMinKeepAlive() {
         mockAuthPass();
         mockSessionReg();
         mockInboxExpire(ExpireReply.Code.NOT_FOUND);
-        // keepalive too short, least is 5s
+        int keepAlive = settingProvider.provide(Setting.MinKeepAliveSeconds, tenantId);
+
+        // keepalive too short, least is 60s
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true, "abc", 1);
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
 
-        channel.advanceTimeBy(10, TimeUnit.SECONDS);
-        testTicker.advanceTimeBy(10, TimeUnit.SECONDS);
+        channel.advanceTimeBy(2, TimeUnit.SECONDS);
+        testTicker.advanceTimeBy(2, TimeUnit.SECONDS);
         channel.runPendingTasks();
-        Assert.assertFalse(channel.isActive());
-        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, IDLE, MQTT_SESSION_STOP);
-    }
-
-    @Test
-    public void idle4() {
-        mockAuthPass();
-        mockSessionReg();
-        mockInboxExpire(ExpireReply.Code.NOT_FOUND);
-        // keepalive too long, max is 7200s
-        MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true, "abc", 100000);
-        channel.writeInbound(connectMessage);
-        channel.runPendingTasks();
-
-        channel.advanceTimeBy((int) (7200 * 1.5) + 1, TimeUnit.SECONDS);
-        testTicker.advanceTimeBy((int) (7200 * 1.5) + 1, TimeUnit.SECONDS);
-        channel.runPendingTasks();
-        Assert.assertFalse(channel.isActive());
-        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, IDLE, MQTT_SESSION_STOP);
+        assertTrue(channel.isActive());
+        verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED);
     }
 
     @Test
@@ -157,7 +145,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
         channel.writeInbound(connectMessage);
         channel.advanceTimeBy(5, TimeUnit.SECONDS);
         channel.runPendingTasks();
-        Assert.assertFalse(channel.isActive());
+        assertFalse(channel.isActive());
         verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, PROTOCOL_VIOLATION, MQTT_SESSION_STOP);
     }
 
@@ -172,7 +160,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
 
         sessionRegistry.disconnectAll(1000);
         channel.runPendingTasks();
-        Assert.assertFalse(channel.isActive());
+        assertFalse(channel.isActive());
         verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, BY_SERVER, MQTT_SESSION_STOP);
     }
 
@@ -189,7 +177,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
         channel.writeInbound(mqttMessage);
         channel.advanceTimeBy(5, TimeUnit.SECONDS);
         channel.runPendingTasks();
-        Assert.assertFalse(channel.isActive());
+        assertFalse(channel.isActive());
         verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, BAD_PACKET, MQTT_SESSION_STOP);
     }
 }

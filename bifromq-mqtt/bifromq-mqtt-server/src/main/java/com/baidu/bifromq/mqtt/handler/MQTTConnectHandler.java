@@ -77,8 +77,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
     protected static final boolean SANITY_CHECK = SanityCheckMqttUtf8String.INSTANCE.get();
-    private static final int MIN_CLIENT_KEEP_ALIVE_DURATION = 5;
-    private static final int MAX_CLIENT_KEEP_ALIVE_DURATION = 2 * 60 * 60;
     private final FutureTracker cancellableTasks = new FutureTracker();
     private ChannelHandlerContext ctx;
     private MQTTSessionContext sessionCtx;
@@ -156,7 +154,8 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                             return CompletableFuture.completedFuture(null);
                         }
                         LWT willMessage = connMsg.variableHeader().isWillFlag() ? getWillMessage(connMsg) : null;
-                        int keepAliveSeconds = keepAliveSeconds(connMsg.variableHeader().keepAliveTimeSeconds());
+                        int keepAliveSeconds = keepAliveSeconds(connMsg.variableHeader().keepAliveTimeSeconds(),
+                            settings);
                         String userSessionId = userSessionId(clientInfo);
                         String requestClientId = connMsg.payload().clientIdentifier();
                         if (isCleanSession(connMsg, settings)) {
@@ -525,13 +524,10 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
 
     protected abstract int maxPacketSize(MqttConnectMessage connMsg, TenantSettings settings);
 
-    private int keepAliveSeconds(int requestKeepAliveSeconds) {
-        if (requestKeepAliveSeconds == 0) {
-            // 20 mins the default keep alive duration
-            requestKeepAliveSeconds = sessionCtx.defaultKeepAliveTimeSeconds;
+    private int keepAliveSeconds(int requestKeepAliveSeconds, TenantSettings settings) {
+        if (requestKeepAliveSeconds > 0) {
+            requestKeepAliveSeconds = Math.max(settings.minKeepAliveSeconds, requestKeepAliveSeconds);
         }
-        requestKeepAliveSeconds = Math.max(MIN_CLIENT_KEEP_ALIVE_DURATION, requestKeepAliveSeconds);
-        requestKeepAliveSeconds = Math.min(requestKeepAliveSeconds, MAX_CLIENT_KEEP_ALIVE_DURATION);
         return requestKeepAliveSeconds;
     }
 

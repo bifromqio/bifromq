@@ -373,8 +373,10 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 }
             });
         lastActiveAtNanos = sessionCtx.nanoTime();
-        idleTimeoutTask = ctx.executor()
-            .scheduleAtFixedRate(this::checkIdle, idleTimeoutNanos, idleTimeoutNanos, TimeUnit.NANOSECONDS);
+        if (idleTimeoutNanos > 0) {
+            idleTimeoutTask = ctx.executor()
+                .scheduleAtFixedRate(this::checkIdle, idleTimeoutNanos, idleTimeoutNanos, TimeUnit.NANOSECONDS);
+        }
         scheduleRedirectCheck();
         onInitialized.whenComplete((v, e) -> tenantMeter.recordCount(MqttConnectCount));
         memUsage.addAndGet(estMemSize());
@@ -985,6 +987,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         writeAndFlush(pubMsg).addListener(f -> {
             memUsage.addAndGet(-msgSize);
             if (f.isSuccess()) {
+                lastActiveAtNanos = sessionCtx.nanoTime();
                 if (settings.debugMode) {
                     eventCollector.report(getLocal(QoS0Pushed.class)
                         .isRetain(msg.isRetain())

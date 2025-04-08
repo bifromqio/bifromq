@@ -18,14 +18,10 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public enum Setting {
-    MQTT3Enabled(Boolean.class, val -> true, true),
-    MQTT4Enabled(Boolean.class, val -> true, true),
-    MQTT5Enabled(Boolean.class, val -> true, true),
-    DebugModeEnabled(Boolean.class, val -> true, false),
-    ForceTransient(Boolean.class, val -> true, false),
-    ByPassPermCheckError(Boolean.class, val -> true, true),
-    PayloadFormatValidationEnabled(Boolean.class, val -> true, true),
-    RetainEnabled(Boolean.class, val -> true, true),
+    MQTT3Enabled(Boolean.class, val -> true, true), MQTT4Enabled(Boolean.class, val -> true, true),
+    MQTT5Enabled(Boolean.class, val -> true, true), DebugModeEnabled(Boolean.class, val -> true, false),
+    ForceTransient(Boolean.class, val -> true, false), ByPassPermCheckError(Boolean.class, val -> true, true),
+    PayloadFormatValidationEnabled(Boolean.class, val -> true, true), RetainEnabled(Boolean.class, val -> true, true),
     WildcardSubscriptionEnabled(Boolean.class, val -> true, true),
     SubscriptionIdentifierEnabled(Boolean.class, val -> true, true),
     SharedSubscriptionEnabled(Boolean.class, val -> true, true),
@@ -46,6 +42,7 @@ public enum Setting {
     ResendTimeoutSeconds(Integer.class, val -> (int) val > 0, 10),
     MaxTopicFiltersPerSub(Integer.class, val -> (int) val > 0 && (int) val <= 100, 10),
     MaxSessionExpirySeconds(Integer.class, val -> (int) val > 0, 24 * 60 * 60),
+    MinKeepAliveSeconds(Integer.class, val -> (int) val > 0 && (int) val < 65535, 60),
     SessionInboxSize(Integer.class, val -> (int) val > 0 && (int) val <= 65535, 1000),
     QoS0DropOldest(Boolean.class, val -> true, false),
     RetainMessageMatchLimit(Integer.class, val -> (int) val >= 0, 10);
@@ -110,8 +107,7 @@ public enum Setting {
                     return Boolean.parseBoolean(override);
                 }
             } catch (Throwable e) {
-                log.error("Unable to parse setting value from system property: setting={}, value={}",
-                    name(), override);
+                log.error("Unable to parse setting value from system property: setting={}, value={}", name(), override);
                 return initial;
             }
         }

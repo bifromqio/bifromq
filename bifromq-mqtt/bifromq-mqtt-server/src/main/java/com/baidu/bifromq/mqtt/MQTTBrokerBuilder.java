@@ -43,7 +43,6 @@ public class MQTTBrokerBuilder implements IMQTTBrokerBuilder {
     int connectTimeoutSeconds = 20;
     int connectRateLimit = 1000;
     int disconnectRate = 1000;
-    int defaultKeepAliveSeconds = 5 * 60; // 5 min
     long writeLimit = 512 * 1024;
     long readLimit = 512 * 1024;
     int maxBytesInMessage = 256 * 1024;

@@ -37,6 +37,12 @@ import java.util.Optional;
 import javax.inject.Singleton;
 
 public class MQTTServiceModule extends AbstractModule {
+    @Override
+    protected void configure() {
+        bind(new TypeLiteral<Optional<IMQTTBroker>>() {
+        }).toProvider(MQTTBrokerServerProvider.class).in(Singleton.class);
+    }
+
     private static class MQTTBrokerServerProvider implements Provider<Optional<IMQTTBroker>> {
         private final StandaloneConfig config;
         private final ServiceInjector injector;
@@ -71,7 +77,6 @@ public class MQTTServiceModule extends AbstractModule {
                 .disconnectRate(serverConfig.getMaxDisconnPerSec())
                 .readLimit(serverConfig.getMaxConnBandwidth())
                 .writeLimit(serverConfig.getMaxConnBandwidth())
-                .defaultKeepAliveSeconds(serverConfig.getDefaultKeepAliveSec())
                 .maxBytesInMessage(serverConfig.getMaxMsgByteSize());
             if (serverConfig.getTcpListener().isEnable()) {
                 brokerBuilder.buildTcpConnListener()
@@ -104,11 +109,5 @@ public class MQTTServiceModule extends AbstractModule {
             return Optional.of(brokerBuilder.build());
         }
 
-    }
-
-    @Override
-    protected void configure() {
-        bind(new TypeLiteral<Optional<IMQTTBroker>>() {
-        }).toProvider(MQTTBrokerServerProvider.class).in(Singleton.class);
     }
 }

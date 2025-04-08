@@ -37,7 +37,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public final class MQTTSessionContext {
-    private final IAuthProvider authProvider;
     public final ILocalSessionRegistry localSessionRegistry;
     public final ILocalDistService localDistService;
     public final IEventCollector eventCollector;
@@ -49,7 +48,7 @@ public final class MQTTSessionContext {
     public final ISessionDictClient sessionDictClient;
     public final IClientBalancer clientBalancer;
     public final String serverId;
-    public final int defaultKeepAliveTimeSeconds;
+    private final IAuthProvider authProvider;
     private final Ticker ticker;
     private final FutureTracker futureTracker = new FutureTracker();
     private final TenantGauge tenantTransientSubNumGauge;
@@ -65,7 +64,6 @@ public final class MQTTSessionContext {
                        IRetainClient retainClient,
                        ISessionDictClient sessionDictClient,
                        IClientBalancer clientBalancer,
-                       int defaultKeepAliveTimeSeconds,
                        IEventCollector eventCollector,
                        IResourceThrottler resourceThrottler,
                        ISettingProvider settingProvider,
@@ -82,7 +80,6 @@ public final class MQTTSessionContext {
         this.retainClient = retainClient;
         this.sessionDictClient = sessionDictClient;
         this.clientBalancer = clientBalancer;
-        this.defaultKeepAliveTimeSeconds = defaultKeepAliveTimeSeconds;
         this.ticker = ticker == null ? Ticker.systemTicker() : ticker;
         this.tenantTransientSubNumGauge = new TenantGauge(MqttTransientSubCountGauge);
         this.tenantMemGauge = new TenantGauge(MqttSessionWorkingMemoryGauge);
