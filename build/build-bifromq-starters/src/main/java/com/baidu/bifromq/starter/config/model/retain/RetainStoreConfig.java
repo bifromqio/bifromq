@@ -13,12 +13,14 @@
 
 package com.baidu.bifromq.starter.config.model.retain;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.starter.config.model.BalancerOptions;
 import com.baidu.bifromq.starter.config.model.RocksDBEngineConfig;
 import com.baidu.bifromq.starter.config.model.StorageEngineConfig;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
 import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.Getter;
@@ -48,12 +50,27 @@ public class RetainStoreConfig {
 
     public RetainStoreConfig() {
         balanceConfig.getBalancers().put("com.baidu.bifromq.retain.store.balance.ReplicaCntBalancerFactory",
-            Struct.getDefaultInstance());
+            Struct.newBuilder()
+                .putFields("votersPerRange", Value.newBuilder().setNumberValue(3).build())
+                .putFields("learnersPerRange", Value.newBuilder().setNumberValue(-1).build())
+                .build());
+        balanceConfig.getBalancers().put("com.baidu.bifromq.retain.store.balance.RangeSplitBalancerFactory",
+            Struct.newBuilder()
+                .putFields("maxRangesPerStore", Value.newBuilder().setNumberValue(
+                    (EnvProvider.INSTANCE.availableProcessors() / 4.0)).build())
+                .putFields("maxCPUUsage", Value.newBuilder().setNumberValue(0.8).build())
+                .putFields("maxIODensity", Value.newBuilder().setNumberValue(100).build())
+                .putFields("ioNanosLimit", Value.newBuilder().setNumberValue(30_000).build())
+                .build());
         balanceConfig.getBalancers().put(
             "com.baidu.bifromq.retain.store.balance.UnreachableReplicaRemovalBalancerFactory",
-            Struct.getDefaultInstance());
+            Struct.newBuilder()
+                .putFields("probeSeconds", Value.newBuilder().setNumberValue(15).build())
+                .build());
         balanceConfig.getBalancers().put("com.baidu.bifromq.retain.store.balance.RangeBootstrapBalancerFactory",
-            Struct.getDefaultInstance());
+            Struct.newBuilder()
+                .putFields("waitSeconds", Value.newBuilder().setNumberValue(15).build())
+                .build());
         balanceConfig.getBalancers().put("com.baidu.bifromq.retain.store.balance.RedundantEpochRemovalBalancerFactory",
             Struct.getDefaultInstance());
     }

@@ -13,22 +13,62 @@
 
 package com.baidu.bifromq.retain.store.balance;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.RangeSplitBalancer;
 import com.baidu.bifromq.retain.store.spi.IRetainStoreBalancerFactory;
-import com.baidu.bifromq.sysprops.props.RetainStoreSplitMaxRangeNum;
-import com.baidu.bifromq.sysprops.props.RetainStoreSplitUnderCPUUsage;
-import com.baidu.bifromq.sysprops.props.RetainStoreSplitUnderIODensity;
-import com.baidu.bifromq.sysprops.props.RetainStoreSplitUnderIONanos;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class RangeSplitBalancerFactory implements IRetainStoreBalancerFactory {
+    private static final String MAX_RANGES_PER_STORE = "maxRangesPerStore";
+    private static final String MAX_CPU_USAGE = "maxCPUUsage";
+    private static final String MAX_IO_DENSITY = "maxIODensity";
+    private static final String IO_NANOS_LIMITS = "ioNanosLimit";
+    private static final int DEFAULT_MAX_RANGES_PER_STORE = EnvProvider.INSTANCE.availableProcessors() / 4;
+    private static final double DEFAULT_MAX_CPU_USAGE = 0.8;
+    private static final int DEFAULT_MAX_IO_DENSITY = 100;
+    private static final long DEFAULT_IO_NANOS_LIMITS = 30_000L;
+
+    private int maxRangesPerStore;
+    private double maxCPUUsage;
+    private int maxIODensity;
+    private long ioNanosLimits;
+
+    @Override
+    public void init(Struct config) {
+        maxRangesPerStore = (int) config.getFieldsOrDefault(MAX_RANGES_PER_STORE,
+            Value.newBuilder().setNumberValue(DEFAULT_MAX_RANGES_PER_STORE).build()).getNumberValue();
+        if (maxRangesPerStore < 1) {
+            maxRangesPerStore = DEFAULT_MAX_RANGES_PER_STORE;
+            log.warn("Invalid max ranges per store config {}, use default {}", maxRangesPerStore,
+                DEFAULT_MAX_RANGES_PER_STORE);
+        }
+        maxCPUUsage = config.getFieldsOrDefault(MAX_CPU_USAGE,
+            Value.newBuilder().setNumberValue(DEFAULT_MAX_CPU_USAGE).build()).getNumberValue();
+        if (maxCPUUsage < 0 || maxCPUUsage > 1) {
+            maxCPUUsage = DEFAULT_MAX_CPU_USAGE;
+            log.warn("Invalid max cpu usage config {}, use default {}", maxCPUUsage, DEFAULT_MAX_CPU_USAGE);
+        }
+        maxIODensity = (int) config.getFieldsOrDefault(MAX_IO_DENSITY,
+            Value.newBuilder().setNumberValue(DEFAULT_MAX_IO_DENSITY).build()).getNumberValue();
+        if (maxIODensity < 1 || maxIODensity > 1000) {
+            maxIODensity = DEFAULT_MAX_IO_DENSITY;
+            log.warn("Invalid max io density config {}, use default {}", maxIODensity, DEFAULT_MAX_IO_DENSITY);
+        }
+        ioNanosLimits = (long) config.getFieldsOrDefault(IO_NANOS_LIMITS,
+            Value.newBuilder().setNumberValue(DEFAULT_IO_NANOS_LIMITS).build()).getNumberValue();
+        if (ioNanosLimits < 1 || ioNanosLimits > 100_000) {
+            ioNanosLimits = DEFAULT_IO_NANOS_LIMITS;
+            log.warn("Invalid io nanos limits config {}, use default {}", ioNanosLimits, DEFAULT_IO_NANOS_LIMITS);
+        }
+    }
+
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {
-        return new RangeSplitBalancer(clusterId, localStoreId,
-            "kv_io_mutation",
-            RetainStoreSplitMaxRangeNum.INSTANCE.get(),
-            RetainStoreSplitUnderCPUUsage.INSTANCE.get(),
-            RetainStoreSplitUnderIODensity.INSTANCE.get(),
-            RetainStoreSplitUnderIONanos.INSTANCE.get());
+        return new RangeSplitBalancer(clusterId, localStoreId, "kv_io_mutation",
+            maxRangesPerStore, maxCPUUsage, maxIODensity, ioNanosLimits);
     }
 }

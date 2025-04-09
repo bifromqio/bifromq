@@ -16,12 +16,28 @@ package com.baidu.bifromq.inbox.store.balance;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.ReplicaCntBalancer;
 import com.baidu.bifromq.inbox.store.spi.IInboxStoreBalancerFactory;
-import com.baidu.bifromq.sysprops.props.InboxStoreRangeVoterNum;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class ReplicaCntBalancerFactory implements IInboxStoreBalancerFactory {
+    private static final String VOTERS_PER_RANGE = "votersPerRange";
+    private static final int DEFAULT_VOTERS_PER_RANGE = 3;
+    private int votersPerRange;
+
+    @Override
+    public void init(Struct config) {
+        votersPerRange = (int) config.getFieldsOrDefault(VOTERS_PER_RANGE,
+            Value.newBuilder().setNumberValue(DEFAULT_VOTERS_PER_RANGE).build()).getNumberValue();
+        if (votersPerRange < 1 || votersPerRange % 2 == 0) {
+            votersPerRange = 3;
+            log.warn("Invalid voters per range config {}, use default {}", votersPerRange, DEFAULT_VOTERS_PER_RANGE);
+        }
+    }
 
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {
-        return new ReplicaCntBalancer(clusterId, localStoreId, InboxStoreRangeVoterNum.INSTANCE.get(), 0);
+        return new ReplicaCntBalancer(clusterId, localStoreId, votersPerRange, 0);
     }
 }

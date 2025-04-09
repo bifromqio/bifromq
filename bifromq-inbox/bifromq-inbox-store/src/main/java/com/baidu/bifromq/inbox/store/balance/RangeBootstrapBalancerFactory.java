@@ -16,14 +16,31 @@ package com.baidu.bifromq.inbox.store.balance;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.RangeBootstrapBalancer;
 import com.baidu.bifromq.inbox.store.spi.IInboxStoreBalancerFactory;
-import com.baidu.bifromq.sysprops.props.InboxStoreRecoveryWaitTimeMillis;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
 import java.time.Duration;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class RangeBootstrapBalancerFactory implements IInboxStoreBalancerFactory {
+    private static final String BOOTSTRAP_WAIT_TIME = "waitSeconds";
+    private static final long DEFAULT_WAIT_SECONDS = 15;
+
+    private Duration waitTime;
+
+    @Override
+    public void init(Struct config) {
+        int waitTimeConfig = (int) config.getFieldsOrDefault(BOOTSTRAP_WAIT_TIME, Value.newBuilder()
+            .setNumberValue(DEFAULT_WAIT_SECONDS).build()).getNumberValue();
+        if (waitTimeConfig < 1 || waitTimeConfig > 60) {
+            waitTimeConfig = 15;
+            log.warn("Invalid wait time config {}, use default {}", waitTimeConfig, DEFAULT_WAIT_SECONDS);
+        }
+        waitTime = Duration.ofSeconds(waitTimeConfig);
+    }
 
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {
-        return new RangeBootstrapBalancer(clusterId, localStoreId,
-            Duration.ofMillis(InboxStoreRecoveryWaitTimeMillis.INSTANCE.get()));
+        return new RangeBootstrapBalancer(clusterId, localStoreId, waitTime);
     }
 }

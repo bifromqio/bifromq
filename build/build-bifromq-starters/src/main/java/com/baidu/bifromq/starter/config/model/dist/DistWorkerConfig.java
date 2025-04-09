@@ -19,6 +19,7 @@ import com.baidu.bifromq.starter.config.model.StorageEngineConfig;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
 import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.Getter;
@@ -46,17 +47,22 @@ public class DistWorkerConfig {
     private Map<String, String> attributes = new HashMap<>();
 
     public DistWorkerConfig() {
-        // DO not enable DistWorker split by default
-//            balanceConfig.balancers.add("com.baidu.bifromq.dist.worker.balance.DistWorkerSplitBalancerFactory");
         balanceConfig.getBalancers().put("com.baidu.bifromq.dist.worker.balance.RangeLeaderBalancerFactory",
             Struct.getDefaultInstance());
         balanceConfig.getBalancers().put("com.baidu.bifromq.dist.worker.balance.ReplicaCntBalancerFactory",
-            Struct.getDefaultInstance());
+            Struct.newBuilder()
+                .putFields("votersPerRange", Value.newBuilder().setNumberValue(3).build())
+                .putFields("learnersPerRange", Value.newBuilder().setNumberValue(-1).build())
+                .build());
         balanceConfig.getBalancers().put(
             "com.baidu.bifromq.dist.worker.balance.UnreachableReplicaRemovalBalancerFactory",
-            Struct.getDefaultInstance());
+            Struct.newBuilder()
+                .putFields("probeSeconds", Value.newBuilder().setNumberValue(15).build())
+                .build());
         balanceConfig.getBalancers().put("com.baidu.bifromq.dist.worker.balance.RangeBootstrapBalancerFactory",
-            Struct.getDefaultInstance());
+            Struct.newBuilder()
+                .putFields("waitSeconds", Value.newBuilder().setNumberValue(15).build())
+                .build());
         balanceConfig.getBalancers().put("com.baidu.bifromq.dist.worker.balance.RedundantEpochRemovalBalancerFactory",
             Struct.getDefaultInstance());
     }

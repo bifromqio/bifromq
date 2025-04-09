@@ -20,6 +20,7 @@ import com.google.protobuf.Struct;
  * The SPI for creating a {@link IDistWorkerBalancerFactory}.
  */
 public interface IDistWorkerBalancerFactory extends IStoreBalancerFactory {
+
     default void init(Struct config) {
     }
 

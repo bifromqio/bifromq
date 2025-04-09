@@ -26,6 +26,9 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
 
+/**
+ * The load-based split balancer.
+ */
 public class RangeSplitBalancer extends RuleBasedPlacementBalancer {
     public static final String LOAD_RULE_CPU_USAGE_LIMIT = "maxCpuUsagePerRange";
     public static final String LOAD_RULE_MAX_IO_DENSITY_PER_RANGE = "maxIODensityPerRange";
@@ -43,25 +46,30 @@ public class RangeSplitBalancer extends RuleBasedPlacementBalancer {
     /**
      * Constructor of StoreBalancer.
      *
-     * @param clusterId    the id of the BaseKV cluster which the store belongs to
-     * @param localStoreId the id of the store which the balancer is responsible for
+     * @param clusterId         the id of the BaseKV cluster which the store belongs to
+     * @param localStoreId      the id of the store which the balancer is responsible for
+     * @param hintType          the type of load hint
+     * @param maxRangesPerStore the max ranges per store
+     * @param cpuUsageLimit     the cpu usage limit under which the balancer will be activated
+     * @param maxIoDensity      the max io density for the range before it's considered for split
+     * @param ioNanoLimit       the io nano limit for the range before it's considered for split
      */
     public RangeSplitBalancer(String clusterId,
                               String localStoreId,
                               String hintType,
-                              int maxRangesPerRange,
+                              int maxRangesPerStore,
                               double cpuUsageLimit,
-                              int maxIoDensityPerRange,
-                              long ioNanoLimitPerRange) {
+                              int maxIoDensity,
+                              long ioNanoLimit) {
         super(clusterId, localStoreId);
         this.hintType = hintType;
         this.defaultLoadRules = Struct.newBuilder()
             .putFields(LOAD_RULE_CPU_USAGE_LIMIT, Value.newBuilder().setNumberValue(cpuUsageLimit).build())
             .putFields(LOAD_RULE_MAX_IO_DENSITY_PER_RANGE,
-                Value.newBuilder().setNumberValue(maxIoDensityPerRange).build())
+                Value.newBuilder().setNumberValue(maxIoDensity).build())
             .putFields(LOAD_RULE_IO_NANOS_LIMIT_PER_RANGE,
-                Value.newBuilder().setNumberValue(ioNanoLimitPerRange).build())
-            .putFields(LOAD_RULE_MAX_RANGES_PER_STORE, Value.newBuilder().setNumberValue(maxRangesPerRange).build())
+                Value.newBuilder().setNumberValue(ioNanoLimit).build())
+            .putFields(LOAD_RULE_MAX_RANGES_PER_STORE, Value.newBuilder().setNumberValue(maxRangesPerStore).build())
             .build();
     }
 

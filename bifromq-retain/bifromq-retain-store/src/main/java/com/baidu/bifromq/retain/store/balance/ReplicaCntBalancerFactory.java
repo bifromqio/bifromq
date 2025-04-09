@@ -16,12 +16,38 @@ package com.baidu.bifromq.retain.store.balance;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.impl.ReplicaCntBalancer;
 import com.baidu.bifromq.retain.store.spi.IRetainStoreBalancerFactory;
-import com.baidu.bifromq.sysprops.props.RetainStoreRangeVoterNum;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class ReplicaCntBalancerFactory implements IRetainStoreBalancerFactory {
+    private static final String VOTERS_PER_RANGE = "votersPerRange";
+    private static final String LEARNERS_PER_RANGE = "learnersPerRange";
+    private static final int DEFAULT_VOTERS_PER_RANGE = 3;
+    private static final int DEFAULT_LEARNERS_PER_RANGE = -1;
+    private int votersPerRange;
+    private int learnersPerRange;
+
+    @Override
+    public void init(Struct config) {
+        votersPerRange = (int) config.getFieldsOrDefault(VOTERS_PER_RANGE,
+            Value.newBuilder().setNumberValue(DEFAULT_VOTERS_PER_RANGE).build()).getNumberValue();
+        if (votersPerRange < 1 || votersPerRange % 2 == 0) {
+            votersPerRange = 3;
+            log.warn("Invalid voters per range config {}, use default {}", votersPerRange, DEFAULT_VOTERS_PER_RANGE);
+        }
+        learnersPerRange = (int) config.getFieldsOrDefault(LEARNERS_PER_RANGE,
+            Value.newBuilder().setNumberValue(DEFAULT_LEARNERS_PER_RANGE).build()).getNumberValue();
+        if (learnersPerRange < -1) {
+            learnersPerRange = 0;
+            log.warn("Invalid learners per range config {}, use default {}", learnersPerRange,
+                DEFAULT_LEARNERS_PER_RANGE);
+        }
+    }
 
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {
-        return new ReplicaCntBalancer(clusterId, localStoreId, RetainStoreRangeVoterNum.INSTANCE.get(), -1);
+        return new ReplicaCntBalancer(clusterId, localStoreId, votersPerRange, learnersPerRange);
     }
 }
