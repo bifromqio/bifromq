@@ -54,16 +54,5 @@ public class DistWorkerConfig {
                 .putFields("votersPerRange", Value.newBuilder().setNumberValue(3).build())
                 .putFields("learnersPerRange", Value.newBuilder().setNumberValue(-1).build())
                 .build());
-        balanceConfig.getBalancers().put(
-            "com.baidu.bifromq.dist.worker.balance.UnreachableReplicaRemovalBalancerFactory",
-            Struct.newBuilder()
-                .putFields("probeSeconds", Value.newBuilder().setNumberValue(15).build())
-                .build());
-        balanceConfig.getBalancers().put("com.baidu.bifromq.dist.worker.balance.RangeBootstrapBalancerFactory",
-            Struct.newBuilder()
-                .putFields("waitSeconds", Value.newBuilder().setNumberValue(15).build())
-                .build());
-        balanceConfig.getBalancers().put("com.baidu.bifromq.dist.worker.balance.RedundantEpochRemovalBalancerFactory",
-            Struct.getDefaultInstance());
     }
 }

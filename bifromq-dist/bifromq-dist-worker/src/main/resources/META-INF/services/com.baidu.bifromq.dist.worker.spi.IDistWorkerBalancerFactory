@@ -14,6 +14,3 @@
 com.baidu.bifromq.dist.worker.balance.ReplicaCntBalancerFactory
 com.baidu.bifromq.dist.worker.balance.RangeLeaderBalancerFactory
 com.baidu.bifromq.dist.worker.balance.DistWorkerSplitBalancerFactory
-com.baidu.bifromq.dist.worker.balance.UnreachableReplicaRemovalBalancerFactory
-com.baidu.bifromq.dist.worker.balance.RedundantEpochRemovalBalancerFactory
-com.baidu.bifromq.dist.worker.balance.RangeBootstrapBalancerFactory

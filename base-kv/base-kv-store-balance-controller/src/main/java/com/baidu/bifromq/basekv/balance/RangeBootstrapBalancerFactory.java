@@ -11,16 +11,24 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.inbox.store.balance;
+package com.baidu.bifromq.basekv.balance;
 
-import com.baidu.bifromq.basekv.balance.StoreBalancer;
-import com.baidu.bifromq.basekv.balance.impl.RedundantEpochRemovalBalancer;
-import com.baidu.bifromq.inbox.store.spi.IInboxStoreBalancerFactory;
+import com.baidu.bifromq.basekv.balance.impl.RangeBootstrapBalancer;
+import java.time.Duration;
 
-public class RedundantEpochRemovalBalancerFactory implements IInboxStoreBalancerFactory {
+/**
+ * Built-in balancer for range bootstrap.
+ */
+class RangeBootstrapBalancerFactory implements IStoreBalancerFactory {
+
+    private final Duration delay;
+
+    public RangeBootstrapBalancerFactory(Duration delay) {
+        this.delay = delay;
+    }
 
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {
-        return new RedundantEpochRemovalBalancer(clusterId, localStoreId);
+        return new RangeBootstrapBalancer(clusterId, localStoreId, delay);
     }
 }

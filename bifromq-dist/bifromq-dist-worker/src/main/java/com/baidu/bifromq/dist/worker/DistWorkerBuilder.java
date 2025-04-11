@@ -53,6 +53,8 @@ public class DistWorkerBuilder {
     ISubBrokerManager subBrokerManager;
     KVRangeStoreOptions storeOptions;
     Duration gcInterval = Duration.ofMinutes(5);
+    Duration bootstrapDelay = Duration.ofSeconds(15);
+    Duration zombieProbeDelay = Duration.ofSeconds(15);
     Duration balancerRetryDelay = Duration.ofSeconds(5);
     Map<String, Struct> balancerFactoryConfig = new HashMap<>();
     Duration loadEstimateWindow = Duration.ofSeconds(5);

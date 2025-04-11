@@ -36,6 +36,8 @@ import lombok.Setter;
 @Getter
 @Setter
 public class BalancerOptions {
+    private long bootstrapDelayInMS = 15000;
+    private long zombieProbeDelayInMS = 15000;
     private long retryDelayInMS = 5000;
     @JsonSetter(nulls = Nulls.SKIP)
     @JsonSerialize(using = BalancerFactorySerializer.class)

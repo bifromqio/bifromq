@@ -119,6 +119,8 @@ public class InboxServiceModule extends AbstractModule {
                 .expireRateLimit(storeConfig.getExpireRateLimit())
                 .gcInterval(
                     Duration.ofSeconds(storeConfig.getGcIntervalSeconds()))
+                .bootstrapDelay(Duration.ofMillis(storeConfig.getBalanceConfig().getBootstrapDelayInMS()))
+                .zombieProbeDelay(Duration.ofMillis(storeConfig.getBalanceConfig().getZombieProbeDelayInMS()))
                 .balancerRetryDelay(Duration.ofMillis(
                     storeConfig.getBalanceConfig().getRetryDelayInMS()))
                 .balancerFactoryConfig(

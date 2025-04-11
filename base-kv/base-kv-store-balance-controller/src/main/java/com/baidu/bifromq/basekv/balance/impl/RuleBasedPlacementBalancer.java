@@ -15,22 +15,19 @@ package com.baidu.bifromq.basekv.balance.impl;
 
 import static com.baidu.bifromq.basekv.balance.util.CommandUtil.diffBy;
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
-import static com.baidu.bifromq.basekv.utils.DescriptorUtil.toLeaderRanges;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveRoute;
 
 import com.baidu.bifromq.basekv.balance.BalanceNow;
 import com.baidu.bifromq.basekv.balance.BalanceResult;
 import com.baidu.bifromq.basekv.balance.NoNeedBalance;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
-import com.baidu.bifromq.basekv.balance.command.RangeCommand;
 import com.baidu.bifromq.basekv.proto.Boundary;
-import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.utils.BoundaryUtil;
-import com.baidu.bifromq.basekv.utils.DescriptorUtil;
-import com.baidu.bifromq.basekv.utils.KeySpaceDAG;
+import com.baidu.bifromq.basekv.utils.EffectiveEpoch;
+import com.baidu.bifromq.basekv.utils.EffectiveRoute;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
 import com.google.protobuf.Struct;
@@ -47,7 +44,7 @@ import java.util.stream.Collectors;
  * load rules are used to generate range layout. Load rules are defined as a JSON object.
  */
 public abstract class RuleBasedPlacementBalancer extends StoreBalancer {
-    private final AtomicReference<RangeCommand> balanceCommandHolder = new AtomicReference<>();
+    private final AtomicReference<BalanceCommand> balanceCommandHolder = new AtomicReference<>();
     private volatile Struct loadRules;
 
     /**
@@ -85,29 +82,31 @@ public abstract class RuleBasedPlacementBalancer extends StoreBalancer {
             balanceCommandHolder.set(null);
             return;
         }
-        Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(landscape);
+        Optional<EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(landscape);
         if (effectiveEpoch.isEmpty()) {
             // no effective epoch, no balance
             balanceCommandHolder.set(null);
             return;
         }
-        Map<String, Map<KVRangeId, KVRangeDescriptor>> allLeaderRangesByStoreId =
-            toLeaderRanges(effectiveEpoch.get().storeDescriptors());
-        KeySpaceDAG keySpaceDAG = new KeySpaceDAG(allLeaderRangesByStoreId);
-        NavigableMap<Boundary, KeySpaceDAG.LeaderRange> effectiveRoute = keySpaceDAG.getEffectiveFullCoveredRoute();
-        if (effectiveRoute.isEmpty()) {
+        EffectiveRoute effectiveRoute = getEffectiveRoute(effectiveEpoch.get());
+        if (effectiveRoute.leaderRanges().isEmpty()) {
             // no effective route in effective epoch, no balance
             balanceCommandHolder.set(null);
             return;
         }
-        Optional<NavigableMap<Boundary, ClusterConfig>> expectedRangeLayout =
+        Optional<NavigableMap<Boundary, ClusterConfig>> expectedRoute =
             generate(loadRules, effectiveEpoch.get().storeDescriptors(), effectiveRoute);
-        if (expectedRangeLayout.isEmpty()) {
+        if (expectedRoute.isEmpty()) {
             // no expectedRange layout, no balance
             balanceCommandHolder.set(null);
             return;
         }
-        balanceCommandHolder.set(diffBy(expectedRangeLayout.get(), effectiveRoute));
+        if (!BoundaryUtil.isValidSplitSet(expectedRoute.get().keySet())) {
+            log.warn("Invalid expected range layout: {}", expectedRoute.get());
+            balanceCommandHolder.set(null);
+            return;
+        }
+        balanceCommandHolder.set(diffBy(expectedRoute.get(), effectiveRoute));
     }
 
     @Override
@@ -126,11 +125,11 @@ public abstract class RuleBasedPlacementBalancer extends StoreBalancer {
 
     protected abstract Map<Boundary, ClusterConfig> doGenerate(Struct loadRules,
                                                                Map<String, KVRangeStoreDescriptor> landscape,
-                                                               NavigableMap<Boundary, KeySpaceDAG.LeaderRange> effectiveRoute);
+                                                               EffectiveRoute effectiveRoute);
 
     private Optional<NavigableMap<Boundary, ClusterConfig>> generate(Struct loadRules,
                                                                      Set<KVRangeStoreDescriptor> landscape,
-                                                                     NavigableMap<Boundary, KeySpaceDAG.LeaderRange> effectiveRoute) {
+                                                                     EffectiveRoute effectiveRoute) {
         try {
             Map<String, KVRangeStoreDescriptor> landscapeMap =
                 landscape.stream().collect(Collectors.toMap(KVRangeStoreDescriptor::getId, store -> store));

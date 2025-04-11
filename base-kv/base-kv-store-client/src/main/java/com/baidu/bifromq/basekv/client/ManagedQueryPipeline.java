@@ -19,14 +19,16 @@ import com.baidu.bifromq.baserpc.client.IRPCClient;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import java.util.concurrent.CompletableFuture;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 class ManagedQueryPipeline implements IQueryPipeline {
+    private final Logger log;
     private final Disposable disposable;
     private volatile IRPCClient.IRequestPipeline<KVRangeRORequest, KVRangeROReply> ppln;
 
-    ManagedQueryPipeline(Observable<IRPCClient.IRequestPipeline<KVRangeRORequest, KVRangeROReply>> pplnObservable) {
+    ManagedQueryPipeline(Observable<IRPCClient.IRequestPipeline<KVRangeRORequest, KVRangeROReply>> pplnObservable,
+                         Logger log) {
+        this.log = log;
         disposable = pplnObservable.subscribe(next -> {
             IRPCClient.IRequestPipeline<KVRangeRORequest, KVRangeROReply> old = ppln;
             ppln = next;

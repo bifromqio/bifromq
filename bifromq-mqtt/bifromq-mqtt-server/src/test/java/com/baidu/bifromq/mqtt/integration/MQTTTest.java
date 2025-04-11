@@ -35,7 +35,6 @@ import com.baidu.bifromq.dist.worker.IDistWorker;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.server.IInboxServer;
 import com.baidu.bifromq.inbox.store.IInboxStore;
-import com.baidu.bifromq.inbox.store.balance.RangeBootstrapBalancerFactory;
 import com.baidu.bifromq.mqtt.IMQTTBroker;
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
@@ -56,11 +55,9 @@ import com.baidu.bifromq.sessiondict.server.ISessionDictServer;
 import com.baidu.bifromq.type.ClientInfo;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.collect.Sets;
-import com.google.protobuf.Struct;
 import io.reactivex.rxjava3.core.Observable;
 import java.lang.reflect.Method;
 import java.time.Duration;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
@@ -79,6 +76,7 @@ import org.testng.annotations.BeforeMethod;
 @Slf4j
 public abstract class MQTTTest {
     protected static final String BROKER_URI = "tcp://127.0.0.1:1883";
+    private final int tickerThreads = 2;
     @Mock
     protected IAuthProvider authProvider;
     @Mock
@@ -113,7 +111,6 @@ public abstract class MQTTTest {
     private IMQTTBroker mqttBroker;
     private ISubBrokerManager inboxBrokerMgr;
     private PluginManager pluginMgr;
-    private final int tickerThreads = 2;
     private ScheduledExecutorService bgTaskExecutor;
     private AutoCloseable closeable;
 
@@ -181,7 +178,6 @@ public abstract class MQTTTest {
             .storeOptions(new KVRangeStoreOptions()
                 .setDataEngineConfigurator(new InMemKVEngineConfigurator())
                 .setWalEngineConfigurator(new InMemKVEngineConfigurator()))
-            .balancerFactoryConfig(Map.of(RangeBootstrapBalancerFactory.class.getName(), Struct.getDefaultInstance()))
             .build();
         distClient = IDistClient.newBuilder()
             .trafficService(trafficService)
@@ -212,9 +208,6 @@ public abstract class MQTTTest {
             .storeOptions(new KVRangeStoreOptions()
                 .setDataEngineConfigurator(new InMemKVEngineConfigurator())
                 .setWalEngineConfigurator(new InMemKVEngineConfigurator()))
-            .balancerFactoryConfig(
-                Map.of(com.baidu.bifromq.retain.store.balance.RangeBootstrapBalancerFactory.class.getName(),
-                    Struct.getDefaultInstance()))
             .build();
 
         distWorkerStoreClient = IBaseKVStoreClient.newBuilder()
@@ -245,9 +238,6 @@ public abstract class MQTTTest {
                 .setDataEngineConfigurator(new InMemKVEngineConfigurator())
                 .setWalEngineConfigurator(new InMemKVEngineConfigurator()))
             .subBrokerManager(inboxBrokerMgr)
-            .balancerFactoryConfig(
-                Map.of(com.baidu.bifromq.dist.worker.balance.RangeBootstrapBalancerFactory.class.getName(),
-                    Struct.getDefaultInstance()))
             .build();
         distServer = IDistServer.builder()
             .rpcServerBuilder(rpcServerBuilder)

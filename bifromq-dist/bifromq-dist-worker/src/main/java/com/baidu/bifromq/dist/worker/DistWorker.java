@@ -37,10 +37,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class DistWorker implements IDistWorker {
-    private enum Status {
-        INIT, STARTING, STARTED, STOPPING, STOPPED
-    }
-
     private final String clusterId;
     private final ExecutorService rpcExecutor;
     private final IBaseKVStoreClient distWorkerClient;
@@ -77,6 +73,8 @@ class DistWorker implements IDistWorker {
             builder.metaService.metadataManager(clusterId),
             builder.distWorkerClient,
             effectiveBalancerFactories,
+            builder.bootstrapDelay,
+            builder.zombieProbeDelay,
             builder.balancerRetryDelay,
             builder.bgTaskExecutor);
         jobExecutorOwner = builder.bgTaskExecutor == null;
@@ -119,7 +117,6 @@ class DistWorker implements IDistWorker {
         start();
     }
 
-
     public String id() {
         return distWorkerServer.storeId(clusterId);
     }
@@ -159,5 +156,9 @@ class DistWorker implements IDistWorker {
             log.debug("DistWorker stopped");
             status.compareAndSet(Status.STOPPING, Status.STOPPED);
         }
+    }
+
+    private enum Status {
+        INIT, STARTING, STARTED, STOPPING, STOPPED
     }
 }

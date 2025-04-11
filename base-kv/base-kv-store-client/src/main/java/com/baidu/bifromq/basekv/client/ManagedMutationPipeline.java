@@ -19,14 +19,16 @@ import com.baidu.bifromq.baserpc.client.IRPCClient;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import java.util.concurrent.CompletableFuture;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
-@Slf4j
 class ManagedMutationPipeline implements IMutationPipeline {
+    private final Logger log;
     private final Disposable disposable;
     private volatile IRPCClient.IRequestPipeline<KVRangeRWRequest, KVRangeRWReply> ppln;
 
-    ManagedMutationPipeline(Observable<IRPCClient.IRequestPipeline<KVRangeRWRequest, KVRangeRWReply>> pplnObservable) {
+    ManagedMutationPipeline(Observable<IRPCClient.IRequestPipeline<KVRangeRWRequest, KVRangeRWReply>> pplnObservable,
+                            Logger log) {
+        this.log = log;
         disposable = pplnObservable.subscribe(next -> {
             IRPCClient.IRequestPipeline<KVRangeRWRequest, KVRangeRWReply> old = ppln;
             ppln = next;

@@ -20,7 +20,8 @@ import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
-import com.baidu.bifromq.basekv.utils.KeySpaceDAG;
+import com.baidu.bifromq.basekv.utils.EffectiveRoute;
+import com.baidu.bifromq.basekv.utils.LeaderRange;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 import com.google.protobuf.Struct;
@@ -30,7 +31,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableMap;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -91,7 +91,7 @@ public class ReplicaCntBalancer extends RuleBasedPlacementBalancer {
     @Override
     protected Map<Boundary, ClusterConfig> doGenerate(Struct loadRules,
                                                       Map<String, KVRangeStoreDescriptor> landscape,
-                                                      NavigableMap<Boundary, KeySpaceDAG.LeaderRange> effectiveRoute) {
+                                                      EffectiveRoute effectiveRoute) {
         Map<Boundary, ClusterConfig> expectedRangeLayout = new HashMap<>();
         boolean meetingGoalOne = meetExpectedConfig(loadRules, landscape, effectiveRoute, expectedRangeLayout);
         if (meetingGoalOne) {
@@ -107,15 +107,15 @@ public class ReplicaCntBalancer extends RuleBasedPlacementBalancer {
 
     private boolean meetExpectedConfig(Struct loadRules,
                                        Map<String, KVRangeStoreDescriptor> landscape,
-                                       NavigableMap<Boundary, KeySpaceDAG.LeaderRange> effectiveRoute,
+                                       EffectiveRoute effectiveRoute,
                                        Map<Boundary, ClusterConfig> expectedRangeLayout) {
         int expectedVoters = (int) loadRules.getFieldsMap().get(LOAD_RULE_VOTERS).getNumberValue();
         int expectedLearners = (int) loadRules.getFieldsMap().get(LOAD_RULE_LEARNERS).getNumberValue();
         // meeting goal one - meet the expected number of Voter replicas and learner replicas for each Range dynamically
         boolean meetingGoal = false;
-        for (Map.Entry<Boundary, KeySpaceDAG.LeaderRange> entry : effectiveRoute.entrySet()) {
+        for (Map.Entry<Boundary, LeaderRange> entry : effectiveRoute.leaderRanges().entrySet()) {
             Boundary boundary = entry.getKey();
-            KeySpaceDAG.LeaderRange leaderRange = entry.getValue();
+            LeaderRange leaderRange = entry.getValue();
             KVRangeDescriptor rangeDescriptor = leaderRange.descriptor();
             ClusterConfig clusterConfig = rangeDescriptor.getConfig();
             if (meetingGoal) {
@@ -153,7 +153,7 @@ public class ReplicaCntBalancer extends RuleBasedPlacementBalancer {
                         .map(Map.Entry::getKey)
                         .toList();
                     for (String aliveStoreId : aliveStoresSortedByRangeCountDesc) {
-                        if (!aliveStoreId.equals(leaderRange.storeId())) {
+                        if (!aliveStoreId.equals(leaderRange.ownerStoreDescriptor().getId())) {
                             voters.remove(aliveStoreId);
                         }
                         if (voters.size() == expectedVoters) {
@@ -180,9 +180,9 @@ public class ReplicaCntBalancer extends RuleBasedPlacementBalancer {
             return true;
         }
         // voter count met the expectation, check learner count
-        for (Map.Entry<Boundary, KeySpaceDAG.LeaderRange> entry : effectiveRoute.entrySet()) {
+        for (Map.Entry<Boundary, LeaderRange> entry : effectiveRoute.leaderRanges().entrySet()) {
             Boundary boundary = entry.getKey();
-            KeySpaceDAG.LeaderRange leaderRange = entry.getValue();
+            LeaderRange leaderRange = entry.getValue();
             KVRangeDescriptor rangeDescriptor = leaderRange.descriptor();
             ClusterConfig clusterConfig = rangeDescriptor.getConfig();
             if (meetingGoal) {
@@ -246,12 +246,12 @@ public class ReplicaCntBalancer extends RuleBasedPlacementBalancer {
     }
 
     private boolean balanceVoterCount(Map<String, KVRangeStoreDescriptor> landscape,
-                                      NavigableMap<Boundary, KeySpaceDAG.LeaderRange> effectiveRoute,
+                                      EffectiveRoute effectiveRoute,
                                       Map<Boundary, ClusterConfig> expectedRangeLayout) {
         // goal one has met, meeting goal two - evenly distributed voter replicas across all stores
         boolean meetingGoal = false;
         Map<String, Integer> storeVoterCount = new HashMap<>();
-        for (Map.Entry<Boundary, KeySpaceDAG.LeaderRange> entry : effectiveRoute.entrySet()) {
+        for (Map.Entry<Boundary, LeaderRange> entry : effectiveRoute.leaderRanges().entrySet()) {
             ClusterConfig config = entry.getValue().descriptor().getConfig();
             config.getVotersList()
                 .forEach(storeId -> storeVoterCount.put(storeId, storeVoterCount.getOrDefault(storeId, 0) + 1));
@@ -271,9 +271,9 @@ public class ReplicaCntBalancer extends RuleBasedPlacementBalancer {
         double totalVoters = storeVoterCount.values().stream().mapToInt(Integer::intValue).sum();
         double targetVotersPerStore = totalVoters / landscape.size();
         int maxVotersPerStore = (int) Math.ceil(targetVotersPerStore);
-        for (Map.Entry<Boundary, KeySpaceDAG.LeaderRange> entry : effectiveRoute.entrySet()) {
+        for (Map.Entry<Boundary, LeaderRange> entry : effectiveRoute.leaderRanges().entrySet()) {
             Boundary boundary = entry.getKey();
-            KeySpaceDAG.LeaderRange leaderRange = entry.getValue();
+            LeaderRange leaderRange = entry.getValue();
             KVRangeDescriptor rangeDescriptor = leaderRange.descriptor();
             ClusterConfig clusterConfig = rangeDescriptor.getConfig();
             if (meetingGoal) {
@@ -308,11 +308,11 @@ public class ReplicaCntBalancer extends RuleBasedPlacementBalancer {
     }
 
     private boolean balanceLearnerCount(Map<String, KVRangeStoreDescriptor> landscape,
-                                        NavigableMap<Boundary, KeySpaceDAG.LeaderRange> effectiveRoute,
+                                        EffectiveRoute effectiveRoute,
                                         Map<Boundary, ClusterConfig> expectedRangeLayout) {
         boolean meetingGoal = false;
         Map<String, Integer> storeLearnerCount = new HashMap<>();
-        for (Map.Entry<Boundary, KeySpaceDAG.LeaderRange> entry : effectiveRoute.entrySet()) {
+        for (Map.Entry<Boundary, LeaderRange> entry : effectiveRoute.leaderRanges().entrySet()) {
             ClusterConfig config = entry.getValue().descriptor().getConfig();
             config.getLearnersList()
                 .forEach(storeId -> storeLearnerCount.put(storeId, storeLearnerCount.getOrDefault(storeId, 0) + 1));
@@ -334,9 +334,9 @@ public class ReplicaCntBalancer extends RuleBasedPlacementBalancer {
         double targetLearnersPerStore = totalLearners / landscape.size();
         int maxLearnersPerStore = (int) Math.ceil(targetLearnersPerStore);
 
-        for (Map.Entry<Boundary, KeySpaceDAG.LeaderRange> entry : effectiveRoute.entrySet()) {
+        for (Map.Entry<Boundary, LeaderRange> entry : effectiveRoute.leaderRanges().entrySet()) {
             Boundary boundary = entry.getKey();
-            KeySpaceDAG.LeaderRange leaderRange = entry.getValue();
+            LeaderRange leaderRange = entry.getValue();
             KVRangeDescriptor rangeDescriptor = leaderRange.descriptor();
             ClusterConfig clusterConfig = rangeDescriptor.getConfig();
             if (meetingGoal) {

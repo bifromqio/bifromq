@@ -42,35 +42,52 @@ public class KVRangeRouterUtil {
 
     public static Collection<KVRangeSetting> findByBoundary(Boundary boundary,
                                                             NavigableMap<Boundary, KVRangeSetting> effectiveRouter) {
+
         if (effectiveRouter.isEmpty()) {
             return Collections.emptyList();
         }
+        // boundary: FULLBoundary -> KVRangeSetting
         if (!boundary.hasStartKey() && !boundary.hasEndKey()) {
             return effectiveRouter.values();
         }
+
+        // boundary: (null, endKey]
         if (!boundary.hasStartKey()) {
             Boundary boundaryEnd = Boundary.newBuilder()
                 .setStartKey(boundary.getEndKey())
-                .setEndKey(boundary.getEndKey()).build();
+                .setEndKey(boundary.getEndKey())
+                .build();
             return effectiveRouter.headMap(boundaryEnd, false).values();
         }
+
+        // boundary: [startKey, null)
         if (!boundary.hasEndKey()) {
             Boundary boundaryStart = Boundary.newBuilder()
                 .setStartKey(boundary.getStartKey())
-                .setEndKey(boundary.getStartKey()).build();
+                .setEndKey(boundary.getStartKey())
+                .build();
             Boundary floorBoundary = effectiveRouter.floorKey(boundaryStart);
-            return effectiveRouter.tailMap(floorBoundary,
-                compareEndKeys(endKey(floorBoundary), boundary.getStartKey()) > 0).values();
+            if (floorBoundary == null) {
+                floorBoundary = effectiveRouter.firstKey();
+            }
+            boolean includeFromKey = compareEndKeys(endKey(floorBoundary), boundary.getStartKey()) > 0;
+            return effectiveRouter.tailMap(floorBoundary, includeFromKey).values();
         }
+
+        // boundary: [startKey, endKey)
         Boundary boundaryStart = Boundary.newBuilder()
             .setStartKey(boundary.getStartKey())
-            .setEndKey(boundary.getStartKey()).build();
+            .setEndKey(boundary.getStartKey())
+            .build();
         Boundary boundaryEnd = Boundary.newBuilder()
             .setStartKey(boundary.getEndKey())
-            .setEndKey(boundary.getEndKey()).build();
+            .setEndKey(boundary.getEndKey())
+            .build();
         Boundary floorBoundary = effectiveRouter.floorKey(boundaryStart);
-
-        return effectiveRouter.subMap(floorBoundary, compareEndKeys(endKey(floorBoundary), boundary.getStartKey()) > 0,
-            boundaryEnd, false).values();
+        if (floorBoundary == null) {
+            floorBoundary = effectiveRouter.firstKey();
+        }
+        boolean includeFromKey = compareEndKeys(endKey(floorBoundary), boundary.getStartKey()) > 0;
+        return effectiveRouter.subMap(floorBoundary, includeFromKey, boundaryEnd, false).values();
     }
 }

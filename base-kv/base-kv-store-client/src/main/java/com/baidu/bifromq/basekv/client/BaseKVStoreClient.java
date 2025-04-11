@@ -25,9 +25,10 @@ import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getRec
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getSplitMethod;
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getTransferLeadershipMethod;
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
-import static com.baidu.bifromq.basekv.utils.DescriptorUtil.toLeaderRanges;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveRoute;
 import static java.util.Collections.emptyMap;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.RPCBluePrint;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVClusterMetadataManager;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
@@ -54,8 +55,9 @@ import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipReply;
 import com.baidu.bifromq.basekv.store.proto.TransferLeadershipRequest;
 import com.baidu.bifromq.basekv.utils.BoundaryUtil;
-import com.baidu.bifromq.basekv.utils.DescriptorUtil;
-import com.baidu.bifromq.basekv.utils.KeySpaceDAG;
+import com.baidu.bifromq.basekv.utils.EffectiveEpoch;
+import com.baidu.bifromq.basekv.utils.EffectiveRoute;
+import com.baidu.bifromq.basekv.utils.LeaderRange;
 import com.baidu.bifromq.baserpc.BluePrint;
 import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
@@ -63,8 +65,12 @@ import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import io.grpc.MethodDescriptor;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import io.reactivex.rxjava3.subjects.Subject;
 import java.util.ArrayList;
@@ -77,11 +83,16 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.IntStream;
 import org.slf4j.Logger;
 
 final class BaseKVStoreClient implements IBaseKVStoreClient {
+    private static final Scheduler SHARE_CLIENT_SCHEDULER = Schedulers.from(
+        ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+            Executors.newSingleThreadExecutor(EnvProvider.INSTANCE.newThreadFactory("basekv-client-scheduler", true)),
+            "basekv-client-scheduler"));
     private final Logger log;
     private final String clusterId;
     private final IRPCClient rpcClient;
@@ -100,9 +111,9 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     private final MethodDescriptor<KVRangeRORequest, KVRangeROReply> linearizedQueryMethod;
     private final MethodDescriptor<KVRangeRORequest, KVRangeROReply> queryMethod;
     private final Subject<Map<String, String>> storeToServerSubject = BehaviorSubject.createDefault(Maps.newHashMap());
+    private final BehaviorSubject<NavigableMap<Boundary, KVRangeSetting>> effectiveRouterSubject = BehaviorSubject
+        .createDefault(new TreeMap<>(BoundaryUtil::compare));
     private final Observable<ClusterInfo> clusterInfoObservable;
-    private final BehaviorSubject<NavigableMap<Boundary, KVRangeSetting>> effectiveRouterSubject =
-        BehaviorSubject.createDefault(new TreeMap<>(BoundaryUtil::compare));
     // key: storeId
     private final Map<String, List<IQueryPipeline>> lnrQueryPplns = Maps.newHashMap();
     // key: serverId, val: storeId
@@ -148,22 +159,21 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
             .keepAliveInSec(builder.keepAliveInSec)
             .build();
         metadataManager = metaService.metadataManager(clusterId);
-        clusterInfoObservable = Observable.combineLatest(
-                metadataManager.landscape(),
-                rpcClient.serverList()
-                    .map(servers -> Maps.transformValues(servers, metadata -> metadata.get(RPC_METADATA_STORE_ID))),
-                ClusterInfo::new)
+        clusterInfoObservable = Observable.combineLatest(metadataManager.landscape(), rpcClient.serverList()
+                .map(servers -> Maps.transformValues(servers, metadata ->
+                    metadata.get(RPC_METADATA_STORE_ID))), ClusterInfo::new)
+            .observeOn(SHARE_CLIENT_SCHEDULER)
             .filter(clusterInfo -> {
                 boolean complete = Sets.newHashSet(clusterInfo.serverToStoreMap.values())
                     .equals(clusterInfo.storeDescriptors.keySet());
                 if (!complete) {
-                    log.debug("Incomplete cluster[{}] info filtered: storeDescriptors={}, serverToStoreMap={}",
-                        clusterId, clusterInfo.storeDescriptors, clusterInfo.serverToStoreMap);
+                    log.debug("Incomplete cluster[{}] info: storeDescriptors={}, serverToStoreMap={}", clusterId,
+                        clusterInfo.storeDescriptors, clusterInfo.serverToStoreMap);
                 }
                 return complete;
             });
         disposables.add(clusterInfoObservable.subscribe(this::refresh));
-        disposables.add(effectiveRouterSubject.subscribe(router -> {
+        disposables.add(effectiveRouter().subscribe(router -> {
             if (!router.isEmpty()) {
                 synchronized (this) {
                     this.notifyAll();
@@ -362,7 +372,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                     };
                 }
                 return rpcClient.createRequestPipeline("", serverIdOpt.get(), null, emptyMap(), executeMethod);
-            }));
+            }), log);
     }
 
     @Override
@@ -406,13 +416,13 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                 } else {
                     return rpcClient.createRequestPipeline("", serverIdOpt.get(), null, emptyMap(), queryMethod);
                 }
-            }));
+            }), log);
     }
 
     @Override
     public void join() {
         // wait for router covering full range
-        if (effectiveRouterSubject.getValue() == null || effectiveRouterSubject.getValue().isEmpty()) {
+        if (effectiveRouterSubject.getValue().isEmpty()) {
             synchronized (this) {
                 try {
                     if (effectiveRouterSubject.getValue().isEmpty()) {
@@ -458,21 +468,16 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     }
 
     private boolean refreshRangeRoute(ClusterInfo clusterInfo) {
-        Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch =
+        Optional<EffectiveEpoch> effectiveEpoch =
             getEffectiveEpoch(Sets.newHashSet(clusterInfo.storeDescriptors.values()));
         if (effectiveEpoch.isEmpty()) {
             return false;
         }
-        Map<String, Map<KVRangeId, KVRangeDescriptor>> leaderRanges =
-            toLeaderRanges(effectiveEpoch.get().storeDescriptors());
-        KeySpaceDAG dag = new KeySpaceDAG(leaderRanges);
+        EffectiveRoute effectiveRoute = getEffectiveRoute(effectiveEpoch.get());
         NavigableMap<Boundary, KVRangeSetting> router = new TreeMap<>(BoundaryUtil::compare);
-        for (Map.Entry<Boundary, KeySpaceDAG.LeaderRange> entry : dag.getEffectiveFullCoveredRoute().entrySet()) {
-            router.put(entry.getKey(),
-                new KVRangeSetting(clusterId, entry.getValue().storeId(), entry.getValue().descriptor()));
-        }
-        if (router.isEmpty()) {
-            return false;
+        for (Map.Entry<Boundary, LeaderRange> entry : effectiveRoute.leaderRanges().entrySet()) {
+            router.put(entry.getKey(), new KVRangeSetting(clusterId, entry.getValue().ownerStoreDescriptor().getId(),
+                entry.getValue().descriptor()));
         }
         NavigableMap<Boundary, KVRangeSetting> last = effectiveRouterSubject.getValue();
         effectiveRouterSubject.onNext(router);

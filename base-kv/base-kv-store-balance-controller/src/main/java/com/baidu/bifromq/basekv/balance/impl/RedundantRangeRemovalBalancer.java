@@ -13,19 +13,23 @@
 
 package com.baidu.bifromq.basekv.balance.impl;
 
+import static com.baidu.bifromq.basekv.balance.util.CommandUtil.quit;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveRoute;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.organizeByEpoch;
+
 import com.baidu.bifromq.basekv.balance.BalanceResult;
 import com.baidu.bifromq.basekv.balance.NoNeedBalance;
 import com.baidu.bifromq.basekv.balance.StoreBalancer;
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
-
+import com.baidu.bifromq.basekv.utils.EffectiveEpoch;
+import com.baidu.bifromq.basekv.utils.LeaderRange;
 import java.util.Collections;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Set;
-
-import static com.baidu.bifromq.basekv.balance.util.CommandUtil.quit;
-import static com.baidu.bifromq.basekv.utils.DescriptorUtil.organizeByEpoch;
 
 /**
  * The RedundantEpochRemovalBalancer is a specialized StoreBalancer designed to manage and remove redundant replicas
@@ -38,7 +42,7 @@ import static com.baidu.bifromq.basekv.utils.DescriptorUtil.organizeByEpoch;
  * correctly. This behavior can potentially disrupt the stability of the cluster and should be handled with
  * caution.</p>
  */
-public class RedundantEpochRemovalBalancer extends StoreBalancer {
+public class RedundantRangeRemovalBalancer extends StoreBalancer {
     private volatile NavigableMap<Long, Set<KVRangeStoreDescriptor>> latest = Collections.emptyNavigableMap();
 
     /**
@@ -47,7 +51,7 @@ public class RedundantEpochRemovalBalancer extends StoreBalancer {
      * @param clusterId    the id of the BaseKV cluster which the store belongs to
      * @param localStoreId the id of the store which the balancer is responsible for
      */
-    public RedundantEpochRemovalBalancer(String clusterId, String localStoreId) {
+    public RedundantRangeRemovalBalancer(String clusterId, String localStoreId) {
         super(clusterId, localStoreId);
     }
 
@@ -72,6 +76,25 @@ public class RedundantEpochRemovalBalancer extends StoreBalancer {
                     if (rangeDescriptor.getRole() != RaftNodeStatus.Leader) {
                         continue;
                     }
+                    return quit(localStoreId, rangeDescriptor);
+                }
+            }
+        }
+        // deal with redundant replicas generated within the effective epoch but not be included in the effective route
+        Map.Entry<Long, Set<KVRangeStoreDescriptor>> oldestEntry = latest.firstEntry();
+        EffectiveEpoch effectiveEpoch = new EffectiveEpoch(oldestEntry.getKey(), oldestEntry.getValue());
+        NavigableMap<Boundary, LeaderRange> effectiveLeaders = getEffectiveRoute(effectiveEpoch).leaderRanges();
+        for (KVRangeStoreDescriptor storeDescriptor : effectiveEpoch.storeDescriptors()) {
+            if (!storeDescriptor.getId().equals(localStoreId)) {
+                continue;
+            }
+            for (KVRangeDescriptor rangeDescriptor : storeDescriptor.getRangesList()) {
+                if (rangeDescriptor.getRole() != RaftNodeStatus.Leader) {
+                    continue;
+                }
+                Boundary boundary = rangeDescriptor.getBoundary();
+                LeaderRange leaderRange = effectiveLeaders.get(boundary);
+                if (leaderRange == null || !leaderRange.descriptor().getId().equals(rangeDescriptor.getId())) {
                     return quit(localStoreId, rangeDescriptor);
                 }
             }

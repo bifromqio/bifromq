@@ -14,6 +14,3 @@
 com.baidu.bifromq.inbox.store.balance.ReplicaCntBalancerFactory
 com.baidu.bifromq.inbox.store.balance.RangeSplitBalancerFactory
 com.baidu.bifromq.inbox.store.balance.RangeLeaderBalancerFactory
-com.baidu.bifromq.inbox.store.balance.UnreachableReplicaRemovalBalancerFactory
-com.baidu.bifromq.inbox.store.balance.RedundantEpochRemovalBalancerFactory
-com.baidu.bifromq.inbox.store.balance.RangeBootstrapBalancerFactory

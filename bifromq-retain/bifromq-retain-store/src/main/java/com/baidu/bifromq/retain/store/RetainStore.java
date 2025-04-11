@@ -43,10 +43,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class RetainStore implements IRetainStore {
-    private enum Status {
-        INIT, STARTING, STARTED, STOPPING, STOPPED
-    }
-
+    protected final RetainStoreCoProcFactory coProcFactory;
     private final String clusterId;
     private final ExecutorService rpcExecutor;
     private final IBaseKVStoreServer storeServer;
@@ -59,7 +56,6 @@ class RetainStore implements IRetainStore {
     private final Duration gcInterval;
     private final List<IRetainStoreBalancerFactory> effectiveBalancerFactories = new LinkedList<>();
     private volatile CompletableFuture<Void> gcJob;
-    protected final RetainStoreCoProcFactory coProcFactory;
     private IRetainStoreGCProcessor gcProcessor;
 
     public RetainStore(RetainStoreBuilder builder) {
@@ -85,6 +81,8 @@ class RetainStore implements IRetainStore {
             builder.metaService.metadataManager(clusterId),
             storeClient,
             effectiveBalancerFactories,
+            builder.bootstrapDelay,
+            builder.zombieProbeDelay,
             builder.balancerRetryDelay,
             builder.bgTaskExecutor);
         jobExecutorOwner = builder.bgTaskExecutor == null;
@@ -184,5 +182,9 @@ class RetainStore implements IRetainStore {
                 })
                 .whenComplete((v, e) -> scheduleGC());
         });
+    }
+
+    private enum Status {
+        INIT, STARTING, STARTED, STOPPING, STOPPED
     }
 }

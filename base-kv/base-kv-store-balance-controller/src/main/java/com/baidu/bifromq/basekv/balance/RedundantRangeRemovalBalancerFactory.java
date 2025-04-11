@@ -11,16 +11,16 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.retain.store.balance;
+package com.baidu.bifromq.basekv.balance;
 
-import com.baidu.bifromq.basekv.balance.StoreBalancer;
-import com.baidu.bifromq.basekv.balance.impl.RedundantEpochRemovalBalancer;
-import com.baidu.bifromq.retain.store.spi.IRetainStoreBalancerFactory;
+import com.baidu.bifromq.basekv.balance.impl.RedundantRangeRemovalBalancer;
 
-public class RedundantEpochRemovalBalancerFactory implements IRetainStoreBalancerFactory {
-
+/**
+ * Builtin balancer for redundant range removal.
+ */
+class RedundantRangeRemovalBalancerFactory implements IStoreBalancerFactory {
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {
-        return new RedundantEpochRemovalBalancer(clusterId, localStoreId);
+        return new RedundantRangeRemovalBalancer(clusterId, localStoreId);
     }
 }

@@ -18,12 +18,12 @@ import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
-import com.baidu.bifromq.basekv.utils.KeySpaceDAG;
+import com.baidu.bifromq.basekv.utils.EffectiveRoute;
+import com.baidu.bifromq.basekv.utils.LeaderRange;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.NavigableMap;
 import java.util.Optional;
 
 /**
@@ -107,18 +107,18 @@ public class RangeSplitBalancer extends RuleBasedPlacementBalancer {
     @Override
     protected Map<Boundary, ClusterConfig> doGenerate(Struct loadRules,
                                                       Map<String, KVRangeStoreDescriptor> landscape,
-                                                      NavigableMap<Boundary, KeySpaceDAG.LeaderRange> effectiveRoute) {
+                                                      EffectiveRoute effectiveRoute) {
         double cpuUsageLimit = loadRules.getFieldsMap().get(LOAD_RULE_CPU_USAGE_LIMIT).getNumberValue();
         double maxRangesPerStore = loadRules.getFieldsMap().get(LOAD_RULE_MAX_RANGES_PER_STORE).getNumberValue();
         double maxIODensityPerRange = loadRules.getFieldsMap().get(LOAD_RULE_MAX_IO_DENSITY_PER_RANGE).getNumberValue();
         double ioLatencyLimitPerRange =
             loadRules.getFieldsMap().get(LOAD_RULE_IO_NANOS_LIMIT_PER_RANGE).getNumberValue();
         Map<Boundary, ClusterConfig> expectedRangeLayout = new HashMap<>();
-        for (Map.Entry<Boundary, KeySpaceDAG.LeaderRange> entry : effectiveRoute.entrySet()) {
+        for (Map.Entry<Boundary, LeaderRange> entry : effectiveRoute.leaderRanges().entrySet()) {
             Boundary boundary = entry.getKey();
-            KeySpaceDAG.LeaderRange leaderRange = entry.getValue();
+            LeaderRange leaderRange = entry.getValue();
             KVRangeDescriptor rangeDescriptor = leaderRange.descriptor();
-            KVRangeStoreDescriptor storeDescriptor = landscape.get(leaderRange.storeId());
+            KVRangeStoreDescriptor storeDescriptor = landscape.get(leaderRange.ownerStoreDescriptor().getId());
             ClusterConfig clusterConfig = rangeDescriptor.getConfig();
             Optional<SplitHint> splitHintOpt = rangeDescriptor
                 .getHintsList()

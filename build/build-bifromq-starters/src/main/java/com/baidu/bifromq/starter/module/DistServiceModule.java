@@ -45,6 +45,14 @@ import java.util.concurrent.ScheduledExecutorService;
 import javax.inject.Singleton;
 
 public class DistServiceModule extends AbstractModule {
+    @Override
+    protected void configure() {
+        bind(new TypeLiteral<Optional<IDistServer>>() {
+        }).toProvider(DistServerProvider.class).in(Singleton.class);
+        bind(new TypeLiteral<Optional<IDistWorker>>() {
+        }).toProvider(DistWorkerProvider.class).in(Singleton.class);
+    }
+
     private static class DistServerProvider implements Provider<Optional<IDistServer>> {
         private final StandaloneConfig config;
         private final ServiceInjector injector;
@@ -113,6 +121,8 @@ public class DistServiceModule extends AbstractModule {
                         .getWalEngineConfig(), "dist_wal")))
                 .gcInterval(
                     Duration.ofSeconds(workerConfig.getGcIntervalSeconds()))
+                .bootstrapDelay(Duration.ofMillis(workerConfig.getBalanceConfig().getBootstrapDelayInMS()))
+                .zombieProbeDelay(Duration.ofMillis(workerConfig.getBalanceConfig().getZombieProbeDelayInMS()))
                 .balancerRetryDelay(Duration.ofMillis(workerConfig.getBalanceConfig().getRetryDelayInMS()))
                 .balancerFactoryConfig(workerConfig.getBalanceConfig().getBalancers())
                 .subBrokerManager(injector.getInstance(ISubBrokerManager.class))
@@ -120,13 +130,5 @@ public class DistServiceModule extends AbstractModule {
                 .attributes(workerConfig.getAttributes())
                 .build());
         }
-    }
-
-    @Override
-    protected void configure() {
-        bind(new TypeLiteral<Optional<IDistServer>>() {
-        }).toProvider(DistServerProvider.class).in(Singleton.class);
-        bind(new TypeLiteral<Optional<IDistWorker>>() {
-        }).toProvider(DistWorkerProvider.class).in(Singleton.class);
     }
 }

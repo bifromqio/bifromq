@@ -389,6 +389,9 @@ public class BoundaryUtil {
         if (boundaries.size() == 1) {
             return boundaries.iterator().next().equals(FULL_BOUNDARY);
         }
+        if (boundaries instanceof NavigableSet) {
+            return isValidSplitSet((NavigableSet<Boundary>) boundaries);
+        }
         NavigableSet<Boundary> sorted = new TreeSet<>(BoundaryUtil::compare);
         sorted.addAll(boundaries);
         return isValidSplitSet(sorted);

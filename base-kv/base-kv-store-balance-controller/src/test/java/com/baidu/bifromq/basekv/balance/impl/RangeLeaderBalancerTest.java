@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basekv.balance.impl;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
@@ -35,11 +36,10 @@ import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class RangeLeaderBalancerTest {
-
+    private final String clusterId = "testCluster";
+    private final String localStoreId = "localStore";
+    private final String otherStoreId = "otherStore";
     private RangeLeaderBalancer balancer;
-    private String clusterId = "testCluster";
-    private String localStoreId = "localStore";
-    private String otherStoreId = "otherStore";
 
     @BeforeMethod
     public void setUp() {
@@ -129,18 +129,20 @@ public class RangeLeaderBalancerTest {
     @Test
     public void balanceToOtherNoLeaderStore() {
         KVRangeId kvRangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
+        // KVRange1: [null, z)
         KVRangeDescriptor kvRangeDescriptor1 = KVRangeDescriptor.newBuilder()
             .setId(kvRangeId1)
             .setRole(RaftNodeStatus.Leader)
-            .setBoundary(Boundary.newBuilder().setEndKey(ByteString.copyFromUtf8("z")).build())
+            .setBoundary(toBoundary(null, ByteString.copyFromUtf8("z")))
             .setConfig(ClusterConfig.newBuilder().addVoters(localStoreId).addLearners("otherStore").build())
             .build();
         KVRangeId kvRangeId2 = KVRangeId.newBuilder().setEpoch(1).setId(2).build();
+        // KVRange2: [z, null)
         KVRangeDescriptor kvRangeDescriptor2 = KVRangeDescriptor.newBuilder()
             .setId(kvRangeId2)
             .setVer(1)
             .setRole(RaftNodeStatus.Leader)
-            .setBoundary(Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("z")).build())
+            .setBoundary(toBoundary(ByteString.copyFromUtf8("z"), null))
             .setConfig(ClusterConfig.newBuilder().addVoters(localStoreId).addVoters("otherStore").build())
             .build();
         KVRangeStoreDescriptor storeDescriptor1 = KVRangeStoreDescriptor.newBuilder()
@@ -149,10 +151,11 @@ public class RangeLeaderBalancerTest {
             .addRanges(kvRangeDescriptor2)
             .build();
         KVRangeId kvRangeId3 = KVRangeId.newBuilder().setEpoch(1).setId(10).build();
+        // KVRange3: [z, null)
         KVRangeDescriptor kvRangeDescriptor3 = KVRangeDescriptor.newBuilder()
             .setId(kvRangeId3)
             .setRole(RaftNodeStatus.Follower)
-            .setBoundary(Boundary.newBuilder().setStartKey(ByteString.copyFromUtf8("z")).build())
+            .setBoundary(toBoundary(ByteString.copyFromUtf8("z"), null))
             .setConfig(ClusterConfig.newBuilder().addVoters("otherStore").build())
             .build();
         KVRangeStoreDescriptor storeDescriptor2 = KVRangeStoreDescriptor.newBuilder()

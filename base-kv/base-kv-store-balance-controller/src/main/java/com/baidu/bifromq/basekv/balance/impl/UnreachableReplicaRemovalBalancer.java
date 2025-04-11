@@ -64,12 +64,12 @@ public final class UnreachableReplicaRemovalBalancer extends StoreBalancer {
     /**
      * Constructor of the balancer with 15 seconds of suspicion duration.
      *
-     * @param clusterId         the id of the BaseKV cluster which the store belongs to
-     * @param localStoreId      the id of the store which the balancer is responsible for
-     * @param suspicionDuration the duration of the replica being suspected unreachable
+     * @param clusterId       the id of the BaseKV cluster which the store belongs to
+     * @param localStoreId    the id of the store which the balancer is responsible for
+     * @param suspectDuration the duration of the replica being suspected unreachable
      */
-    public UnreachableReplicaRemovalBalancer(String clusterId, String localStoreId, Duration suspicionDuration) {
-        this(clusterId, localStoreId, suspicionDuration, HLC.INST::getPhysical);
+    public UnreachableReplicaRemovalBalancer(String clusterId, String localStoreId, Duration suspectDuration) {
+        this(clusterId, localStoreId, suspectDuration, HLC.INST::getPhysical);
     }
 
     /**

@@ -62,16 +62,5 @@ public class RetainStoreConfig {
                 .putFields("maxIODensity", Value.newBuilder().setNumberValue(100).build())
                 .putFields("ioNanosLimit", Value.newBuilder().setNumberValue(30_000).build())
                 .build());
-        balanceConfig.getBalancers().put(
-            "com.baidu.bifromq.retain.store.balance.UnreachableReplicaRemovalBalancerFactory",
-            Struct.newBuilder()
-                .putFields("probeSeconds", Value.newBuilder().setNumberValue(15).build())
-                .build());
-        balanceConfig.getBalancers().put("com.baidu.bifromq.retain.store.balance.RangeBootstrapBalancerFactory",
-            Struct.newBuilder()
-                .putFields("waitSeconds", Value.newBuilder().setNumberValue(15).build())
-                .build());
-        balanceConfig.getBalancers().put("com.baidu.bifromq.retain.store.balance.RedundantEpochRemovalBalancerFactory",
-            Struct.getDefaultInstance());
     }
 }

@@ -24,10 +24,13 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.google.protobuf.ByteString;
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.testng.annotations.Test;
 
 public class DescriptorUtilTest {
@@ -444,124 +447,119 @@ public class DescriptorUtilTest {
     }
 
     @Test
-    public void toLeaderRangesWithLeaders() {
-        KVRangeId rangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
-        KVRangeDescriptor rangeDescriptor1 = KVRangeDescriptor.newBuilder()
-            .setId(rangeId1)
+    public void getEffectiveRouteContiguousChain() {
+        KVRangeId id1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
+        Boundary.Builder boundaryBuilder1 = Boundary.newBuilder();
+        boundaryBuilder1.setEndKey(ByteString.copyFromUtf8("b"));
+        KVRangeDescriptor r1 = KVRangeDescriptor.newBuilder()
+            .setId(id1)
             .setRole(RaftNodeStatus.Leader)
-            .setBoundary(Boundary.newBuilder()
-                .setStartKey(ByteString.copyFromUtf8("a"))
-                .setEndKey(ByteString.copyFromUtf8("m"))
-                .build())
+            .setBoundary(boundaryBuilder1.build())
             .build();
 
-        KVRangeId rangeId2 = KVRangeId.newBuilder().setEpoch(1).setId(2).build();
-        KVRangeDescriptor rangeDescriptor2 = KVRangeDescriptor.newBuilder()
-            .setId(rangeId2)
+        KVRangeId id2 = KVRangeId.newBuilder().setEpoch(1).setId(2).build();
+        Boundary.Builder boundaryBuilder2 = Boundary.newBuilder();
+        boundaryBuilder2.setStartKey(ByteString.copyFromUtf8("b"));
+        boundaryBuilder2.setEndKey(ByteString.copyFromUtf8("m"));
+        KVRangeDescriptor r2 = KVRangeDescriptor.newBuilder()
+            .setId(id2)
             .setRole(RaftNodeStatus.Leader)
-            .setBoundary(Boundary.newBuilder()
-                .setStartKey(ByteString.copyFromUtf8("n"))
-                .setEndKey(ByteString.copyFromUtf8("z"))
-                .build())
+            .setBoundary(boundaryBuilder2.build())
             .build();
 
-        KVRangeStoreDescriptor storeDescriptor1 = KVRangeStoreDescriptor.newBuilder()
+        KVRangeId id3 = KVRangeId.newBuilder().setEpoch(1).setId(3).build();
+        Boundary.Builder boundaryBuilder3 = Boundary.newBuilder();
+        boundaryBuilder3.setStartKey(ByteString.copyFromUtf8("m"));
+        KVRangeDescriptor r3 = KVRangeDescriptor.newBuilder()
+            .setId(id3)
+            .setRole(RaftNodeStatus.Leader)
+            .setBoundary(boundaryBuilder3.build())
+            .build();
+
+        KVRangeStoreDescriptor storeDescriptor = KVRangeStoreDescriptor.newBuilder()
             .setId("store1")
-            .addRanges(rangeDescriptor1)
-            .addRanges(rangeDescriptor2)
+            .addRanges(r1)
+            .addRanges(r2)
+            .addRanges(r3)
             .build();
-
         Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
-        storeDescriptors.add(storeDescriptor1);
+        storeDescriptors.add(storeDescriptor);
 
-        Map<String, Map<KVRangeId, KVRangeDescriptor>> leaderRanges = DescriptorUtil.toLeaderRanges(storeDescriptors);
+        EffectiveEpoch effectiveEpoch = new EffectiveEpoch(1, storeDescriptors);
 
-        assertEquals(leaderRanges.size(), 1);
-        assertTrue(leaderRanges.containsKey("store1"));
-        assertEquals(leaderRanges.get("store1").size(), 2);
-        assertEquals(leaderRanges.get("store1").get(rangeId1), rangeDescriptor1);
-        assertEquals(leaderRanges.get("store1").get(rangeId2), rangeDescriptor2);
+        EffectiveRoute effectiveRoute = DescriptorUtil.getEffectiveRoute(effectiveEpoch);
+        NavigableMap<Boundary, LeaderRange> routeMap = effectiveRoute.leaderRanges();
+
+        assertEquals(routeMap.size(), 3);
+        List<Long> actualIds = routeMap.values().stream()
+            .map(lr -> lr.descriptor().getId().getId())
+            .sorted()
+            .collect(Collectors.toList());
+        List<Long> expectedIds = Arrays.asList(1L, 2L, 3L);
+        assertEquals(actualIds, expectedIds);
     }
 
     @Test
-    public void toLeaderRangesWithNoLeaders() {
-        KVRangeId rangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
-        KVRangeDescriptor rangeDescriptor1 = KVRangeDescriptor.newBuilder()
-            .setId(rangeId1)
+    public void getEffectiveRouteSelectsSmallestVer() {
+        KVRangeId id1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
+        KVRangeId id2 = KVRangeId.newBuilder().setEpoch(1).setId(2).build();
+
+        Boundary boundary = Boundary.newBuilder()
+            .setStartKey(ByteString.copyFromUtf8("a"))
+            .setEndKey(ByteString.copyFromUtf8("m"))
+            .build();
+        KVRangeDescriptor r1 = KVRangeDescriptor.newBuilder()
+            .setId(id1)
+            .setRole(RaftNodeStatus.Leader)
+            .setBoundary(boundary)
+            .build();
+        KVRangeDescriptor r2 = KVRangeDescriptor.newBuilder()
+            .setId(id2)
+            .setRole(RaftNodeStatus.Leader)
+            .setBoundary(boundary)
+            .build();
+
+        KVRangeStoreDescriptor storeDescriptor = KVRangeStoreDescriptor.newBuilder()
+            .setId("store1")
+            .addRanges(r1)
+            .addRanges(r2)
+            .build();
+        Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
+        storeDescriptors.add(storeDescriptor);
+
+        EffectiveEpoch effectiveEpoch = new EffectiveEpoch(1, storeDescriptors);
+        EffectiveRoute effectiveRoute = DescriptorUtil.getEffectiveRoute(effectiveEpoch);
+        NavigableMap<Boundary, LeaderRange> routeMap = effectiveRoute.leaderRanges();
+
+        assertEquals(routeMap.size(), 1);
+        LeaderRange selected = routeMap.firstEntry().getValue();
+        assertEquals(selected.descriptor().getId().getId(), 1L);
+    }
+
+    @Test
+    public void getEffectiveRouteWithNoLeaders() {
+        KVRangeId id1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
+        Boundary boundary = Boundary.newBuilder()
+            .setStartKey(ByteString.copyFromUtf8("a"))
+            .setEndKey(ByteString.copyFromUtf8("z"))
+            .build();
+        KVRangeDescriptor followerRange = KVRangeDescriptor.newBuilder()
+            .setId(id1)
             .setRole(RaftNodeStatus.Follower)
-            .setBoundary(Boundary.newBuilder()
-                .setStartKey(ByteString.copyFromUtf8("a"))
-                .setEndKey(ByteString.copyFromUtf8("m"))
-                .build())
+            .setBoundary(boundary)
             .build();
 
-        KVRangeStoreDescriptor storeDescriptor1 = KVRangeStoreDescriptor.newBuilder()
+        KVRangeStoreDescriptor storeDescriptor = KVRangeStoreDescriptor.newBuilder()
             .setId("store1")
-            .addRanges(rangeDescriptor1)
+            .addRanges(followerRange)
             .build();
-
         Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
-        storeDescriptors.add(storeDescriptor1);
+        storeDescriptors.add(storeDescriptor);
 
-        Map<String, Map<KVRangeId, KVRangeDescriptor>> leaderRanges = DescriptorUtil.toLeaderRanges(storeDescriptors);
+        EffectiveEpoch effectiveEpoch = new EffectiveEpoch(1, storeDescriptors);
+        EffectiveRoute effectiveRoute = DescriptorUtil.getEffectiveRoute(effectiveEpoch);
+        NavigableMap<Boundary, LeaderRange> routeMap = effectiveRoute.leaderRanges();
 
-        assertEquals(leaderRanges.size(), 1);
-        assertTrue(leaderRanges.containsKey("store1"));
-        assertEquals(leaderRanges.get("store1").size(), 0);
-    }
-
-    @Test
-    public void toLeaderRangesWithMultipleStores() {
-        KVRangeId rangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
-        KVRangeDescriptor rangeDescriptor1 = KVRangeDescriptor.newBuilder()
-            .setId(rangeId1)
-            .setRole(RaftNodeStatus.Leader)
-            .setBoundary(Boundary.newBuilder()
-                .setStartKey(ByteString.copyFromUtf8("a"))
-                .setEndKey(ByteString.copyFromUtf8("m"))
-                .build())
-            .build();
-
-        KVRangeId rangeId2 = KVRangeId.newBuilder().setEpoch(1).setId(2).build();
-        KVRangeDescriptor rangeDescriptor2 = KVRangeDescriptor.newBuilder()
-            .setId(rangeId2)
-            .setRole(RaftNodeStatus.Follower)
-            .setBoundary(Boundary.newBuilder()
-                .setStartKey(ByteString.copyFromUtf8("n"))
-                .setEndKey(ByteString.copyFromUtf8("z"))
-                .build())
-            .build();
-
-        KVRangeStoreDescriptor storeDescriptor1 = KVRangeStoreDescriptor.newBuilder()
-            .setId("store1")
-            .addRanges(rangeDescriptor1)
-            .build();
-
-        KVRangeStoreDescriptor storeDescriptor2 = KVRangeStoreDescriptor.newBuilder()
-            .setId("store2")
-            .addRanges(rangeDescriptor2)
-            .build();
-
-        Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
-        storeDescriptors.add(storeDescriptor1);
-        storeDescriptors.add(storeDescriptor2);
-
-        Map<String, Map<KVRangeId, KVRangeDescriptor>> leaderRanges = DescriptorUtil.toLeaderRanges(storeDescriptors);
-
-        assertEquals(leaderRanges.size(), 2);
-        assertTrue(leaderRanges.containsKey("store1"));
-        assertTrue(leaderRanges.containsKey("store2"));
-        assertEquals(leaderRanges.get("store1").size(), 1);
-        assertEquals(leaderRanges.get("store2").size(), 0);
-        assertEquals(leaderRanges.get("store1").get(rangeId1), rangeDescriptor1);
-    }
-
-    @Test
-    public void toLeaderRangesEmptyStoreDescriptors() {
-        Set<KVRangeStoreDescriptor> storeDescriptors = new HashSet<>();
-
-        Map<String, Map<KVRangeId, KVRangeDescriptor>> leaderRanges = DescriptorUtil.toLeaderRanges(storeDescriptors);
-
-        assertTrue(leaderRanges.isEmpty());
+        assertTrue(routeMap.isEmpty());
     }
 }

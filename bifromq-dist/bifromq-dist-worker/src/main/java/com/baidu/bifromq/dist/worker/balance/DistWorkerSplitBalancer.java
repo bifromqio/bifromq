@@ -28,7 +28,7 @@ import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 import com.baidu.bifromq.basekv.store.range.hinter.MutationKVLoadBasedSplitHinter;
-import com.baidu.bifromq.basekv.utils.DescriptorUtil;
+import com.baidu.bifromq.basekv.utils.EffectiveEpoch;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.dist.worker.hinter.FanoutSplitHinter;
 import com.google.common.base.Preconditions;
@@ -65,7 +65,7 @@ class DistWorkerSplitBalancer extends StoreBalancer {
 
     @Override
     public void update(Set<KVRangeStoreDescriptor> landscape) {
-        Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(landscape);
+        Optional<EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(landscape);
         if (effectiveEpoch.isEmpty()) {
             return;
         }

@@ -13,24 +13,30 @@
 
 package com.baidu.bifromq.basekv.balance.util;
 
-import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compareStartKey;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.inRange;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.startKey;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 
 import com.baidu.bifromq.basekv.balance.BalanceNow;
 import com.baidu.bifromq.basekv.balance.BalanceResult;
+import com.baidu.bifromq.basekv.balance.command.BalanceCommand;
+import com.baidu.bifromq.basekv.balance.command.BootstrapCommand;
 import com.baidu.bifromq.basekv.balance.command.ChangeConfigCommand;
 import com.baidu.bifromq.basekv.balance.command.MergeCommand;
-import com.baidu.bifromq.basekv.balance.command.RangeCommand;
 import com.baidu.bifromq.basekv.balance.command.SplitCommand;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.utils.BoundaryUtil;
-import com.baidu.bifromq.basekv.utils.KeySpaceDAG;
+import com.baidu.bifromq.basekv.utils.EffectiveRoute;
+import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
+import com.baidu.bifromq.basekv.utils.LeaderRange;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.NavigableMap;
 import java.util.Set;
 
@@ -70,79 +76,102 @@ public class CommandUtil {
      * Calculate the range layout difference between expected and current layout, and returns the first command to apply
      * so that the current layout can be transformed to the expected layout.
      *
-     * @param expectedRangeLayout the expected range layout.
-     * @param currentRangeLayout  the current range layout.
+     * @param expectedRouteLayout the expected range layout.
+     * @param effectiveRoute      the current range layout.
      * @return the first command to apply so that the current layout can be transformed to the expected layout.
      */
-    public static RangeCommand diffBy(NavigableMap<Boundary, ClusterConfig> expectedRangeLayout,
-                                      NavigableMap<Boundary, KeySpaceDAG.LeaderRange> currentRangeLayout) {
-        assert BoundaryUtil.isValidSplitSet(expectedRangeLayout.keySet());
-        assert BoundaryUtil.isValidSplitSet(currentRangeLayout.keySet());
-        Iterator<Boundary> expectedRangeItr = expectedRangeLayout.keySet().iterator();
-        Iterator<Boundary> currentRangeItr = currentRangeLayout.keySet().iterator();
-        while (expectedRangeItr.hasNext() && currentRangeItr.hasNext()) {
-            Boundary expectedRange = expectedRangeItr.next();
-            ClusterConfig expectedClusterConfig = expectedRangeLayout.get(expectedRange);
+    public static BalanceCommand diffBy(NavigableMap<Boundary, ClusterConfig> expectedRouteLayout,
+                                        EffectiveRoute effectiveRoute) {
+        assert BoundaryUtil.isValidSplitSet(expectedRouteLayout.keySet());
 
-            Boundary currentRange = currentRangeItr.next();
-            KeySpaceDAG.LeaderRange currentLeaderRange = currentRangeLayout.get(currentRange);
-            ClusterConfig currentClusterConfig = currentLeaderRange.descriptor().getConfig();
-            if (!currentClusterConfig.getNextVotersList().isEmpty()
-                || !currentClusterConfig.getNextLearnersList().isEmpty()) {
-                // abort generation if there is running config change process
-                return null;
-            }
-            if (expectedRange.equals(currentRange)) {
-                if (!isSame(expectedClusterConfig, currentClusterConfig)) {
-                    // generate config change
-                    return ChangeConfigCommand.builder()
-                        .toStore(currentLeaderRange.storeId())
-                        .kvRangeId(currentLeaderRange.descriptor().getId())
-                        .expectedVer(currentLeaderRange.descriptor().getVer())
-                        .voters(setOf(expectedClusterConfig.getVotersList()))
-                        .learners(setOf(expectedClusterConfig.getLearnersList()))
-                        .build();
-                }
-                // continue to next range
-            } else if (inRange(expectedRange, currentRange)) {
-                assert compareStartKey(expectedRange.getStartKey(), currentRange.getStartKey()) == 0;
-                // generate split
-                return SplitCommand.builder()
-                    .toStore(currentLeaderRange.storeId())
-                    .kvRangeId(currentLeaderRange.descriptor().getId())
-                    .expectedVer(currentLeaderRange.descriptor().getVer())
-                    .splitKey(expectedRange.getEndKey())
-                    .build();
-            } else {
-                // handling merging
-                assert inRange(currentRange, expectedRange);
-                assert currentRangeItr.hasNext();
-                Boundary nextCurrentBoundary = currentRangeItr.next();
-                KeySpaceDAG.LeaderRange nextCurrentLeaderRange = currentRangeLayout.get(nextCurrentBoundary);
-                ClusterConfig nextCurrentRangeClusterConfig = nextCurrentLeaderRange.descriptor().getConfig();
-                if (!nextCurrentRangeClusterConfig.getNextVotersList().isEmpty()
-                    || !nextCurrentRangeClusterConfig.getNextLearnersList().isEmpty()) {
-                    // abort generation if there is running config change process in mergee range
+        Iterator<Boundary> currentItr = effectiveRoute.leaderRanges().keySet().iterator();
+        for (Boundary expectedRange : expectedRouteLayout.keySet()) {
+            ClusterConfig expectedRangeLayout = expectedRouteLayout.get(expectedRange);
+            if (currentItr.hasNext()) {
+                Boundary currentRange = currentItr.next();
+                LeaderRange currentLeaderRange = effectiveRoute.leaderRanges().get(currentRange);
+                ClusterConfig currentRangeLayout = currentLeaderRange.descriptor().getConfig();
+                if (!currentRangeLayout.getNextVotersList().isEmpty()
+                    || !currentRangeLayout.getNextLearnersList().isEmpty()) {
+                    // abort generation if current layout is in config change process
                     return null;
-                } else if (isSame(expectedClusterConfig, nextCurrentRangeClusterConfig)) {
-                    return MergeCommand.builder()
-                        .toStore(currentLeaderRange.storeId())
+                }
+                if (expectedRange.equals(currentRange)) {
+                    if (!isSame(expectedRangeLayout, currentRangeLayout)) {
+                        // generate config change
+                        return ChangeConfigCommand.builder()
+                            .toStore(currentLeaderRange.ownerStoreDescriptor().getId())
+                            .kvRangeId(currentLeaderRange.descriptor().getId())
+                            .expectedVer(currentLeaderRange.descriptor().getVer())
+                            .voters(setOf(expectedRangeLayout.getVotersList()))
+                            .learners(setOf(expectedRangeLayout.getLearnersList()))
+                            .build();
+                    }
+                    // move on to next
+                } else if (inRange(expectedRange, currentRange)) {
+                    return SplitCommand.builder()
+                        .toStore(currentLeaderRange.ownerStoreDescriptor().getId())
                         .kvRangeId(currentLeaderRange.descriptor().getId())
                         .expectedVer(currentLeaderRange.descriptor().getVer())
-                        .mergeeId(nextCurrentLeaderRange.descriptor().getId())
+                        .splitKey(expectedRange.getEndKey())
+                        .build();
+                } else if (BoundaryUtil.compare(expectedRange, currentRange) < 0) {
+                    return BootstrapCommand.builder()
+                        .toStore(bootstrapStore(expectedRangeLayout))
+                        .boundary(toBoundary(startKey(expectedRange), startKey(currentRange)))
+                        .kvRangeId(KVRangeIdUtil.next(effectiveRoute.epoch()))
                         .build();
                 } else {
-                    return ChangeConfigCommand.builder()
-                        .toStore(nextCurrentLeaderRange.storeId())
-                        .kvRangeId(nextCurrentLeaderRange.descriptor().getId())
-                        .expectedVer(nextCurrentLeaderRange.descriptor().getVer())
-                        .voters(setOf(currentClusterConfig.getVotersList()))
-                        .learners(setOf(currentClusterConfig.getLearnersList()))
-                        .build();
+                    // handling merging
+                    if (!currentItr.hasNext()) {
+                        // no mergee range, bootstrap it using merger config
+                        return BootstrapCommand.builder()
+                            .toStore(bootstrapStore(expectedRangeLayout))
+                            .boundary(toBoundary(currentRange.getEndKey(), expectedRange.getEndKey()))
+                            .kvRangeId(KVRangeIdUtil.next(effectiveRoute.epoch()))
+                            .build();
+                    } else {
+                        Boundary nextCurrentBoundary = currentItr.next();
+                        LeaderRange nextLeaderRange = effectiveRoute.leaderRanges().get(nextCurrentBoundary);
+                        ClusterConfig nextCurrentRangeLayout = nextLeaderRange.descriptor().getConfig();
+                        if (!nextCurrentRangeLayout.getNextVotersList().isEmpty()
+                            || !nextCurrentRangeLayout.getNextLearnersList().isEmpty()) {
+                            // abort generation if there is running config change process in mergee range
+                            return null;
+                        } else if (isSame(expectedRangeLayout, nextCurrentRangeLayout)) {
+                            return MergeCommand.builder()
+                                .toStore(currentLeaderRange.ownerStoreDescriptor().getId())
+                                .kvRangeId(currentLeaderRange.descriptor().getId())
+                                .expectedVer(currentLeaderRange.descriptor().getVer())
+                                .mergeeId(nextLeaderRange.descriptor().getId())
+                                .build();
+                        } else {
+                            // align mergee layout with merger layout
+                            return ChangeConfigCommand.builder()
+                                .toStore(nextLeaderRange.ownerStoreDescriptor().getId())
+                                .kvRangeId(nextLeaderRange.descriptor().getId())
+                                .expectedVer(nextLeaderRange.descriptor().getVer())
+                                .voters(setOf(currentRangeLayout.getVotersList()))
+                                .learners(setOf(currentRangeLayout.getLearnersList()))
+                                .build();
+                        }
+                    }
                 }
+            } else {
+                return BootstrapCommand.builder()
+                    .toStore(bootstrapStore(expectedRangeLayout))
+                    .boundary(expectedRange)
+                    .kvRangeId(KVRangeIdUtil.next(effectiveRoute.epoch()))
+                    .build();
             }
         }
         return null;
+    }
+
+    private static String bootstrapStore(ClusterConfig layout) {
+        List<String> voters = new ArrayList<>(layout.getVotersList());
+        Collections.sort(voters);
+        return voters.get(0);
     }
 
     /**

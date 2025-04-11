@@ -31,7 +31,6 @@ import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.worker.IDistWorker;
-import com.baidu.bifromq.dist.worker.balance.RangeBootstrapBalancerFactory;
 import com.baidu.bifromq.plugin.eventcollector.Event;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
@@ -40,9 +39,7 @@ import com.baidu.bifromq.plugin.subbroker.IDeliverer;
 import com.baidu.bifromq.plugin.subbroker.ISubBroker;
 import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
-import com.google.protobuf.Struct;
 import java.time.Duration;
-import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import lombok.extern.slf4j.Slf4j;
@@ -53,6 +50,10 @@ import org.testng.annotations.BeforeClass;
 
 @Slf4j
 public abstract class DistServiceTest {
+    @Mock
+    protected ISubBroker inboxBroker;
+    @Mock
+    protected IDeliverer inboxDeliverer;
     private IAgentHost agentHost;
     private ICRDTService crdtService;
     private IRPCServiceTrafficService trafficService;
@@ -71,11 +72,6 @@ public abstract class DistServiceTest {
             log.debug("event {}", event);
         }
     };
-
-    @Mock
-    protected ISubBroker inboxBroker;
-    @Mock
-    protected IDeliverer inboxDeliverer;
     @Mock
     private ISubBrokerManager subBrokerMgr;
 
@@ -130,9 +126,6 @@ public abstract class DistServiceTest {
             .bgTaskExecutor(bgTaskExecutor)
             .storeOptions(kvRangeStoreOptions)
             .subBrokerManager(subBrokerMgr)
-            .balancerFactoryConfig(
-                Map.of(RangeBootstrapBalancerFactory.class.getName(),
-                    Struct.getDefaultInstance()))
             .build();
         distServer = IDistServer.builder()
             .rpcServerBuilder(rpcServerBuilder)

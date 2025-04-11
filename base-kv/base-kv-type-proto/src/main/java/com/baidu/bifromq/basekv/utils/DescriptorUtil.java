@@ -13,16 +13,23 @@
 
 package com.baidu.bifromq.basekv.utils;
 
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.endKey;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.startKey;
+
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
+import com.google.protobuf.ByteString;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.NavigableSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 /**
@@ -38,28 +45,24 @@ public class DescriptorUtil {
     public static NavigableMap<Long, Set<KVRangeStoreDescriptor>> organizeByEpoch(
         Set<KVRangeStoreDescriptor> storeDescriptors) {
         NavigableMap<Long, Set<KVRangeStoreDescriptor>> epochMap = new TreeMap<>();
-        Map<Long, Map<KVRangeStoreDescriptor, KVRangeStoreDescriptor.Builder>> storeDescBuilderByEpoch =
-            new HashMap<>();
+        // epoch -> storeId -> storeDescBuilder
+        Map<Long, Map<String, KVRangeStoreDescriptor.Builder>> storeDescBuilderByEpoch = new HashMap<>();
 
         for (KVRangeStoreDescriptor storeDescriptor : storeDescriptors) {
             for (KVRangeDescriptor rangeDescriptor : storeDescriptor.getRangesList()) {
                 long epoch = rangeDescriptor.getId().getEpoch();
                 storeDescBuilderByEpoch.computeIfAbsent(epoch, e -> storeDescriptors.stream()
-                        .collect(Collectors.toMap(k -> k, k -> k.toBuilder().clearRanges())))
-                    .get(storeDescriptor)
+                        .collect(Collectors.toMap(KVRangeStoreDescriptor::getId, k -> k.toBuilder().clearRanges())))
+                    .get(storeDescriptor.getId())
                     .addRanges(rangeDescriptor);
             }
         }
         storeDescBuilderByEpoch.forEach((epoch, storeDescBuilderMap) -> {
             Set<KVRangeStoreDescriptor> storeDescSet = storeDescBuilderMap.values().stream()
-                .map(KVRangeStoreDescriptor.Builder::build)
-                .collect(Collectors.toSet());
+                .map(KVRangeStoreDescriptor.Builder::build).collect(Collectors.toSet());
             epochMap.put(epoch, storeDescSet);
         });
         return epochMap;
-    }
-
-    public record EffectiveEpoch(long epoch, Set<KVRangeStoreDescriptor> storeDescriptors) {
     }
 
     /**
@@ -73,30 +76,57 @@ public class DescriptorUtil {
         if (storeDescriptorsByEpoch.isEmpty()) {
             return Optional.empty();
         }
-        return Optional.of(
-            new EffectiveEpoch(storeDescriptorsByEpoch.firstKey(), storeDescriptorsByEpoch.firstEntry().getValue()));
+        Map.Entry<Long, Set<KVRangeStoreDescriptor>> oldestEpoch = storeDescriptorsByEpoch.firstEntry();
+        return Optional.of(new EffectiveEpoch(oldestEpoch.getKey(), oldestEpoch.getValue()));
     }
 
     /**
-     * Get the leader rangeDescriptors, and organize them by storeId.
-     * <br>
-     * NOTE. The returned map contains all storeIds in storeDescriptors, even if there is no leader range in the store.
+     * Get the effective route from the effective epoch.
      *
-     * @param storeDescriptors storeDescriptors of an epoch
-     * @return leader rangeDescriptors organized by storeId
+     * @param effectiveEpoch effective epoch
+     * @return effective route
      */
-    public static Map<String, Map<KVRangeId, KVRangeDescriptor>> toLeaderRanges(
-        Set<KVRangeStoreDescriptor> storeDescriptors) {
-        Map<String, Map<KVRangeId, KVRangeDescriptor>> leaderRangesByStoreId = new HashMap<>();
-        for (KVRangeStoreDescriptor storeDescriptor : storeDescriptors) {
-            Map<KVRangeId, KVRangeDescriptor> leaderRangeMap = new HashMap<>();
-            leaderRangesByStoreId.put(storeDescriptor.getId(), leaderRangeMap);
+    public static EffectiveRoute getEffectiveRoute(EffectiveEpoch effectiveEpoch) {
+        NavigableSet<LeaderRange> firstLeaderRanges = new TreeSet<>(
+            Comparator.comparingLong(l -> l.descriptor().getId().getId()));
+        NavigableMap<ByteString, NavigableSet<LeaderRange>> sortedLeaderRanges = new TreeMap<>(
+            ByteString.unsignedLexicographicalComparator());
+        for (KVRangeStoreDescriptor storeDescriptor : effectiveEpoch.storeDescriptors()) {
             for (KVRangeDescriptor rangeDescriptor : storeDescriptor.getRangesList()) {
                 if (rangeDescriptor.getRole() == RaftNodeStatus.Leader) {
-                    leaderRangeMap.put(rangeDescriptor.getId(), rangeDescriptor);
+                    ByteString startKey = startKey(rangeDescriptor.getBoundary());
+                    if (startKey == null) {
+                        firstLeaderRanges.add(new LeaderRange(rangeDescriptor, storeDescriptor));
+                        continue;
+                    }
+                    sortedLeaderRanges.computeIfAbsent(startKey,
+                            k -> new TreeSet<>(Comparator.comparingLong(l -> l.descriptor().getId().getId())))
+                        .add(new LeaderRange(rangeDescriptor, storeDescriptor));
                 }
             }
         }
-        return leaderRangesByStoreId;
+        NavigableMap<Boundary, LeaderRange> effectiveRouteMap = new TreeMap<>(BoundaryUtil::compare);
+        LeaderRange prev = firstLeaderRanges.pollFirst();
+        if (prev == null) {
+            Map.Entry<ByteString, NavigableSet<LeaderRange>> firstEntry = sortedLeaderRanges.firstEntry();
+            if (firstEntry != null) {
+                prev = firstEntry.getValue().pollFirst();
+            }
+        }
+        while (prev != null) {
+            effectiveRouteMap.put(prev.descriptor().getBoundary(), prev);
+            ByteString endKey = endKey(prev.descriptor().getBoundary());
+            if (endKey == null) {
+                // reach the end bound
+                break;
+            }
+            Map.Entry<ByteString, NavigableSet<LeaderRange>> next = sortedLeaderRanges.ceilingEntry(endKey);
+            if (next != null) {
+                prev = next.getValue().pollFirst();
+            } else {
+                prev = null;
+            }
+        }
+        return new EffectiveRoute(effectiveEpoch.epoch(), effectiveRouteMap);
     }
 }

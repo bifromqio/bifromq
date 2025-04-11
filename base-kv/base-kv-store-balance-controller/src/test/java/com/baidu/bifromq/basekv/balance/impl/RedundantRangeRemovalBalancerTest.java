@@ -33,15 +33,15 @@ import java.util.Set;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-public class RedundantEpochRemovalBalancerTest {
+public class RedundantRangeRemovalBalancerTest {
 
-    private RedundantEpochRemovalBalancer balancer;
-    private String clusterId = "testCluster";
-    private String localStoreId = "localStore";
+    private final String clusterId = "testCluster";
+    private final String localStoreId = "localStore";
+    private RedundantRangeRemovalBalancer balancer;
 
     @BeforeMethod
     public void setUp() {
-        balancer = new RedundantEpochRemovalBalancer(clusterId, localStoreId);
+        balancer = new RedundantRangeRemovalBalancer(clusterId, localStoreId);
     }
 
     @Test
@@ -107,14 +107,10 @@ public class RedundantEpochRemovalBalancerTest {
         KVRangeStoreDescriptor storeDescriptor1 = KVRangeStoreDescriptor.newBuilder()
             .setId(localStoreId)
             .addRanges(kvRangeDescriptor1)
-            .build();
-
-        KVRangeStoreDescriptor storeDescriptor2 = KVRangeStoreDescriptor.newBuilder()
-            .setId(localStoreId)
             .addRanges(kvRangeDescriptor2)
             .build();
 
-        Set<KVRangeStoreDescriptor> storeDescriptors = Set.of(storeDescriptor1, storeDescriptor2);
+        Set<KVRangeStoreDescriptor> storeDescriptors = Set.of(storeDescriptor1);
 
         balancer.update(storeDescriptors);
 
@@ -161,17 +157,86 @@ public class RedundantEpochRemovalBalancerTest {
         KVRangeStoreDescriptor storeDescriptor1 = KVRangeStoreDescriptor.newBuilder()
             .setId(localStoreId)
             .addRanges(kvRangeDescriptor1)
-            .build();
-
-        KVRangeStoreDescriptor storeDescriptor2 = KVRangeStoreDescriptor.newBuilder()
-            .setId(localStoreId)
             .addRanges(kvRangeDescriptor2)
             .build();
 
-        Set<KVRangeStoreDescriptor> storeDescriptors = Set.of(storeDescriptor1, storeDescriptor2);
+        Set<KVRangeStoreDescriptor> storeDescriptors = Set.of(storeDescriptor1);
 
         balancer.update(storeDescriptors);
 
         assertSame(balancer.balance().type(), BalanceResultType.NoNeedBalance);
+    }
+
+    @Test
+    public void removeRedundantEffectiveRange() {
+        KVRangeId kvRangeId1 = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
+        KVRangeId kvRangeId2 = KVRangeId.newBuilder().setEpoch(1).setId(2).build();
+        Boundary boundary = Boundary.newBuilder()
+            .setStartKey(ByteString.copyFromUtf8("a"))
+            .setEndKey(ByteString.copyFromUtf8("z"))
+            .build();
+        ClusterConfig config = ClusterConfig.newBuilder().addVoters(localStoreId).build();
+
+        KVRangeDescriptor range1 = KVRangeDescriptor.newBuilder()
+            .setId(kvRangeId1)
+            .setVer(1)
+            .setRole(RaftNodeStatus.Leader)
+            .setBoundary(boundary)
+            .setConfig(config)
+            .build();
+        KVRangeDescriptor range2 = KVRangeDescriptor.newBuilder()
+            .setId(kvRangeId2)
+            .setVer(1)
+            .setRole(RaftNodeStatus.Leader)
+            .setBoundary(boundary)
+            .setConfig(config)
+            .build();
+
+        KVRangeStoreDescriptor storeDescriptor = KVRangeStoreDescriptor.newBuilder()
+            .setId(localStoreId)
+            .addRanges(range1)
+            .addRanges(range2)
+            .build();
+
+        Set<KVRangeStoreDescriptor> storeDescriptors = Set.of(storeDescriptor);
+
+        balancer.update(storeDescriptors);
+
+        BalanceResult result = balancer.balance();
+
+        assertEquals(result.type(), BalanceResultType.BalanceNow);
+
+        ChangeConfigCommand command = (ChangeConfigCommand) ((BalanceNow<?>) result).command;
+        assertEquals(command.getToStore(), localStoreId);
+        assertEquals(command.getKvRangeId(), kvRangeId2);
+        assertEquals(command.getVoters(), Collections.emptySet());
+        assertEquals(command.getLearners(), Collections.emptySet());
+    }
+
+    @Test
+    public void ignoreNonLocalStore() {
+        String nonLocalStoreId = "otherStore";
+        KVRangeId kvRangeId = KVRangeId.newBuilder().setEpoch(1).setId(1).build();
+        KVRangeDescriptor kvRangeDescriptor = KVRangeDescriptor.newBuilder()
+            .setId(kvRangeId)
+            .setRole(RaftNodeStatus.Leader)
+            .setVer(1)
+            .setBoundary(Boundary.newBuilder()
+                .setStartKey(ByteString.copyFromUtf8("a"))
+                .setEndKey(ByteString.copyFromUtf8("z"))
+                .build())
+            .setConfig(ClusterConfig.newBuilder().addVoters(nonLocalStoreId).build())
+            .build();
+
+        KVRangeStoreDescriptor nonLocalStoreDescriptor = KVRangeStoreDescriptor.newBuilder()
+            .setId(nonLocalStoreId)
+            .addRanges(kvRangeDescriptor)
+            .build();
+        Set<KVRangeStoreDescriptor> landscape = Collections.singleton(nonLocalStoreDescriptor);
+
+        balancer.update(landscape);
+
+        BalanceResult result = balancer.balance();
+        assertSame(result.type(), BalanceResultType.NoNeedBalance);
     }
 }

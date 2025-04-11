@@ -43,6 +43,16 @@ import java.util.concurrent.ScheduledExecutorService;
 import javax.inject.Singleton;
 
 public class RetainServiceModule extends AbstractModule {
+    @Override
+    protected void configure() {
+        bind(new TypeLiteral<Optional<IRetainServer>>() {
+        }).toProvider(RetainServerProvider.class)
+            .in(Singleton.class);
+        bind(new TypeLiteral<Optional<IRetainStore>>() {
+        }).toProvider(RetainStoreProvider.class)
+            .in(Singleton.class);
+    }
+
     private static class RetainServerProvider implements Provider<Optional<IRetainServer>> {
         private final StandaloneConfig config;
         private final ServiceInjector injector;
@@ -98,6 +108,8 @@ public class RetainServiceModule extends AbstractModule {
                 .tickerThreads(storeConfig.getTickerThreads())
                 .bgTaskExecutor(
                     injector.getInstance(Key.get(ScheduledExecutorService.class, Names.named("bgTaskScheduler"))))
+                .bootstrapDelay(Duration.ofMillis(storeConfig.getBalanceConfig().getBootstrapDelayInMS()))
+                .zombieProbeDelay(Duration.ofMillis(storeConfig.getBalanceConfig().getZombieProbeDelayInMS()))
                 .balancerRetryDelay(Duration.ofMillis(storeConfig.getBalanceConfig().getRetryDelayInMS()))
                 .balancerFactoryConfig(storeConfig.getBalanceConfig().getBalancers())
                 .loadEstimateWindow(Duration.ofSeconds(RetainStoreLoadEstimationWindowSeconds.INSTANCE.get()))
@@ -110,15 +122,5 @@ public class RetainServiceModule extends AbstractModule {
                 .attributes(storeConfig.getAttributes())
                 .build());
         }
-    }
-
-    @Override
-    protected void configure() {
-        bind(new TypeLiteral<Optional<IRetainServer>>() {
-        }).toProvider(RetainServerProvider.class)
-            .in(Singleton.class);
-        bind(new TypeLiteral<Optional<IRetainStore>>() {
-        }).toProvider(RetainStoreProvider.class)
-            .in(Singleton.class);
     }
 }

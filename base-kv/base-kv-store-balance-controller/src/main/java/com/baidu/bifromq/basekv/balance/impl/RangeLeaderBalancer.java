@@ -15,8 +15,7 @@ package com.baidu.bifromq.basekv.balance.impl;
 
 
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
-import static com.baidu.bifromq.basekv.utils.DescriptorUtil.toLeaderRanges;
-import static java.util.Collections.emptySet;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveRoute;
 
 import com.baidu.bifromq.basekv.balance.BalanceNow;
 import com.baidu.bifromq.basekv.balance.BalanceResult;
@@ -25,11 +24,11 @@ import com.baidu.bifromq.basekv.balance.StoreBalancer;
 import com.baidu.bifromq.basekv.balance.command.TransferLeadershipCommand;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
-import com.baidu.bifromq.basekv.utils.DescriptorUtil;
-import com.baidu.bifromq.basekv.utils.KeySpaceDAG;
+import com.baidu.bifromq.basekv.utils.EffectiveEpoch;
+import com.baidu.bifromq.basekv.utils.EffectiveRoute;
+import com.baidu.bifromq.basekv.utils.LeaderRange;
 import com.google.common.collect.Sets;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -38,13 +37,12 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * The goal of the balancer is to balance the leader count of each store by emitting TransferLeadership command.
  */
 public class RangeLeaderBalancer extends StoreBalancer {
-    private volatile Set<KVRangeStoreDescriptor> effectiveEpoch = emptySet();
+    private volatile EffectiveEpoch effectiveEpoch = null;
 
     public RangeLeaderBalancer(String clusterId, String localStoreId) {
         super(clusterId, localStoreId);
@@ -52,34 +50,32 @@ public class RangeLeaderBalancer extends StoreBalancer {
 
     @Override
     public void update(Set<KVRangeStoreDescriptor> landscape) {
-        Optional<DescriptorUtil.EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(landscape);
+        Optional<EffectiveEpoch> effectiveEpoch = getEffectiveEpoch(landscape);
         if (effectiveEpoch.isEmpty()) {
             return;
         }
-        this.effectiveEpoch = effectiveEpoch.get().storeDescriptors();
+        this.effectiveEpoch = effectiveEpoch.get();
     }
 
     @Override
     public BalanceResult balance() {
-        Set<KVRangeStoreDescriptor> current = effectiveEpoch;
-        // leader ranges including non-effective ranges
-        Map<String, Map<KVRangeId, KVRangeDescriptor>> allLeaderRangesByStoreId = toLeaderRanges(current);
-        KeySpaceDAG keySpaceDAG = new KeySpaceDAG(allLeaderRangesByStoreId);
-        NavigableMap<Boundary, KeySpaceDAG.LeaderRange> effectiveRoute = keySpaceDAG.getEffectiveFullCoveredRoute();
-        if (effectiveRoute.isEmpty()) {
-            // only operate on the leader range in effectiveRoute
+        EffectiveEpoch currentEpoch = effectiveEpoch;
+        if (currentEpoch == null) {
             return NoNeedBalance.INSTANCE;
         }
-        Map<String, KVRangeStoreDescriptor> landscape = current.stream()
-            .collect(Collectors.toMap(KVRangeStoreDescriptor::getId, store -> store));
-        return balanceLeaderCount(landscape, effectiveRoute);
+        // leader ranges including non-effective ranges
+        EffectiveRoute effectiveRoute = getEffectiveRoute(currentEpoch);
+        if (effectiveRoute.leaderRanges().isEmpty()) {
+            // only operate on the leader range in leaderRanges
+            return NoNeedBalance.INSTANCE;
+        }
+        return balanceLeaderCount(effectiveRoute.leaderRanges());
     }
 
-    private BalanceResult balanceLeaderCount(Map<String, KVRangeStoreDescriptor> landscape,
-                                             NavigableMap<Boundary, KeySpaceDAG.LeaderRange> effectiveRoute) {
+    private BalanceResult balanceLeaderCount(NavigableMap<Boundary, LeaderRange> effectiveRoute) {
         Map<String, Integer> storeLeaderCount = new HashMap<>();
-        for (Map.Entry<Boundary, KeySpaceDAG.LeaderRange> entry : effectiveRoute.entrySet()) {
-            String localStoreId = entry.getValue().storeId();
+        for (Map.Entry<Boundary, LeaderRange> entry : effectiveRoute.entrySet()) {
+            String localStoreId = entry.getValue().ownerStoreDescriptor().getId();
             KVRangeDescriptor rangeDescriptor = entry.getValue().descriptor();
             ClusterConfig clusterConfig = rangeDescriptor.getConfig();
             clusterConfig.getVotersList().forEach(voter -> storeLeaderCount.computeIfAbsent(voter, k -> 0));
@@ -104,9 +100,9 @@ public class RangeLeaderBalancer extends StoreBalancer {
             return NoNeedBalance.INSTANCE;
         }
         // scan the effective route to find the range to balance
-        for (Map.Entry<Boundary, KeySpaceDAG.LeaderRange> entry : effectiveRoute.entrySet()) {
-            KeySpaceDAG.LeaderRange leaderRange = entry.getValue();
-            String leaderStoreId = leaderRange.storeId();
+        for (Map.Entry<Boundary, LeaderRange> entry : effectiveRoute.entrySet()) {
+            LeaderRange leaderRange = entry.getValue();
+            String leaderStoreId = leaderRange.ownerStoreDescriptor().getId();
             KVRangeDescriptor rangeDescriptor = leaderRange.descriptor();
             ClusterConfig clusterConfig = rangeDescriptor.getConfig();
             Set<String> voters = Sets.newHashSet(clusterConfig.getVotersList());

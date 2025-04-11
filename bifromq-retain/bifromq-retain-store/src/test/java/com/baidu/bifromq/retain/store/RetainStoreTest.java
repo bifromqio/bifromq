@@ -58,13 +58,11 @@ import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcInput;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceROCoProcOutput;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcInput;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcOutput;
-import com.baidu.bifromq.retain.store.balance.RangeBootstrapBalancerFactory;
 import com.baidu.bifromq.retain.store.schema.KVSchemaUtil;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.TopicMessage;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.Struct;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Metrics;
@@ -76,7 +74,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.Comparator;
-import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
@@ -145,11 +142,16 @@ public class RetainStoreTest {
 
     private void buildStoreServer() {
         RPCServerBuilder rpcServerBuilder = IRPCServer.newBuilder().host("127.0.0.1").trafficService(trafficService);
-        testStore =
-            IRetainStore.builder().rpcServerBuilder(rpcServerBuilder).agentHost(agentHost).metaService(metaService)
-                .retainStoreClient(storeClient).storeOptions(options).tickerThreads(tickerThreads)
-                .bgTaskExecutor(bgTaskExecutor).gcInterval(Duration.ofSeconds(60)).balancerFactoryConfig(
-                    Map.of(RangeBootstrapBalancerFactory.class.getName(), Struct.getDefaultInstance())).build();
+        testStore = IRetainStore.builder()
+            .rpcServerBuilder(rpcServerBuilder)
+            .agentHost(agentHost)
+            .metaService(metaService)
+            .retainStoreClient(storeClient)
+            .storeOptions(options)
+            .tickerThreads(tickerThreads)
+            .bgTaskExecutor(bgTaskExecutor)
+            .gcInterval(Duration.ofSeconds(60))
+            .build();
         rpcServer = rpcServerBuilder.build();
     }
 

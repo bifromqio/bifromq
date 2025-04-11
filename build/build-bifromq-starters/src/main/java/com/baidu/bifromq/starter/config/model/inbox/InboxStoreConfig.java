@@ -64,16 +64,5 @@ public class InboxStoreConfig {
                 .build());
         balanceConfig.getBalancers().put("com.baidu.bifromq.inbox.store.balance.RangeLeaderBalancerFactory",
             Struct.getDefaultInstance());
-        balanceConfig.getBalancers().put(
-            "com.baidu.bifromq.inbox.store.balance.UnreachableReplicaRemovalBalancerFactory",
-            Struct.newBuilder()
-                .putFields("probeSeconds", Value.newBuilder().setNumberValue(15).build())
-                .build());
-        balanceConfig.getBalancers().put("com.baidu.bifromq.inbox.store.balance.RangeBootstrapBalancerFactory",
-            Struct.newBuilder()
-                .putFields("waitSeconds", Value.newBuilder().setNumberValue(15).build())
-                .build());
-        balanceConfig.getBalancers().put("com.baidu.bifromq.inbox.store.balance.RedundantEpochRemovalBalancerFactory",
-            Struct.getDefaultInstance());
     }
 }

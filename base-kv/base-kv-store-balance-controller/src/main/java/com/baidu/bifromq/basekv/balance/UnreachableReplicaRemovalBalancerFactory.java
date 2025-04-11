@@ -11,16 +11,22 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.dist.worker.balance;
+package com.baidu.bifromq.basekv.balance;
 
-import com.baidu.bifromq.basekv.balance.StoreBalancer;
-import com.baidu.bifromq.basekv.balance.impl.RedundantEpochRemovalBalancer;
-import com.baidu.bifromq.dist.worker.spi.IDistWorkerBalancerFactory;
+import com.baidu.bifromq.basekv.balance.impl.UnreachableReplicaRemovalBalancer;
+import java.time.Duration;
+import lombok.extern.slf4j.Slf4j;
 
-public class RedundantEpochRemovalBalancerFactory implements IDistWorkerBalancerFactory {
+@Slf4j
+class UnreachableReplicaRemovalBalancerFactory implements IStoreBalancerFactory {
+    private final Duration suspectDuration;
+
+    UnreachableReplicaRemovalBalancerFactory(Duration suspectDuration) {
+        this.suspectDuration = suspectDuration;
+    }
 
     @Override
     public StoreBalancer newBalancer(String clusterId, String localStoreId) {
-        return new RedundantEpochRemovalBalancer(clusterId, localStoreId);
+        return new UnreachableReplicaRemovalBalancer(clusterId, localStoreId, suspectDuration);
     }
 }

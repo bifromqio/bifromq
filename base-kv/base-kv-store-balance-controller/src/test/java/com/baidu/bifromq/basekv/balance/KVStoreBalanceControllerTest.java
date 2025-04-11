@@ -88,9 +88,13 @@ public class KVStoreBalanceControllerTest {
         when(storeClient.clusterId()).thenReturn(CLUSTER_ID);
         when(balancerFactory.newBalancer(eq(CLUSTER_ID), eq(LOCAL_STORE_ID))).thenReturn(storeBalancer);
         executor = Executors.newScheduledThreadPool(1);
-        balanceController =
-            new KVStoreBalanceController(metadataManager, storeClient, List.of(balancerFactory), Duration.ofMillis(100),
-                executor);
+        balanceController = new KVStoreBalanceController(metadataManager,
+            storeClient,
+            List.of(balancerFactory),
+            Duration.ofMillis(100),
+            Duration.ofMillis(100),
+            Duration.ofMillis(100),
+            executor);
         when(metadataManager.loadRules()).thenReturn(loadRuleSubject);
         when(storeClient.describe()).thenReturn(storeDescSubject);
         balanceController.start(LOCAL_STORE_ID);

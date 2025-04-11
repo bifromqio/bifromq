@@ -16,8 +16,15 @@ package com.baidu.bifromq.basekv.utils;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 
-
+/**
+ * Utility class for generating and manipulating KVRangeId objects.
+ */
 public final class KVRangeIdUtil {
+    /**
+     * Generate the first KVRangeId in new epoch.
+     *
+     * @return a new KVRangeId object
+     */
     public static KVRangeId generate() {
         long hlc = HLC.INST.get();
         return KVRangeId.newBuilder()
@@ -26,6 +33,12 @@ public final class KVRangeIdUtil {
             .build();
     }
 
+    /**
+     * Generate the next KVRangeId in the same epoch.
+     *
+     * @param from the KVRangeId to generate the next one from
+     * @return a new KVRangeId object
+     */
     public static KVRangeId next(KVRangeId from) {
         return next(from.getEpoch());
     }

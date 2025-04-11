@@ -57,6 +57,8 @@ public class InboxStoreBuilder {
     int workerThreads;
     int tickerThreads;
     ScheduledExecutorService bgTaskExecutor;
+    Duration bootstrapDelay = Duration.ofSeconds(15);
+    Duration zombieProbeDelay = Duration.ofSeconds(15);
     Duration balancerRetryDelay = Duration.ofSeconds(5);
     Map<String, Struct> balancerFactoryConfig = new HashMap<>();
     Duration detachTimeout = Duration.ofSeconds(PersistentSessionDetachTimeoutSecond.INSTANCE.get());

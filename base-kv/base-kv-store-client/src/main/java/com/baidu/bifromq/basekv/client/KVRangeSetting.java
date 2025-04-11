@@ -23,16 +23,13 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.protobuf.Any;
-import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
@@ -54,7 +51,7 @@ public class KVRangeSetting {
     private final List<String> inProcVoters;
     private final List<String> inProcFollowers;
     private final List<String> inProcReplicas;
-    private final Map<ByteString, Object> cachedFact = new ConcurrentHashMap<>();
+    @EqualsAndHashCode.Exclude
     private volatile Object factObject;
 
     public KVRangeSetting(String clusterId, String leaderStoreId, KVRangeDescriptor desc) {

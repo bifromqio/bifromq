@@ -36,16 +36,13 @@ import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.store.IInboxStore;
-import com.baidu.bifromq.inbox.store.balance.RangeBootstrapBalancerFactory;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
-import com.google.protobuf.Struct;
 import java.lang.reflect.Method;
 import java.time.Duration;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -135,8 +132,6 @@ public abstract class InboxServiceTest {
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
             .detachTimeout(Duration.ofSeconds(2))
-            .balancerFactoryConfig(
-                Map.of(RangeBootstrapBalancerFactory.class.getName(), Struct.getDefaultInstance()))
             .build();
         inboxServer = IInboxServer.builder()
             .rpcServerBuilder(rpcServerBuilder)

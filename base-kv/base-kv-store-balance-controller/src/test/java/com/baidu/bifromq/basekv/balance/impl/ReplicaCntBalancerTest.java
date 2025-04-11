@@ -15,7 +15,7 @@ package com.baidu.bifromq.basekv.balance.impl;
 
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveEpoch;
-import static com.baidu.bifromq.basekv.utils.DescriptorUtil.toLeaderRanges;
+import static com.baidu.bifromq.basekv.utils.DescriptorUtil.getEffectiveRoute;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertSame;
@@ -31,12 +31,11 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
-import com.baidu.bifromq.basekv.utils.KeySpaceDAG;
+import com.baidu.bifromq.basekv.utils.EffectiveRoute;
 import com.google.protobuf.ByteString;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.NavigableMap;
 import java.util.Set;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -452,10 +451,7 @@ public class ReplicaCntBalancerTest {
         storeDescriptors.put(storeDescriptor.getId(), storeDescriptor);
         storeDescriptors.put(learnerStoreDescriptor.getId(), learnerStoreDescriptor);
 
-        KeySpaceDAG keySpaceDAG =
-            new KeySpaceDAG(toLeaderRanges(getEffectiveEpoch(allStoreDescriptors).get().storeDescriptors()));
-        NavigableMap<Boundary, KeySpaceDAG.LeaderRange> effectiveRoute = keySpaceDAG.getEffectiveFullCoveredRoute();
-
+        EffectiveRoute effectiveRoute = getEffectiveRoute(getEffectiveEpoch(allStoreDescriptors).get());
 
         Map<Boundary, ClusterConfig> layout =
             balancer.doGenerate(balancer.defaultLoadRules(), storeDescriptors, effectiveRoute);

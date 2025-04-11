@@ -87,6 +87,8 @@ class InboxStore implements IInboxStore {
             builder.metaService.metadataManager(clusterId),
             inboxStoreClient,
             effectiveBalancerFactories,
+            builder.bootstrapDelay,
+            builder.zombieProbeDelay,
             builder.balancerRetryDelay,
             builder.bgTaskExecutor);
         jobExecutorOwner = builder.bgTaskExecutor == null;
