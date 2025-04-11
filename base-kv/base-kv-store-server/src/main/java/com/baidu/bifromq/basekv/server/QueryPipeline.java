@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.server;
 
+import com.baidu.bifromq.basekv.raft.exception.ReadIndexException;
 import com.baidu.bifromq.basekv.store.IKVRangeStore;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
@@ -91,6 +92,12 @@ class QueryPipeline extends ResponsePipeline<KVRangeRORequest, KVRangeROReply> {
                             return KVRangeROReply.newBuilder()
                                 .setReqId(request.getReqId())
                                 .setCode(ReplyCode.BadRequest)
+                                .build();
+                        }
+                        if (e instanceof ReadIndexException || e.getCause() instanceof ReadIndexException) {
+                            return KVRangeROReply.newBuilder()
+                                .setReqId(request.getReqId())
+                                .setCode(ReplyCode.TryLater)
                                 .build();
                         }
                         log.debug("query range error: reqId={}", request.getReqId(), e);

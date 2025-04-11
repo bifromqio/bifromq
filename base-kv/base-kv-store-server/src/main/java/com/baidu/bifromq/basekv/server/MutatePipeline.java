@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.server;
 
+import com.baidu.bifromq.basekv.raft.exception.DropProposalException;
 import com.baidu.bifromq.basekv.store.IKVRangeStore;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
@@ -90,17 +91,50 @@ class MutatePipeline extends ResponsePipeline<KVRangeRWRequest, KVRangeRWReply> 
                 if (e instanceof KVRangeStoreException.KVRangeNotFoundException
                     || e.getCause() instanceof KVRangeStoreException.KVRangeNotFoundException
                     || e instanceof KVRangeException.TryLater || e.getCause() instanceof KVRangeException.TryLater) {
-                    log.debug("RW request needs retry: reqId={}", request.getReqId(), e);
                     return KVRangeRWReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(ReplyCode.TryLater)
                         .build();
                 }
                 if (e instanceof KVRangeException.BadRequest || e.getCause() instanceof KVRangeException.BadRequest) {
-                    log.debug("Bad RW request: reqId={}", request.getReqId(), e);
                     return KVRangeRWReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(ReplyCode.BadRequest)
+                        .build();
+                }
+                if (e instanceof DropProposalException.TransferringLeaderException
+                    || e.getCause() instanceof DropProposalException.TransferringLeaderException) {
+                    return KVRangeRWReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(ReplyCode.TryLater)
+                        .build();
+                }
+                if (e instanceof DropProposalException.NoLeaderException
+                    || e.getCause() instanceof DropProposalException.NoLeaderException) {
+                    return KVRangeRWReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(ReplyCode.TryLater)
+                        .build();
+                }
+                if (e instanceof DropProposalException.ForwardTimeoutException
+                    || e.getCause() instanceof DropProposalException.ForwardTimeoutException) {
+                    return KVRangeRWReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(ReplyCode.TryLater)
+                        .build();
+                }
+                if (e instanceof DropProposalException.OverriddenException
+                    || e.getCause() instanceof DropProposalException.OverriddenException) {
+                    return KVRangeRWReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(ReplyCode.TryLater)
+                        .build();
+                }
+                if (e instanceof DropProposalException.SupersededBySnapshotException
+                    || e.getCause() instanceof DropProposalException.SupersededBySnapshotException) {
+                    return KVRangeRWReply.newBuilder()
+                        .setReqId(request.getReqId())
+                        .setCode(ReplyCode.TryLater)
                         .build();
                 }
                 log.debug("Handle rw request error: reqId={}", request.getReqId(), e);
