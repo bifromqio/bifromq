@@ -41,6 +41,8 @@ import com.baidu.bifromq.baseenv.EnvProvider;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.protobuf.ByteString;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
@@ -55,16 +57,13 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 final class AgentHost implements IAgentHost {
-    private enum State {
-        INIT, STARTING, STARTED, STOPPING, SHUTDOWN
-    }
-
     private final AtomicReference<State> state = new AtomicReference<>(State.INIT);
     private final AgentHostOptions options;
     private final ICRDTStore store;
     private final ITransport transport;
     private final IMessenger messenger;
     private final IHostMemberList memberList;
+    private final Scheduler hostScheduler;
     private final MemberSelector memberSelector;
     private final AutoHealer healer;
     private final AutoSeeder seeder;
@@ -72,7 +71,6 @@ final class AgentHost implements IAgentHost {
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final IHostAddressResolver hostAddressResolver;
     private final String[] tags;
-
     AgentHost(ITransport transport, IHostAddressResolver resolver, AgentHostOptions options) {
         checkArgument(!Strings.isNullOrEmpty(options.addr()) && !"0.0.0.0".equals(options.addr()),
             "Invalid bind address");
@@ -84,13 +82,14 @@ final class AgentHost implements IAgentHost {
             .maxHealthScore(options.awarenessMaxMultiplier())
             .retransmitMultiplier(options.retransmitMultiplier())
             .spreadPeriod(options.gossipPeriod());
-        Scheduler scheduler = Schedulers.from(newSingleThreadScheduledExecutor(
-            EnvProvider.INSTANCE.newThreadFactory("agent-host-scheduler", true)));
+        hostScheduler = Schedulers.from(ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+            newSingleThreadScheduledExecutor(EnvProvider.INSTANCE.newThreadFactory("agent-host-scheduler", true)),
+            "agent-host-scheduler"));
         this.store = ICRDTStore.newInstance(options.crdtStoreOptions());
         this.messenger = Messenger.builder()
             .transport(transport)
             .opts(messengerOptions)
-            .scheduler(scheduler)
+            .scheduler(hostScheduler)
             .build();
         hostAddressResolver = resolver;
         this.store.start(messenger.receive()
@@ -98,7 +97,7 @@ final class AgentHost implements IAgentHost {
             .map(m -> m.value().message.getCrdtStoreMessage()));
         tags = new String[] {"local", options.addr() + ":" + messenger.bindAddress().getPort()};
         this.memberList = new HostMemberList(options.addr(), messenger.bindAddress().getPort(),
-            messenger, scheduler, store, hostAddressResolver, tags);
+            messenger, hostScheduler, store, hostAddressResolver, tags);
         IFailureDetector failureDetector = FailureDetector.builder()
             .local(new IProbingTarget() {
                 @Override
@@ -116,15 +115,15 @@ final class AgentHost implements IAgentHost {
             .indirectProbes(options.indirectProbes())
             .worstHealthScore(options.awarenessMaxMultiplier())
             .messenger(messenger)
-            .scheduler(scheduler)
+            .scheduler(hostScheduler)
             .build();
-        healer = new AutoHealer(messenger, scheduler, memberList, hostAddressResolver, options.autoHealingTimeout(),
+        healer = new AutoHealer(messenger, hostScheduler, memberList, hostAddressResolver, options.autoHealingTimeout(),
             options.autoHealingInterval(), tags);
-        seeder = new AutoSeeder(messenger, scheduler, memberList, hostAddressResolver, options.joinTimeout(),
+        seeder = new AutoSeeder(messenger, hostScheduler, memberList, hostAddressResolver, options.joinTimeout(),
             Duration.ofSeconds(options.joinRetryInSec()), tags);
-        deadDropper = new AutoDropper(messenger, scheduler, memberList, failureDetector, hostAddressResolver,
+        deadDropper = new AutoDropper(messenger, hostScheduler, memberList, failureDetector, hostAddressResolver,
             options.suspicionMultiplier(), options.suspicionMaxTimeoutMultiplier(), tags);
-        memberSelector = new MemberSelector(memberList, scheduler, hostAddressResolver);
+        memberSelector = new MemberSelector(memberList, hostScheduler, hostAddressResolver);
         disposables.add(store.storeMessages().subscribe(this::sendCRDTStoreMessage));
 
         start();
@@ -184,6 +183,7 @@ final class AgentHost implements IAgentHost {
                 .whenComplete((v, e) -> {
                     memberSelector.stop();
                     disposables.dispose();
+                    hostScheduler.shutdown();
                     state.set(State.SHUTDOWN);
                 }).join();
             log.debug("AgentHost stopped");
@@ -198,7 +198,6 @@ final class AgentHost implements IAgentHost {
         }
     }
 
-
     private void sendCRDTStoreMessage(CRDTStoreMessage storeMsg) {
         ClusterMessage msg = ClusterMessage.newBuilder().setCrdtStoreMessage(storeMsg).build();
         try {
@@ -212,5 +211,10 @@ final class AgentHost implements IAgentHost {
         } catch (Exception e) {
             log.error("Target Host[{}] not found:\n{}", storeMsg.getReceiver(), storeMsg);
         }
+    }
+
+
+    private enum State {
+        INIT, STARTING, STARTED, STOPPING, SHUTDOWN
     }
 }

@@ -66,16 +66,11 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class HostMemberList implements IHostMemberList {
-    private enum State {
-        JOINED, QUITTING, QUITED
-    }
-
     private final AtomicReference<State> state = new AtomicReference<>(State.JOINED);
     private final IMessenger messenger;
     private final Scheduler scheduler;
     private final ICRDTStore store;
     private final IHostAddressResolver addressResolver;
-
     private final BehaviorSubject<Map<HostEndpoint, HostMember>> membershipSubject = BehaviorSubject.createDefault(
         new ConcurrentHashMap<>());
     private final Map<String, Agent> agentMap = new ConcurrentHashMap<>();
@@ -84,7 +79,6 @@ public class HostMemberList implements IHostMemberList {
     private final MetricManager metricManager;
     private final String[] tags;
     private volatile HostMember local;
-
     public HostMemberList(String bindAddr,
                           int port,
                           IMessenger messenger,
@@ -180,11 +174,11 @@ public class HostMemberList implements IHostMemberList {
     @Override
     public CompletableFuture<Void> stop() {
         if (state.compareAndSet(State.JOINED, State.QUITTING)) {
-            synchronized (this) {
-                return CompletableFuture.allOf(agentMap.values().stream()
-                        .map(Agent::quit).toArray(CompletableFuture[]::new))
-                    .exceptionally(e -> null)
-                    .thenCompose(v -> {
+            return CompletableFuture.allOf(agentMap.values().stream()
+                    .map(Agent::quit).toArray(CompletableFuture[]::new))
+                .exceptionally(e -> null)
+                .thenCompose(v -> {
+                    synchronized (this) {
                         disposables.dispose();
                         // remove self from alive host list
                         removeMember(local.getEndpoint(), local.getIncarnation());
@@ -192,24 +186,24 @@ public class HostMemberList implements IHostMemberList {
                         return hostListCRDT.execute(
                                 ORMapOperation.remove(local.getEndpoint().toByteString()).of(mvreg))
                             .exceptionally(e -> null);
-                    })
-                    .thenCompose(v1 -> {
-                        ClusterMessage quit = ClusterMessage.newBuilder()
-                            .setQuit(Quit.newBuilder()
-                                .setEndpoint(local.getEndpoint())
-                                .setIncarnation(local.getIncarnation())
-                                .build())
-                            .build();
-                        return messenger.spread(quit)
-                            .handle((v, e) -> null);
-                    })
-                    .thenCompose(v -> store.stopHosting(hostListCRDT.id()))
-                    .whenComplete((v, e) -> {
-                        membershipSubject.onComplete();
-                        metricManager.close();
-                        state.set(State.QUITED);
-                    });
-            }
+                    }
+                })
+                .thenCompose(v1 -> {
+                    ClusterMessage quit = ClusterMessage.newBuilder()
+                        .setQuit(Quit.newBuilder()
+                            .setEndpoint(local.getEndpoint())
+                            .setIncarnation(local.getIncarnation())
+                            .build())
+                        .build();
+                    return messenger.spread(quit)
+                        .handle((v, e) -> null);
+                })
+                .thenCompose(v -> store.stopHosting(hostListCRDT.id()))
+                .whenComplete((v, e) -> {
+                    membershipSubject.onComplete();
+                    metricManager.close();
+                    state.set(State.QUITED);
+                });
         } else if (state.get() == State.QUITTING) {
             return CompletableFuture.failedFuture(new IllegalStateException("quit has started"));
         } else {
@@ -423,6 +417,10 @@ public class HostMemberList implements IHostMemberList {
 
     private void checkState() {
         Preconditions.checkState(state.get() == State.JOINED);
+    }
+
+    private enum State {
+        JOINED, QUITTING, QUITED
     }
 
     private class MetricManager {

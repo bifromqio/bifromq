@@ -26,6 +26,7 @@ import com.baidu.bifromq.basecrdt.core.api.MVRegOperation;
 import com.baidu.bifromq.basecrdt.core.api.ORMapOperation;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.proto.DescriptorKey;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
@@ -36,8 +37,12 @@ import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Struct;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import io.reactivex.rxjava3.subjects.Subject;
 import java.time.Duration;
@@ -48,17 +53,17 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class BaseKVClusterMetadataManager implements IBaseKVClusterMetadataManager {
-
-    private record StoreDescriptorAndReplicas(Map<DescriptorKey, KVRangeStoreDescriptor> descriptorMap,
-                                              Set<ByteString> replicaIds) {
-    }
-
+    private static final Scheduler SHARED_SCHEDULER = Schedulers.from(
+        ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+            Executors.newSingleThreadExecutor(EnvProvider.INSTANCE.newThreadFactory("basekv-metadata-manager", true)),
+            "basekv-metadata-manager"));
     private final ICRDTService crdtService;
     private final IORMap loadRulesORMap;
     private final IORMap loadRulesProposalORMap;
@@ -79,12 +84,15 @@ class BaseKVClusterMetadataManager implements IBaseKVClusterMetadataManager {
         this.loadRulesProposalORMap = crdtService.host(toLoadRulesProposalURI(clusterId));
         this.proposalTimeout = proposalTimeout;
         disposable.add(landscapeORMap.inflation()
+            .observeOn(SHARED_SCHEDULER)
             .map(this::buildLandscape)
             .subscribe(landscapeSubject::onNext));
         disposable.add(loadRulesORMap.inflation()
+            .observeOn(SHARED_SCHEDULER)
             .map(this::buildBalancerLoadRules)
             .subscribe(loadRulesSubject::onNext));
         disposable.add(loadRulesProposalORMap.inflation()
+            .observeOn(SHARED_SCHEDULER)
             .map(this::buildLoadRulesProposition)
             .map(m -> {
                 Map<String, LoadRulesProposition> result = new HashMap<>();
@@ -114,6 +122,7 @@ class BaseKVClusterMetadataManager implements IBaseKVClusterMetadataManager {
             Observable.combineLatest(landscapeSubject, crdtService.aliveReplicas(landscapeORMap.id().getUri())
                         .map(replicas -> replicas.stream().map(Replica::getId).collect(Collectors.toSet())),
                     (StoreDescriptorAndReplicas::new))
+                .observeOn(SHARED_SCHEDULER)
                 .subscribe(this::checkAndHealStoreDescriptorList));
     }
 
@@ -346,5 +355,9 @@ class BaseKVClusterMetadataManager implements IBaseKVClusterMetadataManager {
             log.error("Unable to parse DescriptorKey", e);
             return null;
         }
+    }
+
+    private record StoreDescriptorAndReplicas(Map<DescriptorKey, KVRangeStoreDescriptor> descriptorMap,
+                                              Set<ByteString> replicaIds) {
     }
 }

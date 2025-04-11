@@ -18,6 +18,7 @@ import static com.baidu.bifromq.basecrdt.core.api.CausalCRDTType.mvreg;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberAddr;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMemberMetadata;
 import com.baidu.bifromq.basecluster.agent.proto.AgentMessage;
+import com.baidu.bifromq.basecluster.agent.proto.AgentMessageEnvelope;
 import com.baidu.bifromq.basecrdt.core.api.IORMap;
 import com.baidu.bifromq.basecrdt.core.api.MVRegOperation;
 import com.baidu.bifromq.basecrdt.core.api.ORMapOperation;
@@ -41,7 +42,6 @@ class AgentMember implements IAgentMember {
     private final AgentMemberAddr localAddr;
     private final IORMap agentCRDT;
     private final IAgentMessenger messenger;
-    private final Scheduler scheduler;
     private final Supplier<Set<AgentMemberAddr>> memberAddresses;
     private final PublishSubject<AgentMessage> agentMessageSubject = PublishSubject.create();
     private final CompositeDisposable disposables = new CompositeDisposable();
@@ -57,7 +57,6 @@ class AgentMember implements IAgentMember {
         this.localAddr = memberAddr;
         this.agentCRDT = agentCRDT;
         this.messenger = messenger;
-        this.scheduler = scheduler;
         this.memberAddresses = memberAddresses;
         metadata = AgentMemberMetadata.newBuilder().setHlc(HLC.INST.get()).build();
         updateCRDT();
@@ -66,7 +65,7 @@ class AgentMember implements IAgentMember {
             .subscribe(this::updateCRDT));
         disposables.add(messenger.receive()
             .filter(msg -> msg.getReceiver().equals(localAddr))
-            .map(msg -> msg.getMessage())
+            .map(AgentMessageEnvelope::getMessage)
             .observeOn(scheduler)
             .subscribe(agentMessageSubject::onNext));
     }
@@ -95,10 +94,9 @@ class AgentMember implements IAgentMember {
     public CompletableFuture<Void> broadcast(ByteString message, boolean reliable) {
         return throwsWhenDestroyed(() -> {
             AgentMessage agentMessage = AgentMessage.newBuilder().setSender(localAddr).setPayload(message).build();
-            CompletableFuture<Void>[] sendFutures = memberAddresses.get().stream()
+            return CompletableFuture.allOf(memberAddresses.get().stream()
                 .map(memberAddr -> messenger.send(agentMessage, memberAddr, reliable))
-                .toArray(CompletableFuture[]::new);
-            return CompletableFuture.allOf(sendFutures).exceptionally(e -> null);
+                .toArray(CompletableFuture[]::new)).exceptionally(e -> null);
         });
     }
 
@@ -132,7 +130,7 @@ class AgentMember implements IAgentMember {
     private void updateCRDT(long ts) {
         skipRunWhenDestroyed(() -> {
             Optional<AgentMemberMetadata> metaOnCRDT = CRDTUtil.getAgentMemberMetadata(agentCRDT, localAddr);
-            if (!metaOnCRDT.isPresent() || !metaOnCRDT.get().equals(metadata)) {
+            if (metaOnCRDT.isEmpty() || !metaOnCRDT.get().equals(metadata)) {
                 updateCRDT();
             }
         });

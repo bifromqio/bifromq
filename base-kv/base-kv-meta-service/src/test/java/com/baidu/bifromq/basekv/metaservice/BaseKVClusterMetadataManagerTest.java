@@ -167,7 +167,7 @@ public class BaseKVClusterMetadataManagerTest {
             .setHlc(HLC.INST.get())
             .build();
         manager.report(descriptor).join();
-        assertTrue(manager.getStoreDescriptor(descriptor.getId()).isPresent());
+        await().until(() -> manager.getStoreDescriptor(descriptor.getId()).isPresent());
 
         manager.stopReport("testStoreId").join();
         assertEquals(Collections.emptyMap(), manager.landscape().blockingFirst());

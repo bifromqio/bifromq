@@ -152,8 +152,7 @@ public class KVRangeFSM implements IKVRangeFSM {
     private final Map<String, KVRangeDumpSession> dumpSessions = Maps.newConcurrentMap();
     private final AtomicInteger taskSeqNo = new AtomicInteger();
     private final Subject<ClusterConfig> clusterConfigSubject = BehaviorSubject.<ClusterConfig>create().toSerialized();
-    private final Subject<KVRangeDescriptor> descriptorSubject =
-        BehaviorSubject.<KVRangeDescriptor>create().toSerialized();
+    private final Subject<KVRangeDescriptor> descriptorSubject = BehaviorSubject.create();
     private final Subject<List<SplitHint>> splitHintsSubject = BehaviorSubject.<List<SplitHint>>create().toSerialized();
     private final Subject<Any> factSubject = BehaviorSubject.create();
     private final KVRangeOptions opts;
@@ -299,6 +298,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 .setFact(fact)
                                 .build();
                         })
+                    .observeOn(Schedulers.from(mgmtExecutor))
                     .subscribe(descriptorSubject::onNext));
                 disposables.add(messenger.receive().subscribe(this::handleMessage));
                 disposables.add(descriptorSubject.subscribe(this::detectZombieState));

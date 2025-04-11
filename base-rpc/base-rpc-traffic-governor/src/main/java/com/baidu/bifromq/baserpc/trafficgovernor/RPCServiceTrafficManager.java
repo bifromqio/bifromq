@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.baserpc.trafficgovernor;
 
+import static com.baidu.bifromq.baserpc.trafficgovernor.SharedScheduler.RPC_SHARED_SCHEDULER;
 import static java.util.Collections.emptySet;
 
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
@@ -46,6 +47,7 @@ class RPCServiceTrafficManager extends RPCServiceAnnouncer
     public RPCServiceTrafficManager(String serviceUniqueName, ICRDTService crdtService) {
         super(serviceUniqueName, crdtService);
         disposables.add(Observable.combineLatest(announcedServers(), aliveAnnouncers(), this::refreshAliveServerList)
+            .observeOn(RPC_SHARED_SCHEDULER)
             .subscribe(serverEndpointSubject::onNext));
     }
 

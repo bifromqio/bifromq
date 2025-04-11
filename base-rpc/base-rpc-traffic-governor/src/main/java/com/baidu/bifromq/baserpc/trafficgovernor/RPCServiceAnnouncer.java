@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.baserpc.trafficgovernor;
 
+import static com.baidu.bifromq.baserpc.trafficgovernor.SharedScheduler.RPC_SHARED_SCHEDULER;
 import static com.google.protobuf.ByteString.copyFromUtf8;
 import static java.util.Collections.emptyMap;
-import static java.util.concurrent.Executors.newSingleThreadExecutor;
 
 import com.baidu.bifromq.basecrdt.core.api.CRDTURI;
 import com.baidu.bifromq.basecrdt.core.api.CausalCRDTType;
@@ -25,7 +25,6 @@ import com.baidu.bifromq.basecrdt.core.api.MVRegOperation;
 import com.baidu.bifromq.basecrdt.core.api.ORMapOperation;
 import com.baidu.bifromq.basecrdt.proto.Replica;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
-import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.proto.LoadAssignment;
 import com.baidu.bifromq.baserpc.proto.RPCServer;
@@ -33,9 +32,7 @@ import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.reactivex.rxjava3.core.Observable;
-import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
-import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import java.util.Iterator;
 import java.util.Map;
@@ -47,8 +44,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 abstract class RPCServiceAnnouncer {
-    private static final Scheduler RPC_SHARED_SCHEDULER = Schedulers.from(
-        newSingleThreadExecutor(EnvProvider.INSTANCE.newThreadFactory("RPC-Service-Cluster-CRDT", true)));
     private static final ByteString SERVER_LIST_KEY = ByteString.copyFrom(new byte[] {0x00});
     private static final ByteString TRAFFIC_RULES_KEY = ByteString.copyFrom(new byte[] {0x01});
 
@@ -146,7 +141,7 @@ abstract class RPCServiceAnnouncer {
     }
 
     protected Observable<Map<String, RPCServer>> announcedServers() {
-        return serverEndpointSubject.observeOn(RPC_SHARED_SCHEDULER);
+        return serverEndpointSubject;
     }
 
     private Map<String, RPCServer> buildAnnouncedServers(long t) {
@@ -164,7 +159,7 @@ abstract class RPCServiceAnnouncer {
     }
 
     protected Observable<Map<String, Map<String, Integer>>> trafficRules() {
-        return trafficRulesSubject.observeOn(RPC_SHARED_SCHEDULER);
+        return trafficRulesSubject;
     }
 
     protected Observable<Set<ByteString>> aliveAnnouncers() {
