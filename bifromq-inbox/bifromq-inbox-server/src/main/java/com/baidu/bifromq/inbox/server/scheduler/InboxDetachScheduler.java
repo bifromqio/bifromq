@@ -64,7 +64,7 @@ public class InboxDetachScheduler extends MutationCallScheduler<DetachRequest, D
 
         @Override
         protected IBatchCall<DetachRequest, DetachReply, MutationCallBatcherKey> newBatch() {
-            return new BatchDetachCall(storeClient, Duration.ofMinutes(5), batcherKey);
+            return new BatchDetachCall(storeClient, batcherKey);
         }
     }
 }

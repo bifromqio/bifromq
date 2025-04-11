@@ -19,17 +19,14 @@ import com.google.protobuf.ByteString;
 import java.time.Duration;
 
 public class TestQueryCallScheduler extends QueryCallScheduler<ByteString, ByteString> {
-    private final Duration pipelineExpire;
     private final boolean linearizable;
 
     public TestQueryCallScheduler(String name,
                                   IBaseKVStoreClient storeClient,
                                   Duration tolerableLatency,
                                   Duration burstLatency,
-                                  Duration pipelineExpire,
                                   boolean linearizable) {
         super(name, storeClient, tolerableLatency, burstLatency);
-        this.pipelineExpire = pipelineExpire;
         this.linearizable = linearizable;
     }
 
@@ -37,11 +34,9 @@ public class TestQueryCallScheduler extends QueryCallScheduler<ByteString, ByteS
                                   IBaseKVStoreClient storeClient,
                                   Duration tolerableLatency,
                                   Duration burstLatency,
-                                  Duration pipelineExpire,
                                   Duration batcherExpiry,
                                   boolean linearizable) {
         super(name, storeClient, tolerableLatency, burstLatency, batcherExpiry);
-        this.pipelineExpire = pipelineExpire;
         this.linearizable = linearizable;
     }
 
@@ -66,7 +61,6 @@ public class TestQueryCallScheduler extends QueryCallScheduler<ByteString, ByteS
             burstLatencyNanos,
             batcherKey,
             storeClient,
-            pipelineExpire,
             linearizable
         );
     }

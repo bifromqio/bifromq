@@ -25,21 +25,18 @@ import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
-import java.time.Duration;
 import java.util.HashSet;
 import java.util.Queue;
 import java.util.Set;
 
 class BatchInsertCall extends BatchMutationCall<InboxSubMessagePack, InboxInsertResult> {
-    protected BatchInsertCall(IBaseKVStoreClient storeClient,
-                              Duration pipelineExpiryTime,
-                              MutationCallBatcherKey batcherKey) {
-        super(storeClient, pipelineExpiryTime, batcherKey);
+    protected BatchInsertCall(IBaseKVStoreClient storeClient, MutationCallBatcherKey batcherKey) {
+        super(storeClient, batcherKey);
     }
 
     @Override
-    protected MutationCallTaskBatch<InboxSubMessagePack, InboxInsertResult> newBatch(String storeId, long ver) {
-        return new BatchInsertCallTask(storeId, ver);
+    protected MutationCallTaskBatch<InboxSubMessagePack, InboxInsertResult> newBatch(long ver) {
+        return new BatchInsertCallTask(ver);
     }
 
     @Override
@@ -77,8 +74,8 @@ class BatchInsertCall extends BatchMutationCall<InboxSubMessagePack, InboxInsert
     private static class BatchInsertCallTask extends MutationCallTaskBatch<InboxSubMessagePack, InboxInsertResult> {
         private final Set<TenantInboxInstance> inboxes = new HashSet<>();
 
-        private BatchInsertCallTask(String storeId, long ver) {
-            super(storeId, ver);
+        private BatchInsertCallTask(long ver) {
+            super(ver);
         }
 
         @Override

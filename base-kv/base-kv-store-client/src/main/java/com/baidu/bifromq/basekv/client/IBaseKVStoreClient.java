@@ -144,7 +144,5 @@ public interface IBaseKVStoreClient extends IConnectable, AutoCloseable {
      */
     IQueryPipeline createLinearizedQueryPipeline(String storeId);
 
-    void join();
-
     void close();
 }

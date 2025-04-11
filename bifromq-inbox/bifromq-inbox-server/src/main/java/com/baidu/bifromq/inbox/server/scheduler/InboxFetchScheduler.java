@@ -23,7 +23,6 @@ import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.sysprops.props.InboxFetchQueuesPerRange;
 import com.google.protobuf.ByteString;
-import java.time.Duration;
 import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 
@@ -63,7 +62,7 @@ public class InboxFetchScheduler extends InboxReadScheduler<IInboxFetchScheduler
 
         @Override
         protected IBatchCall<InboxFetch, Fetched, QueryCallBatcherKey> newBatch() {
-            return new BatchFetchCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
+            return new BatchFetchCall(storeClient, batcherKey);
         }
     }
 }

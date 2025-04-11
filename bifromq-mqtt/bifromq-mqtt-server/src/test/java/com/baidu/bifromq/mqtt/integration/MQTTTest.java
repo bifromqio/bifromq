@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.integration;
 
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -25,6 +26,7 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
+import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.baserpc.server.IRPCServer;
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
@@ -290,9 +292,9 @@ public abstract class MQTTTest {
             .filter(state -> state == IRPCClient.ConnState.READY)
             .firstElement()
             .blockingSubscribe();
-        distWorkerStoreClient.join();
-        inboxStoreKVStoreClient.join();
-        retainStoreKVStoreClient.join();
+        await().until(() -> BoundaryUtil.isValidSplitSet(distWorkerStoreClient.latestEffectiveRouter().keySet()));
+        await().until(() -> BoundaryUtil.isValidSplitSet(inboxStoreKVStoreClient.latestEffectiveRouter().keySet()));
+        await().until(() -> BoundaryUtil.isValidSplitSet(retainStoreKVStoreClient.latestEffectiveRouter().keySet()));
         lenient().when(settingProvider.provide(any(), anyString()))
             .thenAnswer(invocation -> {
                 Setting setting = invocation.getArgument(0);

@@ -89,8 +89,8 @@ public abstract class RuleBasedPlacementBalancer extends StoreBalancer {
             return;
         }
         EffectiveRoute effectiveRoute = getEffectiveRoute(effectiveEpoch.get());
-        if (effectiveRoute.leaderRanges().isEmpty()) {
-            // no effective route in effective epoch, no balance
+        if (!BoundaryUtil.isValidSplitSet(effectiveRoute.leaderRanges().keySet())) {
+            // no complete effective route in effective epoch, no balance
             balanceCommandHolder.set(null);
             return;
         }

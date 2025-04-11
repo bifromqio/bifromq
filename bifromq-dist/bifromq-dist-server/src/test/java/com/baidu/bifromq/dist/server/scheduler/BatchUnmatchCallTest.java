@@ -31,7 +31,6 @@ import com.baidu.bifromq.dist.rpc.proto.DistServiceRWCoProcOutput;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
 import com.baidu.bifromq.util.TopicUtil;
-import java.time.Duration;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
@@ -49,8 +48,7 @@ public class BatchUnmatchCallTest {
     void setUp() {
         rangeId = KVRangeId.newBuilder().setId(1).build();
         storeClient = mock(IBaseKVStoreClient.class);
-        batchUnmatchCall = new BatchUnmatchCall(storeClient, Duration.ofMinutes(1),
-            new MutationCallBatcherKey(rangeId, "leaderStoreId", 1L));
+        batchUnmatchCall = new BatchUnmatchCall(storeClient, new MutationCallBatcherKey(rangeId, "leaderStoreId", 1L));
     }
 
     @Test

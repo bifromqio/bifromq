@@ -23,6 +23,5 @@ public class QueryCallBatcherKey {
     public final KVRangeId id;
     public final String storeId;
     public final int queueId;
-    @EqualsAndHashCode.Exclude
     public final long ver;
 }

@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.inbox.store;
 
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -20,6 +21,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 
+import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
@@ -44,7 +46,7 @@ public class LoadExistingTest extends InboxStoreTest {
             .setNow(now)
             .build());
         restartStoreServer();
-        storeClient.join();
+        await().until(() -> BoundaryUtil.isValidSplitSet(storeClient.latestEffectiveRouter().keySet()));
         when(inboxClient.detach(any()))
             .thenReturn(CompletableFuture.completedFuture(DetachReply.newBuilder().build()));
         ArgumentCaptor<DetachRequest> detachCaptor = ArgumentCaptor.forClass(DetachRequest.class);

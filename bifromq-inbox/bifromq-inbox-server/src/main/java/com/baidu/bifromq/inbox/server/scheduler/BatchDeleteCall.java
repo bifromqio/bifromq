@@ -29,7 +29,6 @@ import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchDeleteReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchDeleteRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import java.time.Duration;
 import java.util.HashSet;
 import java.util.Queue;
 import java.util.Set;
@@ -38,16 +37,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class BatchDeleteCall extends BatchMutationCall<DeleteRequest, DeleteReply> {
 
-    protected BatchDeleteCall(IBaseKVStoreClient distWorkerClient,
-                              Duration pipelineExpiryTime,
-                              MutationCallBatcherKey batcherKey) {
-        super(distWorkerClient, pipelineExpiryTime, batcherKey);
+    protected BatchDeleteCall(IBaseKVStoreClient distWorkerClient, MutationCallBatcherKey batcherKey) {
+        super(distWorkerClient, batcherKey);
     }
 
     @Override
-    protected MutationCallTaskBatch<DeleteRequest, DeleteReply> newBatch(String storeId,
-                                                                         long ver) {
-        return new BatchDeleteCallTask(storeId, ver);
+    protected MutationCallTaskBatch<DeleteRequest, DeleteReply> newBatch(long ver) {
+        return new BatchDeleteCallTask(ver);
     }
 
     @Override
@@ -133,8 +129,8 @@ class BatchDeleteCall extends BatchMutationCall<DeleteRequest, DeleteReply> {
     private static class BatchDeleteCallTask extends MutationCallTaskBatch<DeleteRequest, DeleteReply> {
         private final Set<TenantInboxInstance> inboxes = new HashSet<>();
 
-        private BatchDeleteCallTask(String storeId, long ver) {
-            super(storeId, ver);
+        private BatchDeleteCallTask(long ver) {
+            super(ver);
         }
 
         @Override

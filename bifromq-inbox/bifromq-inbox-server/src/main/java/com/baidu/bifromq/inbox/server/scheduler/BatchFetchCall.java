@@ -18,7 +18,6 @@ import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchQueryCall;
 import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
@@ -26,15 +25,12 @@ import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
-import java.time.Duration;
 import java.util.Iterator;
 import java.util.Queue;
 
 class BatchFetchCall extends BatchQueryCall<IInboxFetchScheduler.InboxFetch, Fetched> {
-    protected BatchFetchCall(KVRangeId rangeId,
-                             IBaseKVStoreClient storeClient,
-                             Duration pipelineExpiryTime) {
-        super(rangeId, storeClient, false, pipelineExpiryTime);
+    protected BatchFetchCall(IBaseKVStoreClient storeClient, QueryCallBatcherKey batcherKey) {
+        super(storeClient, true, batcherKey);
     }
 
     @Override

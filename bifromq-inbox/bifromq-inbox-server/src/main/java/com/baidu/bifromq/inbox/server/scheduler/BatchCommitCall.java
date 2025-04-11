@@ -29,21 +29,18 @@ import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.Replica;
-import java.time.Duration;
 import java.util.HashSet;
 import java.util.Queue;
 import java.util.Set;
 
 class BatchCommitCall extends BatchMutationCall<CommitRequest, CommitReply> {
-    protected BatchCommitCall(IBaseKVStoreClient storeClient,
-                              Duration pipelineExpiryTime,
-                              MutationCallBatcherKey batcherKey) {
-        super(storeClient, pipelineExpiryTime, batcherKey);
+    protected BatchCommitCall(IBaseKVStoreClient storeClient, MutationCallBatcherKey batcherKey) {
+        super(storeClient, batcherKey);
     }
 
     @Override
-    protected MutationCallTaskBatch<CommitRequest, CommitReply> newBatch(String storeId, long ver) {
-        return new BatchCommitCallTask(storeId, ver);
+    protected MutationCallTaskBatch<CommitRequest, CommitReply> newBatch(long ver) {
+        return new BatchCommitCallTask(ver);
     }
 
     @Override
@@ -127,8 +124,8 @@ class BatchCommitCall extends BatchMutationCall<CommitRequest, CommitReply> {
     private static class BatchCommitCallTask extends MutationCallTaskBatch<CommitRequest, CommitReply> {
         private final Set<TenantInboxInstance> inboxes = new HashSet<>();
 
-        private BatchCommitCallTask(String storeId, long ver) {
-            super(storeId, ver);
+        private BatchCommitCallTask(long ver) {
+            super(ver);
         }
 
         @Override

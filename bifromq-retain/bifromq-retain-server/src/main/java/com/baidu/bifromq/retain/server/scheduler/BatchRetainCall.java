@@ -27,7 +27,6 @@ import com.baidu.bifromq.retain.rpc.proto.RetainRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainResult;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcInput;
 import com.google.common.collect.Iterables;
-import java.time.Duration;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Queue;
@@ -36,10 +35,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class BatchRetainCall extends BatchMutationCall<RetainRequest, RetainReply> {
 
-    protected BatchRetainCall(IBaseKVStoreClient retainStoreClient,
-                              Duration pipelineExpiryTime,
-                              MutationCallBatcherKey batcherKey) {
-        super(retainStoreClient, pipelineExpiryTime, batcherKey);
+    protected BatchRetainCall(IBaseKVStoreClient retainStoreClient, MutationCallBatcherKey batcherKey) {
+        super(retainStoreClient, batcherKey);
     }
 
     @Override

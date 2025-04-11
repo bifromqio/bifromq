@@ -21,8 +21,6 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode
 public class MutationCallBatcherKey {
     public final KVRangeId id;
-    @EqualsAndHashCode.Exclude
     public final String leaderStoreId;
-    @EqualsAndHashCode.Exclude
     public final long ver;
 }

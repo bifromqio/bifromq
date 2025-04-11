@@ -16,6 +16,7 @@ package com.baidu.bifromq.retain.store;
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertNotSame;
 
+import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import io.micrometer.core.instrument.Gauge;
 import java.time.Duration;
 import org.testng.annotations.BeforeMethod;
@@ -40,7 +41,7 @@ public class LoadMetadataTest extends RetainStoreTest {
         Gauge retainCountGauge = getRetainCountGauge(tenantId);
 
         restartStoreServer();
-        storeClient.join();
+        await().until(() -> BoundaryUtil.isValidSplitSet(storeClient.latestEffectiveRouter().keySet()));
 
         Gauge newSpaceUsageGauge = getSpaceUsageGauge(tenantId);
         Gauge newRetainCountGauge = getRetainCountGauge(tenantId);

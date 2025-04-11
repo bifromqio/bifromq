@@ -30,7 +30,6 @@ import com.baidu.bifromq.inbox.storage.proto.BatchAttachReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.Replica;
-import java.time.Duration;
 import java.util.HashSet;
 import java.util.Queue;
 import java.util.Set;
@@ -39,15 +38,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class BatchAttachCall extends BatchMutationCall<AttachRequest, AttachReply> {
 
-    protected BatchAttachCall(IBaseKVStoreClient distWorkerClient,
-                              Duration pipelineExpiryTime,
-                              MutationCallBatcherKey batcherKey) {
-        super(distWorkerClient, pipelineExpiryTime, batcherKey);
+    protected BatchAttachCall(IBaseKVStoreClient distWorkerClient, MutationCallBatcherKey batcherKey) {
+        super(distWorkerClient, batcherKey);
     }
 
     @Override
-    protected MutationCallTaskBatch<AttachRequest, AttachReply> newBatch(String storeId, long ver) {
-        return new BatchAttachCallTask(storeId, ver);
+    protected MutationCallTaskBatch<AttachRequest, AttachReply> newBatch(long ver) {
+        return new BatchAttachCallTask(ver);
     }
 
 
@@ -142,8 +139,8 @@ class BatchAttachCall extends BatchMutationCall<AttachRequest, AttachReply> {
     private static class BatchAttachCallTask extends MutationCallTaskBatch<AttachRequest, AttachReply> {
         private final Set<TenantInboxInstance> inboxes = new HashSet<>();
 
-        private BatchAttachCallTask(String storeId, long ver) {
-            super(storeId, ver);
+        private BatchAttachCallTask(long ver) {
+            super(ver);
         }
 
         @Override

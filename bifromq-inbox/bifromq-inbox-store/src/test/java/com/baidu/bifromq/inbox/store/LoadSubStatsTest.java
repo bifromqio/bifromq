@@ -17,6 +17,7 @@ import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertNotSame;
 
 import com.baidu.bifromq.basehlc.HLC;
+import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
 import com.baidu.bifromq.type.ClientInfo;
@@ -58,7 +59,7 @@ public class LoadSubStatsTest extends InboxStoreTest {
 
         restartStoreServer();
 
-        storeClient.join();
+        await().until(() -> BoundaryUtil.isValidSplitSet(storeClient.latestEffectiveRouter().keySet()));
         Gauge newSubCountGauge = getSubCountGauge(tenantId);
         Gauge newPSessionGauge = getPSessionGauge(tenantId);
         Gauge newPSessionSpaceGauge = getPSessionSpaceGauge(tenantId);

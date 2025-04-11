@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.dist.server;
 
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -25,6 +26,7 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
+import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.baserpc.server.IRPCServer;
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
@@ -50,6 +52,14 @@ import org.testng.annotations.BeforeClass;
 
 @Slf4j
 public abstract class DistServiceTest {
+    private final ISettingProvider settingProvider = Setting::current;
+    private final IResourceThrottler resourceThrottler = (tenantId, type) -> true;
+    private final IEventCollector eventCollector = new IEventCollector() {
+        @Override
+        public void report(Event<?> event) {
+            log.debug("event {}", event);
+        }
+    };
     @Mock
     protected ISubBroker inboxBroker;
     @Mock
@@ -64,14 +74,6 @@ public abstract class DistServiceTest {
     private IDistClient distClient;
     private IBaseKVStoreClient workerClient;
     private ScheduledExecutorService bgTaskExecutor;
-    private ISettingProvider settingProvider = Setting::current;
-    private IResourceThrottler resourceThrottler = (tenantId, type) -> true;
-    private IEventCollector eventCollector = new IEventCollector() {
-        @Override
-        public void report(Event<?> event) {
-            log.debug("event {}", event);
-        }
-    };
     @Mock
     private ISubBrokerManager subBrokerMgr;
 
@@ -136,7 +138,7 @@ public abstract class DistServiceTest {
 
         rpcServer = rpcServerBuilder.build();
         rpcServer.start();
-        workerClient.join();
+        await().until(() -> BoundaryUtil.isValidSplitSet(workerClient.latestEffectiveRouter().keySet()));
         distClient.connState().filter(s -> s == IRPCClient.ConnState.READY).blockingFirst();
         log.info("Setup finished, and start testing");
     }

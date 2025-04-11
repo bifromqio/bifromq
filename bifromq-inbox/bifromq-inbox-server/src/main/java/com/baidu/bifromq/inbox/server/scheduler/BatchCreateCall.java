@@ -27,22 +27,19 @@ import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.Replica;
 import com.baidu.bifromq.type.ClientInfo;
-import java.time.Duration;
 import java.util.HashSet;
 import java.util.Queue;
 import java.util.Set;
 
 class BatchCreateCall extends BatchMutationCall<CreateRequest, CreateReply> {
 
-    protected BatchCreateCall(IBaseKVStoreClient distWorkerClient,
-                              Duration pipelineExpiryTime,
-                              MutationCallBatcherKey batcherKey) {
-        super(distWorkerClient, pipelineExpiryTime, batcherKey);
+    protected BatchCreateCall(IBaseKVStoreClient distWorkerClient, MutationCallBatcherKey batcherKey) {
+        super(distWorkerClient, batcherKey);
     }
 
     @Override
-    protected MutationCallTaskBatch<CreateRequest, CreateReply> newBatch(String storeId, long ver) {
-        return new BatchCreateCallTask(storeId, ver);
+    protected MutationCallTaskBatch<CreateRequest, CreateReply> newBatch(long ver) {
+        return new BatchCreateCallTask(ver);
     }
 
     @Override
@@ -107,8 +104,8 @@ class BatchCreateCall extends BatchMutationCall<CreateRequest, CreateReply> {
     private static class BatchCreateCallTask extends MutationCallTaskBatch<CreateRequest, CreateReply> {
         private final Set<TenantInboxInstance> inboxes = new HashSet<>();
 
-        private BatchCreateCallTask(String storeId, long ver) {
-            super(storeId, ver);
+        private BatchCreateCallTask(long ver) {
+            super(ver);
         }
 
         @Override

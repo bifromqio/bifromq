@@ -24,7 +24,6 @@ import com.baidu.bifromq.inbox.rpc.proto.TouchReply;
 import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
 import com.baidu.bifromq.sysprops.props.InboxTouchQueuesPerRange;
 import com.google.protobuf.ByteString;
-import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -57,7 +56,7 @@ public class InboxTouchScheduler extends InboxReadScheduler<TouchRequest, TouchR
 
         @Override
         protected IBatchCall<TouchRequest, TouchReply, QueryCallBatcherKey> newBatch() {
-            return new BatchTouchCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
+            return new BatchTouchCall(storeClient, batcherKey);
         }
     }
 }

@@ -64,7 +64,7 @@ public class DeleteCallScheduler extends MutationCallScheduler<RetainRequest, Re
 
         @Override
         protected IBatchCall<RetainRequest, RetainReply, MutationCallBatcherKey> newBatch() {
-            return new BatchRetainCall(storeClient, Duration.ofMinutes(5), batcherKey);
+            return new BatchRetainCall(storeClient, batcherKey);
         }
     }
 }

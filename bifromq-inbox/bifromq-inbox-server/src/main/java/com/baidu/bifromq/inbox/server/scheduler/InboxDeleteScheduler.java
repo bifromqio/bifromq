@@ -64,7 +64,7 @@ public class InboxDeleteScheduler extends MutationCallScheduler<DeleteRequest, D
 
         @Override
         protected IBatchCall<DeleteRequest, DeleteReply, MutationCallBatcherKey> newBatch() {
-            return new BatchDeleteCall(storeClient, Duration.ofMinutes(5), batcherKey);
+            return new BatchDeleteCall(storeClient, batcherKey);
         }
     }
 }

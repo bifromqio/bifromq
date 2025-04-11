@@ -20,7 +20,6 @@ import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.dist.rpc.proto.MatchReply;
 import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import java.time.Duration;
 
 class MatchCallBatcher extends MutationCallBatcher<MatchRequest, MatchReply> {
     private final ISettingProvider settingProvider;
@@ -37,6 +36,6 @@ class MatchCallBatcher extends MutationCallBatcher<MatchRequest, MatchReply> {
 
     @Override
     protected IBatchCall<MatchRequest, MatchReply, MutationCallBatcherKey> newBatch() {
-        return new BatchMatchCall(storeClient, Duration.ofMinutes(5), settingProvider, batcherKey);
+        return new BatchMatchCall(storeClient, settingProvider, batcherKey);
     }
 }

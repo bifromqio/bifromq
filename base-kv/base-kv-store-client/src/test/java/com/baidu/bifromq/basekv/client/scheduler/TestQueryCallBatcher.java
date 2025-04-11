@@ -16,10 +16,8 @@ package com.baidu.bifromq.basekv.client.scheduler;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.google.protobuf.ByteString;
-import java.time.Duration;
 
 public class TestQueryCallBatcher extends QueryCallBatcher<ByteString, ByteString> {
-    private final Duration pipelineExpiry;
     private final boolean linearizable;
 
     protected TestQueryCallBatcher(String name,
@@ -27,15 +25,13 @@ public class TestQueryCallBatcher extends QueryCallBatcher<ByteString, ByteStrin
                                    long burstLatencyNanos,
                                    QueryCallBatcherKey batcherKey,
                                    IBaseKVStoreClient storeClient,
-                                   Duration pipelineExpiry,
                                    boolean linearizable) {
         super(name, tolerableLatencyNanos, burstLatencyNanos, batcherKey, storeClient);
-        this.pipelineExpiry = pipelineExpiry;
         this.linearizable = linearizable;
     }
 
     @Override
     protected IBatchCall<ByteString, ByteString, QueryCallBatcherKey> newBatch() {
-        return new TestBatchQueryCall(batcherKey.id, storeClient, linearizable, pipelineExpiry);
+        return new TestBatchQueryCall(storeClient, linearizable, batcherKey);
     }
 }

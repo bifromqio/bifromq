@@ -29,7 +29,6 @@ import com.baidu.bifromq.dist.rpc.proto.MatchRoute;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
 import com.google.common.collect.Iterables;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -40,10 +39,8 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchReply> {
-    BatchUnmatchCall(IBaseKVStoreClient distWorkerClient,
-                     Duration pipelineExpiryTime,
-                     MutationCallBatcherKey batcherKey) {
-        super(distWorkerClient, pipelineExpiryTime, batcherKey);
+    BatchUnmatchCall(IBaseKVStoreClient distWorkerClient, MutationCallBatcherKey batcherKey) {
+        super(distWorkerClient, batcherKey);
     }
 
     @Override

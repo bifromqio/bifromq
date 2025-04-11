@@ -32,7 +32,6 @@ import com.baidu.bifromq.dist.rpc.proto.TenantOption;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.google.common.collect.Iterables;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -46,10 +45,9 @@ class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> {
     private final ISettingProvider settingProvider;
 
     BatchMatchCall(IBaseKVStoreClient distWorkerClient,
-                   Duration pipelineExpiryTime,
                    ISettingProvider settingProvider,
                    MutationCallBatcherKey batcherKey) {
-        super(distWorkerClient, pipelineExpiryTime, batcherKey);
+        super(distWorkerClient, batcherKey);
         this.settingProvider = settingProvider;
     }
 

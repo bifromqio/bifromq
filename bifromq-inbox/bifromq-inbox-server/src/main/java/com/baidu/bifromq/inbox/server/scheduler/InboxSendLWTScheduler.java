@@ -24,7 +24,6 @@ import com.baidu.bifromq.inbox.rpc.proto.SendLWTReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendLWTRequest;
 import com.baidu.bifromq.sysprops.props.InboxCheckQueuesPerRange;
 import com.google.protobuf.ByteString;
-import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -58,7 +57,7 @@ public class InboxSendLWTScheduler extends InboxReadScheduler<SendLWTRequest, Se
 
         @Override
         protected IBatchCall<SendLWTRequest, SendLWTReply, QueryCallBatcherKey> newBatch() {
-            return new BatchSendLWTCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
+            return new BatchSendLWTCall(storeClient, batcherKey);
         }
     }
 }

@@ -19,16 +19,11 @@ import com.baidu.bifromq.basekv.client.exception.BadRequestException;
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.InternalErrorException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRORequest;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.basescheduler.ICallTask;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
-import com.github.benmanes.caffeine.cache.RemovalListener;
-import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Iterator;
@@ -38,44 +33,28 @@ import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public abstract class BatchQueryCall<Req, Resp> implements IBatchCall<Req, Resp, QueryCallBatcherKey> {
-    private final KVRangeId rangeId;
-    private final LoadingCache<String, IQueryPipeline> storePipelines;
-    private final Deque<BatchQueryCall.BatchCallTask<Req, Resp>> batchCallTasks = new ArrayDeque<>();
+public abstract class BatchQueryCall<ReqT, RespT> implements IBatchCall<ReqT, RespT, QueryCallBatcherKey> {
+    private static final int MAX_RECURSION_DEPTH = 100;
+    private final QueryCallBatcherKey batcherKey;
+    private final IQueryPipeline storePipeline;
+    private final Deque<BatchQueryCall.BatchCallTask<ReqT, RespT>> batchCallTasks = new ArrayDeque<>();
 
-    protected BatchQueryCall(KVRangeId rangeId,
-                             IBaseKVStoreClient storeClient,
-                             boolean linearizable,
-                             Duration pipelineExpiryTime) {
-        this.rangeId = rangeId;
-        storePipelines = Caffeine.newBuilder()
-            .evictionListener((RemovalListener<String, IQueryPipeline>) (key, value, cause) -> {
-                if (value != null) {
-                    value.close();
-                }
-            })
-            .expireAfterAccess(pipelineExpiryTime)
-            .build(storeId -> {
-                if (linearizable) {
-                    return storeClient.createLinearizedQueryPipeline(storeId);
-                } else {
-                    return storeClient.createQueryPipeline(storeId);
-                }
-            });
+    protected BatchQueryCall(IBaseKVStoreClient storeClient, boolean linearizable, QueryCallBatcherKey batcherKey) {
+        this.batcherKey = batcherKey;
+        if (linearizable) {
+            storePipeline = storeClient.createLinearizedQueryPipeline(batcherKey.storeId);
+        } else {
+            storePipeline = storeClient.createQueryPipeline(batcherKey.storeId);
+        }
     }
 
     @Override
-    public void add(ICallTask<Req, Resp, QueryCallBatcherKey> callTask) {
-        BatchQueryCall.BatchCallTask<Req, Resp> lastBatchCallTask;
+    public void add(ICallTask<ReqT, RespT, QueryCallBatcherKey> callTask) {
+        BatchQueryCall.BatchCallTask<ReqT, RespT> lastBatchCallTask;
         QueryCallBatcherKey batcherKey = callTask.batcherKey();
         if ((lastBatchCallTask = batchCallTasks.peekLast()) != null) {
-            if (lastBatchCallTask.storeId.equals(batcherKey.storeId) && lastBatchCallTask.ver == batcherKey.ver) {
-                lastBatchCallTask.batchedTasks.add(callTask);
-            } else {
-                lastBatchCallTask = new BatchQueryCall.BatchCallTask<>(batcherKey.storeId, batcherKey.ver);
-                lastBatchCallTask.batchedTasks.add(callTask);
-                batchCallTasks.add(lastBatchCallTask);
-            }
+            lastBatchCallTask.batchedTasks.add(callTask);
+            batchCallTasks.add(lastBatchCallTask);
         } else {
             lastBatchCallTask = new BatchQueryCall.BatchCallTask<>(batcherKey.storeId, batcherKey.ver);
             lastBatchCallTask.batchedTasks.add(callTask);
@@ -83,12 +62,12 @@ public abstract class BatchQueryCall<Req, Resp> implements IBatchCall<Req, Resp,
         }
     }
 
-    protected abstract ROCoProcInput makeBatch(Iterator<Req> reqIterator);
+    protected abstract ROCoProcInput makeBatch(Iterator<ReqT> reqIterator);
 
-    protected abstract void handleOutput(Queue<ICallTask<Req, Resp, QueryCallBatcherKey>> batchedTasks,
+    protected abstract void handleOutput(Queue<ICallTask<ReqT, RespT, QueryCallBatcherKey>> batchedTasks,
                                          ROCoProcOutput output);
 
-    protected abstract void handleException(ICallTask<Req, Resp, QueryCallBatcherKey> callTask, Throwable e);
+    protected abstract void handleException(ICallTask<ReqT, RespT, QueryCallBatcherKey> callTask, Throwable e);
 
     @Override
     public void reset() {
@@ -97,52 +76,42 @@ public abstract class BatchQueryCall<Req, Resp> implements IBatchCall<Req, Resp,
 
     @Override
     public CompletableFuture<Void> execute() {
-        BatchQueryCall.BatchCallTask<Req, Resp> batchCallTask = batchCallTasks.poll();
-        if (batchCallTask == null) {
-            return CompletableFuture.completedFuture(null);
-        }
-        return fireBatchCall(batchCallTask);
+        return fireBatchCall(1);
     }
 
     @Override
     public void destroy() {
-        storePipelines.asMap().forEach((k, v) -> v.close());
-        storePipelines.invalidateAll();
+        storePipeline.close();
     }
 
-    private CompletableFuture<Void> fireBatchCall() {
-        BatchQueryCall.BatchCallTask<Req, Resp> batchCallTask = batchCallTasks.poll();
+    private CompletableFuture<Void> fireBatchCall(int recursionDepth) {
+        BatchCallTask<ReqT, RespT> batchCallTask = batchCallTasks.poll();
         if (batchCallTask == null) {
             return CompletableFuture.completedFuture(null);
         }
-        return fireBatchCall(batchCallTask);
+        return fireBatchCall(batchCallTask, recursionDepth);
     }
 
-    private CompletableFuture<Void> fireBatchCall(BatchQueryCall.BatchCallTask<Req, Resp> batchCallTask) {
-        ROCoProcInput input = makeBatch(batchCallTask.batchedTasks.stream()
-            .map(ICallTask::call).iterator());
+    private CompletableFuture<Void> fireBatchCall(BatchCallTask<ReqT, RespT> batchCallTask, int recursionDepth) {
+        ROCoProcInput input = makeBatch(batchCallTask.batchedTasks.stream().map(ICallTask::call).iterator());
         long reqId = System.nanoTime();
-        return storePipelines.get(batchCallTask.storeId)
-            .query(KVRangeRORequest.newBuilder()
-                .setReqId(reqId)
-                .setVer(batchCallTask.ver)
-                .setKvRangeId(rangeId)
-                .setRoCoProc(input)
-                .build())
-            .thenApply(reply -> {
-                switch (reply.getCode()) {
-                    case Ok -> {
-                        return reply.getRoCoProcResult();
-                    }
-                    case TryLater -> throw new TryLaterException();
-                    case BadVersion -> throw new BadVersionException();
-                    case BadRequest -> throw new BadRequestException();
-                    default -> throw new InternalErrorException();
-                }
+        return storePipeline.query(
+                KVRangeRORequest.newBuilder()
+                    .setReqId(reqId)
+                    .setVer(batchCallTask.ver)
+                    .setKvRangeId(batcherKey.id)
+                    .setRoCoProc(input)
+                    .build())
+            .thenApply(reply -> switch (reply.getCode()) {
+                case Ok -> reply.getRoCoProcResult();
+                case TryLater -> throw new TryLaterException();
+                case BadVersion -> throw new BadVersionException();
+                case BadRequest -> throw new BadRequestException();
+                default -> throw new InternalErrorException();
             })
             .handle((v, e) -> {
                 if (e != null) {
-                    ICallTask<Req, Resp, QueryCallBatcherKey> callTask;
+                    ICallTask<ReqT, RespT, QueryCallBatcherKey> callTask;
                     while ((callTask = batchCallTask.batchedTasks.poll()) != null) {
                         handleException(callTask, e);
                     }
@@ -151,14 +120,20 @@ public abstract class BatchQueryCall<Req, Resp> implements IBatchCall<Req, Resp,
                 }
                 return null;
             })
-            .thenCompose(v -> fireBatchCall());
+            .thenCompose(v -> {
+                if (recursionDepth < MAX_RECURSION_DEPTH) {
+                    return fireBatchCall(recursionDepth + 1);
+                } else {
+                    return CompletableFuture.supplyAsync(() -> fireBatchCall(1))
+                        .thenCompose(inner -> inner);
+                }
+            });
     }
 
-
-    private static class BatchCallTask<Req, Resp> {
+    private static class BatchCallTask<ReqT, RespT> {
         final String storeId;
         final long ver;
-        final LinkedList<ICallTask<Req, Resp, QueryCallBatcherKey>> batchedTasks = new LinkedList<>();
+        final LinkedList<ICallTask<ReqT, RespT, QueryCallBatcherKey>> batchedTasks = new LinkedList<>();
 
         private BatchCallTask(String storeId, long ver) {
             this.storeId = storeId;

@@ -19,7 +19,6 @@ import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.google.common.collect.Iterables;
 import com.google.protobuf.ByteString;
-import java.time.Duration;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Queue;
@@ -27,14 +26,13 @@ import java.util.Set;
 
 public class TestBatchMutationCall extends BatchMutationCall<ByteString, ByteString> {
     protected TestBatchMutationCall(IBaseKVStoreClient storeClient,
-                                    Duration pipelineExpiryTime,
                                     MutationCallBatcherKey batcherKey) {
-        super(storeClient, pipelineExpiryTime, batcherKey);
+        super(storeClient, batcherKey);
     }
 
     @Override
-    protected MutationCallTaskBatch<ByteString, ByteString> newBatch(String storeId, long ver) {
-        return new TestBatchCallTask(storeId, ver);
+    protected MutationCallTaskBatch<ByteString, ByteString> newBatch(long ver) {
+        return new TestBatchCallTask(ver);
     }
 
     @Override
@@ -68,8 +66,8 @@ public class TestBatchMutationCall extends BatchMutationCall<ByteString, ByteStr
     private static class TestBatchCallTask extends MutationCallTaskBatch<ByteString, ByteString> {
         private final Set<ByteString> keys = new HashSet<>();
 
-        protected TestBatchCallTask(String storeId, long ver) {
-            super(storeId, ver);
+        protected TestBatchCallTask(long ver) {
+            super(ver);
         }
 
         @Override

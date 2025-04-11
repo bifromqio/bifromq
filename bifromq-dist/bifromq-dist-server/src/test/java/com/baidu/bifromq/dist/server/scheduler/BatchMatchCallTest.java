@@ -34,7 +34,6 @@ import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.util.TopicUtil;
-import java.time.Duration;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +54,7 @@ public class BatchMatchCallTest {
         rangeId = KVRangeId.newBuilder().setId(1).build();
         storeClient = mock(IBaseKVStoreClient.class);
         settingProvider = mock(ISettingProvider.class);
-        batchMatchCall = new BatchMatchCall(storeClient, Duration.ofMinutes(1), settingProvider,
+        batchMatchCall = new BatchMatchCall(storeClient, settingProvider,
             new MutationCallBatcherKey(rangeId, "leaderStoreId", 1L));
     }
 

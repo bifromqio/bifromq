@@ -19,25 +19,19 @@ import com.google.protobuf.ByteString;
 import java.time.Duration;
 
 public class TestMutationCallScheduler extends MutationCallScheduler<ByteString, ByteString> {
-    private final Duration pipelineExpire;
-
     public TestMutationCallScheduler(String name,
                                      IBaseKVStoreClient storeClient,
                                      Duration tolerableLatency,
-                                     Duration burstLatency,
-                                     Duration pipelineExpire) {
+                                     Duration burstLatency) {
         super(name, storeClient, tolerableLatency, burstLatency);
-        this.pipelineExpire = pipelineExpire;
     }
 
     public TestMutationCallScheduler(String name,
                                      IBaseKVStoreClient storeClient,
                                      Duration tolerableLatency,
                                      Duration burstLatency,
-                                     Duration pipelineExpire,
                                      Duration batcherExpiry) {
         super(name, storeClient, tolerableLatency, burstLatency, batcherExpiry);
-        this.pipelineExpire = pipelineExpire;
     }
 
     @Override
@@ -55,8 +49,7 @@ public class TestMutationCallScheduler extends MutationCallScheduler<ByteString,
             tolerableLatencyNanos,
             burstLatencyNanos,
             mutationCallBatcherKey,
-            storeClient,
-            pipelineExpire
+            storeClient
         );
     }
 }

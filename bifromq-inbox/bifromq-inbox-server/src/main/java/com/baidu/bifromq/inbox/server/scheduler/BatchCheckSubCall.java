@@ -19,7 +19,6 @@ import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchQueryCall;
 import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
@@ -29,15 +28,14 @@ import com.baidu.bifromq.inbox.storage.proto.BatchCheckSubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchCheckSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.plugin.subbroker.CheckReply;
-import java.time.Duration;
 import java.util.Iterator;
 import java.util.Queue;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class BatchCheckSubCall extends BatchQueryCall<IInboxCheckSubScheduler.CheckMatchInfo, CheckReply.Code> {
-    protected BatchCheckSubCall(KVRangeId rangeId, IBaseKVStoreClient storeClient, Duration pipelineExpiryTime) {
-        super(rangeId, storeClient, true, pipelineExpiryTime);
+    protected BatchCheckSubCall(IBaseKVStoreClient storeClient, QueryCallBatcherKey batcherKey) {
+        super(storeClient, true, batcherKey);
     }
 
     @Override

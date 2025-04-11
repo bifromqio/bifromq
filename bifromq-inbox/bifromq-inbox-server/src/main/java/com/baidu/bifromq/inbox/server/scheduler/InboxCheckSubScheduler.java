@@ -23,7 +23,6 @@ import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.plugin.subbroker.CheckReply;
 import com.baidu.bifromq.sysprops.props.InboxCheckQueuesPerRange;
 import com.google.protobuf.ByteString;
-import java.time.Duration;
 
 public class InboxCheckSubScheduler
     extends InboxReadScheduler<IInboxCheckSubScheduler.CheckMatchInfo, CheckReply.Code>
@@ -57,7 +56,7 @@ public class InboxCheckSubScheduler
 
         @Override
         protected IBatchCall<IInboxCheckSubScheduler.CheckMatchInfo, CheckReply.Code, QueryCallBatcherKey> newBatch() {
-            return new BatchCheckSubCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
+            return new BatchCheckSubCall(storeClient, batcherKey);
         }
     }
 }

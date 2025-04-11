@@ -63,7 +63,7 @@ public class InboxCommitScheduler extends MutationCallScheduler<CommitRequest, C
 
         @Override
         protected IBatchCall<CommitRequest, CommitReply, MutationCallBatcherKey> newBatch() {
-            return new BatchCommitCall(storeClient, Duration.ofMinutes(5), batcherKey);
+            return new BatchCommitCall(storeClient, batcherKey);
         }
     }
 }

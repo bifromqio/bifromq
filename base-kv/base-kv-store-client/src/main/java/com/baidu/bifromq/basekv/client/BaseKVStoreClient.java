@@ -420,25 +420,6 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     }
 
     @Override
-    public void join() {
-        // wait for router covering full range
-        if (effectiveRouterSubject.getValue().isEmpty()) {
-            synchronized (this) {
-                try {
-                    if (effectiveRouterSubject.getValue().isEmpty()) {
-                        this.wait();
-                    }
-                } catch (InterruptedException e) {
-                    // nothing to do
-                }
-            }
-        }
-        rpcClient.connState()
-            .filter(connState -> connState == IRPCClient.ConnState.READY || connState == IRPCClient.ConnState.SHUTDOWN)
-            .blockingFirst();
-    }
-
-    @Override
     public void close() {
         if (closed.compareAndSet(false, true)) {
             log.debug("Stopping BaseKVStore client: cluster[{}]", clusterId);

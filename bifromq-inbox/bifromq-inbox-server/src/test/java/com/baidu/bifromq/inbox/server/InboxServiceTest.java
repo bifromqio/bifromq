@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.inbox.server;
 
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -27,6 +28,7 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.localengine.memory.InMemKVEngineConfigurator;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
+import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.baserpc.server.IRPCServer;
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
@@ -141,7 +143,7 @@ public abstract class InboxServiceTest {
             .build();
         rpcServer = rpcServerBuilder.build();
         rpcServer.start();
-        inboxStoreClient.join();
+        await().until(() -> BoundaryUtil.isValidSplitSet(inboxStoreClient.latestEffectiveRouter().keySet()));
         inboxClient.connState().filter(s -> s == IRPCClient.ConnState.READY).blockingFirst();
         log.info("Setup finished, and start testing");
     }

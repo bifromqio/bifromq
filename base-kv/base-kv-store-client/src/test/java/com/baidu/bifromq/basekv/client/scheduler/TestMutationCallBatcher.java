@@ -16,23 +16,19 @@ package com.baidu.bifromq.basekv.client.scheduler;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.google.protobuf.ByteString;
-import java.time.Duration;
 
 public class TestMutationCallBatcher extends MutationCallBatcher<ByteString, ByteString> {
-    private final Duration pipelineExpiry;
 
     protected TestMutationCallBatcher(String name,
                                       long tolerableLatencyNanos,
                                       long burstLatencyNanos,
                                       MutationCallBatcherKey batcherKey,
-                                      IBaseKVStoreClient storeClient,
-                                      Duration pipelineExpiry) {
+                                      IBaseKVStoreClient storeClient) {
         super(name, tolerableLatencyNanos, burstLatencyNanos, batcherKey, storeClient);
-        this.pipelineExpiry = pipelineExpiry;
     }
 
     @Override
     protected IBatchCall<ByteString, ByteString, MutationCallBatcherKey> newBatch() {
-        return new TestBatchMutationCall(storeClient, pipelineExpiry, batcherKey);
+        return new TestBatchMutationCall(storeClient, batcherKey);
     }
 }

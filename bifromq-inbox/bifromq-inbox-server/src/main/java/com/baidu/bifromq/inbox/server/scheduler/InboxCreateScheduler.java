@@ -63,7 +63,7 @@ public class InboxCreateScheduler extends MutationCallScheduler<CreateRequest, C
 
         @Override
         protected IBatchCall<CreateRequest, CreateReply, MutationCallBatcherKey> newBatch() {
-            return new BatchCreateCall(storeClient, Duration.ofMinutes(5), batcherKey);
+            return new BatchCreateCall(storeClient, batcherKey);
         }
     }
 }

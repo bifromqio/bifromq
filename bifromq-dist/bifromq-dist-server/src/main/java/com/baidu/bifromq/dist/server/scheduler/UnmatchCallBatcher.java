@@ -19,7 +19,6 @@ import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
-import java.time.Duration;
 
 class UnmatchCallBatcher extends MutationCallBatcher<UnmatchRequest, UnmatchReply> {
     UnmatchCallBatcher(String name,
@@ -32,6 +31,6 @@ class UnmatchCallBatcher extends MutationCallBatcher<UnmatchRequest, UnmatchRepl
 
     @Override
     protected IBatchCall<UnmatchRequest, UnmatchReply, MutationCallBatcherKey> newBatch() {
-        return new BatchUnmatchCall(storeClient, Duration.ofMinutes(5), batcherKey);
+        return new BatchUnmatchCall(storeClient, batcherKey);
     }
 }

@@ -16,7 +16,7 @@ package com.baidu.bifromq.basekv.client.scheduler;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basescheduler.Batcher;
 
-public abstract class QueryCallBatcher<Req, Resp> extends Batcher<Req, Resp, QueryCallBatcherKey> {
+public abstract class QueryCallBatcher<ReqT, RespT> extends Batcher<ReqT, RespT, QueryCallBatcherKey> {
     protected final IBaseKVStoreClient storeClient;
 
     protected QueryCallBatcher(String name,
@@ -32,5 +32,4 @@ public abstract class QueryCallBatcher<Req, Resp> extends Batcher<Req, Resp, Que
     public void close() {
         super.close();
     }
-
 }

@@ -186,11 +186,6 @@ public class DelayTaskRunner<KeyT extends Comparable<KeyT>> implements IDelayTas
                 long now = currentMillisSupplier.get();
                 IDelayedTask<KeyT> delayedTask = supplier.get();
                 Duration delayInterval = delayedTask.getDelay();
-                if (delayInterval.isZero()) {
-                    // triggered immediately
-                    delayedTask.run(key, this);
-                    return;
-                }
                 long deadlineTS = deadline(now, delayInterval);
                 deadLines.put(key, deadlineTS);
                 sortedDeadlines.put(new SortKey<>(key, deadlineTS), delayedTask);

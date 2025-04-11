@@ -30,7 +30,6 @@ import com.baidu.bifromq.inbox.storage.proto.BatchDetachReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchDetachRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.Replica;
-import java.time.Duration;
 import java.util.HashSet;
 import java.util.Queue;
 import java.util.Set;
@@ -39,15 +38,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
 
-    protected BatchDetachCall(IBaseKVStoreClient distWorkerClient,
-                              Duration pipelineExpiryTime,
-                              MutationCallBatcherKey batcherKey) {
-        super(distWorkerClient, pipelineExpiryTime, batcherKey);
+    protected BatchDetachCall(IBaseKVStoreClient distWorkerClient, MutationCallBatcherKey batcherKey) {
+        super(distWorkerClient, batcherKey);
     }
 
     @Override
-    protected MutationCallTaskBatch<DetachRequest, DetachReply> newBatch(String storeId, long ver) {
-        return new BatchDetachCallTask(storeId, ver);
+    protected MutationCallTaskBatch<DetachRequest, DetachReply> newBatch(long ver) {
+        return new BatchDetachCallTask(ver);
     }
 
     @Override
@@ -136,8 +133,8 @@ class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
     private static class BatchDetachCallTask extends MutationCallTaskBatch<DetachRequest, DetachReply> {
         private final Set<TenantInboxInstance> inboxes = new HashSet<>();
 
-        private BatchDetachCallTask(String storeId, long ver) {
-            super(storeId, ver);
+        private BatchDetachCallTask(long ver) {
+            super(ver);
         }
 
         @Override

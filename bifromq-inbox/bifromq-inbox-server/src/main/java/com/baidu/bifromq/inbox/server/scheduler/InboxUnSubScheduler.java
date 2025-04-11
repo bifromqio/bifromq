@@ -62,7 +62,7 @@ public class InboxUnSubScheduler extends MutationCallScheduler<UnsubRequest, Uns
 
         @Override
         protected IBatchCall<UnsubRequest, UnsubReply, MutationCallBatcherKey> newBatch() {
-            return new BatchUnsubCall(storeClient, Duration.ofMinutes(5), batcherKey);
+            return new BatchUnsubCall(storeClient, batcherKey);
         }
     }
 }

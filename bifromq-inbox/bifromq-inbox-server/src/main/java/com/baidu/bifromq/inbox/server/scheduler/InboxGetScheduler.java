@@ -24,7 +24,6 @@ import com.baidu.bifromq.inbox.rpc.proto.GetReply;
 import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.sysprops.props.InboxCheckQueuesPerRange;
 import com.google.protobuf.ByteString;
-import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -57,7 +56,7 @@ public class InboxGetScheduler extends InboxReadScheduler<GetRequest, GetReply> 
 
         @Override
         protected IBatchCall<GetRequest, GetReply, QueryCallBatcherKey> newBatch() {
-            return new BatchGetCall(batcherKey.id, storeClient, Duration.ofMinutes(5));
+            return new BatchGetCall(storeClient, batcherKey);
         }
     }
 }

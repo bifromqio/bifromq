@@ -153,7 +153,7 @@ public class BatchQueryCallTest {
 
         TestQueryCallScheduler scheduler =
             new TestQueryCallScheduler("test_call_scheduler", storeClient, Duration.ofMillis(100),
-                Duration.ofMillis(1000), Duration.ofMillis(100), Duration.ofMillis(100), false);
+                Duration.ofMillis(1000), Duration.ofMillis(100), false);
         List<CompletableFuture<ByteString>> futures = new ArrayList<>();
         for (int i = 0; i < 1000; i++) {
             int req = ThreadLocalRandom.current().nextInt();
