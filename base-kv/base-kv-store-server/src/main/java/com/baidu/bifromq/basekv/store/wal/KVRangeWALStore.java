@@ -66,6 +66,7 @@ class KVRangeWALStore implements IKVRangeWALStore {
     private final TreeMap<Long, ClusterConfig> configEntryMap = Maps.newTreeMap();
     private final Deque<StabilizingIndex> stabilizingIndices = new ConcurrentLinkedDeque<>();
     private final Consumer<KVRangeWALStore> onDestroy;
+    private final LogEntryIteratorPool logEntryIteratorPool;
     private long currentTerm = 0;
     private Voting currentVoting;
     private Snapshot latestSnapshot;
@@ -79,8 +80,9 @@ class KVRangeWALStore implements IKVRangeWALStore {
         this.kvSpace = kvSpace;
         this.storeId = storeId;
         this.onDestroy = onDestroy;
-        log = SiftLogger.getLogger(KVRangeWALStore.class,
-            "clusterId", clusterId, "storeId", storeId, "rangeId", KVRangeIdUtil.toString(rangeId));
+        log = SiftLogger.getLogger(KVRangeWALStore.class, "clusterId", clusterId, "storeId", storeId, "rangeId",
+            KVRangeIdUtil.toString(rangeId));
+        logEntryIteratorPool = new LogEntryIteratorPool(kvSpace);
         load();
     }
 
@@ -237,17 +239,17 @@ class KVRangeWALStore implements IKVRangeWALStore {
     @Override
     public Iterator<LogEntry> entries(long lo, long hi, long maxSize) {
         if (lo < firstIndex()) {
-            throw new IndexOutOfBoundsException("lo[" + lo + "] must not be less than firstIndex["
-                + firstIndex() + "]");
+            throw new IndexOutOfBoundsException(
+                "lo[" + lo + "] must not be less than firstIndex[" + firstIndex() + "]");
         }
         if (hi > lastIndex() + 1) {
-            throw new IndexOutOfBoundsException("hi[" + hi + "] must not be greater than lastIndex["
-                + lastIndex() + "]");
+            throw new IndexOutOfBoundsException(
+                "hi[" + hi + "] must not be greater than lastIndex[" + lastIndex() + "]");
         }
         if (maxSize < 0) {
             maxSize = Long.MAX_VALUE;
         }
-        return new LogEntryIterator(lo, hi, maxSize);
+        return logEntryIteratorPool.acquire(lo, hi, maxSize, logEntriesKeyInfix);
     }
 
     @Override
@@ -256,8 +258,8 @@ class KVRangeWALStore implements IKVRangeWALStore {
         LogEntry startEntry = entries.get(0);
         if (lastIndex() >= firstIndex()) {
             if (firstIndex() > startEntry.getIndex() || lastIndex() + 1 < startEntry.getIndex()) {
-                throw new IndexOutOfBoundsException(format("first index[%d] must be in [%d,%d]",
-                    startEntry.getIndex(), firstIndex(), lastIndex() + 1));
+                throw new IndexOutOfBoundsException(
+                    format("first index[%d] must be in [%d,%d]", startEntry.getIndex(), firstIndex(), lastIndex() + 1));
             }
         } else {
             if (startEntry.getIndex() != firstIndex()) {
@@ -278,8 +280,8 @@ class KVRangeWALStore implements IKVRangeWALStore {
                 // force flush if log entry contains config
                 flush = true;
             }
-            trace("Append log entry[index={}, term={}, type={}], flush? {}",
-                entry.getIndex(), entry.getTerm(), entry.getTypeCase().name(), flush);
+            trace("Append log entry[index={}, term={}, type={}], flush? {}", entry.getIndex(), entry.getTerm(),
+                entry.getTypeCase().name(), flush);
             writer.insert(logEntryKey(logEntriesKeyInfix, entry.getIndex()), entry.toByteString());
         }
         writer.done();
@@ -398,8 +400,8 @@ class KVRangeWALStore implements IKVRangeWALStore {
 
     private ClusterConfig loadConfigEntry(long configEntryIndex) {
         try {
-            LogEntry logEntry =
-                LogEntry.parseFrom(kvSpace.get(logEntryKey(logEntriesKeyInfix, configEntryIndex)).get());
+            LogEntry logEntry = LogEntry.parseFrom(
+                kvSpace.get(logEntryKey(logEntriesKeyInfix, configEntryIndex)).get());
             assert logEntry.hasConfig();
             return logEntry.getConfig();
         } catch (InvalidProtocolBufferException e) {
@@ -422,9 +424,7 @@ class KVRangeWALStore implements IKVRangeWALStore {
     }
 
     private void loadLogEntryInfix() {
-        logEntriesKeyInfix = kvSpace.get(KEY_LOG_ENTRIES_INCAR)
-            .map(KVUtil::toInt)
-            .orElse(0);
+        logEntriesKeyInfix = kvSpace.get(KEY_LOG_ENTRIES_INCAR).map(KVUtil::toInt).orElse(0);
     }
 
     private void trace(String msg, Object... args) {
@@ -439,53 +439,6 @@ class KVRangeWALStore implements IKVRangeWALStore {
 
         private StabilizingIndex(long index) {
             this.index = index;
-        }
-    }
-
-    private class LogEntryIterator implements Iterator<LogEntry> {
-        private final long maxIndex;
-        private final long maxSize;
-        private final IKVSpaceIterator iterator;
-        private long currentIndex;
-        private long accumulatedSize;
-
-        private LogEntryIterator(long startIndex, long endIndex, long maxSize) {
-            this.currentIndex = startIndex;
-            this.maxIndex = endIndex;
-            this.maxSize = maxSize;
-            this.iterator = kvSpace.newIterator(
-                Boundary.newBuilder()
-                    .setStartKey(logEntryKey(logEntriesKeyInfix, currentIndex))
-                    .setEndKey(upperBound(logEntriesKeyPrefixInfix(logEntriesKeyInfix)))
-                    .build());
-            this.iterator.seek(logEntryKey(logEntriesKeyInfix, currentIndex));
-        }
-
-        @Override
-        public boolean hasNext() {
-            boolean has = currentIndex < maxIndex && accumulatedSize <= maxSize;
-            if (!has) {
-                // the iterator can be closed automically by Cleaner if not scanned to the end
-                iterator.close();
-            }
-            return has;
-        }
-
-        @Override
-        public LogEntry next() {
-            if (!iterator.isValid()) {
-                throw new NoSuchElementException();
-            } else {
-                try {
-                    LogEntry entry = LogEntry.parseFrom(iterator.value());
-                    accumulatedSize += entry.getData().size();
-                    currentIndex++;
-                    iterator.next();
-                    return entry;
-                } catch (InvalidProtocolBufferException e) {
-                    throw new KVRangeStoreException("Log data corruption", e);
-                }
-            }
         }
     }
 }

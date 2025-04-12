@@ -114,6 +114,7 @@ public class DistServiceModule extends AbstractModule {
                     injector.getInstance(Key.get(ScheduledExecutorService.class, Names.named("bgTaskScheduler"))))
                 .storeOptions(new KVRangeStoreOptions()
                     .setKvRangeOptions(new KVRangeOptions()
+                        .setMaxWALFatchBatchSize(workerConfig.getMaxWALFetchSize())
                         .setCompactWALThreshold(workerConfig.getCompactWALThreshold()))
                     .setDataEngineConfigurator(buildDataEngineConf(workerConfig
                         .getDataEngineConfig(), "dist_data"))

@@ -127,6 +127,7 @@ public class InboxServiceModule extends AbstractModule {
                     storeConfig.getBalanceConfig().getBalancers())
                 .storeOptions(new KVRangeStoreOptions()
                     .setKvRangeOptions(new KVRangeOptions()
+                        .setMaxWALFatchBatchSize(storeConfig.getMaxWALFetchSize())
                         .setCompactWALThreshold(storeConfig
                             .getCompactWALThreshold())
                         .setEnableLoadEstimation(true))

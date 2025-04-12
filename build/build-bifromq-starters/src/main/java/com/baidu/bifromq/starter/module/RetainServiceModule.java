@@ -116,6 +116,7 @@ public class RetainServiceModule extends AbstractModule {
                 .gcInterval(Duration.ofSeconds(storeConfig.getGcIntervalSeconds()))
                 .storeOptions(new KVRangeStoreOptions()
                     .setKvRangeOptions(new KVRangeOptions()
+                        .setMaxWALFatchBatchSize(storeConfig.getMaxWALFetchSize())
                         .setCompactWALThreshold(storeConfig.getCompactWALThreshold()))
                     .setDataEngineConfigurator(buildDataEngineConf(storeConfig.getDataEngineConfig(), "retain_data"))
                     .setWalEngineConfigurator(buildWALEngineConf(storeConfig.getWalEngineConfig(), "retain_wal")))

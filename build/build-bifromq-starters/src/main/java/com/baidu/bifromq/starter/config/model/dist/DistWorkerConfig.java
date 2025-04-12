@@ -32,6 +32,7 @@ public class DistWorkerConfig {
     // 0 for doing tasks on calling threads
     private int workerThreads = 0;
     private int tickerThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 20);
+    private int maxWALFetchSize = 10 * 1024 * 1024; // 10MB
     private int compactWALThreshold = 2500;
     private int gcIntervalSeconds = 86400; // every 24 hours
     @JsonSetter(nulls = Nulls.SKIP)
