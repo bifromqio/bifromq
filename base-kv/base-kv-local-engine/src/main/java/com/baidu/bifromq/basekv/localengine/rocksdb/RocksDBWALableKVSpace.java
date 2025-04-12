@@ -17,8 +17,8 @@ import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.localengine.IWALableKVSpace;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters;
-import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMetric;
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
+import com.baidu.bifromq.basekv.localengine.rocksdb.metrics.RocksDBKVSpaceMetric;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
@@ -134,7 +134,7 @@ public class RocksDBWALableKVSpace
         private final Timer flushTimer;
 
         MetricManager(String... metricTags) {
-            flushTimer = KVSpaceMeters.getTimer(id, KVSpaceMetric.FlushTimer, Tags.of(metricTags));
+            flushTimer = KVSpaceMeters.getTimer(id, RocksDBKVSpaceMetric.FlushTimer, Tags.of(metricTags));
         }
 
         void close() {

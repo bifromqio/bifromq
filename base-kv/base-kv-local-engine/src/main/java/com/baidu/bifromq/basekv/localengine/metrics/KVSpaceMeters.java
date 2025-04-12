@@ -16,6 +16,7 @@ package com.baidu.bifromq.basekv.localengine.metrics;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Metrics;
@@ -32,34 +33,44 @@ public class KVSpaceMeters {
     private static final Cleaner CLEANER = Cleaner.create();
     private static final Cache<MeterKey, Meter> METERS = Caffeine.newBuilder().weakValues().build();
 
-    public static Timer getTimer(String id, KVSpaceMetric metric, Tags tags) {
-        assert metric.meterType == Meter.Type.TIMER;
+    public static Timer getTimer(String id, IKVSpaceMetric metric, Tags tags) {
+        assert metric.meterType() == Meter.Type.TIMER;
         return (Timer) METERS.get(new MeterKey(id, metric, tags),
-            k -> new TimerWrapper(Timer.builder(metric.metricName)
+            k -> new TimerWrapper(Timer.builder(metric.metricName())
                 .tags(tags)
                 .tags("kvspace", id)
                 .register(Metrics.globalRegistry)));
     }
 
-    public static Counter getCounter(String id, KVSpaceMetric metric, Tags tags) {
-        assert metric.meterType == Meter.Type.COUNTER;
+    public static Counter getCounter(String id, IKVSpaceMetric metric, Tags tags) {
+        assert metric.meterType() == Meter.Type.COUNTER;
         return (Counter) METERS.get(new MeterKey(id, metric, tags),
-            k -> new CounterWrapper(Counter.builder(metric.metricName)
+            k -> new CounterWrapper(Counter.builder(metric.metricName())
                 .tags(tags)
                 .tags("kvspace", id)
                 .register(Metrics.globalRegistry)));
     }
 
-    public static Gauge getGauge(String id, KVSpaceMetric metric, Supplier<Number> numProvider, Tags tags) {
-        assert metric.meterType == Meter.Type.GAUGE;
+    public static Gauge getGauge(String id, IKVSpaceMetric metric, Supplier<Number> numProvider, Tags tags) {
+        assert metric.meterType() == Meter.Type.GAUGE;
         return (Gauge) METERS.get(new MeterKey(id, metric, tags),
-            k -> new GaugeWrapper(Gauge.builder(metric.metricName, numProvider)
+            k -> new GaugeWrapper(Gauge.builder(metric.metricName(), numProvider)
                 .tags(tags)
                 .tags("kvspace", id)
                 .register(Metrics.globalRegistry)));
     }
 
-    private record MeterKey(String id, KVSpaceMetric metric, Tags tags) {
+    public static DistributionSummary getSummary(String id, IKVSpaceMetric metric, Tags tags) {
+        assert metric.meterType() == Meter.Type.DISTRIBUTION_SUMMARY;
+        return (DistributionSummary) METERS.get(new MeterKey(id, metric, tags),
+            k -> new SummaryWrapper(DistributionSummary.builder(metric.metricName())
+                .tags(tags)
+                .tags("kvspace", id)
+                .register(Metrics.globalRegistry)));
+    }
+
+
+    private record MeterKey(String id, IKVSpaceMetric metric, Tags tags) {
 
     }
 
@@ -131,7 +142,7 @@ public class KVSpaceMeters {
 
         @Override
         public void close() {
-            Timer.super.close();
+            delegate.close();
             cleanable.clean();
         }
     }
@@ -152,7 +163,7 @@ public class KVSpaceMeters {
 
         @Override
         public void close() {
-            Counter.super.close();
+            delegate.close();
             cleanable.clean();
         }
 
@@ -183,7 +194,7 @@ public class KVSpaceMeters {
 
         @Override
         public void close() {
-            Gauge.super.close();
+            delegate.close();
             cleanable.clean();
         }
 
@@ -212,6 +223,52 @@ public class KVSpaceMeters {
         @Override
         public String toString() {
             return "GaugeWrapper[delegate=" + delegate + "]";
+        }
+    }
+
+    private static final class SummaryWrapper implements DistributionSummary {
+        private final DistributionSummary delegate;
+        private final Cleaner.Cleanable cleanable;
+
+        private SummaryWrapper(DistributionSummary delegate) {
+            this.delegate = delegate;
+            cleanable = CLEANER.register(this, new State(delegate));
+        }
+
+        @Override
+        public void record(double amount) {
+            delegate.record(amount);
+        }
+
+        @Override
+        public long count() {
+            return delegate.count();
+        }
+
+        @Override
+        public double totalAmount() {
+            return delegate.totalAmount();
+        }
+
+        @Override
+        public double max() {
+            return delegate.totalAmount();
+        }
+
+        @Override
+        public HistogramSnapshot takeSnapshot() {
+            return delegate.takeSnapshot();
+        }
+
+        @Override
+        public Id getId() {
+            return delegate.getId();
+        }
+
+        @Override
+        public void close() {
+            delegate.close();
+            cleanable.clean();
         }
     }
 }

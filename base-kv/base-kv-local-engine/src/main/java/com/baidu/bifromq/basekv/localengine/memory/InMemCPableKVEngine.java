@@ -28,6 +28,6 @@ public class InMemCPableKVEngine extends InMemKVEngine<InMemCPableKVEngine, InMe
                                                 KVSpaceOpMeters opMeters,
                                                 Logger logger,
                                                 String... tags) {
-        return new InMemCPableKVSpace(spaceId, configurator, this, onDestroy, opMeters, logger);
+        return new InMemCPableKVSpace(spaceId, configurator, this, onDestroy, opMeters, logger, tags);
     }
 }

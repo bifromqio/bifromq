@@ -13,8 +13,10 @@
 
 package com.baidu.bifromq.basekv.localengine.metrics;
 
+import static com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters.getSummary;
 import static com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters.getTimer;
 
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 
@@ -32,21 +34,23 @@ public class KVSpaceOpMeters {
     public final Timer iterPrevCallTimer;
     public final Timer iterRefreshTimer;
     public final Timer batchWriteCallTimer;
+    public final DistributionSummary readBytesSummary;
 
     public KVSpaceOpMeters(String id, Tags tags) {
-        metadataCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "metadata"));
-        sizeCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "size"));
-        existCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "exist"));
-        getCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "get"));
-        iterNewCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "newitr"));
-        iterSeekCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "seek"));
-        iterSeekForPrevCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "pseek"));
-        iterSeekToFirstCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "fseek"));
-        iterSeekToLastCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "lseek"));
-        iterNextCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "next"));
-        iterPrevCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "prev"));
-        iterRefreshTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "refresh"));
-        batchWriteCallTimer = getTimer(id, KVSpaceMetric.CallTimer, tags.and("op", "bwrite"));
+        metadataCallTimer = getTimer(id, GeneralKVSpaceMetric.CallTimer, tags.and("op", "metadata"));
+        sizeCallTimer = getTimer(id, GeneralKVSpaceMetric.CallTimer, tags.and("op", "size"));
+        existCallTimer = getTimer(id, GeneralKVSpaceMetric.CallTimer, tags.and("op", "exist"));
+        getCallTimer = getTimer(id, GeneralKVSpaceMetric.CallTimer, tags.and("op", "get"));
+        iterNewCallTimer = getTimer(id, GeneralKVSpaceMetric.CallTimer, tags.and("op", "newitr"));
+        iterSeekCallTimer = getTimer(id, GeneralKVSpaceMetric.CallTimer, tags.and("op", "seek"));
+        iterSeekForPrevCallTimer = getTimer(id, GeneralKVSpaceMetric.CallTimer, tags.and("op", "pseek"));
+        iterSeekToFirstCallTimer = getTimer(id, GeneralKVSpaceMetric.CallTimer, tags.and("op", "fseek"));
+        iterSeekToLastCallTimer = getTimer(id, GeneralKVSpaceMetric.CallTimer, tags.and("op", "lseek"));
+        iterNextCallTimer = getTimer(id, GeneralKVSpaceMetric.CallTimer, tags.and("op", "next"));
+        iterPrevCallTimer = getTimer(id, GeneralKVSpaceMetric.CallTimer, tags.and("op", "prev"));
+        iterRefreshTimer = getTimer(id, GeneralKVSpaceMetric.CallTimer, tags.and("op", "refresh"));
+        batchWriteCallTimer = getTimer(id, GeneralKVSpaceMetric.CallTimer, tags.and("op", "bwrite"));
+        readBytesSummary = getSummary(id, GeneralKVSpaceMetric.ReadBytesDistribution, tags);
     }
 
     public void close() {
@@ -63,5 +67,6 @@ public class KVSpaceOpMeters {
         iterPrevCallTimer.close();
         iterRefreshTimer.close();
         batchWriteCallTimer.close();
+        readBytesSummary.close();
     }
 }

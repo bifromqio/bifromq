@@ -14,7 +14,7 @@
 package com.baidu.bifromq.basekv.localengine.rocksdb;
 
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters;
-import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMetric;
+import com.baidu.bifromq.basekv.localengine.rocksdb.metrics.RocksDBKVSpaceMetric;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Tags;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -30,6 +30,7 @@ class RocksDBKVSpaceCompactionTrigger implements IWriteStatsRecorder {
     private final Gauge totalKeysGauge;
     private final Gauge totalTombstoneKeysGauge;
     private final Gauge totalTombstoneRangesGauge;
+
     public RocksDBKVSpaceCompactionTrigger(String id,
                                            int minTombstoneKeysTrigger,
                                            int minTombstoneRangesTrigger,
@@ -42,11 +43,12 @@ class RocksDBKVSpaceCompactionTrigger implements IWriteStatsRecorder {
         this.compactionScheduler = compactionScheduler;
         Tags metricTags = Tags.of(tags);
         totalKeysGauge = KVSpaceMeters
-            .getGauge(id, KVSpaceMetric.TotalKeysGauge, totalKeyCount::get, metricTags);
+            .getGauge(id, RocksDBKVSpaceMetric.TotalKeysGauge, totalKeyCount::get, metricTags);
         totalTombstoneKeysGauge =
-            KVSpaceMeters.getGauge(id, KVSpaceMetric.TotalTombstoneKeysGauge, totalTombstoneKeyCount::get, metricTags);
+            KVSpaceMeters.getGauge(id, RocksDBKVSpaceMetric.TotalTombstoneKeysGauge, totalTombstoneKeyCount::get,
+                metricTags);
         totalTombstoneRangesGauge =
-            KVSpaceMeters.getGauge(id, KVSpaceMetric.TotalTombstoneRangesGauge, totalTombstoneRangeCount::get,
+            KVSpaceMeters.getGauge(id, RocksDBKVSpaceMetric.TotalTombstoneRangesGauge, totalTombstoneRangeCount::get,
                 metricTags);
     }
 

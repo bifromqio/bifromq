@@ -32,8 +32,8 @@ import com.baidu.bifromq.basekv.localengine.ISyncContext;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
 import com.baidu.bifromq.basekv.localengine.KVSpaceDescriptor;
 import com.baidu.bifromq.basekv.localengine.SyncContext;
-import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMetric;
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
+import com.baidu.bifromq.basekv.localengine.rocksdb.metrics.RocksDBKVSpaceMetric;
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import io.micrometer.core.instrument.Counter;
@@ -327,9 +327,9 @@ abstract class RocksDBKVSpace<
         private final Timer compactionTimer;
 
         SpaceMetrics(Tags metricTags) {
-            compactionSchedCounter = getCounter(id, KVSpaceMetric.CompactionCounter, metricTags);
-            compactionTimer = getTimer(id, KVSpaceMetric.CompactionTimer, metricTags);
-            blockCacheSizeGauge = getGauge(id, KVSpaceMetric.BlockCache, () -> {
+            compactionSchedCounter = getCounter(id, RocksDBKVSpaceMetric.CompactionCounter, metricTags);
+            compactionTimer = getTimer(id, RocksDBKVSpaceMetric.CompactionTimer, metricTags);
+            blockCacheSizeGauge = getGauge(id, RocksDBKVSpaceMetric.BlockCache, () -> {
                 try {
                     if (!((BlockBasedTableConfig) cfDesc.getOptions().tableFormatConfig()).noBlockCache()) {
                         return db.getLongProperty(cfHandle, "rocksdb.block-cache-usage");
@@ -340,7 +340,7 @@ abstract class RocksDBKVSpace<
                     return 0;
                 }
             }, metricTags);
-            tableReaderSizeGauge = getGauge(id, KVSpaceMetric.TableReader, () -> {
+            tableReaderSizeGauge = getGauge(id, RocksDBKVSpaceMetric.TableReader, () -> {
                 try {
                     return db.getLongProperty(cfHandle, "rocksdb.estimate-table-readers-mem");
                 } catch (RocksDBException e) {
@@ -348,7 +348,7 @@ abstract class RocksDBKVSpace<
                     return 0;
                 }
             }, metricTags);
-            memtableSizeGauges = getGauge(id, KVSpaceMetric.MemTable, () -> {
+            memtableSizeGauges = getGauge(id, RocksDBKVSpaceMetric.MemTable, () -> {
                 try {
                     return db.getLongProperty(cfHandle, "rocksdb.cur-size-all-mem-tables");
                 } catch (RocksDBException e) {
@@ -356,7 +356,7 @@ abstract class RocksDBKVSpace<
                     return 0;
                 }
             }, metricTags);
-            pinedMemorySizeGauges = getGauge(id, KVSpaceMetric.PinnedMem, () -> {
+            pinedMemorySizeGauges = getGauge(id, RocksDBKVSpaceMetric.PinnedMem, () -> {
                 try {
                     if (!((BlockBasedTableConfig) cfDesc.getOptions().tableFormatConfig()).noBlockCache()) {
                         return db.getLongProperty(cfHandle, "rocksdb.block-cache-pinned-usage");

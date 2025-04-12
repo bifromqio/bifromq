@@ -11,16 +11,18 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.localengine.metrics;
+package com.baidu.bifromq.basekv.localengine.rocksdb.metrics;
 
 import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertFalse;
 
 import com.baidu.bifromq.basekv.localengine.MockableTest;
-import io.micrometer.core.instrument.DistributionSummary;
+import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
 import java.lang.ref.WeakReference;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +33,8 @@ public class KVSpaceMetersTest extends MockableTest {
     @Test
     public void removeGaugeWhenNoRef() {
         AtomicInteger gaugeCounter = new AtomicInteger();
-        Gauge gauge = KVSpaceMeters.getGauge("testSpace", GeneralKVSpaceMetric.CheckpointNumGauge, gaugeCounter::get,
+        Gauge gauge = KVSpaceMeters.getGauge("testSpace", RocksDBKVSpaceMetric.TotalTombstoneRangesGauge,
+            gaugeCounter::get,
             Tags.of(new String[0]));
         String gaugeName = gauge.getId().getName();
         WeakReference<Gauge> weakRef = new WeakReference<>(gauge);
@@ -43,19 +46,30 @@ public class KVSpaceMetersTest extends MockableTest {
         });
     }
 
+    @Test
+    public void removeTimerWhenNoRef() {
+        Timer timer = KVSpaceMeters.getTimer("testSpace", RocksDBKVSpaceMetric.FlushTimer, Tags.of(new String[0]));
+        String timerName = timer.getId().getName();
+        WeakReference<Timer> weakRef = new WeakReference<>(timer);
+        assertFalse(Metrics.globalRegistry.find(timerName).timers().isEmpty());
+        timer = null;
+        await().forever().until(() -> {
+            System.gc();
+            return weakRef.get() == null && Metrics.globalRegistry.find(timerName).timers().isEmpty();
+        });
+    }
 
     @Test
-    public void removeSummaryWhenNoRef() {
-        DistributionSummary summary = KVSpaceMeters.getSummary("testSpace", GeneralKVSpaceMetric.ReadBytesDistribution,
-            Tags.of(new String[0]));
-        String timerName = summary.getId().getName();
-        WeakReference<DistributionSummary> weakRef = new WeakReference<>(summary);
-        assertFalse(Metrics.globalRegistry.find(timerName).summaries().isEmpty());
-        summary = null;
+    public void removeCounterWhenNoRef() {
+        Counter counter =
+            KVSpaceMeters.getCounter("testSpace", RocksDBKVSpaceMetric.CompactionCounter, Tags.of(new String[0]));
+        String timerName = counter.getId().getName();
+        WeakReference<Counter> weakRef = new WeakReference<>(counter);
+        assertFalse(Metrics.globalRegistry.find(timerName).counters().isEmpty());
+        counter = null;
         await().forever().until(() -> {
             System.gc();
             return weakRef.get() == null && Metrics.globalRegistry.find(timerName).counters().isEmpty();
         });
-
     }
 }

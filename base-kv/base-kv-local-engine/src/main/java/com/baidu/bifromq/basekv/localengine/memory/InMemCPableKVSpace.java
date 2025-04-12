@@ -13,11 +13,16 @@
 
 package com.baidu.bifromq.basekv.localengine.memory;
 
+import static com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters.getGauge;
+
 import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceCheckpoint;
+import com.baidu.bifromq.basekv.localengine.metrics.GeneralKVSpaceMetric;
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Tags;
 import java.util.HashMap;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,6 +31,7 @@ import org.slf4j.Logger;
 public class InMemCPableKVSpace extends InMemKVSpace<InMemCPableKVEngine, InMemCPableKVSpace>
     implements ICPableKVSpace {
     private final Cache<String, InMemKVSpaceCheckpoint> checkpoints;
+    private final Gauge checkpointGauge;
     private volatile InMemKVSpaceCheckpoint latestCheckpoint;
 
     protected InMemCPableKVSpace(String id,
@@ -33,9 +39,12 @@ public class InMemCPableKVSpace extends InMemKVSpace<InMemCPableKVEngine, InMemC
                                  InMemCPableKVEngine engine,
                                  Runnable onDestroy,
                                  KVSpaceOpMeters opMeters,
-                                 Logger logger) {
+                                 Logger logger,
+                                 String... tags) {
         super(id, configurator, engine, onDestroy, opMeters, logger);
         checkpoints = Caffeine.newBuilder().weakValues().build();
+        checkpointGauge = getGauge(id, GeneralKVSpaceMetric.CheckpointNumGauge, checkpoints::estimatedSize,
+            Tags.of(tags));
     }
 
     @Override
@@ -54,5 +63,11 @@ public class InMemCPableKVSpace extends InMemKVSpace<InMemCPableKVEngine, InMemC
     @Override
     public Optional<IKVSpaceCheckpoint> openCheckpoint(String checkpointId) {
         return Optional.ofNullable(checkpoints.getIfPresent(checkpointId));
+    }
+
+    @Override
+    public void close() {
+        super.close();
+        checkpointGauge.close();
     }
 }

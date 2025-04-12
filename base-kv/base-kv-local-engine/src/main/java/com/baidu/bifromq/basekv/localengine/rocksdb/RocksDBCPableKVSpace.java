@@ -20,9 +20,10 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceCheckpoint;
 import com.baidu.bifromq.basekv.localengine.KVEngineException;
+import com.baidu.bifromq.basekv.localengine.metrics.GeneralKVSpaceMetric;
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMeters;
-import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceMetric;
 import com.baidu.bifromq.basekv.localengine.metrics.KVSpaceOpMeters;
+import com.baidu.bifromq.basekv.localengine.rocksdb.metrics.RocksDBKVSpaceMetric;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.micrometer.core.instrument.Gauge;
@@ -226,8 +227,8 @@ public class RocksDBCPableKVSpace
 
         MetricManager(String... metricTags) {
             Tags tags = Tags.of(metricTags);
-            checkpointGauge = getGauge(id, KVSpaceMetric.CheckpointNumGauge, checkpoints::estimatedSize, tags);
-            checkpointTimer = KVSpaceMeters.getTimer(id, KVSpaceMetric.CheckpointTimer, tags);
+            checkpointGauge = getGauge(id, GeneralKVSpaceMetric.CheckpointNumGauge, checkpoints::estimatedSize, tags);
+            checkpointTimer = KVSpaceMeters.getTimer(id, RocksDBKVSpaceMetric.CheckpointTimer, tags);
         }
 
         void close() {
