@@ -204,30 +204,33 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                             .build();
                                     })
                                     .thenAcceptAsync(reply -> {
-                                        if (reply.getCode() == ExpireReply.Code.ERROR) {
-                                            handleGoAway(onCleanSessionFailed(clientInfo));
-                                        } else {
-                                            int sessionExpiryInterval = getSessionExpiryInterval(connMsg, settings);
-                                            if (sessionExpiryInterval == 0) {
-                                                setupTransientSessionHandler(connMsg,
-                                                    settings,
-                                                    userSessionId,
-                                                    keepAliveSeconds,
-                                                    reply.getCode() == ExpireReply.Code.OK,
-                                                    willMessage,
-                                                    okOrGoAway.successInfo,
-                                                    ctx);
-                                            } else {
-                                                setupPersistentSessionHandler(connMsg,
-                                                    settings,
-                                                    userSessionId,
-                                                    keepAliveSeconds,
-                                                    sessionExpiryInterval,
-                                                    null,
-                                                    willMessage,
-                                                    okOrGoAway.successInfo,
-                                                    ctx);
+                                        switch (reply.getCode()) {
+                                            case OK, NOT_FOUND -> {
+                                                int sessionExpiryInterval = getSessionExpiryInterval(connMsg, settings);
+                                                if (sessionExpiryInterval == 0) {
+                                                    setupTransientSessionHandler(connMsg,
+                                                        settings,
+                                                        userSessionId,
+                                                        keepAliveSeconds,
+                                                        reply.getCode() == ExpireReply.Code.OK,
+                                                        willMessage,
+                                                        okOrGoAway.successInfo,
+                                                        ctx);
+                                                } else {
+                                                    setupPersistentSessionHandler(connMsg,
+                                                        settings,
+                                                        userSessionId,
+                                                        keepAliveSeconds,
+                                                        sessionExpiryInterval,
+                                                        null,
+                                                        willMessage,
+                                                        okOrGoAway.successInfo,
+                                                        ctx);
+                                                }
                                             }
+                                            case BACK_PRESSURE_REJECTED ->
+                                                handleGoAway(onCleanSessionRejected(clientInfo));
+                                            case ERROR -> handleGoAway(onCleanSessionFailed(clientInfo));
                                         }
                                     }, ctx.executor());
                             }
@@ -301,6 +304,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                     ctx);
                                             }
                                         }
+                                        case BACK_PRESSURE_REJECTED -> handleGoAway(onGetSessionRejected(clientInfo));
                                         case ERROR -> handleGoAway(onGetSessionFailed(clientInfo));
                                         default -> {
                                             // do nothing
@@ -345,7 +349,11 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
 
     protected abstract GoAway onCleanSessionFailed(ClientInfo clientInfo);
 
+    protected abstract GoAway onCleanSessionRejected(ClientInfo clientInfo);
+
     protected abstract GoAway onGetSessionFailed(ClientInfo clientInfo);
+
+    protected abstract GoAway onGetSessionRejected(ClientInfo clientInfo);
 
     protected abstract MQTTSessionHandler buildTransientSessionHandler(MqttConnectMessage connMsg,
                                                                        TenantSettings settings,

@@ -47,7 +47,7 @@ public class MockedInboxAdminTest extends MockedInboxService {
         inboxService.get(GetRequest.newBuilder().setReqId(reqId).build(), streamObserver);
 
         verify(streamObserver).onNext(argThat(reply ->
-            reply.getReqId() == reqId && reply.getCode() == GetReply.Code.ERROR));
+            reply.getReqId() == reqId && reply.getCode() == GetReply.Code.TRY_LATER));
         verify(streamObserver).onCompleted();
     }
 

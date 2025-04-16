@@ -24,6 +24,7 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PACKET_TOO_LARGE;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_PROTOCOL_ERROR;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_QUOTA_EXCEEDED;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_BUSY;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_MOVED;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_USE_ANOTHER_SERVER;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.SERVER_REFERENCE;
@@ -39,6 +40,8 @@ import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.inbox.client.IInboxClient;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
+import com.baidu.bifromq.inbox.rpc.proto.GetReply;
 import com.baidu.bifromq.mqtt.MockableTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
@@ -83,7 +86,6 @@ import org.testng.annotations.Test;
 public class MQTT5ConnectHandlerTest extends MockableTest {
 
     private final String serverId = "serverId";
-    private final int keepAlive = 2;
     private final String remoteIp = "127.0.0.1";
     private final int remotePort = 8888;
     private MQTT5ConnectHandler connectHandler;
@@ -353,5 +355,59 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         assertEquals(connAckMessage.variableHeader().connectReturnCode(), CONNECTION_REFUSED_PACKET_TOO_LARGE);
         assertFalse(channel.isOpen());
         verify(eventCollector).report(argThat(e -> e.type() == EventType.PROTOCOL_VIOLATION));
+    }
+
+    @Test
+    public void expireInboxBackPressureRejected() {
+        when(authProvider.auth(any(MQTT5AuthData.class))).thenReturn(CompletableFuture.completedFuture(
+            MQTT5AuthResult.newBuilder().setSuccess(Success.newBuilder().setTenantId("tenantId").build()).build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn))).thenReturn(
+            CompletableFuture.completedFuture(
+                CheckResult.newBuilder().setGranted(Granted.getDefaultInstance()).build()));
+        when(inboxClient.expire(any())).thenReturn(CompletableFuture.completedFuture(ExpireReply.newBuilder()
+            .setCode(ExpireReply.Code.BACK_PRESSURE_REJECTED)
+            .build()));
+
+        MqttConnectMessage connMsg = MqttMessageBuilders.connect().clientId("client")
+            .cleanSession(true)
+            .properties(MQTT5MessageUtils.mqttProps()
+                .addSessionExpiryInterval(10)
+                .build())
+            .protocolVersion(MqttVersion.MQTT_5)
+            .build();
+        channel.writeInbound(connMsg);
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        MqttConnAckMessage connAckMessage = channel.readOutbound();
+        assertEquals(connAckMessage.variableHeader().connectReturnCode(), CONNECTION_REFUSED_SERVER_BUSY);
+        assertFalse(channel.isOpen());
+        verify(eventCollector).report(argThat(e -> e.type() == EventType.SERVER_BUSY));
+    }
+
+    @Test
+    public void getInboxBackPressureRejected() {
+        when(authProvider.auth(any(MQTT5AuthData.class))).thenReturn(CompletableFuture.completedFuture(
+            MQTT5AuthResult.newBuilder().setSuccess(Success.newBuilder().setTenantId("tenantId").build()).build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn))).thenReturn(
+            CompletableFuture.completedFuture(
+                CheckResult.newBuilder().setGranted(Granted.getDefaultInstance()).build()));
+        when(inboxClient.get(any())).thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder()
+            .setCode(GetReply.Code.BACK_PRESSURE_REJECTED)
+            .build()));
+
+        MqttConnectMessage connMsg = MqttMessageBuilders.connect().clientId("client")
+            .cleanSession(false)
+            .properties(MQTT5MessageUtils.mqttProps()
+                .addSessionExpiryInterval(10)
+                .build())
+            .protocolVersion(MqttVersion.MQTT_5)
+            .build();
+        channel.writeInbound(connMsg);
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        MqttConnAckMessage connAckMessage = channel.readOutbound();
+        assertEquals(connAckMessage.variableHeader().connectReturnCode(), CONNECTION_REFUSED_SERVER_BUSY);
+        assertFalse(channel.isOpen());
+        verify(eventCollector).report(argThat(e -> e.type() == EventType.SERVER_BUSY));
     }
 }

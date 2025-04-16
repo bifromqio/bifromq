@@ -14,10 +14,13 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.exception.BadVersionException;
+import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
+import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.record.InboxInstance;
 import com.baidu.bifromq.inbox.record.TenantInboxInstance;
@@ -87,7 +90,7 @@ class BatchCreateCall extends BatchMutationCall<CreateRequest, CreateReply> {
             boolean succeed = output.getInboxService().getBatchCreate().getSucceed(i++);
             callTask.resultPromise().complete(CreateReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
-                .setCode(succeed ? CreateReply.Code.OK : CreateReply.Code.ERROR)
+                .setCode(succeed ? CreateReply.Code.OK : CreateReply.Code.CONFLICT)
                 .build());
         }
     }
@@ -95,10 +98,29 @@ class BatchCreateCall extends BatchMutationCall<CreateRequest, CreateReply> {
     @Override
     protected void handleException(ICallTask<CreateRequest, CreateReply, MutationCallBatcherKey> callTask,
                                    Throwable e) {
-        callTask.resultPromise().complete(CreateReply.newBuilder()
-            .setReqId(callTask.call().getReqId())
-            .setCode(CreateReply.Code.ERROR)
-            .build());
+        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+            callTask.resultPromise().complete(CreateReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(CreateReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+            callTask.resultPromise().complete(CreateReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(CreateReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+            callTask.resultPromise().complete(CreateReply.newBuilder()
+                .setReqId(callTask.call().getReqId())
+                .setCode(CreateReply.Code.TRY_LATER)
+                .build());
+            return;
+        }
+        callTask.resultPromise().completeExceptionally(e);
+
     }
 
     private static class BatchCreateCallTask extends MutationCallTaskBatch<CreateRequest, CreateReply> {

@@ -65,6 +65,7 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Inval
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ProtocolViolation;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Redirect;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ResourceThrottled;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ServerBusy;
 import com.baidu.bifromq.sysprops.props.MaxMqtt3ClientIdLength;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
@@ -373,12 +374,32 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
     }
 
     @Override
+    protected GoAway onCleanSessionRejected(ClientInfo clientInfo) {
+        return new GoAway(MqttMessageBuilders.connAck()
+            .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
+            .build(),
+            getLocal(ServerBusy.class)
+                .reason("Unable to expire previous session, Server Busy")
+                .clientInfo(clientInfo));
+    }
+
+    @Override
     protected GoAway onGetSessionFailed(ClientInfo clientInfo) {
         return new GoAway(MqttMessageBuilders.connAck()
             .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
             .build(),
             getLocal(InboxTransientError.class)
                 .reason("Unable to retrieve previous session, Try later")
+                .clientInfo(clientInfo));
+    }
+
+    @Override
+    protected GoAway onGetSessionRejected(ClientInfo clientInfo) {
+        return new GoAway(MqttMessageBuilders.connAck()
+            .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
+            .build(),
+            getLocal(ServerBusy.class)
+                .reason("Unable to retrieve previous session, Server Busy")
                 .clientInfo(clientInfo));
     }
 

@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
+import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.farewell;
 import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.goAway;
 import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.goAwayNow;
 import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.response;
@@ -20,6 +21,7 @@ import static com.baidu.bifromq.mqtt.handler.record.ProtocolResponse.responseNot
 import static com.baidu.bifromq.mqtt.handler.v3.MQTT3MessageUtils.toMessage;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_UNAVAILABLE;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
@@ -99,6 +101,16 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
     @Override
     public ProtocolResponse onInboxTransientError(String reason) {
         return goAway(getLocal(InboxTransientError.class).reason(reason).clientInfo(clientInfo));
+    }
+
+    @Override
+    public ProtocolResponse onInboxBusy(String reason) {
+        return farewell(MqttMessageBuilders.connAck()
+                .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
+                .build(),
+            getLocal(ServerBusy.class)
+                .reason(reason)
+                .clientInfo(clientInfo));
     }
 
     @Override

@@ -17,6 +17,7 @@ import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_DELIVE
 import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_ID;
 
 import com.baidu.bifromq.baserpc.server.AckStream;
+import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.basescheduler.exception.BatcherUnavailableException;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetchHint;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetched;
@@ -180,18 +181,30 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
                                     .setResult(Fetched.Result.TRY_LATER)
                                     .build())
                                 .build());
-                        } else {
-                            log.debug("Failed to fetch inbox: tenantId={}, inboxId={}, incarnation={}",
-                                tenantId, inboxId, incarnation, e);
+                            return;
+                        }
+                        if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
                             send(InboxFetched.newBuilder()
                                 .setSessionId(fetchState.sessionId)
                                 .setInboxId(inboxId)
                                 .setIncarnation(incarnation)
                                 .setFetched(Fetched.newBuilder()
-                                    .setResult(Fetched.Result.ERROR)
+                                    .setResult(Fetched.Result.BACK_PRESSURE_REJECTED)
                                     .build())
                                 .build());
+                            return;
                         }
+                        log.debug("Failed to fetch inbox: tenantId={}, inboxId={}, incarnation={}",
+                            tenantId, inboxId, incarnation, e);
+                        send(InboxFetched.newBuilder()
+                            .setSessionId(fetchState.sessionId)
+                            .setInboxId(inboxId)
+                            .setIncarnation(incarnation)
+                            .setFetched(Fetched.newBuilder()
+                                .setResult(Fetched.Result.ERROR)
+                                .build())
+                            .build());
+
                     } catch (Throwable t) {
                         log.error("Unexpected error", t);
                     }

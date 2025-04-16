@@ -11,8 +11,9 @@ message Fetched {
   enum Result {
     OK = 0;
     NO_INBOX = 1;
-    TRY_LATER = 2;
-    ERROR = 3;
+    BACK_PRESSURE_REJECTED = 2;
+    TRY_LATER = 3;
+    ERROR = 4;
   }
   Result result = 1;
 

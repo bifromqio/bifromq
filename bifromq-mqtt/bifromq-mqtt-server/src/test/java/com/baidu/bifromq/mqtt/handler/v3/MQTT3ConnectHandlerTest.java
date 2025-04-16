@@ -25,8 +25,11 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNull;
 
 import com.baidu.bifromq.inbox.client.IInboxClient;
+import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
+import com.baidu.bifromq.inbox.rpc.proto.GetReply;
 import com.baidu.bifromq.mqtt.MockableTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
+import com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.plugin.authprovider.IAuthProvider;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
@@ -207,5 +210,67 @@ public class MQTT3ConnectHandlerTest extends MockableTest {
         assertNull(connAckMessage);
         assertFalse(channel.isOpen());
         verify(eventCollector).report(argThat(e -> e.type() == EventType.PROTOCOL_VIOLATION));
+    }
+
+    @Test
+    public void expireInboxBackPressureRejected() {
+        when(authProvider.auth(any(MQTT3AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTenantId("tenantId")
+                    .build())
+                .build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn))).thenReturn(
+            CompletableFuture.completedFuture(
+                CheckResult.newBuilder().setGranted(Granted.getDefaultInstance()).build()));
+        when(inboxClient.expire(any())).thenReturn(CompletableFuture.completedFuture(ExpireReply.newBuilder()
+            .setCode(ExpireReply.Code.BACK_PRESSURE_REJECTED)
+            .build()));
+
+        MqttConnectMessage connMsg = MqttMessageBuilders.connect().clientId("client")
+            .cleanSession(true)
+            .properties(MQTT5MessageUtils.mqttProps()
+                .addSessionExpiryInterval(10)
+                .build())
+            .protocolVersion(MqttVersion.MQTT_3_1_1)
+            .build();
+        channel.writeInbound(connMsg);
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        MqttConnAckMessage connAckMessage = channel.readOutbound();
+        assertEquals(connAckMessage.variableHeader().connectReturnCode(), CONNECTION_REFUSED_SERVER_UNAVAILABLE);
+        assertFalse(channel.isOpen());
+        verify(eventCollector).report(argThat(e -> e.type() == EventType.SERVER_BUSY));
+    }
+
+    @Test
+    public void getInboxBackPressureRejected() {
+        when(authProvider.auth(any(MQTT3AuthData.class)))
+            .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
+                .setOk(Ok.newBuilder()
+                    .setTenantId("tenantId")
+                    .build())
+                .build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn))).thenReturn(
+            CompletableFuture.completedFuture(
+                CheckResult.newBuilder().setGranted(Granted.getDefaultInstance()).build()));
+        when(inboxClient.get(any())).thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder()
+            .setCode(GetReply.Code.BACK_PRESSURE_REJECTED)
+            .build()));
+
+        MqttConnectMessage connMsg = MqttMessageBuilders.connect().clientId("client")
+            .cleanSession(false)
+            .properties(MQTT5MessageUtils.mqttProps()
+                .addSessionExpiryInterval(10)
+                .build())
+            .protocolVersion(MqttVersion.MQTT_3_1_1)
+            .build();
+        channel.writeInbound(connMsg);
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        MqttConnAckMessage connAckMessage = channel.readOutbound();
+        assertEquals(connAckMessage.variableHeader().connectReturnCode(), CONNECTION_REFUSED_SERVER_UNAVAILABLE);
+        assertFalse(channel.isOpen());
+        verify(eventCollector).report(argThat(e -> e.type() == EventType.SERVER_BUSY));
     }
 }

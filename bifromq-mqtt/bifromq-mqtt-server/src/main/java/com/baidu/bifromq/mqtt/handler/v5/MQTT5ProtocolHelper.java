@@ -29,6 +29,7 @@ import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLo
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ADDRESS_KEY;
 import static com.baidu.bifromq.util.TopicUtil.isValidTopic;
 import static com.baidu.bifromq.util.UTF8Util.isWellFormed;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_BUSY;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.storage.proto.RetainHandling;
@@ -78,6 +79,7 @@ import com.bifromq.plugin.resourcethrottler.TenantResourceType;
 import io.netty.handler.codec.TooLongFrameException;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
+import io.netty.handler.codec.mqtt.MqttMessageBuilders;
 import io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader;
 import io.netty.handler.codec.mqtt.MqttProperties;
 import io.netty.handler.codec.mqtt.MqttPubReplyMessageVariableHeader;
@@ -135,6 +137,18 @@ public class MQTT5ProtocolHelper implements IMQTTProtocolHelper {
             MQTT5MessageBuilders.disconnect().reasonCode(MQTT5DisconnectReasonCode.ImplementationSpecificError)
                 .reasonString(reason).build(),
             getLocal(InboxTransientError.class).reason(reason).clientInfo(clientInfo));
+    }
+
+    @Override
+    public ProtocolResponse onInboxBusy(String reason) {
+        return farewell(MqttMessageBuilders
+                .connAck()
+                .returnCode(CONNECTION_REFUSED_SERVER_BUSY)
+                .properties(MQTT5MessageBuilders.connAckProperties().build())
+                .build(),
+            getLocal(ServerBusy.class)
+                .reason(reason)
+                .clientInfo(clientInfo));
     }
 
     @Override

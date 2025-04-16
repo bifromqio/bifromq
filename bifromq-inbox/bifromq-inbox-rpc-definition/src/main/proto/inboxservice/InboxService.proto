@@ -44,7 +44,8 @@ message GetReply {
     EXIST = 0;
     NO_INBOX = 1;
     TRY_LATER = 2;
-    ERROR = 3;
+    BACK_PRESSURE_REJECTED = 3;
+    ERROR = 4;
   }
   uint64 reqId = 1;
   Code code = 2;
@@ -68,7 +69,8 @@ message AttachReply {
     NO_INBOX = 1;
     CONFLICT = 2;
     TRY_LATER = 3;
-    ERROR = 4;
+    BACK_PRESSURE_REJECTED = 4;
+    ERROR = 5;
   }
   uint64 reqId = 1;
   Code code = 2;
@@ -114,8 +116,10 @@ message CreateRequest {
 message CreateReply {
   enum Code {
     OK = 0;
-    TRY_LATER = 1;
-    ERROR = 2;
+    CONFLICT = 1;
+    TRY_LATER = 2;
+    BACK_PRESSURE_REJECTED = 3;
+    ERROR = 4;
   }
   uint64 reqId = 1;
   Code code = 2;
@@ -235,8 +239,9 @@ message CommitReply {
     OK = 0;
     NO_INBOX = 1;
     CONFLICT = 2;
-    TRY_LATER = 3;
-    ERROR = 4;
+    BACK_PRESSURE_REJECTED = 3;
+    TRY_LATER = 4;
+    ERROR = 5;
   }
   uint64 reqId = 1;
   Code code = 2;
@@ -298,7 +303,8 @@ message ExpireReply {
     OK = 0;
     NOT_FOUND = 1;
     TRY_LATER = 2;
-    ERROR = 3;
+    BACK_PRESSURE_REJECTED = 3;
+    ERROR = 4;
   }
   uint64 reqId = 1;
   Code code = 2;

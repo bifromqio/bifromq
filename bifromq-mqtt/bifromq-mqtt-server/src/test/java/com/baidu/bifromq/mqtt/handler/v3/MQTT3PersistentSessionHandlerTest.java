@@ -27,22 +27,27 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_CONFIRMED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_DROPPED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_PUSHED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.QOS2_RECEIVED;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.SERVER_BUSY;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.SUB_ACKED;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.UNSUB_ACKED;
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_TYPE_VALUE;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.baidu.bifromq.type.QoS.EXACTLY_ONCE;
+import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_SERVER_UNAVAILABLE;
 import static io.netty.handler.codec.mqtt.MqttMessageType.PUBREL;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basehlc.HLC;
+import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
@@ -53,8 +58,8 @@ import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.mqtt.handler.BaseSessionHandlerTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
+import com.baidu.bifromq.mqtt.handler.MQTTConnectHandler;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
-import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.authprovider.type.Denied;
@@ -71,6 +76,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.embedded.EmbeddedChannel;
+import io.netty.handler.codec.mqtt.MqttConnAckMessage;
 import io.netty.handler.codec.mqtt.MqttDecoder;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageIdVariableHeader;
@@ -112,7 +118,6 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
         });
     }
 
-
     @SneakyThrows
     @AfterMethod(alwaysRun = true)
     public void tearDown(Method method) {
@@ -122,26 +127,29 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
 
     @Override
     protected ChannelDuplexHandler buildChannelHandler() {
+        return buildChannelHandler(null);
+    }
+
+    private ChannelDuplexHandler buildChannelHandler(MQTTConnectHandler.ExistingSession existingSession) {
         return new ChannelDuplexHandler() {
             @Override
             public void channelActive(ChannelHandlerContext ctx) throws Exception {
                 super.channelActive(ctx);
                 ctx.pipeline().addLast(MQTT3PersistentSessionHandler.builder()
-                        .settings(new TenantSettings(tenantId, settingProvider))
-                        .tenantMeter(tenantMeter)
-                        .oomCondition(oomCondition)
-                        .userSessionId(userSessionId(clientInfo))
-                        .keepAliveTimeSeconds(120)
-                        .clientInfo(clientInfo)
-                        .willMessage(null)
-                        .ctx(ctx)
-                        .build());
+                    .settings(new TenantSettings(tenantId, settingProvider))
+                    .tenantMeter(tenantMeter)
+                    .existingSession(existingSession)
+                    .oomCondition(oomCondition)
+                    .userSessionId(userSessionId(clientInfo))
+                    .keepAliveTimeSeconds(120)
+                    .clientInfo(clientInfo)
+                    .willMessage(null)
+                    .ctx(ctx)
+                    .build());
                 ctx.pipeline().remove(this);
             }
         };
     }
-
-    //  =============================================== sub & unSub =======================================================
 
     @Test
     public void persistentQoS0Sub() {
@@ -201,7 +209,6 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
         verifyEvent(SUB_ACKED);
     }
 
-
     @Test
     public void persistentUnSub() {
         mockCheckPermission(true);
@@ -226,9 +233,6 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
         Assert.assertNotNull(unsubAckMessage);
         verifyEvent(UNSUB_ACKED);
     }
-
-
-//  =============================================== S2CPub ============================================================
 
     @Test
     public void qoS0Pub() {
@@ -538,5 +542,55 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
         channel.advanceTimeBy(6, TimeUnit.SECONDS);
         channel.runPendingTasks();
         verifyEvent(INBOX_TRANSIENT_ERROR);
+    }
+
+    @Test
+    public void createRejected() {
+        reset(inboxClient);
+        ChannelDuplexHandler sessionHandlerAdder = buildChannelHandler();
+        mockInboxCreate(CreateReply.Code.BACK_PRESSURE_REJECTED);
+        EmbeddedChannel channel = new EmbeddedChannel(true, true, new ChannelInitializer<>() {
+            @Override
+            protected void initChannel(Channel ch) {
+                ch.attr(ChannelAttrs.MQTT_SESSION_CTX).set(sessionContext);
+                ch.attr(ChannelAttrs.PEER_ADDR).set(new InetSocketAddress(remoteIp, remotePort));
+                ChannelPipeline pipeline = ch.pipeline();
+                pipeline.addLast(new ChannelTrafficShapingHandler(512 * 1024, 512 * 1024));
+                pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(256 * 1024));
+                pipeline.addLast(sessionHandlerAdder);
+            }
+        });
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        channel.flushOutbound();
+        MqttConnAckMessage connAckMessage = channel.readOutbound();
+        assertEquals(connAckMessage.variableHeader().connectReturnCode(), CONNECTION_REFUSED_SERVER_UNAVAILABLE);
+        assertFalse(channel.isOpen());
+        verifyEvent(SERVER_BUSY);
+    }
+
+    @Test
+    public void attachRejected() {
+        reset(inboxClient);
+        ChannelDuplexHandler sessionHandlerAdder = buildChannelHandler(new MQTTConnectHandler.ExistingSession(0, 0));
+        mockAttach(AttachReply.Code.BACK_PRESSURE_REJECTED);
+        EmbeddedChannel channel = new EmbeddedChannel(true, true, new ChannelInitializer<>() {
+            @Override
+            protected void initChannel(Channel ch) {
+                ch.attr(ChannelAttrs.MQTT_SESSION_CTX).set(sessionContext);
+                ch.attr(ChannelAttrs.PEER_ADDR).set(new InetSocketAddress(remoteIp, remotePort));
+                ChannelPipeline pipeline = ch.pipeline();
+                pipeline.addLast(new ChannelTrafficShapingHandler(512 * 1024, 512 * 1024));
+                pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(256 * 1024));
+                pipeline.addLast(sessionHandlerAdder);
+            }
+        });
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        channel.flushOutbound();
+        MqttConnAckMessage connAckMessage = channel.readOutbound();
+        assertEquals(connAckMessage.variableHeader().connectReturnCode(), CONNECTION_REFUSED_SERVER_UNAVAILABLE);
+        assertFalse(channel.isOpen());
+        verifyEvent(SERVER_BUSY);
     }
 }

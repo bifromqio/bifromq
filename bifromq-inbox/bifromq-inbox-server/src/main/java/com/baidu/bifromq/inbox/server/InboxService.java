@@ -136,11 +136,15 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         log.trace("Handling get {}", request);
         response(tenantId -> getScheduler.schedule(request)
             .exceptionally(e -> {
+                if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
+                    return GetReply.newBuilder().setReqId(request.getReqId()).setCode(GetReply.Code.TRY_LATER).build();
+                }
+                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                    return GetReply.newBuilder().setReqId(request.getReqId())
+                        .setCode(GetReply.Code.BACK_PRESSURE_REJECTED).build();
+                }
                 log.debug("Failed to get inbox", e);
-                return GetReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(GetReply.Code.ERROR)
-                    .build();
+                return GetReply.newBuilder().setReqId(request.getReqId()).setCode(GetReply.Code.ERROR).build();
             }), responseObserver);
     }
 
@@ -155,13 +159,18 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         .setReqId(request.getReqId())
                         .setCode(CreateReply.Code.TRY_LATER)
                         .build();
-                } else {
-                    log.debug("Failed to create inbox", e);
+                }
+                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
                     return CreateReply.newBuilder()
                         .setReqId(request.getReqId())
-                        .setCode(CreateReply.Code.ERROR)
+                        .setCode(CreateReply.Code.BACK_PRESSURE_REJECTED)
                         .build();
                 }
+                log.debug("Failed to create inbox", e);
+                return CreateReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(CreateReply.Code.ERROR)
+                    .build();
             }), responseObserver);
     }
 
@@ -176,13 +185,18 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         .setReqId(request.getReqId())
                         .setCode(AttachReply.Code.TRY_LATER)
                         .build();
-                } else {
-                    log.debug("Failed to attach inbox", e);
+                }
+                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
                     return AttachReply.newBuilder()
                         .setReqId(request.getReqId())
-                        .setCode(AttachReply.Code.ERROR)
+                        .setCode(AttachReply.Code.BACK_PRESSURE_REJECTED)
                         .build();
                 }
+                log.debug("Failed to attach inbox", e);
+                return AttachReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(AttachReply.Code.ERROR)
+                    .build();
             }), responseObserver);
     }
 
@@ -372,11 +386,13 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             .exceptionally(e -> {
                 if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
                     return GetReply.newBuilder().setReqId(request.getReqId()).setCode(GetReply.Code.TRY_LATER).build();
-                } else {
-                    log.debug("Failed to expire", e);
-                    return GetReply.newBuilder().setReqId(request.getReqId()).setCode(GetReply.Code.ERROR).build();
                 }
-
+                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                    return GetReply.newBuilder().setReqId(request.getReqId())
+                        .setCode(GetReply.Code.BACK_PRESSURE_REJECTED).build();
+                }
+                log.debug("Failed to expire", e);
+                return GetReply.newBuilder().setReqId(request.getReqId()).setCode(GetReply.Code.ERROR).build();
             })
             .thenCompose(reply -> {
                 switch (reply.getCode()) {
@@ -426,6 +442,12 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         return CompletableFuture.completedFuture(ExpireReply.newBuilder()
                             .setReqId(request.getReqId())
                             .setCode(ExpireReply.Code.TRY_LATER)
+                            .build());
+                    }
+                    case BACK_PRESSURE_REJECTED -> {
+                        return CompletableFuture.completedFuture(ExpireReply.newBuilder()
+                            .setReqId(request.getReqId())
+                            .setCode(ExpireReply.Code.BACK_PRESSURE_REJECTED)
                             .build());
                     }
                     default -> {
@@ -488,13 +510,19 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                         .setReqId(request.getReqId())
                         .setCode(CommitReply.Code.TRY_LATER)
                         .build();
-                } else {
-                    log.debug("Failed to commit", e);
+                }
+                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
                     return CommitReply.newBuilder()
                         .setReqId(request.getReqId())
-                        .setCode(CommitReply.Code.ERROR)
+                        .setCode(CommitReply.Code.BACK_PRESSURE_REJECTED)
                         .build();
                 }
+                log.debug("Failed to commit", e);
+                return CommitReply.newBuilder()
+                    .setReqId(request.getReqId())
+                    .setCode(CommitReply.Code.ERROR)
+                    .build();
+
             }), responseObserver);
     }
 

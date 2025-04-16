@@ -26,7 +26,6 @@ import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.SubResult.EXCEE
 import static com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper.UnsubResult.ERROR;
 import static com.baidu.bifromq.mqtt.utils.AuthUtil.buildSubAction;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
-import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
 import static com.baidu.bifromq.type.QoS.AT_LEAST_ONCE;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersistentSessionSpaceBytes;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersistentSessions;
@@ -35,12 +34,12 @@ import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersi
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersistentUnsubscribePerSecond;
 
 import com.baidu.bifromq.basehlc.HLC;
+import com.baidu.bifromq.basescheduler.AsyncRetry;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
-import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
+import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
@@ -109,7 +108,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     private long qos0ConfirmUpToSeq;
     private long inboxConfirmedUpToSeq = -1;
     private IInboxClient.IInboxReader inboxReader;
-    private boolean disconnectByClient = false;
+    private State state = State.INIT;
     private int touchRetryCount;
     private ScheduledFuture<?> touchTimeout;
 
@@ -157,11 +156,14 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
             }
             addFgTask(inboxClient.attach(reqBuilder.build())
                 .thenAcceptAsync(reply -> {
-                    if (reply.getCode() == AttachReply.Code.OK) {
-                        version++;
-                        setupInboxReader();
-                    } else {
-                        handleProtocolResponse(helper().onInboxTransientError(reply.getCode().name()));
+                    switch (reply.getCode()) {
+                        case OK -> {
+                            version++;
+                            setupInboxReader();
+                        }
+                        case BACK_PRESSURE_REJECTED ->
+                            handleProtocolResponse(helper().onInboxBusy(reply.getCode().name()));
+                        default -> handleProtocolResponse(helper().onInboxTransientError(reply.getCode().name()));
                     }
                 }, ctx.executor()));
         } else {
@@ -189,10 +191,11 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
             }
             addFgTask(inboxClient.create(reqBuilder.build())
                 .thenAcceptAsync(reply -> {
-                    if (reply.getCode() == CreateReply.Code.OK) {
-                        setupInboxReader();
-                    } else {
-                        handleProtocolResponse(helper().onInboxTransientError(reply.getCode().name()));
+                    switch (reply.getCode()) {
+                        case OK -> setupInboxReader();
+                        case BACK_PRESSURE_REJECTED ->
+                            handleProtocolResponse(helper().onInboxBusy(reply.getCode().name()));
+                        default -> handleProtocolResponse(helper().onInboxTransientError(reply.getCode().name()));
                     }
                 }, ctx.executor()));
         }
@@ -214,9 +217,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         if (remainInboxSize > 0) {
             memUsage.addAndGet(-remainInboxSize);
         }
-        if (!disconnectByClient) {
-            int finalSEI = settings.forceTransient ? 0 : Math.min(sessionExpirySeconds, settings.maxSEI);
-            inboxClient.detach(DetachRequest.newBuilder()
+        int finalSEI = settings.forceTransient ? 0 : Math.min(sessionExpirySeconds, settings.maxSEI);
+        if (state == State.ATTACHED) {
+            detach(DetachRequest.newBuilder()
                 .setReqId(System.nanoTime())
                 .setInboxId(userSessionId)
                 .setIncarnation(incarnation)
@@ -232,14 +235,13 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
 
     @Override
     protected final ProtocolResponse handleDisconnect(MqttMessage message) {
-        disconnectByClient = true;
         Optional<Integer> requestSEI = helper().sessionExpiryIntervalOnDisconnect(message);
         int finalSEI = settings.forceTransient ? 0 : Math.min(requestSEI.orElse(sessionExpirySeconds), settings.maxSEI);
         if (helper().isNormalDisconnect(message)) {
             discardLWT();
             if (finalSEI == 0) {
                 // expire without triggering Will Message if any
-                inboxClient.detach(DetachRequest.newBuilder()
+                detach(DetachRequest.newBuilder()
                     .setReqId(System.nanoTime())
                     .setInboxId(userSessionId)
                     .setIncarnation(incarnation)
@@ -251,7 +253,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     .build());
             } else {
                 // update inbox with requested SEI and discard will message
-                inboxClient.detach(DetachRequest.newBuilder()
+                detach(DetachRequest.newBuilder()
                     .setReqId(System.nanoTime())
                     .setInboxId(userSessionId)
                     .setIncarnation(incarnation)
@@ -263,7 +265,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     .build());
             }
         } else if (helper().isDisconnectWithLWT(message)) {
-            inboxClient.detach(DetachRequest.newBuilder()
+            detach(DetachRequest.newBuilder()
                 .setReqId(System.nanoTime())
                 .setInboxId(userSessionId)
                 .setIncarnation(incarnation)
@@ -275,6 +277,20 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                 .build());
         }
         return ProtocolResponse.goAwayNow(getLocal(ByClient.class).clientInfo(clientInfo));
+    }
+
+    private void detach(DetachRequest request) {
+        if (state == State.DETACH) {
+            return;
+        }
+        state = State.DETACH;
+        AsyncRetry.exec(() -> inboxClient.detach(request),
+                (reply, t) -> {
+                    if (t != null) {
+                        return true;
+                    }
+                    return reply.getCode() != DetachReply.Code.TRY_LATER;
+                }, 1000, 5000);
     }
 
     @Override
@@ -319,8 +335,10 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                     case EXCEED_LIMIT -> {
                         return IMQTTProtocolHelper.SubResult.EXCEED_LIMIT;
                     }
-                    case NO_INBOX, CONFLICT ->
+                    case NO_INBOX, CONFLICT -> {
+                        state = State.TERMINATE;
                         handleProtocolResponse(helper().onInboxTransientError(v.getCode().name()));
+                    }
                     case BACK_PRESSURE_REJECTED -> {
                         return IMQTTProtocolHelper.SubResult.BACK_PRESSURE_REJECTED;
                     }
@@ -391,6 +409,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                         return IMQTTProtocolHelper.UnsubResult.NO_SUB;
                     }
                     case NO_INBOX, CONFLICT -> {
+                        state = State.TERMINATE;
                         handleProtocolResponse(helper().onInboxTransientError(v.getCode().name()));
                         return IMQTTProtocolHelper.UnsubResult.ERROR;
                     }
@@ -408,6 +427,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     }
 
     private void setupInboxReader() {
+        state = State.ATTACHED;
         if (!ctx.channel().isActive()) {
             return;
         }
@@ -443,8 +463,11 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                             confirmQoS0();
                         }
                     }
-                    case NO_INBOX, CONFLICT, ERROR ->
+                    case NO_INBOX, CONFLICT -> {
+                        state = State.TERMINATE;
                         handleProtocolResponse(helper().onInboxTransientError(v.getCode().name()));
+                    }
+                    case BACK_PRESSURE_REJECTED -> qos0Confirming = false;
                     case TRY_LATER -> {
                         // try again with same version
                         qos0Confirming = false;
@@ -498,8 +521,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                             inboxReader.hint(clientReceiveQuota());
                         }
                     }
-                    case NO_INBOX, CONFLICT, ERROR ->
+                    case NO_INBOX, CONFLICT ->
                         handleProtocolResponse(helper().onInboxTransientError(v.getCode().name()));
+                    case BACK_PRESSURE_REJECTED -> inboxConfirming = false;
                     case TRY_LATER -> {
                         // try again with same version
                         inboxConfirming = false;
@@ -517,9 +541,6 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     }
 
     private void consume(Fetched fetched) {
-        log.trace("Got fetched : tenantId={}, inboxId={}, qos0={}, sendBuffer={}", clientInfo().getTenantId(),
-            clientInfo().getMetadataOrThrow(MQTT_CLIENT_ID_KEY), fetched.getQos0MsgCount(),
-            fetched.getSendBufferMsgCount());
         ctx.executor().execute(() -> {
             switch (fetched.getResult()) {
                 case OK -> {
@@ -536,6 +557,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                         drainStaging();
                     }
                     rescheduleTouch();
+                }
+                case BACK_PRESSURE_REJECTED -> {
+                    // ignore
                 }
                 case TRY_LATER -> inboxReader.hint(clientReceiveQuota());
                 case NO_INBOX, ERROR ->
@@ -652,13 +676,22 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                                 // stop retry after 5 times
                             }
                         }
-                        case NO_INBOX, CONFLICT ->
+                        case NO_INBOX, CONFLICT -> {
+                            state = State.TERMINATE;
                             handleProtocolResponse(helper().onInboxTransientError(v.getCode().name()));
+                        }
                         default -> {
                             // never happens
                         }
                     }
                 }, ctx.executor());
         }, delayMS, TimeUnit.MILLISECONDS);
+    }
+
+    private enum State {
+        INIT,
+        ATTACHED,
+        DETACH,
+        TERMINATE
     }
 }

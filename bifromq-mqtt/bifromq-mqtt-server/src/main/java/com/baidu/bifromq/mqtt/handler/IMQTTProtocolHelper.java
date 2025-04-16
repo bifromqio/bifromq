@@ -41,6 +41,8 @@ public interface IMQTTProtocolHelper {
 
     ProtocolResponse onInboxTransientError(String reason);
 
+    ProtocolResponse onInboxBusy(String reason);
+
     Optional<Integer> sessionExpiryIntervalOnDisconnect(MqttMessage disconnectMessage);
 
     ProtocolResponse onDisconnect();
