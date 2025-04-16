@@ -16,6 +16,7 @@ package com.baidu.bifromq.mqtt.handler.v3;
 
 import static com.baidu.bifromq.mqtt.handler.MQTTSessionIdUtil.userSessionId;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.DISCARD;
+import static com.baidu.bifromq.plugin.eventcollector.EventType.EXCEED_RECEIVING_LIMIT;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC_FILTER;
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MALFORMED_TOPIC;
@@ -634,7 +635,7 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
         channel.runScheduledPendingTasks();
         channel.runPendingTasks();
 
-        verifyEvent(MQTT_SESSION_START, MQTT_SESSION_START, DISCARD);
+        verifyEvent(MQTT_SESSION_START, MQTT_SESSION_START, EXCEED_RECEIVING_LIMIT);
         // leave channel open in MQTT3
         assertTrue(channel.isOpen());
     }

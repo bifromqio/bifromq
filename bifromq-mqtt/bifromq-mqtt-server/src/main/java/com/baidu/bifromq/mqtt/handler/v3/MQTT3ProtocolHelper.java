@@ -31,6 +31,7 @@ import com.baidu.bifromq.plugin.authprovider.type.CheckResult;
 import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.BadPacket;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByServer;
+import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ExceedReceivingLimit;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.Idle;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InboxTransientError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.InvalidTopic;
@@ -304,12 +305,8 @@ public class MQTT3ProtocolHelper implements IMQTTProtocolHelper {
 
     @Override
     public ProtocolResponse respondReceivingMaximumExceeded(MqttPublishMessage message) {
-        return responseNothing(getLocal(Discard.class)
-            .rateLimit(settings.maxMsgPerSec)
-            .reqId(message.variableHeader().packetId())
-            .qos(QoS.forNumber(message.fixedHeader().qosLevel().value()))
-            .topic(message.variableHeader().topicName())
-            .size(message.payload().readableBytes())
+        return responseNothing(getLocal(ExceedReceivingLimit.class)
+            .limit(settings.receiveMaximum)
             .clientInfo(clientInfo));
     }
 
