@@ -65,9 +65,6 @@ class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
                 .setExpirySeconds(request.getExpirySeconds())
                 .setDiscardLWT(request.getDiscardLWT())
                 .setNow(request.getNow());
-            if (request.hasSender()) {
-                paramsBuilder.setSender(request.getSender());
-            }
             reqBuilder.addParams(paramsBuilder.build());
         }
 

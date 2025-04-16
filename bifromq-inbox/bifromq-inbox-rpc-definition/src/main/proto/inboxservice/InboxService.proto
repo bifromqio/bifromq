@@ -18,7 +18,6 @@ service InboxService {
   rpc attach (AttachRequest) returns (AttachReply);
   rpc detach (DetachRequest) returns (DetachReply);
   rpc create (CreateRequest) returns (CreateReply);
-  rpc touch (TouchRequest) returns (TouchReply);
   rpc sub(SubRequest) returns (SubReply);
   rpc unsub(UnsubRequest) returns (UnsubReply);
   rpc receive (stream SendRequest) returns (stream SendReply);
@@ -85,7 +84,6 @@ message DetachRequest {
   bool discardLWT = 6;
   commontype.ClientInfo client = 7;
   uint64 now = 8;
-  optional Replica sender = 9; // if the request is triggered by detach task on the replica
 }
 
 message DetachReply {
@@ -119,27 +117,6 @@ message CreateReply {
     CONFLICT = 1;
     TRY_LATER = 2;
     BACK_PRESSURE_REJECTED = 3;
-    ERROR = 4;
-  }
-  uint64 reqId = 1;
-  Code code = 2;
-}
-
-message TouchRequest {
-  uint64 reqId = 1;
-  string tenantId = 2;
-  string inboxId = 3;
-  uint64 incarnation = 4;
-  uint64 version = 5;
-  uint64 now = 6;
-}
-
-message TouchReply {
-  enum Code {
-    OK = 0;
-    NO_INBOX = 1;
-    CONFLICT = 2;
-    TRY_LATER = 3;
     ERROR = 4;
   }
   uint64 reqId = 1;

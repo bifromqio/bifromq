@@ -30,6 +30,7 @@ import com.baidu.bifromq.plugin.eventcollector.EventCollectorManager;
 import com.baidu.bifromq.plugin.resourcethrottler.ResourceThrottlerManager;
 import com.baidu.bifromq.plugin.settingprovider.SettingProviderManager;
 import com.baidu.bifromq.retain.client.IRetainClient;
+import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.starter.config.StandaloneConfig;
 import com.baidu.bifromq.starter.config.model.inbox.InboxServerConfig;
 import com.baidu.bifromq.starter.config.model.inbox.InboxStoreConfig;
@@ -106,6 +107,7 @@ public class InboxServiceModule extends AbstractModule {
                 .distClient(injector.getInstance(IDistClient.class))
                 .inboxClient(injector.getInstance(IInboxClient.class))
                 .retainClient(injector.getInstance(IRetainClient.class))
+                .sessionDictClient(injector.getInstance(ISessionDictClient.class))
                 .inboxStoreClient(
                     injector.getInstance(Key.get(IBaseKVStoreClient.class, Names.named("inboxStoreClient"))))
                 .settingProvider(injector.getInstance(SettingProviderManager.class))

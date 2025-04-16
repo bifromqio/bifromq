@@ -37,8 +37,6 @@ import com.baidu.bifromq.inbox.rpc.proto.SendLWTReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendLWTRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
-import com.baidu.bifromq.inbox.rpc.proto.TouchReply;
-import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.plugin.subbroker.CheckReply;
@@ -152,17 +150,6 @@ final class InboxClient implements IInboxClient {
                 return DetachReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setCode(DetachReply.Code.ERROR).build();
-            });
-    }
-
-    @Override
-    public CompletableFuture<TouchReply> touch(TouchRequest request) {
-        return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getTouchMethod())
-            .exceptionally(e -> {
-                log.debug("Touch inbox failed", e);
-                return TouchReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(TouchReply.Code.ERROR).build();
             });
     }
 

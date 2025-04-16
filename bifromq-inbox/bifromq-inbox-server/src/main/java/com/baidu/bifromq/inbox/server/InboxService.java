@@ -47,8 +47,6 @@ import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
-import com.baidu.bifromq.inbox.rpc.proto.TouchReply;
-import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxAttachScheduler;
@@ -62,7 +60,6 @@ import com.baidu.bifromq.inbox.server.scheduler.IInboxGetScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxInsertScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxSendLWTScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxSubScheduler;
-import com.baidu.bifromq.inbox.server.scheduler.IInboxTouchScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxUnsubScheduler;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.plugin.subbroker.CheckReply;
@@ -87,7 +84,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final IInboxCheckSubScheduler checkSubScheduler;
     private final IInboxInsertScheduler insertScheduler;
     private final IInboxCommitScheduler commitScheduler;
-    private final IInboxTouchScheduler touchScheduler;
     private final IInboxCreateScheduler createScheduler;
     private final IInboxAttachScheduler attachScheduler;
     private final IInboxDetachScheduler detachScheduler;
@@ -111,7 +107,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                  IInboxDeleteScheduler deleteScheduler,
                  IInboxSubScheduler subScheduler,
                  IInboxUnsubScheduler unsubScheduler,
-                 IInboxTouchScheduler touchScheduler,
                  ITenantGCRunner tenantGCRunner) {
         this.inboxClient = inboxClient;
         this.distClient = distClient;
@@ -127,7 +122,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         this.deleteScheduler = deleteScheduler;
         this.subScheduler = subScheduler;
         this.unsubScheduler = unsubScheduler;
-        this.touchScheduler = touchScheduler;
         this.tenantGCRunner = tenantGCRunner;
     }
 
@@ -222,26 +216,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     .setReqId(request.getReqId())
                     .setCode(DetachReply.Code.ERROR)
                     .build();
-            }), responseObserver);
-    }
-
-    @Override
-    public void touch(TouchRequest request, StreamObserver<TouchReply> responseObserver) {
-        log.trace("Handling touch {}", request);
-        response(tenantId -> touchScheduler.schedule(request)
-            .exceptionally(e -> {
-                if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
-                    return TouchReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setCode(TouchReply.Code.TRY_LATER)
-                        .build();
-                } else {
-                    log.debug("Failed to touch inbox", e);
-                    return TouchReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setCode(TouchReply.Code.ERROR)
-                        .build();
-                }
             }), responseObserver);
     }
 
@@ -612,7 +586,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             detachScheduler.close();
             deleteScheduler.close();
             createScheduler.close();
-            touchScheduler.close();
             subScheduler.close();
             unsubScheduler.close();
 

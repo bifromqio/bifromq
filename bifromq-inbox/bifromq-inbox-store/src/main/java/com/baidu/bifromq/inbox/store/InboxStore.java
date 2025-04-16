@@ -65,6 +65,7 @@ class InboxStore implements IInboxStore {
                 builder.distClient,
                 builder.inboxClient,
                 builder.retainClient,
+                builder.sessionDictClient,
                 builder.settingProvider,
                 builder.eventCollector,
                 builder.resourceThrottler,

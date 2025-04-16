@@ -42,6 +42,7 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
+import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import java.lang.reflect.Method;
 import java.time.Duration;
@@ -71,6 +72,8 @@ public abstract class InboxServiceTest {
     protected IDistClient distClient;
     @Mock
     protected IRetainClient retainClient;
+    @Mock
+    protected ISessionDictClient sessionDictClient;
     private IAgentHost agentHost;
     private ICRDTService crdtService;
     private IRPCServiceTrafficService trafficService;
@@ -126,6 +129,7 @@ public abstract class InboxServiceTest {
             .distClient(distClient)
             .inboxClient(inboxClient)
             .retainClient(retainClient)
+            .sessionDictClient(sessionDictClient)
             .inboxStoreClient(inboxStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)

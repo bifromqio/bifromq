@@ -28,7 +28,6 @@ import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
 import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.Replica;
 import com.baidu.bifromq.type.ClientInfo;
 import java.util.HashSet;
 import java.util.Queue;
@@ -48,11 +47,7 @@ class BatchCreateCall extends BatchMutationCall<CreateRequest, CreateReply> {
     @Override
     protected RWCoProcInput makeBatch(
         Iterable<ICallTask<CreateRequest, CreateReply, MutationCallBatcherKey>> callTasks) {
-        BatchCreateRequest.Builder reqBuilder = BatchCreateRequest.newBuilder()
-            .setLeader(Replica.newBuilder()
-                .setRangeId(batcherKey.id)
-                .setStoreId(batcherKey.leaderStoreId)
-                .build());
+        BatchCreateRequest.Builder reqBuilder = BatchCreateRequest.newBuilder();
         callTasks.forEach(call -> {
             CreateRequest request = call.call();
             ClientInfo client = request.getClient();

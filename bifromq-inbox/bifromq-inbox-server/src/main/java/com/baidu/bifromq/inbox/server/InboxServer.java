@@ -26,7 +26,6 @@ import com.baidu.bifromq.inbox.server.scheduler.InboxGetScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxInsertScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxSendLWTScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxSubScheduler;
-import com.baidu.bifromq.inbox.server.scheduler.InboxTouchScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxUnSubScheduler;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
@@ -59,7 +58,6 @@ class InboxServer implements IInboxServer {
             .deleteScheduler(new InboxDeleteScheduler(builder.inboxStoreClient))
             .subScheduler(new InboxSubScheduler(builder.inboxStoreClient))
             .unsubScheduler(new InboxUnSubScheduler(builder.inboxStoreClient))
-            .touchScheduler(new InboxTouchScheduler(builder.inboxStoreClient))
             .tenantGCRunner(new TenantGCRunner(builder.inboxStoreClient))
             .build();
         if (builder.workerThreads == 0) {

@@ -19,13 +19,13 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
 
 import com.baidu.bifromq.basekv.utils.BoundaryUtil;
-import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
-import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
+import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
+import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.MQTTClientInfoConstants;
 import java.util.concurrent.CompletableFuture;
 import org.mockito.ArgumentCaptor;
 import org.testng.annotations.Test;
@@ -37,25 +37,26 @@ public class LoadExistingTest extends InboxStoreTest {
         String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
-        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId)
+            .putMetadata(MQTTClientInfoConstants.MQTT_USER_ID_KEY, "userId")
+            .putMetadata(MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY, "clientId")
+            .build();
         requestCreate(BatchCreateRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
-            .setExpirySeconds(10)
+            .setExpirySeconds(3)
             .setClient(client)
             .setNow(now)
             .build());
         restartStoreServer();
         await().until(() -> BoundaryUtil.isValidSplitSet(storeClient.latestEffectiveRouter().keySet()));
-        when(inboxClient.detach(any()))
-            .thenReturn(CompletableFuture.completedFuture(DetachReply.newBuilder().build()));
-        ArgumentCaptor<DetachRequest> detachCaptor = ArgumentCaptor.forClass(DetachRequest.class);
-        verify(inboxClient, timeout(10000)).detach(detachCaptor.capture());
-        DetachRequest request = detachCaptor.getValue();
+        when(sessionDictClient.get(any())).thenReturn(
+            CompletableFuture.completedFuture(GetReply.newBuilder().setResult(GetReply.Result.NOT_FOUND).build()));
+        ArgumentCaptor<DeleteRequest> deleteCaptor = ArgumentCaptor.forClass(DeleteRequest.class);
+        verify(inboxClient, timeout(10000)).delete(deleteCaptor.capture());
+        DeleteRequest request = deleteCaptor.getValue();
+        assertEquals(request.getTenantId(), tenantId);
         assertEquals(request.getInboxId(), inboxId);
-        assertEquals(request.getClient(), client);
         assertEquals(request.getIncarnation(), incarnation);
-        assertFalse(request.getDiscardLWT());
-        assertEquals(request.getExpirySeconds(), 10);
     }
 }

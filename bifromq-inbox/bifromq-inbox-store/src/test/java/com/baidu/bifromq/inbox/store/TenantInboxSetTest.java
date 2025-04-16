@@ -228,7 +228,7 @@ public class TenantInboxSetTest extends MeterTest {
         inboxSet.upsert(inboxMetadata);
         inboxSet.upsert(inboxMetadata1);
         inboxSet.upsert(inboxMetadata2);
-        assertEquals(inboxSet.getAll().size(), 3);
+        assertEquals(inboxSet.getAll().size(), 2);
         assertEquals(inboxSet.getAll(inboxMetadata.getInboxId()).size(), 2);
         assertEquals(inboxSet.getAll(inboxMetadata2.getInboxId()).size(), 1);
         inboxSet.destroy();

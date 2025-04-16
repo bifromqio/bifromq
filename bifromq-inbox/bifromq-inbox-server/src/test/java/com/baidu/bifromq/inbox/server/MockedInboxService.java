@@ -33,7 +33,6 @@ import com.baidu.bifromq.inbox.server.scheduler.IInboxFetchScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxGetScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxInsertScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxSubScheduler;
-import com.baidu.bifromq.inbox.server.scheduler.IInboxTouchScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxUnsubScheduler;
 import com.baidu.bifromq.inbox.util.PipelineUtil;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
@@ -73,8 +72,6 @@ public abstract class MockedInboxService {
     protected IInboxInsertScheduler insertScheduler;
     @Mock
     protected IInboxCommitScheduler commitScheduler;
-    @Mock
-    protected IInboxTouchScheduler touchScheduler;
     @Mock
     protected IInboxCreateScheduler createScheduler;
     @Mock
@@ -143,12 +140,11 @@ public abstract class MockedInboxService {
             .deleteScheduler(deleteScheduler)
             .subScheduler(subScheduler)
             .unsubScheduler(unsubScheduler)
-            .touchScheduler(touchScheduler)
             .build();
     }
 
     @AfterMethod
-    public void teardown() throws Exception {
+    public void tearDown() throws Exception {
         closeable.close();
     }
 }

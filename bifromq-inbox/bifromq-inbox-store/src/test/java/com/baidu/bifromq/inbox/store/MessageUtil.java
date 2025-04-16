@@ -22,7 +22,6 @@ import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchGetRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchTouchRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
@@ -88,14 +87,6 @@ public class MessageUtil {
         return InboxServiceROCoProcInput.newBuilder()
             .setReqId(reqId)
             .setBatchFetch(request)
-            .build();
-    }
-
-
-    public static InboxServiceROCoProcInput buildTouchRequest(long reqId, BatchTouchRequest request) {
-        return InboxServiceROCoProcInput.newBuilder()
-            .setReqId(reqId)
-            .setBatchTouch(request)
             .build();
     }
 

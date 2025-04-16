@@ -13,8 +13,7 @@
 
 package com.baidu.bifromq.inbox.store.delay;
 
-import com.baidu.bifromq.inbox.storage.proto.Replica;
-import java.util.function.Supplier;
+import java.util.Set;
 
 /**
  * The interface of DelayTask Runner which is used to schedule tasks to be executed after a specified delay.
@@ -22,25 +21,6 @@ import java.util.function.Supplier;
  * @param <KeyT> the type of the key used to identify the task.
  */
 public interface IDelayTaskRunner<KeyT> {
-    /**
-     * The owner replica of this runner.
-     *
-     * @return the owner replica
-     */
-    Replica owner();
-
-    /**
-     * Schedule a new task or postpone existing task of same type to be triggered after the specified delay. If there is
-     * a task registered with the same key, and of different type. The previous task will be cancelled and a new task
-     * will be scheduled.
-     *
-     * @param key       the key under monitoring
-     * @param supplier  the task to be triggered
-     * @param taskClass the class of the task to be triggered
-     * @param <TaskT>   the type of the task
-     */
-    <TaskT extends IDelayedTask<KeyT>> void reschedule(KeyT key, Supplier<TaskT> supplier, Class<TaskT> taskClass);
-
     /**
      * Schedule a new delayedTask.
      *
@@ -51,11 +31,9 @@ public interface IDelayTaskRunner<KeyT> {
     <TaskT extends IDelayedTask<KeyT>> void schedule(KeyT key, TaskT delayedTask);
 
     /**
-     * Schedule a new task to be triggered after the specified delay.
+     * Cancel the task associated with the specified key.
      *
-     * @param key      the key under monitoring
-     * @param supplier the task to be triggered
-     * @param <TaskT>  the type of the task
+     * @param keys the keys to cancel
      */
-    <TaskT extends IDelayedTask<KeyT>> void scheduleIfAbsent(KeyT key, Supplier<TaskT> supplier);
+    void cancelAll(Set<KeyT> keys);
 }

@@ -17,15 +17,14 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
@@ -42,8 +41,7 @@ public class DelayTaskRunnerTest {
     @BeforeMethod
     public void setUp() {
         currentMillisSupplier = System::currentTimeMillis;
-        runner = new DelayTaskRunner<>(KVRangeIdUtil.generate(), "store1", String::compareTo, currentMillisSupplier,
-            1000);
+        runner = new DelayTaskRunner<>(String::compareTo, currentMillisSupplier, 1000);
         taskFunction1 = mock(BiFunction.class);
         taskFunction2 = mock(BiFunction.class);
     }
@@ -52,8 +50,7 @@ public class DelayTaskRunnerTest {
     public void testImmediateExecution() {
         TestDelayedTask task = new TestDelayedTask(Duration.ZERO, taskFunction1);
 
-        Supplier<TestDelayedTask> supplier = () -> task;
-        runner.reschedule("immediateKey", supplier, TestDelayedTask.class);
+        runner.schedule("immediateKey", task);
         verify(taskFunction1, timeout(100).times(1)).apply("immediateKey", runner);
         assertFalse(runner.hasTask("immidateKey"));
     }
@@ -61,28 +58,12 @@ public class DelayTaskRunnerTest {
     @Test
     public void testDelayedExecution() {
         TestDelayedTask task = new TestDelayedTask(Duration.ofMillis(50), taskFunction1);
-        Supplier<TestDelayedTask> supplier = () -> task;
 
-        runner.reschedule("delayedKey", supplier, TestDelayedTask.class);
+        runner.schedule("delayedKey", task);
 
         verify(taskFunction1, timeout(40).times(0)).apply(Mockito.anyString(), Mockito.any());
         verify(taskFunction1, timeout(100).times(1)).apply("delayedKey", runner);
         assertFalse(runner.hasTask("delayedKey"));
-    }
-
-    @Test
-    public void testRescheduleSameType() throws Exception {
-        TestDelayedTask task = new TestDelayedTask(Duration.ofMillis(50), taskFunction1);
-
-        Supplier<TestDelayedTask> supplier = Mockito.mock(Supplier.class);
-        when(supplier.get()).thenReturn(task);
-
-        runner.reschedule("rescheduleKey", supplier, TestDelayedTask.class);
-        Thread.sleep(10);
-        runner.reschedule("rescheduleKey", supplier, TestDelayedTask.class);
-
-        verify(supplier, timeout(100).times(1)).get();
-        verify(taskFunction1, timeout(200).times(1)).apply("rescheduleKey", runner);
     }
 
     @Test
@@ -98,27 +79,10 @@ public class DelayTaskRunnerTest {
     }
 
     @Test
-    public void testScheduleIfAbsent() {
-        TestDelayedTask task = new TestDelayedTask(Duration.ofMillis(50), taskFunction1);
-
-        Supplier<TestDelayedTask> supplier = Mockito.mock(Supplier.class);
-        when(supplier.get()).thenReturn(task);
-
-        runner.scheduleIfAbsent("ifAbsentKey", supplier);
-        runner.scheduleIfAbsent("ifAbsentKey", supplier);
-
-        verify(supplier, timeout(100).times(1)).get();
-        verify(taskFunction1, timeout(200).times(1)).apply("ifAbsentKey", runner);
-    }
-
-    @Test
     public void testHasTask() {
         TestDelayedTask task = new TestDelayedTask(Duration.ofMillis(1000), taskFunction1);
 
-        Supplier<TestDelayedTask> supplier = Mockito.mock(Supplier.class);
-        when(supplier.get()).thenReturn(task);
-
-        runner.reschedule("hasTaskKey", supplier, TestDelayedTask.class);
+        runner.schedule("hasTaskKey", task);
         await().until(() -> runner.hasTask("hasTaskKey"));
         await().until(() -> runner.hasTask("hasTaskKey"));
     }
@@ -126,15 +90,14 @@ public class DelayTaskRunnerTest {
     @Test
     public void testRateLimiterBehavior() {
         int rateLimit = 2;
-        DelayTaskRunner<String> rateLimitedRunner = new DelayTaskRunner<>(KVRangeIdUtil.generate(), "store1",
-            String::compareTo, System::currentTimeMillis, rateLimit);
+        DelayTaskRunner<String> rateLimitedRunner = new DelayTaskRunner<>(String::compareTo, System::currentTimeMillis,
+            rateLimit);
 
         List<Long> executionTimes = Collections.synchronizedList(new ArrayList<>());
 
         for (int i = 1; i <= 6; i++) {
             String key = "task" + i;
-            Supplier<RecordingTask> supplier = () -> new RecordingTask(Duration.ofMillis(10), executionTimes);
-            rateLimitedRunner.reschedule(key, supplier, RecordingTask.class);
+            rateLimitedRunner.schedule(key, new RecordingTask(Duration.ofMillis(10), executionTimes));
         }
 
         await().atMost(Duration.ofSeconds(10)).until(() -> executionTimes.size() == 6);
@@ -160,9 +123,29 @@ public class DelayTaskRunnerTest {
     }
 
     @Test
+    public void testCancelAllTasks() {
+        TestDelayedTask task1 = new TestDelayedTask(Duration.ofMillis(500), taskFunction1);
+        TestDelayedTask task2 = new TestDelayedTask(Duration.ofMillis(500), taskFunction2);
+
+        runner.schedule("cancelKey1", task1);
+        runner.schedule("cancelKey2", task2);
+
+        await().until(() -> runner.hasTask("cancelKey1"));
+        await().until(() -> runner.hasTask("cancelKey2"));
+
+        runner.cancelAll(Set.of("cancelKey1", "cancelKey2"));
+
+        await().atMost(Duration.ofMillis(200))
+            .until(() -> !runner.hasTask("cancelKey1") && !runner.hasTask("cancelKey2"));
+
+        verify(taskFunction1, timeout(600).times(0)).apply("cancelKey1", runner);
+        verify(taskFunction2, timeout(600).times(0)).apply("cancelKey2", runner);
+    }
+
+    @Test
     public void testShutdown() {
         TestDelayedTask task = new TestDelayedTask(Duration.ofMillis(50), taskFunction1);
-        runner.reschedule("shutdownKey2", () -> task, TestDelayedTask.class);
+        runner.schedule("shutdownKey2", task);
         runner.shutdown();
         verify(taskFunction1, timeout(100).times(0)).apply("shutdownKey2", runner);
     }

@@ -26,7 +26,6 @@ import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.rpc.proto.SendLWTRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
-import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.plugin.subbroker.CheckRequest;
 
@@ -51,8 +50,6 @@ public class RPCBluePrint {
             .keyHashFunc(request -> getDelivererKey(request.getTenantId(), request.getInboxId())).build())
         .methodSemantic(InboxServiceGrpc.getCreateMethod(), BluePrint.WCHUnaryMethod.<CreateRequest>builder()
             .keyHashFunc(request -> getDelivererKey(request.getClient().getTenantId(), request.getInboxId())).build())
-        .methodSemantic(InboxServiceGrpc.getTouchMethod(), BluePrint.WCHUnaryMethod.<TouchRequest>builder()
-            .keyHashFunc(request -> getDelivererKey(request.getTenantId(), request.getInboxId())).build())
         .methodSemantic(InboxServiceGrpc.getSubMethod(), BluePrint.WCHUnaryMethod.<SubRequest>builder()
             .keyHashFunc(request -> getDelivererKey(request.getTenantId(), request.getInboxId())).build())
         .methodSemantic(InboxServiceGrpc.getUnsubMethod(), BluePrint.WCHUnaryMethod.<UnsubRequest>builder()

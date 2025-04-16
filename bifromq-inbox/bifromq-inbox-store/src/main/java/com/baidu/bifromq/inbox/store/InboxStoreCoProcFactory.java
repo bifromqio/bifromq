@@ -28,6 +28,7 @@ import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
+import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import java.time.Duration;
 import java.util.Collections;
@@ -39,6 +40,7 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
     private final IDistClient distClient;
     private final IInboxClient inboxClient;
     private final IRetainClient retainClient;
+    private final ISessionDictClient sessionDictClient;
     private final ISettingProvider settingProvider;
     private final IEventCollector eventCollector;
     private final IResourceThrottler resourceThrottler;
@@ -50,6 +52,7 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
     public InboxStoreCoProcFactory(IDistClient distClient,
                                    IInboxClient inboxClient,
                                    IRetainClient retainClient,
+                                   ISessionDictClient sessionDictClient,
                                    ISettingProvider settingProvider,
                                    IEventCollector eventCollector,
                                    IResourceThrottler resourceThrottler,
@@ -59,6 +62,7 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
         this.distClient = distClient;
         this.inboxClient = inboxClient;
         this.retainClient = retainClient;
+        this.sessionDictClient = sessionDictClient;
         this.settingProvider = settingProvider;
         this.eventCollector = eventCollector;
         this.resourceThrottler = resourceThrottler;
@@ -88,6 +92,7 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
             distClient,
             inboxClient,
             retainClient,
+            sessionDictClient,
             settingProvider,
             eventCollector,
             resourceThrottler,

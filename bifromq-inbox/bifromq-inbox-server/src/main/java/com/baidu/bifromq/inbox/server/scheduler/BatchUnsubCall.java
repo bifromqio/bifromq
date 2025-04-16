@@ -29,7 +29,6 @@ import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.Replica;
 import java.util.HashSet;
 import java.util.Queue;
 import java.util.Set;
@@ -48,11 +47,7 @@ class BatchUnsubCall extends BatchMutationCall<UnsubRequest, UnsubReply> {
 
     @Override
     protected RWCoProcInput makeBatch(Iterable<ICallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey>> callTasks) {
-        BatchUnsubRequest.Builder reqBuilder = BatchUnsubRequest.newBuilder()
-            .setLeader(Replica.newBuilder()
-                .setRangeId(batcherKey.id)
-                .setStoreId(batcherKey.leaderStoreId)
-                .build());
+        BatchUnsubRequest.Builder reqBuilder = BatchUnsubRequest.newBuilder();
         callTasks.forEach(call -> {
             UnsubRequest request = call.call();
             reqBuilder.addParams(BatchUnsubRequest.Params.newBuilder()

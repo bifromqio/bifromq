@@ -29,7 +29,6 @@ import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.Replica;
 import java.util.HashSet;
 import java.util.Queue;
 import java.util.Set;
@@ -48,11 +47,7 @@ class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
 
     @Override
     protected RWCoProcInput makeBatch(Iterable<ICallTask<SubRequest, SubReply, MutationCallBatcherKey>> callTasks) {
-        BatchSubRequest.Builder reqBuilder = BatchSubRequest.newBuilder()
-            .setLeader(Replica.newBuilder()
-                .setRangeId(batcherKey.id)
-                .setStoreId(batcherKey.leaderStoreId)
-                .build());
+        BatchSubRequest.Builder reqBuilder = BatchSubRequest.newBuilder();
         callTasks.forEach(call -> {
             SubRequest request = call.call();
             BatchSubRequest.Params.Builder paramsBuilder = BatchSubRequest.Params.newBuilder()

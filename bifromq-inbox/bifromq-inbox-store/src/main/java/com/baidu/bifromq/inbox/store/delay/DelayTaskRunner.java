@@ -14,8 +14,6 @@
 package com.baidu.bifromq.inbox.store.delay;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
-import com.baidu.bifromq.basekv.proto.KVRangeId;
-import com.baidu.bifromq.inbox.storage.proto.Replica;
 import com.google.common.util.concurrent.RateLimiter;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
@@ -23,6 +21,7 @@ import java.time.Duration;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -37,7 +36,6 @@ import java.util.function.Supplier;
  * @param <KeyT> the type of the key used to identify the task.
  */
 public class DelayTaskRunner<KeyT extends Comparable<KeyT>> implements IDelayTaskRunner<KeyT> {
-    private final Replica owner;
     // sorted by deadlineTS and then inboxId
     private final NavigableMap<SortKey<KeyT>, IDelayedTask<KeyT>> sortedDeadlines;
     // key: inboxId, value: deadlineTS
@@ -52,18 +50,13 @@ public class DelayTaskRunner<KeyT extends Comparable<KeyT>> implements IDelayTas
     /**
      * Constructor for DelayTaskRunner.
      *
-     * @param rangeId               the range ID
-     * @param storeId               the store ID
      * @param comparator            the comparator to be used for sorting the keys
      * @param currentMillisSupplier a supplier to get the current time in milliseconds
      * @param rateLimit             the rate limit for triggering the scheduled tasks
      */
-    public DelayTaskRunner(KVRangeId rangeId,
-                           String storeId,
-                           Comparator<KeyT> comparator,
+    public DelayTaskRunner(Comparator<KeyT> comparator,
                            Supplier<Long> currentMillisSupplier,
                            int rateLimit) {
-        this.owner = Replica.newBuilder().setRangeId(rangeId).setStoreId(storeId).build();
         this.currentMillisSupplier = currentMillisSupplier;
         this.sortedDeadlines = new TreeMap<>(
             Comparator.comparingLong((SortKey<KeyT> sk) -> sk.deadlineTS).thenComparing(sk -> sk.key, comparator));
@@ -71,11 +64,6 @@ public class DelayTaskRunner<KeyT extends Comparable<KeyT>> implements IDelayTas
         executor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
             Executors.newSingleThreadScheduledExecutor(EnvProvider.INSTANCE.newThreadFactory("delay-task-runner")),
             "delay-task-runner");
-    }
-
-    @Override
-    public Replica owner() {
-        return owner;
     }
 
     /**
@@ -86,55 +74,6 @@ public class DelayTaskRunner<KeyT extends Comparable<KeyT>> implements IDelayTas
      */
     public boolean hasTask(KeyT key) {
         return deadLines.containsKey(key);
-    }
-
-    @Override
-    public <TaskT extends IDelayedTask<KeyT>> void reschedule(KeyT key,
-                                                              Supplier<TaskT> supplier,
-                                                              Class<TaskT> taskClass) {
-        if (isShutdown) {
-            return;
-        }
-        executor.submit(() -> {
-            if (isShutdown) {
-                return;
-            }
-            Long prevDeadlineTS = deadLines.remove(key);
-            long now = currentMillisSupplier.get();
-            if (prevDeadlineTS != null) {
-                IDelayedTask<KeyT> prevTaskState = sortedDeadlines.remove(new SortKey<>(key, prevDeadlineTS));
-                if (!prevTaskState.getClass().equals(taskClass)) {
-                    TaskT task = supplier.get();
-                    long deadlineTS = deadline(now, task.getDelay());
-                    deadLines.put(key, deadlineTS);
-                    // if prevTask is of another type
-                    sortedDeadlines.put(new SortKey<>(key, deadlineTS), task);
-                } else {
-                    Duration delayInterval = prevTaskState.getDelay();
-                    long deadlineTS = deadline(now, delayInterval);
-                    deadLines.put(key, deadlineTS);
-                    // reuse previous task object
-                    sortedDeadlines.put(new SortKey<>(key, deadlineTS), prevTaskState);
-                }
-            } else {
-                IDelayedTask<KeyT> delayedTask = supplier.get();
-                Duration delayInterval = delayedTask.getDelay();
-                long deadlineTS = deadline(now, delayInterval);
-                deadLines.put(key, deadlineTS);
-                sortedDeadlines.put(new SortKey<>(key, deadlineTS), delayedTask);
-            }
-
-            Map.Entry<SortKey<KeyT>, IDelayedTask<KeyT>> firstEntry = sortedDeadlines.firstEntry();
-            long earliestDeadline = firstEntry.getKey().deadlineTS;
-            if (nextTriggerTS == 0 || earliestDeadline < nextTriggerTS) {
-                // postpone trigger task
-                if (triggerTask != null) {
-                    triggerTask.cancel(true);
-                }
-                nextTriggerTS = earliestDeadline;
-                triggerTask = executor.schedule(this::trigger, earliestDeadline - now, TimeUnit.MILLISECONDS);
-            }
-        });
     }
 
     @Override
@@ -169,37 +108,40 @@ public class DelayTaskRunner<KeyT extends Comparable<KeyT>> implements IDelayTas
         });
     }
 
-    /**
-     * Schedule a new task to be triggered after the specified delay.
-     *
-     * @param key      the key under monitoring
-     * @param supplier the task to be triggered
-     * @param <TaskT>  the type of the task
-     */
-    public <TaskT extends IDelayedTask<KeyT>> void scheduleIfAbsent(KeyT key, Supplier<TaskT> supplier) {
+    @Override
+    public void cancelAll(Set<KeyT> keys) {
         executor.submit(() -> {
-            if (isShutdown) {
-                return;
-            }
-            Long prevDeadlineTS = deadLines.get(key);
-            if (prevDeadlineTS == null) {
-                long now = currentMillisSupplier.get();
-                IDelayedTask<KeyT> delayedTask = supplier.get();
-                Duration delayInterval = delayedTask.getDelay();
-                long deadlineTS = deadline(now, delayInterval);
-                deadLines.put(key, deadlineTS);
-                sortedDeadlines.put(new SortKey<>(key, deadlineTS), delayedTask);
-                Map.Entry<SortKey<KeyT>, IDelayedTask<KeyT>> firstEntry = sortedDeadlines.firstEntry();
-                long earliestDeadline = firstEntry.getKey().deadlineTS;
-                if (nextTriggerTS == 0 || earliestDeadline < nextTriggerTS) {
-                    // postpone trigger task
-                    if (triggerTask != null) {
-                        triggerTask.cancel(true);
+            executor.submit(() -> {
+                boolean removed = false;
+                for (KeyT key : keys) {
+                    Long deadline = deadLines.remove(key);
+                    if (deadline != null) {
+                        sortedDeadlines.remove(new SortKey<>(key, deadline));
+                        removed = true;
                     }
-                    nextTriggerTS = earliestDeadline;
-                    triggerTask = executor.schedule(this::trigger, earliestDeadline - now, TimeUnit.MILLISECONDS);
                 }
-            }
+                if (removed) {
+                    Map.Entry<SortKey<KeyT>, IDelayedTask<KeyT>> firstEntry = sortedDeadlines.firstEntry();
+                    if (firstEntry != null) {
+                        long earliestDeadline = firstEntry.getKey().deadlineTS;
+                        if (nextTriggerTS == 0 || earliestDeadline < nextTriggerTS) {
+                            if (triggerTask != null) {
+                                triggerTask.cancel(true);
+                            }
+                            long now = currentMillisSupplier.get();
+                            nextTriggerTS = earliestDeadline;
+                            triggerTask = executor.schedule(this::trigger, Math.max(earliestDeadline - now, 0),
+                                TimeUnit.MILLISECONDS);
+                        }
+                    } else {
+                        if (triggerTask != null) {
+                            triggerTask.cancel(true);
+                        }
+                        nextTriggerTS = 0;
+                        triggerTask = null;
+                    }
+                }
+            });
         });
     }
 

@@ -14,16 +14,17 @@
 package com.baidu.bifromq.inbox.store;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
 
-import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
-import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
+import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
+import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.MQTTClientInfoConstants;
 import java.util.concurrent.CompletableFuture;
 import org.mockito.ArgumentCaptor;
 import org.testng.annotations.Test;
@@ -31,13 +32,18 @@ import org.testng.annotations.Test;
 public class GCTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void gcJob() {
+        reset(inboxClient);
+        reset(sessionDictClient);
         long now = System.currentTimeMillis();
         String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
-        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        when(inboxClient.detach(any()))
-            .thenReturn(CompletableFuture.completedFuture(DetachReply.newBuilder().build()));
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId)
+            .putMetadata(MQTTClientInfoConstants.MQTT_USER_ID_KEY, "userId")
+            .putMetadata(MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY, "clientId")
+            .build();
+        when(sessionDictClient.get(any())).thenReturn(
+            CompletableFuture.completedFuture(GetReply.newBuilder().setResult(GetReply.Result.NOT_FOUND).build()));
         requestCreate(BatchCreateRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
@@ -45,14 +51,36 @@ public class GCTest extends InboxStoreTest {
             .setClient(client)
             .setNow(now)
             .build());
-
-        ArgumentCaptor<DetachRequest> detachCaptor = ArgumentCaptor.forClass(DetachRequest.class);
-        verify(inboxClient, timeout(10000)).detach(detachCaptor.capture());
-        DetachRequest request = detachCaptor.getValue();
+        ArgumentCaptor<DeleteRequest> deleteCaptor = ArgumentCaptor.forClass(DeleteRequest.class);
+        verify(inboxClient, timeout(10000)).delete(deleteCaptor.capture());
+        DeleteRequest request = deleteCaptor.getValue();
+        assertEquals(request.getTenantId(), tenantId);
         assertEquals(request.getInboxId(), inboxId);
-        assertEquals(request.getClient(), client);
         assertEquals(request.getIncarnation(), incarnation);
-        assertFalse(request.getDiscardLWT());
-        assertEquals(request.getExpirySeconds(), 1);
+    }
+
+    @Test(groups = "integration")
+    public void gcJobNoClean() {
+        reset(inboxClient);
+        reset(sessionDictClient);
+        long now = System.currentTimeMillis();
+        String tenantId = "tenantId-" + System.nanoTime();
+        String inboxId = "inboxId-" + System.nanoTime();
+        long incarnation = System.nanoTime();
+        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId)
+            .putMetadata(MQTTClientInfoConstants.MQTT_USER_ID_KEY, "userId")
+            .putMetadata(MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY, "clientId")
+            .build();
+        when(sessionDictClient.get(any())).thenReturn(
+            CompletableFuture.completedFuture(GetReply.newBuilder().setResult(GetReply.Result.OK).build()));
+        requestCreate(BatchCreateRequest.Params.newBuilder()
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setExpirySeconds(1)
+            .setClient(client)
+            .setNow(now)
+            .build());
+        ArgumentCaptor<DeleteRequest> deleteCaptor = ArgumentCaptor.forClass(DeleteRequest.class);
+        verify(inboxClient, timeout(3000).times(0)).delete(deleteCaptor.capture());
     }
 }

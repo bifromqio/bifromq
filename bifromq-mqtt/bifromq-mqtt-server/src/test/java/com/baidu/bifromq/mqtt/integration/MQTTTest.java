@@ -171,6 +171,7 @@ public abstract class MQTTTest {
             .distClient(distClient)
             .inboxClient(inboxClient)
             .retainClient(retainClient)
+            .sessionDictClient(sessionDictClient)
             .inboxStoreClient(inboxStoreKVStoreClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)

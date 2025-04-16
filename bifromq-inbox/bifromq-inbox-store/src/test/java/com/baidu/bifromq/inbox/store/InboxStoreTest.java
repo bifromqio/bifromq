@@ -68,8 +68,6 @@ import com.baidu.bifromq.inbox.storage.proto.BatchGetRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchTouchReply;
-import com.baidu.bifromq.inbox.storage.proto.BatchTouchRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
@@ -86,6 +84,7 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
+import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
@@ -137,6 +136,8 @@ abstract class InboxStoreTest {
     protected IInboxClient inboxClient;
     @Mock
     protected IRetainClient retainClient;
+    @Mock
+    protected ISessionDictClient sessionDictClient;
     @Mock
     protected ISettingProvider settingProvider;
     @Mock
@@ -214,6 +215,7 @@ abstract class InboxStoreTest {
             .distClient(distClient)
             .inboxClient(inboxClient)
             .retainClient(retainClient)
+            .sessionDictClient(sessionDictClient)
             .inboxStoreClient(storeClient)
             .settingProvider(settingProvider)
             .eventCollector(eventCollector)
@@ -221,6 +223,7 @@ abstract class InboxStoreTest {
             .storeOptions(options)
             .tickerThreads(tickerThreads)
             .bgTaskExecutor(bgTaskExecutor)
+            .detachTimeout(Duration.ofSeconds(1))
             .gcInterval(Duration.ofSeconds(1))
             .build();
         rpcServer = rpcServerBuilder.build();
@@ -416,19 +419,6 @@ abstract class InboxStoreTest {
         assertTrue(output.hasBatchUnsub());
         assertEquals(output.getReqId(), reqId);
         return output.getBatchUnsub().getResultList();
-    }
-
-    protected List<BatchTouchReply.Code> requestTouch(BatchTouchRequest.Params... params) {
-        assert params.length > 0;
-        long reqId = ThreadLocalRandom.current().nextInt();
-        ByteString routeKey = inboxStartKeyPrefix(params[0].getTenantId(), params[0].getInboxId());
-        InboxServiceROCoProcInput input = MessageUtil.buildTouchRequest(reqId, BatchTouchRequest.newBuilder()
-            .addAllParams(List.of(params))
-            .build());
-        InboxServiceROCoProcOutput output = query(routeKey, input);
-        assertTrue(output.hasBatchTouch());
-        assertEquals(output.getReqId(), reqId);
-        return output.getBatchTouch().getCodeList();
     }
 
     protected List<InboxInsertResult> requestInsert(InboxSubMessagePack... inboxSubMessagePack) {

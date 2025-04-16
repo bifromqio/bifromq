@@ -41,7 +41,7 @@ public abstract class RetryableDelayedTask<R> implements IDelayedTask<TenantInbo
         return callOperation(key, runner).thenAccept(response -> {
             if (shouldRetry(response)) {
                 Duration retryDelay = Duration.ofMillis(ThreadLocalRandom.current().nextLong(100, 5000));
-                runner.scheduleIfAbsent(key, () -> createRetryTask(retryDelay));
+                runner.schedule(key, createRetryTask(retryDelay));
             }
         });
     }

@@ -23,6 +23,7 @@ import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
+import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.sysprops.props.PersistentSessionDetachTimeoutSecond;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.protobuf.Struct;
@@ -49,6 +50,7 @@ public class InboxStoreBuilder {
     IInboxClient inboxClient;
     IDistClient distClient;
     IRetainClient retainClient;
+    ISessionDictClient sessionDictClient;
     IBaseKVStoreClient inboxStoreClient;
     ISettingProvider settingProvider;
     IEventCollector eventCollector;
@@ -63,7 +65,7 @@ public class InboxStoreBuilder {
     Map<String, Struct> balancerFactoryConfig = new HashMap<>();
     Duration detachTimeout = Duration.ofSeconds(PersistentSessionDetachTimeoutSecond.INSTANCE.get());
     Duration loadEstimateWindow = Duration.ofSeconds(5);
-    int expireRateLimit = 2000;
+    int expireRateLimit = 1000;
     Duration gcInterval = Duration.ofMinutes(5);
     Map<String, String> attributes = new HashMap<>();
 

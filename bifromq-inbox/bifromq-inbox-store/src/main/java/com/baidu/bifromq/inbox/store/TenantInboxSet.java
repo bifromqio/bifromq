@@ -24,18 +24,16 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStart;
 import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStop;
 import com.google.common.collect.Sets;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 /**
  * TenantInboxSet is used to hold all persistent session metadata in memory belonging to a tenant.
@@ -68,7 +66,7 @@ class TenantInboxSet {
                 eventCollector.report(getLocal(MQTTSessionStart.class)
                     .sessionId(metadata.getInboxId())
                     .clientInfo(metadata.getClient()));
-                v = new TreeMap<>();
+                v = new ConcurrentSkipListMap<>();
             }
             v.compute(metadata.getIncarnation(), (k1, v1) -> {
                 if (v1 == null) {
@@ -123,12 +121,12 @@ class TenantInboxSet {
             inboxMetadataMap.getOrDefault(inboxId, Collections.emptySortedMap()).get(incarnation));
     }
 
-    Collection<InboxMetadata> getAll() {
-        return inboxMetadataMap.values().stream().flatMap(map -> map.values().stream()).collect(Collectors.toList());
+    Map<String, SortedMap<Long, InboxMetadata>> getAll() {
+        return inboxMetadataMap;
     }
 
-    Collection<InboxMetadata> getAll(String inboxId) {
-        return inboxMetadataMap.getOrDefault(inboxId, Collections.emptySortedMap()).values();
+    SortedMap<Long, InboxMetadata> getAll(String inboxId) {
+        return inboxMetadataMap.getOrDefault(inboxId, Collections.emptySortedMap());
     }
 
     void destroy() {

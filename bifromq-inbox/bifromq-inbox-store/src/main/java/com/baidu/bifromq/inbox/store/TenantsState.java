@@ -28,6 +28,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
+import java.util.SortedMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -47,18 +48,18 @@ class TenantsState {
         boundary = reader.boundary();
     }
 
-    Collection<InboxMetadata> getAll(String tenantId) {
+    Map<String, SortedMap<Long, InboxMetadata>> getAll(String tenantId) {
         TenantInboxSet inboxSet = tenantStates.get(tenantId);
         if (inboxSet == null) {
-            return Collections.emptyList();
+            return Collections.emptyMap();
         }
         return inboxSet.getAll();
     }
 
-    Collection<InboxMetadata> getAll(String tenantId, String inboxId) {
+    SortedMap<Long, InboxMetadata> getAll(String tenantId, String inboxId) {
         TenantInboxSet inboxSet = tenantStates.get(tenantId);
         if (inboxSet == null) {
-            return Collections.emptyList();
+            return Collections.emptySortedMap();
         }
         return inboxSet.getAll(inboxId);
     }

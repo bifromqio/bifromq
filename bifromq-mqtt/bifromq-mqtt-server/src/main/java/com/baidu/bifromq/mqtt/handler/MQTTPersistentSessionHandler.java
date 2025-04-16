@@ -42,7 +42,6 @@ import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
-import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
@@ -76,8 +75,6 @@ import java.util.Optional;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.Nullable;
@@ -109,8 +106,6 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     private long inboxConfirmedUpToSeq = -1;
     private IInboxClient.IInboxReader inboxReader;
     private State state = State.INIT;
-    private int touchRetryCount;
-    private ScheduledFuture<?> touchTimeout;
 
     protected MQTTPersistentSessionHandler(TenantSettings settings,
                                            ITenantMeter tenantMeter,
@@ -205,9 +200,6 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     @Override
     public final void channelInactive(ChannelHandlerContext ctx) {
         super.channelInactive(ctx);
-        if (touchTimeout != null) {
-            touchTimeout.cancel(true);
-        }
         if (inboxReader != null) {
             inboxReader.close();
         }
@@ -284,13 +276,13 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
             return;
         }
         state = State.DETACH;
-        AsyncRetry.exec(() -> inboxClient.detach(request),
+        addBgTask(AsyncRetry.exec(() -> inboxClient.detach(request),
                 (reply, t) -> {
                     if (t != null) {
                         return true;
                     }
                     return reply.getCode() != DetachReply.Code.TRY_LATER;
-                }, 1000, 5000);
+                }, 1000, 5000));
     }
 
     @Override
@@ -310,7 +302,6 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
             return CompletableFuture.completedFuture(EXCEED_LIMIT);
         }
         tenantMeter.recordCount(MqttPersistentSubCount);
-        rescheduleTouch();
         Timer.Sample start = Timer.start();
         return inboxClient.sub(SubRequest.newBuilder()
                 .setReqId(reqId)
@@ -388,7 +379,6 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
 
         tenantMeter.recordCount(MqttPersistentUnsubCount);
         Timer.Sample start = Timer.start();
-        rescheduleTouch();
         return inboxClient.unsub(UnsubRequest.newBuilder()
                 .setReqId(reqId)
                 .setTenantId(clientInfo.getTenantId())
@@ -437,7 +427,6 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         // resume channel read after inbox being setup
         onInitialized();
         resumeChannelRead();
-        rescheduleTouch();
     }
 
     private void confirmQoS0() {
@@ -556,7 +545,6 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                         fetched.getSendBufferMsgList().forEach(this::pubBufferedMessage);
                         drainStaging();
                     }
-                    rescheduleTouch();
                 }
                 case BACK_PRESSURE_REJECTED -> {
                     // ignore
@@ -641,51 +629,6 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
             nextSendSeq = seq + 1;
         }
         flush(true);
-    }
-
-    private void rescheduleTouch() {
-        rescheduleTouch(ThreadLocalRandom.current().nextLong(TouchTimeoutMillis / 2, TouchTimeoutMillis));
-    }
-
-    private void rescheduleTouch(long delayMS) {
-        if (!ctx.channel().isActive()) {
-            return;
-        }
-        if (touchTimeout != null) {
-            touchTimeout.cancel(true);
-        }
-        touchTimeout = ctx.executor().schedule(() -> {
-            inboxClient.touch(TouchRequest.newBuilder()
-                    .setReqId(System.nanoTime())
-                    .setTenantId(clientInfo.getTenantId())
-                    .setInboxId(userSessionId)
-                    .setIncarnation(incarnation)
-                    .setVersion(version)
-                    .setNow(HLC.INST.getPhysical())
-                    .build())
-                .thenAcceptAsync(v -> {
-                    switch (v.getCode()) {
-                        case OK -> {
-                            touchRetryCount = 0;
-                            rescheduleTouch();
-                        }
-                        case TRY_LATER -> {
-                            if (touchRetryCount < 5) {
-                                rescheduleTouch(ThreadLocalRandom.current().nextLong(0, 5000L));
-                                touchRetryCount++;
-                                // stop retry after 5 times
-                            }
-                        }
-                        case NO_INBOX, CONFLICT -> {
-                            state = State.TERMINATE;
-                            handleProtocolResponse(helper().onInboxTransientError(v.getCode().name()));
-                        }
-                        default -> {
-                            // never happens
-                        }
-                    }
-                }, ctx.executor());
-        }, delayMS, TimeUnit.MILLISECONDS);
     }
 
     private enum State {

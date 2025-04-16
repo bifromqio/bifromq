@@ -69,8 +69,6 @@ import com.baidu.bifromq.inbox.storage.proto.BatchSendLWTReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchSendLWTRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchTouchReply;
-import com.baidu.bifromq.inbox.storage.proto.BatchTouchRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.ExpireTenantReply;
@@ -92,7 +90,6 @@ import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.SubMessagePack;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.inbox.store.delay.DelayTaskRunner;
-import com.baidu.bifromq.inbox.store.delay.DetachInboxTask;
 import com.baidu.bifromq.inbox.store.delay.ExpireInboxTask;
 import com.baidu.bifromq.inbox.store.delay.SendLWTTask;
 import com.baidu.bifromq.inbox.store.schema.KVSchemaUtil;
@@ -108,7 +105,11 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
+import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
+import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
+import com.baidu.bifromq.sessiondict.rpc.proto.GetRequest;
 import com.baidu.bifromq.type.ClientInfo;
+import com.baidu.bifromq.type.MQTTClientInfoConstants;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessage;
@@ -119,13 +120,14 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
@@ -143,6 +145,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     private final IDistClient distClient;
     private final IRetainClient retainClient;
     private final IInboxClient inboxClient;
+    private final ISessionDictClient sessionDictClient;
     private final ISettingProvider settingProvider;
     private final IEventCollector eventCollector;
     private final IResourceThrottler resourceThrottler;
@@ -157,6 +160,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                      IDistClient distClient,
                      IInboxClient inboxClient,
                      IRetainClient retainClient,
+                     ISessionDictClient sessionDictClient,
                      ISettingProvider settingProvider,
                      IEventCollector eventCollector,
                      IResourceThrottler resourceThrottler,
@@ -168,14 +172,15 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         this.distClient = distClient;
         this.retainClient = retainClient;
         this.inboxClient = inboxClient;
+        this.sessionDictClient = sessionDictClient;
         this.settingProvider = settingProvider;
         this.eventCollector = eventCollector;
         this.resourceThrottler = resourceThrottler;
         this.rangeReaderProvider = rangeReaderProvider;
         this.tenantStates = new TenantsState(eventCollector, rangeReaderProvider.get(), "clusterId", clusterId,
             "storeId", storeId, "rangeId", KVRangeIdUtil.toString(id));
-        this.delayTaskRunner = new DelayTaskRunner<>(id, storeId, TenantInboxInstance::compareTo,
-            HLC.INST::getPhysical, expireRateLimit);
+        this.delayTaskRunner = new DelayTaskRunner<>(TenantInboxInstance::compareTo, HLC.INST::getPhysical,
+            expireRateLimit);
         this.detachTimeout = detachTimeout;
     }
 
@@ -193,8 +198,6 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                     .thenApply(outputBuilder::setBatchFetch);
                 case BATCHCHECKSUB -> outputFuture = batchCheckSub(coProcInput.getBatchCheckSub(), reader)
                     .thenApply(outputBuilder::setBatchCheckSub);
-                case BATCHTOUCH -> outputFuture = batchTouch(coProcInput.getBatchTouch(), reader)
-                    .thenApply(outputBuilder::setBatchTouch);
                 case GC -> outputFuture = gc(coProcInput.getGc(), reader)
                     .thenApply(outputBuilder::setGc);
                 case EXPIRETENANT -> outputFuture = expireTenant(coProcInput.getExpireTenant(), reader)
@@ -282,8 +285,9 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         BatchGetReply.Builder replyBuilder = BatchGetReply.newBuilder();
         for (BatchGetRequest.Params params : request.getParamsList()) {
             BatchGetReply.Result.Builder resultBuilder = BatchGetReply.Result.newBuilder();
-            Collection<InboxMetadata> inboxInstances = tenantStates.getAll(params.getTenantId(), params.getInboxId());
-            for (InboxMetadata metadata : inboxInstances) {
+            SortedMap<Long, InboxMetadata> inboxInstances = tenantStates.getAll(params.getTenantId(),
+                params.getInboxId());
+            for (InboxMetadata metadata : inboxInstances.values()) {
                 if (!hasExpired(metadata, params.getNow())) {
                     InboxVersion.Builder inboxVerBuilder = InboxVersion.newBuilder()
                         .setIncarnation(metadata.getIncarnation())
@@ -355,7 +359,6 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         fetchFromInbox(inboxInstStartKey, fetchCount, metadata.getSendBufferStartSeq(), startFetchFromSeq,
             metadata.getSendBufferNextSeq(), KVSchemaUtil::bufferedMsgKey, Fetched.Builder::addSendBufferMsg, reader,
             replyBuilder);
-        resetDetachTimer(params.getTenantId(), metadata);
         return replyBuilder.setResult(Fetched.Result.OK).build();
     }
 
@@ -402,7 +405,6 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                  IKVReader reader,
                                  IKVWriter writer) {
         Map<String, Set<InboxMetadata>> toBeCached = new HashMap<>();
-        Map<String, Set<InboxMetadata>> toBeScheduled = new HashMap<>();
         for (BatchCreateRequest.Params params : request.getParamsList()) {
             Optional<InboxMetadata> existing = tenantStates.get(params.getClient().getTenantId(), params.getInboxId(),
                 params.getIncarnation());
@@ -428,12 +430,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             writer.put(metadataKey, metadata.toByteString());
             replyBuilder.addSucceed(true);
             toBeCached.computeIfAbsent(params.getClient().getTenantId(), k -> new HashSet<>()).add(metadata);
-            if (request.getLeader().getRangeId().equals(id) && request.getLeader().getStoreId().equals(storeId)) {
-                // setup expire task only on the leader
-                toBeScheduled.computeIfAbsent(params.getClient().getTenantId(), k -> new HashSet<>()).add(metadata);
-            }
         }
-        return afterMutation(toBeCached, toBeScheduled);
+        return () -> updateTenantStates(toBeCached);
     }
 
     private Runnable batchAttach(BatchAttachRequest request,
@@ -441,7 +439,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                  IKVReader reader,
                                  IKVWriter writer) {
         Map<String, Set<InboxMetadata>> toBeCached = new HashMap<>();
-        Map<String, Set<InboxMetadata>> toBeScheduled = new HashMap<>();
+        Set<TenantInboxInstance> toBeCanceled = new HashSet<>();
         for (BatchAttachRequest.Params params : request.getParamsList()) {
             Optional<InboxMetadata> metadataOpt = tenantStates.get(params.getClient().getTenantId(),
                 params.getInboxId(), params.getIncarnation());
@@ -471,11 +469,15 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             replyBuilder.addCode(BatchAttachReply.Code.OK);
             toBeCached.computeIfAbsent(params.getClient().getTenantId(), k -> new HashSet<>()).add(metadata);
             if (request.getLeader().getRangeId().equals(id) && request.getLeader().getStoreId().equals(storeId)) {
-                // setup expire task only on the leader
-                toBeScheduled.computeIfAbsent(params.getClient().getTenantId(), k -> new HashSet<>()).add(metadata);
+                TenantInboxInstance inboxInstance = new TenantInboxInstance(params.getClient().getTenantId(),
+                    new InboxInstance(metadata.getInboxId(), metadata.getIncarnation()));
+                toBeCanceled.add(inboxInstance);
             }
         }
-        return afterMutation(toBeCached, toBeScheduled);
+        return () -> {
+            updateTenantStates(toBeCached);
+            delayTaskRunner.cancelAll(toBeCanceled);
+        };
     }
 
     private Runnable batchDetach(BatchDetachRequest request,
@@ -484,7 +486,6 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                  IKVWriter writer) {
         Map<String, Set<InboxMetadata>> toBeCached = new HashMap<>();
         Map<String, Set<InboxMetadata>> toBeScheduled = new HashMap<>();
-        Map<String, Set<InboxMetadata>> toBeChecked = new HashMap<>();
         for (BatchDetachRequest.Params params : request.getParamsList()) {
             Optional<InboxMetadata> metadataOpt = tenantStates.get(params.getTenantId(), params.getInboxId(),
                 params.getIncarnation());
@@ -494,15 +495,6 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             }
             if (metadataOpt.get().getVersion() != params.getVersion()) {
                 replyBuilder.addCode(BatchDetachReply.Code.CONFLICT);
-                continue;
-            }
-            if (params.hasSender() && !params.getSender().equals(request.getLeader())) {
-                // if the detach request is not triggered by the leader's detach task, ignore it
-                replyBuilder.addCode(BatchDetachReply.Code.OK);
-                if (request.getLeader().getRangeId().equals(id) && request.getLeader().getStoreId().equals(storeId)) {
-                    // make sure there is a detach task on the leader
-                    toBeChecked.computeIfAbsent(params.getTenantId(), k -> new HashSet<>()).add(metadataOpt.get());
-                }
                 continue;
             }
             InboxMetadata.Builder metadataBuilder = metadataOpt.get().toBuilder()
@@ -530,59 +522,20 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             toBeScheduled.forEach((tenantId, inboxSet) -> inboxSet.forEach(metadata -> {
                 TenantInboxInstance inboxInstance = new TenantInboxInstance(tenantId,
                     new InboxInstance(metadata.getInboxId(), metadata.getIncarnation()));
-                // cancel the detach timer and schedule a task for sending LWT or expiry session
+                // schedule a task for sending LWT or expiry session
                 if (metadata.hasLwt()) {
                     Duration delay = Duration.ofSeconds(
-                        Math.min(metadata.getLwt().getDelaySeconds(), metadata.getExpirySeconds()));
-                    delayTaskRunner.reschedule(inboxInstance,
-                        () -> new SendLWTTask(delay, metadata.getVersion(), inboxClient),
-                        SendLWTTask.class);
+                            Math.min(metadata.getLwt().getDelaySeconds(), metadata.getExpirySeconds()))
+                        .plusMillis(ThreadLocalRandom.current().nextLong(0, 1000));
+                    delayTaskRunner.schedule(inboxInstance, new SendLWTTask(delay, metadata.getVersion(), inboxClient));
                 } else {
                     Duration delay = Duration.ofSeconds(metadata.getExpirySeconds())
                         .plusMillis(ThreadLocalRandom.current().nextLong(0, 1000));
-                    delayTaskRunner.reschedule(inboxInstance,
-                        () -> new ExpireInboxTask(delay, metadata.getVersion(), inboxClient),
-                        ExpireInboxTask.class);
-                }
-            }));
-            toBeChecked.forEach((tenantId, inboxSet) -> inboxSet.forEach(metadata -> {
-                TenantInboxInstance inboxInstance = new TenantInboxInstance(tenantId,
-                    new InboxInstance(metadata.getInboxId(), metadata.getIncarnation()));
-                // we got a detach request from the non-leader, but the detach task is not scheduled on leader
-                // it's very likely the inbox has expired, we schedule a detach task to clean up the inbox immediately
-                if (!delayTaskRunner.hasTask(inboxInstance)) {
-                    long lastActiveMillis = metadata.getLastActiveTime();
-                    long possibleDetachAtMillis =
-                        lastActiveMillis + Duration.ofSeconds(metadata.getExpirySeconds()).toMillis();
-                    Duration delay = Duration.ofMillis(Math.max(0, possibleDetachAtMillis - HLC.INST.getPhysical()));
-                    delayTaskRunner.reschedule(inboxInstance, () -> new DetachInboxTask(delay,
-                            metadata.getVersion(),
-                            metadata.getExpirySeconds(),
-                            metadata.getClient(),
-                            inboxClient),
-                        DetachInboxTask.class);
+                    delayTaskRunner.schedule(inboxInstance,
+                        new ExpireInboxTask(delay, metadata.getVersion(), inboxClient));
                 }
             }));
         };
-    }
-
-    private CompletableFuture<BatchTouchReply> batchTouch(BatchTouchRequest request, IKVReader reader) {
-        BatchTouchReply.Builder replyBuilder = BatchTouchReply.newBuilder();
-        for (BatchTouchRequest.Params params : request.getParamsList()) {
-            Optional<InboxMetadata> metadataOpt = tenantStates.get(params.getTenantId(), params.getInboxId(),
-                params.getIncarnation());
-            if (metadataOpt.isEmpty()) {
-                replyBuilder.addCode(BatchTouchReply.Code.NO_INBOX);
-                continue;
-            }
-            if (metadataOpt.get().getVersion() != params.getVersion()) {
-                replyBuilder.addCode(BatchTouchReply.Code.CONFLICT);
-                continue;
-            }
-            resetDetachTimer(params.getTenantId(), metadataOpt.get());
-            replyBuilder.addCode(BatchTouchReply.Code.OK);
-        }
-        return CompletableFuture.completedFuture(replyBuilder.build());
     }
 
     private CompletableFuture<BatchSendLWTReply> batchSendLWT(BatchSendLWTRequest request, IKVReader reader) {
@@ -626,9 +579,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                     long expireAtMillis = detachAtMillis + Duration.ofSeconds(metadata.getExpirySeconds()).toMillis();
                     Duration delay = Duration.ofMillis(Math.max(0, expireAtMillis - now))
                         .plusMillis(ThreadLocalRandom.current().nextLong(0, 1000));
-                    delayTaskRunner.reschedule(inboxInstance,
-                        () -> new ExpireInboxTask(delay, metadata.getVersion(), inboxClient),
-                        ExpireInboxTask.class);
+                    delayTaskRunner.schedule(inboxInstance,
+                        new ExpireInboxTask(delay, metadata.getVersion(), inboxClient));
                 }
                 return v;
             });
@@ -653,28 +605,42 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 retainLWTFuture = retain(reqId, lwt, clientInfo)
                     .thenApply(v -> {
                         switch (v) {
-                            case RETAINED -> eventCollector.report(
-                                getLocal(MsgRetained.class).topic(lwt.getTopic()).qos(lwt.getMessage().getPubQoS())
-                                    .isLastWill(true).size(lwt.getMessage().getPayload().size())
-                                    .clientInfo(clientInfo));
+                            case RETAINED -> eventCollector.report(getLocal(MsgRetained.class)
+                                .topic(lwt.getTopic())
+                                .qos(lwt.getMessage().getPubQoS())
+                                .isLastWill(true)
+                                .size(lwt.getMessage().getPayload().size())
+                                .clientInfo(clientInfo));
                             case CLEARED -> eventCollector.report(
-                                getLocal(RetainMsgCleared.class).topic(lwt.getTopic()).isLastWill(true)
+                                getLocal(RetainMsgCleared.class)
+                                    .topic(lwt.getTopic()).isLastWill(true)
                                     .clientInfo(clientInfo));
                             case BACK_PRESSURE_REJECTED -> eventCollector.report(
-                                getLocal(MsgRetainedError.class).topic(lwt.getTopic()).qos(lwt.getMessage().getPubQoS())
-                                    .isLastWill(true).payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
-                                    .size(lwt.getMessage().getPayload().size()).reason("Server Busy")
+                                getLocal(MsgRetainedError.class)
+                                    .topic(lwt.getTopic())
+                                    .qos(lwt.getMessage().getPubQoS())
+                                    .isLastWill(true)
+                                    .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
+                                    .size(lwt.getMessage().getPayload().size())
+                                    .reason("Server Busy")
                                     .clientInfo(clientInfo));
                             case EXCEED_LIMIT -> eventCollector.report(
-                                getLocal(MsgRetainedError.class).topic(lwt.getTopic()).qos(lwt.getMessage().getPubQoS())
-                                    .isLastWill(true).payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
-                                    .size(lwt.getMessage().getPayload().size()).reason("Exceed Limit")
+                                getLocal(MsgRetainedError.class)
+                                    .topic(lwt.getTopic())
+                                    .qos(lwt.getMessage().getPubQoS())
+                                    .isLastWill(true)
+                                    .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
+                                    .size(lwt.getMessage().getPayload().size())
+                                    .reason("Exceed Limit")
                                     .clientInfo(clientInfo));
-                            case ERROR -> eventCollector.report(
-                                getLocal(MsgRetainedError.class).topic(lwt.getTopic()).qos(lwt.getMessage().getPubQoS())
-                                    .isLastWill(true).payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
-                                    .size(lwt.getMessage().getPayload().size()).reason("Internal Error")
-                                    .clientInfo(clientInfo));
+                            case ERROR -> eventCollector.report(getLocal(MsgRetainedError.class)
+                                .topic(lwt.getTopic())
+                                .qos(lwt.getMessage().getPubQoS())
+                                .isLastWill(true)
+                                .payload(lwt.getMessage().getPayload().asReadOnlyByteBuffer())
+                                .size(lwt.getMessage().getPayload().size())
+                                .reason("Internal Error")
+                                .clientInfo(clientInfo));
                             default -> {
                                 // never happen
                             }
@@ -699,8 +665,11 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 } else {
                     switch (distResult) {
                         case OK, NO_MATCH -> {
-                            eventCollector.report(getLocal(WillDisted.class).reqId(reqId).topic(lwt.getTopic())
-                                .qos(lwt.getMessage().getPubQoS()).size(lwt.getMessage().getPayload().size())
+                            eventCollector.report(getLocal(WillDisted.class)
+                                .reqId(reqId)
+                                .topic(lwt.getTopic())
+                                .qos(lwt.getMessage().getPubQoS())
+                                .size(lwt.getMessage().getPayload().size())
                                 .clientInfo(clientInfo));
                             return BatchSendLWTReply.Code.OK;
                         }
@@ -766,9 +735,9 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             replyBuilder.addResult(BatchDeleteReply.Result.newBuilder().setCode(BatchDeleteReply.Code.OK)
                 .putAllTopicFilters(metadata.getTopicFiltersMap()).build());
         }
-        return () -> toBeRemoved.forEach((tenantId, removeSet) -> removeSet.forEach(
-            inboxMetadata -> tenantStates.remove(tenantId, inboxMetadata.getInboxId(),
-                inboxMetadata.getIncarnation())));
+        return () -> toBeRemoved.forEach((tenantId, removeSet) ->
+            removeSet.forEach(inboxMetadata ->
+                tenantStates.remove(tenantId, inboxMetadata.getInboxId(), inboxMetadata.getIncarnation())));
     }
 
     private Runnable batchSub(BatchSubRequest request,
@@ -776,7 +745,6 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                               IKVReader reader,
                               IKVWriter writer) {
         Map<String, Set<InboxMetadata>> toBeCached = new HashMap<>();
-        Map<String, Set<InboxMetadata>> toBeScheduled = new HashMap<>();
         for (BatchSubRequest.Params params : request.getParamsList()) {
             Optional<InboxMetadata> metadataOpt = tenantStates.get(params.getTenantId(), params.getInboxId(),
                 params.getIncarnation());
@@ -807,12 +775,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 params.getIncarnation());
             writer.put(inboxInstStartKey, metadata.toByteString());
             toBeCached.computeIfAbsent(params.getTenantId(), k -> new HashSet<>()).add(metadata);
-            if (request.getLeader().getRangeId().equals(id) && request.getLeader().getStoreId().equals(storeId)) {
-                // setup expire task only on the leader
-                toBeScheduled.computeIfAbsent(params.getTenantId(), k -> new HashSet<>()).add(metadata);
-            }
         }
-        return afterMutation(toBeCached, toBeScheduled);
+        return () -> updateTenantStates(toBeCached);
     }
 
     private Runnable batchUnsub(BatchUnsubRequest request,
@@ -820,7 +784,6 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                 IKVReader reader,
                                 IKVWriter write) {
         Map<String, Set<InboxMetadata>> toBeCached = new HashMap<>();
-        Map<String, Set<InboxMetadata>> toBeScheduled = new HashMap<>();
         for (BatchUnsubRequest.Params params : request.getParamsList()) {
             Optional<InboxMetadata> metadataOpt = tenantStates.get(params.getTenantId(), params.getInboxId(),
                 params.getIncarnation());
@@ -849,12 +812,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 params.getIncarnation());
             write.put(inboxInstStartKey, metadata.toByteString());
             toBeCached.computeIfAbsent(params.getTenantId(), k -> new HashSet<>()).add(metadata);
-            if (request.getLeader().getRangeId().equals(id) && request.getLeader().getStoreId().equals(storeId)) {
-                // setup expire task only on the leader
-                toBeScheduled.computeIfAbsent(params.getTenantId(), k -> new HashSet<>()).add(metadata);
-            }
         }
-        return afterMutation(toBeCached, toBeScheduled);
+        return () -> updateTenantStates(toBeCached);
     }
 
     private void clearInbox(ByteString inboxInstanceStartKey,
@@ -883,49 +842,12 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
 
     @SneakyThrows
     private CompletableFuture<GCReply> gc(GCRequest request, IKVReader reader) {
+        List<CompletableFuture<Void>> expireFutures = new LinkedList<>();
         for (String tenantId : tenantStates.getAllTenantIds()) {
-            for (InboxMetadata metadata : tenantStates.getAll(tenantId)) {
-                TenantInboxInstance inboxInstance = new TenantInboxInstance(tenantId,
-                    new InboxInstance(metadata.getInboxId(), metadata.getIncarnation()));
-                if (delayTaskRunner.hasTask(inboxInstance)) {
-                    continue;
-                }
-                if (metadata.hasDetachedAt()) {
-                    long detachedAt = metadata.getDetachedAt();
-                    long expireMillis = Duration.ofSeconds(metadata.getExpirySeconds()).toMillis();
-                    if (metadata.hasLwt()) {
-                        long delayMillis = Duration.ofSeconds(
-                            Math.min(metadata.getLwt().getDelaySeconds(), metadata.getExpirySeconds())).toMillis();
-                        long sendWillAtMillis = detachedAt + delayMillis;
-                        if (sendWillAtMillis > request.getNow()) {
-                            Duration delay = Duration.ofMillis(sendWillAtMillis - request.getNow());
-                            delayTaskRunner.scheduleIfAbsent(inboxInstance,
-                                () -> new SendLWTTask(delay, metadata.getVersion(), inboxClient));
-                        } else {
-                            long expireAtMillis = detachedAt + expireMillis;
-                            Duration delay = Duration.ofMillis(Math.max(expireAtMillis - request.getNow(), 0));
-                            delayTaskRunner.scheduleIfAbsent(inboxInstance,
-                                () -> new ExpireInboxTask(delay, metadata.getVersion(), inboxClient));
-                        }
-                    } else {
-                        long expireAtMillis = detachedAt + expireMillis;
-                        Duration delay = Duration.ofMillis(Math.max(expireAtMillis - request.getNow(), 0));
-                        delayTaskRunner.scheduleIfAbsent(inboxInstance,
-                            () -> new ExpireInboxTask(delay, metadata.getVersion(), inboxClient));
-                    }
-                } else {
-                    long lastActiveTime = metadata.getLastActiveTime();
-                    long expireAtMillis = lastActiveTime + Duration.ofSeconds(metadata.getExpirySeconds()).toMillis();
-                    Duration delay = Duration.ofMillis(Math.max(expireAtMillis - request.getNow(), 0));
-                    delayTaskRunner.scheduleIfAbsent(inboxInstance, () -> new DetachInboxTask(delay,
-                        metadata.getVersion(),
-                        metadata.getExpirySeconds(),
-                        metadata.getClient(),
-                        inboxClient));
-                }
-            }
+            expireFutures.add(expireTenant(tenantId, Duration.ZERO, request.getNow()));
         }
-        return CompletableFuture.completedFuture(GCReply.newBuilder().build());
+        return CompletableFuture.allOf(expireFutures.toArray(CompletableFuture[]::new))
+            .thenApply(v -> GCReply.newBuilder().build());
     }
 
     private Runnable batchInsert(BatchInsertRequest request,
@@ -1180,7 +1102,6 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                  IKVReader reader,
                                  IKVWriter writer) {
         Map<String, Set<InboxMetadata>> toBeCached = new HashMap<>();
-        Map<String, Set<InboxMetadata>> toBeScheduled = new HashMap<>();
         for (BatchCommitRequest.Params params : request.getParamsList()) {
             Optional<InboxMetadata> metadataOpt = tenantStates.get(params.getTenantId(), params.getInboxId(),
                 params.getIncarnation());
@@ -1201,12 +1122,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             writer.put(inboxInstStartKey, metadata.toByteString());
             replyBuilder.addCode(BatchCommitReply.Code.OK);
             toBeCached.computeIfAbsent(params.getTenantId(), k -> new HashSet<>()).add(metadata);
-            if (request.getLeader().getRangeId().equals(id) && request.getLeader().getStoreId().equals(storeId)) {
-                // setup expire task only on the leader
-                toBeScheduled.computeIfAbsent(params.getTenantId(), k -> new HashSet<>()).add(metadata);
-            }
         }
-        return afterMutation(toBeCached, toBeScheduled);
+        return () -> updateTenantStates(toBeCached);
     }
 
     private void commitInbox(ByteString scopedInboxId,
@@ -1265,58 +1182,89 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
     }
 
     private CompletableFuture<ExpireTenantReply> expireTenant(ExpireTenantRequest request, IKVReader reader) {
-        Collection<InboxMetadata> inboxInstances = tenantStates.getAll(request.getTenantId());
-        for (InboxMetadata metadata : inboxInstances) {
-            TenantInboxInstance inboxInstance = new TenantInboxInstance(request.getTenantId(),
-                new InboxInstance(metadata.getInboxId(), metadata.getIncarnation()));
-            if (metadata.hasDetachedAt()) {
-                // if inbox instance is detached, schedule expire task
-                long detachAtMillis = metadata.getDetachedAt();
-                long origExpireAtMillis = detachAtMillis + Duration.ofSeconds(metadata.getExpirySeconds()).toMillis();
-                long newExpireAtMillis = detachAtMillis + Duration.ofSeconds(request.getExpirySeconds()).toMillis();
-                long finalExpireAtMillis = Math.min(origExpireAtMillis, newExpireAtMillis);
-                Duration delay = Duration.ofMillis(
-                    Math.max(finalExpireAtMillis - request.getNow(), ThreadLocalRandom.current().nextLong(100, 2000)));
-                // replace current task if exists
-                delayTaskRunner.schedule(inboxInstance, new ExpireInboxTask(delay, metadata.getVersion(), inboxClient));
-            } else if (!delayTaskRunner.hasTask(inboxInstance)) {
-                // use last active time to determine if it's likely expired
-                long lastActiveTime = metadata.getLastActiveTime();
-                long origExpireAtMillis = lastActiveTime + Duration.ofSeconds(metadata.getExpirySeconds()).toMillis();
-                long newExpireAtMillis = lastActiveTime + Duration.ofSeconds(request.getExpirySeconds()).toMillis();
-                long finalExpireAtMillis = Math.min(origExpireAtMillis, newExpireAtMillis);
-                Duration delay = Duration.ofMillis(
-                    Math.max(finalExpireAtMillis - request.getNow(), ThreadLocalRandom.current().nextLong(100, 2000)));
-                // schedule a detach task if no task exists
-                delayTaskRunner.scheduleIfAbsent(inboxInstance, () -> new DetachInboxTask(delay,
-                    metadata.getVersion(),
-                    metadata.getExpirySeconds(),
-                    metadata.getClient(),
-                    inboxClient));
+        return expireTenant(request.getTenantId(), Duration.ofSeconds(request.getExpirySeconds()), request.getNow())
+            .thenApply(v -> ExpireTenantReply.newBuilder().build());
+    }
+
+    private CompletableFuture<Void> expireTenant(String tenantId, Duration expireTime, long now) {
+        Map<String, SortedMap<Long, InboxMetadata>> inboxSet = tenantStates.getAll(tenantId);
+        List<CompletableFuture<ExpireCheckResult>> onlineCheckFutures = new LinkedList<>();
+        for (SortedMap<Long, InboxMetadata> inboxVersions : inboxSet.values()) {
+            InboxMetadata latestInboxMetadata;
+            if (inboxVersions.size() > 1) {
+                long latestVersion = inboxVersions.lastKey();
+                for (long olderVersion : inboxVersions.headMap(latestVersion).keySet()) {
+                    InboxMetadata metadata = inboxVersions.get(olderVersion);
+                    // expire all older version
+                    onlineCheckFutures.add(
+                        CompletableFuture.completedFuture(new ExpireCheckResult(metadata, true)));
+                }
+                // check latest version
+                latestInboxMetadata = inboxVersions.get(latestVersion);
+            } else {
+                latestInboxMetadata = inboxVersions.get(inboxVersions.firstKey());
+            }
+            if (latestInboxMetadata.hasDetachedAt()) {
+                long detachedAt = latestInboxMetadata.getDetachedAt();
+                long expireMillis = expireTime.isZero()
+                    ? Duration.ofSeconds(latestInboxMetadata.getExpirySeconds()).toMillis()
+                    : Math.min(Duration.ofSeconds(latestInboxMetadata.getExpirySeconds()).toMillis(),
+                    expireTime.toMillis());
+                if (detachedAt + expireMillis + 5000 > now) {
+                    onlineCheckFutures.add(
+                        CompletableFuture.completedFuture(new ExpireCheckResult(latestInboxMetadata, false)));
+                } else {
+                    // expired
+                    onlineCheckFutures.add(
+                        CompletableFuture.completedFuture(new ExpireCheckResult(latestInboxMetadata, true)));
+                }
+            } else {
+                // not detached
+                long lastActiveTime = latestInboxMetadata.getLastActiveTime();
+                long detachTimeoutMillis = detachTimeout.toMillis();
+                if (lastActiveTime + detachTimeoutMillis > now) {
+                    onlineCheckFutures.add(
+                        CompletableFuture.completedFuture(new ExpireCheckResult(latestInboxMetadata, false)));
+                } else {
+                    // check online status
+                    onlineCheckFutures.add(sessionDictClient.get(GetRequest.newBuilder()
+                            .setReqId(System.nanoTime())
+                            .setTenantId(tenantId)
+                            .setUserId(latestInboxMetadata.getClient()
+                                .getMetadataMap().get(MQTTClientInfoConstants.MQTT_USER_ID_KEY))
+                            .setClientId(latestInboxMetadata.getClient()
+                                .getMetadataMap().get(MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY))
+                            .build())
+                        .exceptionally(e -> {
+                            log.debug("Failed to check session online status", e);
+                            return GetReply.newBuilder()
+                                .setResult(GetReply.Result.OK)
+                                .build();
+                        })
+                        .thenApply((v) -> switch (v.getResult()) {
+                            case NOT_FOUND -> new ExpireCheckResult(latestInboxMetadata, true);
+                            default -> new ExpireCheckResult(latestInboxMetadata, false);
+                        }));
+                }
             }
         }
-        return CompletableFuture.completedFuture(ExpireTenantReply.newBuilder().build());
+        return CompletableFuture.allOf(onlineCheckFutures.toArray(CompletableFuture[]::new))
+            .thenAccept(v -> {
+                for (CompletableFuture<ExpireCheckResult> future : onlineCheckFutures) {
+                    ExpireCheckResult result = future.join();
+                    if (result.expired) {
+                        TenantInboxInstance inboxInstance = new TenantInboxInstance(tenantId,
+                            new InboxInstance(result.metadata.getInboxId(), result.metadata.getIncarnation()));
+                        delayTaskRunner.schedule(inboxInstance,
+                            new ExpireInboxTask(Duration.ofMillis(0), result.metadata.getVersion(), inboxClient));
+                    }
+                }
+            });
     }
 
-    private Runnable afterMutation(Map<String, Set<InboxMetadata>> toBeCached,
-                                   Map<String, Set<InboxMetadata>> toBeScheduled) {
-        return () -> {
-            toBeCached.forEach((tenantId, inboxSet) ->
-                inboxSet.forEach(inboxMetadata -> tenantStates.upsert(tenantId, inboxMetadata)));
-            toBeScheduled.forEach(
-                (tenantId, inboxSet) -> inboxSet.forEach(metadata -> resetDetachTimer(tenantId, metadata)));
-        };
-    }
-
-    private void resetDetachTimer(String tenantId, InboxMetadata metadata) {
-        TenantInboxInstance inboxInstance = new TenantInboxInstance(tenantId,
-            new InboxInstance(metadata.getInboxId(), metadata.getIncarnation()));
-        delayTaskRunner.reschedule(inboxInstance, () -> new DetachInboxTask(detachTimeout,
-                metadata.getVersion(),
-                metadata.getExpirySeconds(),
-                metadata.getClient(),
-                inboxClient),
-            DetachInboxTask.class);
+    private void updateTenantStates(Map<String, Set<InboxMetadata>> toBeCached) {
+        toBeCached.forEach((tenantId, inboxSet) ->
+            inboxSet.forEach(inboxMetadata -> tenantStates.upsert(tenantId, inboxMetadata)));
     }
 
     private void load() {
@@ -1357,6 +1305,10 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
             return false;
         }
         return Duration.ofMillis(metadata.getDetachedAt()).plusSeconds(metadata.getExpirySeconds()).toMillis() < nowTS;
+    }
+
+    private record ExpireCheckResult(InboxMetadata metadata, boolean expired) {
+
     }
 
     private record SubMessage(String topic, ClientInfo publisher, Message message,

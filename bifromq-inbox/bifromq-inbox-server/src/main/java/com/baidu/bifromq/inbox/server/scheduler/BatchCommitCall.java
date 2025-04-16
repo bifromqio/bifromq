@@ -28,7 +28,6 @@ import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.Replica;
 import java.util.HashSet;
 import java.util.Queue;
 import java.util.Set;
@@ -46,11 +45,7 @@ class BatchCommitCall extends BatchMutationCall<CommitRequest, CommitReply> {
     @Override
     protected RWCoProcInput makeBatch(
         Iterable<ICallTask<CommitRequest, CommitReply, MutationCallBatcherKey>> callTasks) {
-        BatchCommitRequest.Builder reqBuilder = BatchCommitRequest.newBuilder()
-            .setLeader(Replica.newBuilder()
-                .setRangeId(batcherKey.id)
-                .setStoreId(batcherKey.leaderStoreId)
-                .build());
+        BatchCommitRequest.Builder reqBuilder = BatchCommitRequest.newBuilder();
         callTasks.forEach(call -> {
             CommitRequest req = call.call();
             BatchCommitRequest.Params.Builder paramsBuilder = BatchCommitRequest.Params.newBuilder()

@@ -20,7 +20,6 @@ import com.baidu.bifromq.inbox.record.InboxInstance;
 import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Supplier;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.testng.Assert;
@@ -45,7 +44,7 @@ public class RetryableDelayedTaskTest {
         future.get();
 
         Assert.assertFalse(task.callOperationInvoked);
-        verify(runner, Mockito.never()).scheduleIfAbsent(Mockito.any(), Mockito.any());
+        verify(runner, Mockito.never()).schedule(Mockito.any(), Mockito.any());
     }
 
     @Test
@@ -55,11 +54,11 @@ public class RetryableDelayedTaskTest {
         future.get();
         Assert.assertTrue(task.callOperationInvoked);
 
-        verify(runner, Mockito.times(1)).scheduleIfAbsent(Mockito.eq(tenantInboxInstance), Mockito.any());
-        ArgumentCaptor<Supplier> supplierCaptor = ArgumentCaptor.forClass(Supplier.class);
-        verify(runner).scheduleIfAbsent(Mockito.eq(tenantInboxInstance), supplierCaptor.capture());
-        Supplier supplier = supplierCaptor.getValue();
-        RetryableDelayedTask<Boolean> retryTask = (RetryableDelayedTask<Boolean>) supplier.get();
+        verify(runner, Mockito.times(1)).schedule(Mockito.eq(tenantInboxInstance), Mockito.any());
+        ArgumentCaptor<RetryableDelayedTask<Boolean>> taskCaptor = ArgumentCaptor.forClass(
+            RetryableDelayedTask.class);
+        verify(runner).schedule(Mockito.eq(tenantInboxInstance), taskCaptor.capture());
+        RetryableDelayedTask<Boolean> retryTask = taskCaptor.getValue();
         Assert.assertEquals(retryTask.retryCount, task.retryCount + 1);
     }
 
@@ -70,7 +69,7 @@ public class RetryableDelayedTaskTest {
         future.get();  // 等待任务执行完成
         Assert.assertTrue(task.callOperationInvoked);
 
-        verify(runner, Mockito.never()).scheduleIfAbsent(Mockito.any(), Mockito.any());
+        verify(runner, Mockito.never()).schedule(Mockito.any(), Mockito.any());
     }
 
     private static class TestTask extends RetryableDelayedTask<Boolean> {

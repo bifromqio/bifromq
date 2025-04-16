@@ -27,6 +27,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
@@ -52,57 +53,9 @@ import org.testng.annotations.Test;
 
 public class InboxExpiryTest extends InboxServiceTest {
     @Test(groups = "integration")
-    public void lwtPubAfterDetachTimeout() {
-        // detach timeout is 2s
-        clearInvocations(distClient, eventCollector);
-        long now = System.nanoTime();
-        long reqId = System.nanoTime();
-        String tenantId = "traffic-" + System.nanoTime();
-        String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
-        LWT lwt = LWT.newBuilder()
-            .setTopic("LastWill")
-            .setDelaySeconds(1)
-            .setMessage(Message.newBuilder()
-                .setPubQoS(QoS.AT_LEAST_ONCE)
-                .setPayload(ByteString.copyFromUtf8("last will"))
-                .build())
-            .build();
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        when(distClient.pub(anyLong(), anyString(), any(), any()))
-            .thenReturn(CompletableFuture.completedFuture(PubResult.OK));
-        inboxClient.create(CreateRequest.newBuilder()
-            .setReqId(reqId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setExpirySeconds(2)
-            .setLimit(10)
-            .setDropOldest(true)
-            .setLwt(lwt)
-            .setClient(clientInfo)
-            .setNow(now)
-            .build()).join();
-        verify(distClient, timeout(10000).times(1))
-            .pub(anyLong(), eq(lwt.getTopic()),
-                argThat(m -> m.getPubQoS() == QoS.AT_LEAST_ONCE
-                    && m.getPayload().equals(lwt.getMessage().getPayload())),
-                any());
-        verify(eventCollector, timeout(10000)).report(argThat(e -> e.type() == EventType.WILL_DISTED));
-        await().until(() -> {
-            GetReply getReply = inboxClient.get(GetRequest.newBuilder()
-                .setReqId(reqId)
-                .setTenantId(tenantId)
-                .setInboxId(inboxId)
-                .setNow(0)
-                .build()).join();
-            return getReply.getCode() == GetReply.Code.NO_INBOX;
-        });
-    }
-
-    @Test(groups = "integration")
     public void lwtRetained() {
         clearInvocations(retainClient, eventCollector);
-        long now = System.nanoTime();
+        long now = HLC.INST.getPhysical();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
@@ -132,6 +85,15 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setClient(clientInfo)
             .setNow(now)
             .build()).join();
+        inboxClient.detach(DetachRequest.newBuilder()
+            .setReqId(reqId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .setExpirySeconds(1)
+            .setClient(clientInfo)
+            .setNow(now)
+            .build()).join();
         verify(retainClient, timeout(10000).times(1)).retain(anyLong(), anyString(), any(), any(), anyInt(), any());
         ArgumentCaptor<Event<?>> eventCaptor = ArgumentCaptor.forClass(Event.class);
         verify(eventCollector, timeout(10000).times(4)).report(eventCaptor.capture());
@@ -154,7 +116,7 @@ public class InboxExpiryTest extends InboxServiceTest {
     @Test(groups = "integration")
     public void lwtRetryOnError() {
         clearInvocations(distClient, retainClient, eventCollector);
-        long now = System.nanoTime();
+        long now = HLC.INST.getPhysical();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
@@ -166,12 +128,11 @@ public class InboxExpiryTest extends InboxServiceTest {
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         when(distClient.pub(anyLong(), anyString(), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(PubResult.OK));
-        when(retainClient.retain(anyLong(), anyString(), any(), any(), anyInt(), any()))
-            .thenReturn(
-                CompletableFuture.completedFuture(
-                    RetainReply.newBuilder().setResult(RetainReply.Result.TRY_LATER).build()),
-                CompletableFuture.completedFuture(
-                    RetainReply.newBuilder().setResult(RetainReply.Result.RETAINED).build()));
+        when(retainClient.retain(anyLong(), anyString(), any(), any(), anyInt(), any())).thenReturn(
+            CompletableFuture.completedFuture(
+                RetainReply.newBuilder().setResult(RetainReply.Result.TRY_LATER).build()),
+            CompletableFuture.completedFuture(
+                RetainReply.newBuilder().setResult(RetainReply.Result.RETAINED).build()));
         inboxClient.create(CreateRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
@@ -180,6 +141,15 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setLimit(10)
             .setDropOldest(true)
             .setLwt(lwt)
+            .setClient(clientInfo)
+            .setNow(now)
+            .build()).join();
+        inboxClient.detach(DetachRequest.newBuilder()
+            .setReqId(reqId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .setExpirySeconds(10)
             .setClient(clientInfo)
             .setNow(now)
             .build()).join();
@@ -199,7 +169,7 @@ public class InboxExpiryTest extends InboxServiceTest {
     @Test(groups = "integration")
     public void lwtAfterDetach() {
         clearInvocations(distClient);
-        long now = System.currentTimeMillis();
+        long now = HLC.INST.getPhysical();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
@@ -212,8 +182,8 @@ public class InboxExpiryTest extends InboxServiceTest {
                 .build())
             .build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        when(distClient.pub(anyLong(), anyString(), any(), any())).thenReturn(
-            CompletableFuture.completedFuture(PubResult.OK));
+        when(distClient.pub(anyLong(), anyString(), any(), any()))
+            .thenReturn(CompletableFuture.completedFuture(PubResult.OK));
         inboxClient.create(CreateRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
@@ -236,8 +206,8 @@ public class InboxExpiryTest extends InboxServiceTest {
             .build()).join();
         verify(distClient, timeout(2000).times(1))
             .pub(anyLong(), eq(lwt.getTopic()),
-                argThat(m -> m.getPubQoS() == QoS.AT_LEAST_ONCE &&
-                    m.getPayload().equals(lwt.getMessage().getPayload())),
+                argThat(m -> m.getPubQoS() == QoS.AT_LEAST_ONCE
+                    && m.getPayload().equals(lwt.getMessage().getPayload())),
                 any());
         verify(eventCollector, timeout(2000)).report(argThat(e -> e.type() == EventType.WILL_DISTED));
     }
@@ -245,7 +215,7 @@ public class InboxExpiryTest extends InboxServiceTest {
     @Test(groups = "integration")
     public void matchCleanupWhenInboxExpired() {
         clearInvocations(distClient, retainClient, eventCollector);
-        long now = System.nanoTime();
+        long now = HLC.INST.getPhysical();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
@@ -275,6 +245,15 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setOption(TopicFilterOption.newBuilder()
                 .setIncarnation(1L)
                 .build())
+            .setNow(now)
+            .build()).join();
+        inboxClient.detach(DetachRequest.newBuilder()
+            .setReqId(reqId)
+            .setInboxId(inboxId)
+            .setIncarnation(incarnation)
+            .setVersion(0)
+            .setExpirySeconds(1)
+            .setClient(clientInfo)
             .setNow(now)
             .build()).join();
 

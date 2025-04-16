@@ -38,8 +38,6 @@ import com.baidu.bifromq.inbox.rpc.proto.GetReply;
 import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
-import com.baidu.bifromq.inbox.rpc.proto.TouchReply;
-import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.plugin.subbroker.CheckReply;
@@ -178,17 +176,6 @@ public class InboxClientTest {
         UnsubReply reply = inboxClient.unsub(unsubRequest).join();
         verify(rpcClient).invoke(eq(unsubRequest.getTenantId()), isNull(), eq(unsubRequest), any());
         assertEquals(reply.getCode(), UnsubReply.Code.ERROR);
-    }
-
-    @Test
-    public void touchRPCException() {
-        TouchRequest touchRequest = TouchRequest.newBuilder().setTenantId("TenantId").build();
-
-        when(rpcClient.invoke(anyString(), isNull(), any(), any()))
-            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Mocked")));
-        TouchReply reply = inboxClient.touch(touchRequest).join();
-        verify(rpcClient).invoke(eq(touchRequest.getTenantId()), isNull(), eq(touchRequest), any());
-        assertEquals(reply.getCode(), TouchReply.Code.ERROR);
     }
 
     @Test

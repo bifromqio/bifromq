@@ -34,8 +34,6 @@ import com.baidu.bifromq.inbox.rpc.proto.SendLWTReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendLWTRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
-import com.baidu.bifromq.inbox.rpc.proto.TouchReply;
-import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
@@ -61,8 +59,6 @@ public interface IInboxClient extends ISubBroker, IConnectable, AutoCloseable {
     CompletableFuture<AttachReply> attach(AttachRequest request);
 
     CompletableFuture<DetachReply> detach(DetachRequest request);
-
-    CompletableFuture<TouchReply> touch(TouchRequest request);
 
     CompletableFuture<SubReply> sub(SubRequest request);
 

@@ -31,8 +31,6 @@ import com.baidu.bifromq.inbox.storage.proto.BatchDetachReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchDetachRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchGetReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchGetRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchTouchReply;
-import com.baidu.bifromq.inbox.storage.proto.BatchTouchRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
@@ -461,93 +459,6 @@ public class InboxAdminTest extends InboxStoreTest {
             .build();
         BatchDetachReply.Code code = requestDetach(detachParams).get(0);
         assertSame(code, BatchDetachReply.Code.OK);
-
-        verify(eventCollector).report(argThat(e -> e.type() == EventType.MQTT_SESSION_START));
-    }
-
-    @Test(groups = "integration")
-    public void touchNoInbox() {
-        long now = 0;
-        String tenantId = "tenantId-" + System.nanoTime();
-        String inboxId = "inboxId-" + System.nanoTime();
-        long incarnation = System.nanoTime();
-        BatchTouchRequest.Params touchParams = BatchTouchRequest.Params.newBuilder()
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
-            .setNow(now)
-            .build();
-        BatchTouchReply.Code code = requestTouch(touchParams).get(0);
-        assertEquals(code, BatchTouchReply.Code.NO_INBOX);
-    }
-
-    @Test(groups = "integration")
-    public void touchConflict() {
-        long now = 0;
-        String tenantId = "tenantId-" + System.nanoTime();
-        String inboxId = "inboxId-" + System.nanoTime();
-        long incarnation = System.nanoTime();
-        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setExpirySeconds(5)
-            .setClient(client)
-            .setNow(now)
-            .build();
-        requestCreate(createParams);
-
-        BatchTouchRequest.Params touchParams = BatchTouchRequest.Params.newBuilder()
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(1)
-            .setNow(now)
-            .build();
-        BatchTouchReply.Code code = requestTouch(touchParams).get(0);
-        assertEquals(code, BatchTouchReply.Code.CONFLICT);
-
-        verify(eventCollector).report(argThat(e -> e.type() == EventType.MQTT_SESSION_START));
-    }
-
-    @Test(groups = "integration")
-    public void touch() {
-        long now = HLC.INST.getPhysical();
-        String tenantId = "tenantId-" + System.nanoTime();
-        String inboxId = "inboxId-" + System.nanoTime();
-        long incarnation = System.nanoTime();
-        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        LWT lwt = LWT.newBuilder().setTopic("lastWill").build();
-        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setExpirySeconds(5)
-            .setLwt(lwt)
-            .setClient(client)
-            .setNow(now)
-            .build();
-        requestCreate(createParams);
-
-        now = Duration.ofMillis(now).plusSeconds(5).toMillis();
-        BatchTouchRequest.Params touchParams = BatchTouchRequest.Params.newBuilder()
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
-            .setNow(now)
-            .build();
-        BatchTouchReply.Code code = requestTouch(touchParams).get(0);
-        assertEquals(code, BatchTouchReply.Code.OK);
-
-        BatchGetRequest.Params getParams = BatchGetRequest.Params.newBuilder()
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setNow(now)
-            .build();
-        InboxVersion inboxVersion = requestGet(getParams).get(0).getVersion(0);
-        assertEquals(inboxVersion.getVersion(), 0);
-        assertEquals(inboxVersion.getExpirySeconds(), 5);
 
         verify(eventCollector).report(argThat(e -> e.type() == EventType.MQTT_SESSION_START));
     }

@@ -29,8 +29,6 @@ import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.GetReply;
 import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
-import com.baidu.bifromq.inbox.rpc.proto.TouchReply;
-import com.baidu.bifromq.inbox.rpc.proto.TouchRequest;
 import io.grpc.stub.StreamObserver;
 import java.util.concurrent.CompletableFuture;
 import org.testng.annotations.Test;
@@ -90,20 +88,6 @@ public class MockedInboxAdminTest extends MockedInboxService {
 
         verify(streamObserver).onNext(argThat(reply ->
             reply.getReqId() == reqId && reply.getCode() == DetachReply.Code.TRY_LATER));
-        verify(streamObserver).onCompleted();
-    }
-
-    @Test
-    public void touchInboxThrowsException() {
-        long reqId = HLC.INST.getPhysical();
-        when(touchScheduler.schedule(any())).thenReturn(
-            CompletableFuture.failedFuture(new BatcherUnavailableException("Mocked")));
-
-        StreamObserver<TouchReply> streamObserver = mock(StreamObserver.class);
-        inboxService.touch(TouchRequest.newBuilder().setReqId(reqId).build(), streamObserver);
-
-        verify(streamObserver).onNext(argThat(reply ->
-            reply.getReqId() == reqId && reply.getCode() == TouchReply.Code.TRY_LATER));
         verify(streamObserver).onCompleted();
     }
 }
