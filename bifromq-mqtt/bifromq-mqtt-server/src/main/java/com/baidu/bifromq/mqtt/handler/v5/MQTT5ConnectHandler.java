@@ -658,7 +658,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                 .getProperty(SESSION_EXPIRY_INTERVAL.value()))
             .map(MqttProperties.MqttProperty::value);
         int assignedSEI = settings.forceTransient ? 0 : requestSEI.orElse(0);
-        return Math.min(assignedSEI, settings.maxSEI);
+        return Integer.compareUnsigned(assignedSEI, settings.maxSEI) < 0 ? assignedSEI : settings.maxSEI;
     }
 
     @Override

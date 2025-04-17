@@ -441,7 +441,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
             .oomCondition(or(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE))
             .userSessionId(userSessionId)
             .keepAliveTimeSeconds(keepAliveSeconds)
-            .sessionExpirySeconds(settings.maxSEI)
+            .sessionExpirySeconds(sessionExpiryInterval)
             .clientInfo(clientInfo)
             .existingSession(existingSession)
             .willMessage(willMessage)

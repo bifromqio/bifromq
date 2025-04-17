@@ -140,6 +140,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 final class InboxStoreCoProc implements IKVRangeCoProc {
+    private static final int UINT_MAX = 0xFFFFFFFF;
     private final KVRangeId id;
     private final String storeId;
     private final IDistClient distClient;
@@ -182,6 +183,26 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         this.delayTaskRunner = new DelayTaskRunner<>(TenantInboxInstance::compareTo, HLC.INST::getPhysical,
             expireRateLimit);
         this.detachTimeout = detachTimeout;
+    }
+
+    private static int getExpireSeconds(Duration expireTime, InboxMetadata latestInboxMetadata) {
+        int expireSeconds;
+        int newExpireSeconds = (int) expireTime.toSeconds();
+        if (Integer.compareUnsigned(latestInboxMetadata.getExpirySeconds(), UINT_MAX) == 0) {
+            if (newExpireSeconds > 0) {
+                expireSeconds = newExpireSeconds;
+            } else {
+                expireSeconds = UINT_MAX;
+            }
+        } else {
+            if (newExpireSeconds > 0) {
+                expireSeconds = Integer.compareUnsigned(latestInboxMetadata.getExpirySeconds(),
+                    newExpireSeconds) < 0 ? latestInboxMetadata.getExpirySeconds() : newExpireSeconds;
+            } else {
+                expireSeconds = latestInboxMetadata.getExpirySeconds();
+            }
+        }
+        return expireSeconds;
     }
 
     @Override
@@ -525,14 +546,17 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 // schedule a task for sending LWT or expiry session
                 if (metadata.hasLwt()) {
                     Duration delay = Duration.ofSeconds(
-                            Math.min(metadata.getLwt().getDelaySeconds(), metadata.getExpirySeconds()))
+                            Integer.compareUnsigned(metadata.getLwt().getDelaySeconds(), metadata.getExpirySeconds())
+                                < 0 ? metadata.getLwt().getDelaySeconds() : metadata.getExpirySeconds())
                         .plusMillis(ThreadLocalRandom.current().nextLong(0, 1000));
                     delayTaskRunner.schedule(inboxInstance, new SendLWTTask(delay, metadata.getVersion(), inboxClient));
                 } else {
-                    Duration delay = Duration.ofSeconds(metadata.getExpirySeconds())
-                        .plusMillis(ThreadLocalRandom.current().nextLong(0, 1000));
-                    delayTaskRunner.schedule(inboxInstance,
-                        new ExpireInboxTask(delay, metadata.getVersion(), inboxClient));
+                    if (Integer.compareUnsigned(metadata.getExpirySeconds(), UINT_MAX) < 0) {
+                        // UINT_MAX never expire according to MQTT5 spec
+                        Duration delay = Duration.ofSeconds(metadata.getExpirySeconds());
+                        delayTaskRunner.schedule(inboxInstance,
+                            new ExpireInboxTask(delay, metadata.getVersion(), inboxClient));
+                    }
                 }
             }));
         };
@@ -573,6 +597,10 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         return sendLWT(tenantId, metadata, now)
             .thenApply(v -> {
                 if (v == BatchSendLWTReply.Code.OK) {
+                    if (Integer.compareUnsigned(metadata.getExpirySeconds(), UINT_MAX) == 0) {
+                        // UINT_MAX never expire according to MQTT5 spec
+                        return v;
+                    }
                     TenantInboxInstance inboxInstance = new TenantInboxInstance(tenantId,
                         new InboxInstance(metadata.getInboxId(), metadata.getIncarnation()));
                     long detachAtMillis = metadata.getDetachedAt();
@@ -1205,12 +1233,16 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 latestInboxMetadata = inboxVersions.get(inboxVersions.firstKey());
             }
             if (latestInboxMetadata.hasDetachedAt()) {
-                long detachedAt = latestInboxMetadata.getDetachedAt();
-                long expireMillis = expireTime.isZero()
-                    ? Duration.ofSeconds(latestInboxMetadata.getExpirySeconds()).toMillis()
-                    : Math.min(Duration.ofSeconds(latestInboxMetadata.getExpirySeconds()).toMillis(),
-                    expireTime.toMillis());
-                if (detachedAt + expireMillis + 5000 > now) {
+                long detachedAtMillis = latestInboxMetadata.getDetachedAt();
+                int expireSeconds = getExpireSeconds(expireTime, latestInboxMetadata);
+                if (Integer.compareUnsigned(expireSeconds, UINT_MAX) == 0) {
+                    // never expire according to MQTT5 spec
+                    onlineCheckFutures.add(
+                        CompletableFuture.completedFuture(new ExpireCheckResult(latestInboxMetadata, false)));
+                    continue;
+                }
+                long expireMillis = Duration.ofSeconds(expireSeconds).toMillis();
+                if (detachedAtMillis + expireMillis + 5000 > now) {
                     onlineCheckFutures.add(
                         CompletableFuture.completedFuture(new ExpireCheckResult(latestInboxMetadata, false)));
                 } else {
@@ -1220,6 +1252,13 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 }
             } else {
                 // not detached
+                int expireSeconds = latestInboxMetadata.getExpirySeconds();
+                if (Integer.compareUnsigned(expireSeconds, UINT_MAX) == 0) {
+                    // never expire according to mqtt5 spec
+                    onlineCheckFutures.add(
+                        CompletableFuture.completedFuture(new ExpireCheckResult(latestInboxMetadata, false)));
+                    continue;
+                }
                 long lastActiveTime = latestInboxMetadata.getLastActiveTime();
                 long detachTimeoutMillis = detachTimeout.toMillis();
                 if (lastActiveTime + detachTimeoutMillis > now) {

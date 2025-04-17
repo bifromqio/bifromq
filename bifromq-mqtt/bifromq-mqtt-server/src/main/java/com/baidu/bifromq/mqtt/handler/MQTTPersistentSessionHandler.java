@@ -69,7 +69,6 @@ import io.netty.handler.codec.mqtt.MqttMessage;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.Optional;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
@@ -205,14 +204,13 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         if (remainInboxSize > 0) {
             memUsage.addAndGet(-remainInboxSize);
         }
-        int finalSEI = settings.forceTransient ? 0 : Math.min(sessionExpirySeconds, settings.maxSEI);
         if (state == State.ATTACHED) {
             detach(DetachRequest.newBuilder()
                 .setReqId(System.nanoTime())
                 .setInboxId(userSessionId)
                 .setIncarnation(incarnation)
                 .setVersion(version)
-                .setExpirySeconds(finalSEI)
+                .setExpirySeconds(sessionExpirySeconds)
                 .setDiscardLWT(false)
                 .setClient(clientInfo)
                 .setNow(HLC.INST.getPhysical())
@@ -223,8 +221,8 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
 
     @Override
     protected final ProtocolResponse handleDisconnect(MqttMessage message) {
-        Optional<Integer> requestSEI = helper().sessionExpiryIntervalOnDisconnect(message);
-        int finalSEI = settings.forceTransient ? 0 : Math.min(requestSEI.orElse(sessionExpirySeconds), settings.maxSEI);
+        int requestSEI = helper().sessionExpiryIntervalOnDisconnect(message).orElse(sessionExpirySeconds);
+        int finalSEI = Integer.compareUnsigned(requestSEI, settings.maxSEI) < 0 ? requestSEI : settings.maxSEI;
         if (helper().isNormalDisconnect(message)) {
             discardLWT();
             if (finalSEI == 0) {
@@ -273,12 +271,12 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         }
         state = State.DETACH;
         addBgTask(AsyncRetry.exec(() -> inboxClient.detach(request),
-                (reply, t) -> {
-                    if (t != null) {
-                        return true;
-                    }
-                    return reply.getCode() != DetachReply.Code.TRY_LATER;
-                }, 1000, 5000));
+            (reply, t) -> {
+                if (t != null) {
+                    return true;
+                }
+                return reply.getCode() != DetachReply.Code.TRY_LATER;
+            }, 1000, 5000));
     }
 
     @Override
