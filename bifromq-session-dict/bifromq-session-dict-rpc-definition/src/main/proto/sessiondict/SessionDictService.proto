@@ -15,6 +15,7 @@ service SessionDictService {
   rpc kill (KillRequest) returns(KillReply);
   rpc killAll (KillAllRequest) returns(KillAllReply);
   rpc get(GetRequest) returns(GetReply);
+  rpc exist(stream ExistRequest) returns(stream ExistReply);
   rpc sub(SubRequest) returns(SubReply);
   rpc unsub(UnsubRequest) returns(UnsubReply);
 }
@@ -83,6 +84,7 @@ message GetRequest {
   string userId = 3;
   string clientId = 4;
 }
+
 message GetReply {
   enum Result{
     OK = 0;
@@ -93,6 +95,26 @@ message GetReply {
   Result result = 2;
   commontype.ClientInfo owner = 3;
 }
+
+message ExistRequest {
+  message Client{
+    string userId = 1;
+    string clientId = 2;
+  }
+  uint64 reqId = 1;
+  repeated Client client = 2;
+}
+
+message ExistReply {
+  enum Code{
+    OK = 0;
+    ERROR = 1;
+  }
+  uint64 reqId = 1;
+  Code code = 2;
+  repeated bool exist = 3;
+}
+
 message SubRequest {
   uint64 reqId = 1;
   string tenantId = 2;

@@ -34,6 +34,14 @@ public class SessionRegisterKeyUtil {
         if (key < 0) {
             key += SESSION_REGISTER_NUM;
         }
-        return tenantId + key;
+        return tenantId + "_" + key;
+    }
+
+    public static String parseTenantId(String registerKey) {
+        int index = registerKey.indexOf('_');
+        if (index == -1) {
+            throw new IllegalArgumentException("Invalid register key: " + registerKey);
+        }
+        return registerKey.substring(0, index);
     }
 }

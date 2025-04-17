@@ -14,6 +14,8 @@
 package com.baidu.bifromq.sessiondict.client;
 
 import com.baidu.bifromq.baserpc.client.IConnectable;
+import com.baidu.bifromq.sessiondict.client.type.ExistResult;
+import com.baidu.bifromq.sessiondict.client.type.TenantClientId;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillAllReply;
@@ -28,10 +30,6 @@ import java.util.concurrent.CompletableFuture;
 import javax.annotation.Nullable;
 
 public interface ISessionDictClient extends IConnectable, AutoCloseable {
-
-    interface IKillListener {
-        void onKill(ClientInfo killer, ServerRedirection redirection);
-    }
 
     static SessionDictClientBuilder newBuilder() {
         return new SessionDictClientBuilder();
@@ -50,9 +48,15 @@ public interface ISessionDictClient extends IConnectable, AutoCloseable {
 
     CompletableFuture<GetReply> get(GetRequest request);
 
+    CompletableFuture<ExistResult> exist(TenantClientId tenantClientId);
+
     CompletableFuture<SubReply> sub(SubRequest request);
 
     CompletableFuture<UnsubReply> unsub(UnsubRequest request);
 
     void close();
+
+    interface IKillListener {
+        void onKill(ClientInfo killer, ServerRedirection redirection);
+    }
 }

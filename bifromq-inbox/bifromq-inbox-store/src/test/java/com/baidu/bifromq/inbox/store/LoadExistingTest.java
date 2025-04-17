@@ -23,7 +23,7 @@ import static org.testng.Assert.assertEquals;
 import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
-import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
+import com.baidu.bifromq.sessiondict.client.type.ExistResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MQTTClientInfoConstants;
 import java.util.concurrent.CompletableFuture;
@@ -50,8 +50,7 @@ public class LoadExistingTest extends InboxStoreTest {
             .build());
         restartStoreServer();
         await().until(() -> BoundaryUtil.isValidSplitSet(storeClient.latestEffectiveRouter().keySet()));
-        when(sessionDictClient.get(any())).thenReturn(
-            CompletableFuture.completedFuture(GetReply.newBuilder().setResult(GetReply.Result.NOT_FOUND).build()));
+        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(ExistResult.NOT_EXISTS));
         ArgumentCaptor<DeleteRequest> deleteCaptor = ArgumentCaptor.forClass(DeleteRequest.class);
         verify(inboxClient, timeout(10000)).delete(deleteCaptor.capture());
         DeleteRequest request = deleteCaptor.getValue();

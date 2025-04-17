@@ -27,6 +27,7 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryUsage;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -35,6 +36,8 @@ public class MemUsage {
     private static final long JVM_MAX_DIRECT_MEMORY = PlatformDependent.estimateMaxDirectMemory();
     private static final MemoryMXBean memoryMXBean = ManagementFactory.getMemoryMXBean();
     private static final ThreadLocal<MemUsage> THREAD_LOCAL = ThreadLocal.withInitial(MemUsage::new);
+    private static final NonblockingNettyDirectMemoryUsage nonblockingNettyDirectMemoryUsage =
+        new NonblockingNettyDirectMemoryUsage();
     private double nettyDirectMemoryUsage = 0;
     private double heapMemoryUsage = 0;
     private long refreshNettyDirectMemoryUsageAt = 0;
@@ -42,71 +45,6 @@ public class MemUsage {
 
     public static MemUsage local() {
         return THREAD_LOCAL.get();
-    }
-
-    private static double calculateNettyDirectMemoryUsage() {
-        if (PlatformDependent.useDirectBufferNoCleaner()) {
-            if (ByteBufAllocator.DEFAULT.isDirectBufferPooled()) {
-                long pooledDirectMemory = PlatformDependent.usedDirectMemory();
-                double pooledDirectMemoryUsage = pooledDirectMemoryUsage();
-                double jvmDirectMemoryUsage = pooledDirectMemory / (double) JVM_MAX_DIRECT_MEMORY;
-                return Math.min(pooledDirectMemoryUsage, jvmDirectMemoryUsage);
-            } else {
-                return (PlatformDependent.usedDirectMemory()) / (double) PlatformDependent.maxDirectMemory();
-            }
-        } else {
-            ByteBufAllocatorMetric allocatorMetric =
-                ((ByteBufAllocatorMetricProvider) ByteBufAllocator.DEFAULT).metric();
-            long usedDirectMemory = allocatorMetric.usedDirectMemory();
-            if (ByteBufAllocator.DEFAULT.isDirectBufferPooled()) {
-                double pooledDirectMemoryUsage = pooledDirectMemoryUsage();
-                double jvmDirectMemoryUsage = usedDirectMemory / (double) JVM_MAX_DIRECT_MEMORY;
-                return Math.min(pooledDirectMemoryUsage, jvmDirectMemoryUsage);
-            } else {
-                return usedDirectMemory / (double) Math.min(PlatformDependent.maxDirectMemory(), JVM_MAX_DIRECT_MEMORY);
-            }
-        }
-    }
-
-    private static double pooledDirectMemoryUsage() {
-        PooledByteBufAllocatorMetric allocatorMetric =
-            (PooledByteBufAllocatorMetric) ((ByteBufAllocatorMetricProvider) ByteBufAllocator.DEFAULT).metric();
-
-        int[] buckets = new int[101];
-        int totalChunks = 0;
-
-        for (PoolArenaMetric arenaMetric : allocatorMetric.directArenas()) {
-            totalChunks += collectChunkUsages(arenaMetric, buckets);
-        }
-
-        return calculatePercentile(buckets, totalChunks, 90) / 100.0;
-    }
-
-    private static int collectChunkUsages(PoolArenaMetric arenaMetric, int[] buckets) {
-        int totalChunks = 0;
-        for (PoolChunkListMetric chunkListMetric : arenaMetric.chunkLists()) {
-            for (PoolChunkMetric chunkMetric : chunkListMetric) {
-                int usage = chunkMetric.usage();
-                buckets[usage]++;
-                totalChunks++;
-            }
-        }
-        return totalChunks;
-    }
-
-    private static double calculatePercentile(int[] buckets, int totalChunks, double percentile) {
-        if (totalChunks == 0) {
-            return 0;
-        }
-        int threshold = (int) Math.ceil(percentile / 100.0 * totalChunks);
-        int cumulativeCount = 0;
-        for (int i = 0; i < buckets.length; i++) {
-            cumulativeCount += buckets[i];
-            if (cumulativeCount >= threshold) {
-                return i;
-            }
-        }
-        return 100;
     }
 
     public double nettyDirectMemoryUsage() {
@@ -122,7 +60,7 @@ public class MemUsage {
     private void scheduleNettyDirectMemoryUsage() {
         long now = System.nanoTime();
         if (now - refreshNettyDirectMemoryUsageAt > UPDATE_INTERVAL) {
-            nettyDirectMemoryUsage = NonblockingNettyDirectMemoryUsage.usage();
+            nettyDirectMemoryUsage = nonblockingNettyDirectMemoryUsage.usage();
             refreshNettyDirectMemoryUsageAt = System.nanoTime();
         }
     }
@@ -148,23 +86,90 @@ public class MemUsage {
     }
 
     private static class NonblockingNettyDirectMemoryUsage {
-        private static final Executor executor =
+        private final Executor executor =
             newSingleThreadExecutor(EnvProvider.INSTANCE.newThreadFactory("netty-pool-usage-reader", true));
-        private static final AtomicBoolean isRefreshing = new AtomicBoolean(false);
-        private static volatile double nettyDirectMemoryUsage = 0;
+        private final AtomicBoolean isRefreshing = new AtomicBoolean(false);
+        private final int[] buckets = new int[101];
+        private volatile double nettyDirectMemoryUsage = 0;
 
-        static double usage() {
+        double usage() {
             scheduleRefresh();
             return nettyDirectMemoryUsage;
         }
 
-        static void scheduleRefresh() {
+        void scheduleRefresh() {
             if (isRefreshing.compareAndSet(false, true)) {
                 executor.execute(() -> {
-                    nettyDirectMemoryUsage = MemUsage.calculateNettyDirectMemoryUsage();
+                    nettyDirectMemoryUsage = calculateNettyDirectMemoryUsage();
                     isRefreshing.set(false);
                 });
             }
+        }
+
+        private double calculateNettyDirectMemoryUsage() {
+            if (PlatformDependent.useDirectBufferNoCleaner()) {
+                if (ByteBufAllocator.DEFAULT.isDirectBufferPooled()) {
+                    long pooledDirectMemory = PlatformDependent.usedDirectMemory();
+                    double pooledDirectMemoryUsage = pooledDirectMemoryUsage();
+                    double jvmDirectMemoryUsage = pooledDirectMemory / (double) JVM_MAX_DIRECT_MEMORY;
+                    return Math.min(pooledDirectMemoryUsage, jvmDirectMemoryUsage);
+                } else {
+                    return (PlatformDependent.usedDirectMemory()) / (double) PlatformDependent.maxDirectMemory();
+                }
+            } else {
+                ByteBufAllocatorMetric allocatorMetric =
+                    ((ByteBufAllocatorMetricProvider) ByteBufAllocator.DEFAULT).metric();
+                long usedDirectMemory = allocatorMetric.usedDirectMemory();
+                if (ByteBufAllocator.DEFAULT.isDirectBufferPooled()) {
+                    double pooledDirectMemoryUsage = pooledDirectMemoryUsage();
+                    double jvmDirectMemoryUsage = usedDirectMemory / (double) JVM_MAX_DIRECT_MEMORY;
+                    return Math.min(pooledDirectMemoryUsage, jvmDirectMemoryUsage);
+                } else {
+                    return usedDirectMemory
+                        / (double) Math.min(PlatformDependent.maxDirectMemory(), JVM_MAX_DIRECT_MEMORY);
+                }
+            }
+        }
+
+        private double pooledDirectMemoryUsage() {
+            PooledByteBufAllocatorMetric allocatorMetric =
+                (PooledByteBufAllocatorMetric) ((ByteBufAllocatorMetricProvider) ByteBufAllocator.DEFAULT).metric();
+
+            Arrays.fill(buckets, 0);
+            int totalChunks = 0;
+
+            for (PoolArenaMetric arenaMetric : allocatorMetric.directArenas()) {
+                totalChunks += collectChunkUsages(arenaMetric, buckets);
+            }
+
+            return calculatePercentile(buckets, totalChunks, 90) / 100.0;
+        }
+
+        private int collectChunkUsages(PoolArenaMetric arenaMetric, int[] buckets) {
+            int totalChunks = 0;
+            for (PoolChunkListMetric chunkListMetric : arenaMetric.chunkLists()) {
+                for (PoolChunkMetric chunkMetric : chunkListMetric) {
+                    int usage = chunkMetric.usage();
+                    buckets[usage]++;
+                    totalChunks++;
+                }
+            }
+            return totalChunks;
+        }
+
+        private double calculatePercentile(int[] buckets, int totalChunks, double percentile) {
+            if (totalChunks == 0) {
+                return 0;
+            }
+            int threshold = (int) Math.ceil(percentile / 100.0 * totalChunks);
+            int cumulativeCount = 0;
+            for (int i = 0; i < buckets.length; i++) {
+                cumulativeCount += buckets[i];
+                if (cumulativeCount >= threshold) {
+                    return i;
+                }
+            }
+            return 100;
         }
     }
 }

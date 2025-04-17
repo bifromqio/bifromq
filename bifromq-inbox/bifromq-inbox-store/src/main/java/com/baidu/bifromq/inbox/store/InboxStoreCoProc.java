@@ -26,6 +26,8 @@ import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.qos0QueuePrefix;
 import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.sendBufferPrefix;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.RetainEnabled;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY;
+import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetainMessageSpaceBytes;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetainTopics;
 
@@ -106,10 +108,8 @@ import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
-import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
-import com.baidu.bifromq.sessiondict.rpc.proto.GetRequest;
+import com.baidu.bifromq.sessiondict.client.type.TenantClientId;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.MQTTClientInfoConstants;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessage;
@@ -1227,22 +1227,12 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                         CompletableFuture.completedFuture(new ExpireCheckResult(latestInboxMetadata, false)));
                 } else {
                     // check online status
-                    onlineCheckFutures.add(sessionDictClient.get(GetRequest.newBuilder()
-                            .setReqId(System.nanoTime())
-                            .setTenantId(tenantId)
-                            .setUserId(latestInboxMetadata.getClient()
-                                .getMetadataMap().get(MQTTClientInfoConstants.MQTT_USER_ID_KEY))
-                            .setClientId(latestInboxMetadata.getClient()
-                                .getMetadataMap().get(MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY))
-                            .build())
-                        .exceptionally(e -> {
-                            log.debug("Failed to check session online status", e);
-                            return GetReply.newBuilder()
-                                .setResult(GetReply.Result.OK)
-                                .build();
-                        })
-                        .thenApply((v) -> switch (v.getResult()) {
-                            case NOT_FOUND -> new ExpireCheckResult(latestInboxMetadata, true);
+                    TenantClientId clientId = new TenantClientId(tenantId,
+                        latestInboxMetadata.getClient().getMetadataMap().get(MQTT_USER_ID_KEY),
+                        latestInboxMetadata.getClient().getMetadataMap().get(MQTT_CLIENT_ID_KEY));
+                    onlineCheckFutures.add(sessionDictClient.exist(clientId)
+                        .thenApply((v) -> switch (v) {
+                            case NOT_EXISTS -> new ExpireCheckResult(latestInboxMetadata, true);
                             default -> new ExpireCheckResult(latestInboxMetadata, false);
                         }));
                 }

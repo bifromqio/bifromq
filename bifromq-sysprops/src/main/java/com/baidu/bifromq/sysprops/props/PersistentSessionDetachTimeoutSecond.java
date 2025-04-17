@@ -17,12 +17,12 @@ import com.baidu.bifromq.sysprops.BifroMQSysProp;
 import com.baidu.bifromq.sysprops.parser.IntegerParser;
 
 /**
- * The timeout seconds to consider persistent session is detached from mqtt client.
+ * The timeout seconds to consider persistent session is probably detached from mqtt client.
  */
 public final class PersistentSessionDetachTimeoutSecond extends BifroMQSysProp<Integer, IntegerParser> {
     public static final PersistentSessionDetachTimeoutSecond INSTANCE = new PersistentSessionDetachTimeoutSecond();
 
     private PersistentSessionDetachTimeoutSecond() {
-        super("persistent_session_detach_timeout_second", 300, IntegerParser.from(60, 600));
+        super("persistent_session_detach_timeout_second", 7200, IntegerParser.from(60, Integer.MAX_VALUE));
     }
 }

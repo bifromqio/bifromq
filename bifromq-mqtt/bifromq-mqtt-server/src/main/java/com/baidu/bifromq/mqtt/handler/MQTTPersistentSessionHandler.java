@@ -56,7 +56,6 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByCli
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
-import com.baidu.bifromq.sysprops.props.PersistentSessionDetachTimeoutSecond;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
@@ -67,7 +66,6 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import io.micrometer.core.instrument.Timer;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttMessage;
-import java.time.Duration;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -85,8 +83,6 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler implements IMQTTPersistentSession {
-    private static final long TouchTimeoutMillis = Duration.ofSeconds(
-        PersistentSessionDetachTimeoutSecond.INSTANCE.get()).multipliedBy(2).dividedBy(3).toMillis();
     private final int sessionExpirySeconds;
     private final boolean sessionPresent;
     private final long incarnation;

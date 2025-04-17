@@ -24,6 +24,7 @@ public class RPCBluePrint {
     public static final BluePrint INSTANCE = BluePrint.builder()
         .serviceDescriptor(SessionDictServiceGrpc.getServiceDescriptor())
         .methodSemantic(SessionDictServiceGrpc.getDictMethod(), BluePrint.WCHStreamingMethod.getInstance())
+        .methodSemantic(SessionDictServiceGrpc.getExistMethod(), BluePrint.WCHPipelineUnaryMethod.getInstance())
         .methodSemantic(SessionDictServiceGrpc.getKillMethod(),
             BluePrint.WCHUnaryMethod.<KillRequest>builder()
                 .keyHashFunc(r -> SessionRegisterKeyUtil.toRegisterKey(r.getTenantId(), r.getUserId(), r.getClientId()))

@@ -18,6 +18,8 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CHANNEL_ID_KEY
 import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_CLIENT_BROKER_KEY;
 
 import com.baidu.bifromq.mqtt.inbox.IMqttBrokerClient;
+import com.baidu.bifromq.sessiondict.rpc.proto.ExistReply;
+import com.baidu.bifromq.sessiondict.rpc.proto.ExistRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillAllReply;
@@ -115,6 +117,11 @@ class SessionDictService extends SessionDictServiceGrpc.SessionDictServiceImplBa
                     .setResult(GetReply.Result.NOT_FOUND)
                     .build()));
         }, responseObserver);
+    }
+
+    @Override
+    public StreamObserver<ExistRequest> exist(StreamObserver<ExistReply> responseObserver) {
+        return new SessionExistPipeline(sessionRegistry, responseObserver);
     }
 
     @Override

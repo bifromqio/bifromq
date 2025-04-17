@@ -15,6 +15,10 @@ package com.baidu.bifromq.sessiondict.client;
 
 import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.sessiondict.SessionRegisterKeyUtil;
+import com.baidu.bifromq.sessiondict.client.scheduler.ISessionExistScheduler;
+import com.baidu.bifromq.sessiondict.client.scheduler.SessionExistScheduler;
+import com.baidu.bifromq.sessiondict.client.type.ExistResult;
+import com.baidu.bifromq.sessiondict.client.type.TenantClientId;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillAllReply;
@@ -41,16 +45,14 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 final class SessionDictClient implements ISessionDictClient {
-
-    private record ManagerCacheKey(String tenantId, String registerKey) {
-    }
-
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final IRPCClient rpcClient;
+    private final ISessionExistScheduler sessionExistScheduler;
     private final LoadingCache<ManagerCacheKey, SessionRegister> tenantSessionRegisterManagers;
 
     SessionDictClient(IRPCClient rpcClient) {
         this.rpcClient = rpcClient;
+        sessionExistScheduler = new SessionExistScheduler(rpcClient);
         tenantSessionRegisterManagers = Caffeine.newBuilder()
             .weakValues()
             .executor(MoreExecutors.directExecutor())
@@ -151,6 +153,11 @@ final class SessionDictClient implements ISessionDictClient {
     }
 
     @Override
+    public CompletableFuture<ExistResult> exist(TenantClientId clientId) {
+        return sessionExistScheduler.schedule(clientId);
+    }
+
+    @Override
     public CompletableFuture<SubReply> sub(SubRequest request) {
         return rpcClient.invoke(request.getTenantId(), null, request,
                 SessionDictServiceGrpc.getSubMethod())
@@ -176,16 +183,19 @@ final class SessionDictClient implements ISessionDictClient {
             });
     }
 
-
     @Override
     public void close() {
         if (closed.compareAndSet(false, true)) {
             log.debug("Stopping session dict client");
             tenantSessionRegisterManagers.asMap().forEach((k, v) -> v.close());
             tenantSessionRegisterManagers.invalidateAll();
+            sessionExistScheduler.close();
             log.debug("Stopping rpc client");
             rpcClient.stop();
             log.debug("Session dict client stopped");
         }
+    }
+
+    private record ManagerCacheKey(String tenantId, String registerKey) {
     }
 }
