@@ -17,17 +17,13 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static java.util.Collections.unmodifiableMap;
 
-import com.baidu.bifromq.basehlc.HLC;
-import com.google.protobuf.Message;
-import com.google.protobuf.UnknownFieldSet;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServiceDescriptor;
-import java.io.InputStream;
+import io.grpc.protobuf.lite.EnhancedMarshaller;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
-import javax.annotation.Nullable;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.NoArgsConstructor;
@@ -36,7 +32,66 @@ import lombok.NoArgsConstructor;
  * BluePrint is a configuration class for a service. It contains the service descriptor, method semantics, and method
  */
 public final class BluePrint {
-    private static final int PIGGYBACK_FIELD_ID = Short.MAX_VALUE;
+    private final ServiceDescriptor serviceDescriptor;
+    private final Map<String, MethodSemantic> methodSemantics;
+    private final Map<String, MethodDescriptor<?, ?>> methods;
+    private final Map<String, MethodDescriptor<?, ?>> wrappedMethods;
+
+    private BluePrint(
+        ServiceDescriptor serviceDescriptor,
+        Map<String, MethodSemantic> methodSemantics,
+        Map<String, MethodDescriptor<?, ?>> methods,
+        Map<String, MethodDescriptor<?, ?>> wrappedMethods) {
+        this.serviceDescriptor = serviceDescriptor;
+        this.methodSemantics = methodSemantics;
+        this.methods = methods;
+        this.wrappedMethods = wrappedMethods;
+        if (!serviceDescriptor.getMethods().containsAll(methods.values())) {
+            throw new RuntimeException("Some method is not defined in the supplied service descriptor");
+        }
+        for (String methodName : methodSemantics.keySet()) {
+            MethodDescriptor<?, ?> methodDesc = wrappedMethods.get(methodName);
+            MethodSemantic semantic = methodSemantics.get(methodName);
+            switch (methodDesc.getType()) {
+                case UNARY:
+                    if (!(semantic instanceof Unary)) {
+                        // unary rpc could not be configured as pipelining method
+                        throw new RuntimeException("Wrong semantic for Unary rpc");
+                    }
+                    break;
+                case BIDI_STREAMING:
+                    if (!(semantic instanceof PipelineUnary) && !(semantic instanceof Streaming)) {
+                        // bidi streaming rpc could only be configured as either request/response pipeline
+                        // or wrr/wch streaming method
+                        throw new RuntimeException("Wrong semantic configured for bidi streaming rpc");
+                    }
+                    break;
+                default:
+                    throw new RuntimeException("Unknown method type: " + methodDesc.getType());
+            }
+        }
+    }
+
+    public static BluePrintBuilder builder() {
+        return new BluePrintBuilder();
+    }
+
+    public ServiceDescriptor serviceDescriptor() {
+        return serviceDescriptor;
+    }
+
+    public Set<String> allMethods() {
+        return wrappedMethods.keySet();
+    }
+
+    public MethodSemantic semantic(String fullMethodName) {
+        return methodSemantics.get(fullMethodName);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <ReqT, RespT> MethodDescriptor<ReqT, RespT> methodDesc(String fullMethodName) {
+        return (MethodDescriptor<ReqT, RespT>) wrappedMethods.get(fullMethodName);
+    }
 
     /**
      * The rpc type of method.
@@ -232,67 +287,6 @@ public final class BluePrint {
         }
     }
 
-    private final ServiceDescriptor serviceDescriptor;
-    private final Map<String, MethodSemantic> methodSemantics;
-    private final Map<String, MethodDescriptor<?, ?>> methods;
-    private final Map<String, MethodDescriptor<?, ?>> wrappedMethods;
-
-    private BluePrint(
-        ServiceDescriptor serviceDescriptor,
-        Map<String, MethodSemantic> methodSemantics,
-        Map<String, MethodDescriptor<?, ?>> methods,
-        Map<String, MethodDescriptor<?, ?>> wrappedMethods) {
-        this.serviceDescriptor = serviceDescriptor;
-        this.methodSemantics = methodSemantics;
-        this.methods = methods;
-        this.wrappedMethods = wrappedMethods;
-        if (!serviceDescriptor.getMethods().containsAll(methods.values())) {
-            throw new RuntimeException("Some method is not defined in the supplied service descriptor");
-        }
-        for (String methodName : methodSemantics.keySet()) {
-            MethodDescriptor<?, ?> methodDesc = wrappedMethods.get(methodName);
-            MethodSemantic semantic = methodSemantics.get(methodName);
-            switch (methodDesc.getType()) {
-                case UNARY:
-                    if (!(semantic instanceof Unary)) {
-                        // unary rpc could not be configured as pipelining method
-                        throw new RuntimeException("Wrong semantic for Unary rpc");
-                    }
-                    break;
-                case BIDI_STREAMING:
-                    if (!(semantic instanceof PipelineUnary) && !(semantic instanceof Streaming)) {
-                        // bidi streaming rpc could only be configured as either request/response pipeline
-                        // or wrr/wch streaming method
-                        throw new RuntimeException("Wrong semantic configured for bidi streaming rpc");
-                    }
-                    break;
-                default:
-                    throw new RuntimeException("Unknown method type: " + methodDesc.getType());
-            }
-        }
-    }
-
-    public ServiceDescriptor serviceDescriptor() {
-        return serviceDescriptor;
-    }
-
-    public Set<String> allMethods() {
-        return wrappedMethods.keySet();
-    }
-
-    public MethodSemantic semantic(String fullMethodName) {
-        return methodSemantics.get(fullMethodName);
-    }
-
-    @SuppressWarnings("unchecked")
-    public <ReqT, RespT> MethodDescriptor<ReqT, RespT> methodDesc(String fullMethodName) {
-        return (MethodDescriptor<ReqT, RespT>) wrappedMethods.get(fullMethodName);
-    }
-
-    public static BluePrintBuilder builder() {
-        return new BluePrintBuilder();
-    }
-
     public static class BluePrintBuilder {
         private ServiceDescriptor serviceDescriptor;
         private ArrayList<MethodDescriptor<?, ?>> methods;
@@ -317,9 +311,9 @@ public final class BluePrint {
             this.methodSemantics.add(methodSemanticValue);
             this.methods.add(methodSemanticKey);
             this.wrappedMethods.add(methodSemanticKey.toBuilder()
-                .setRequestMarshaller(withHLC((MethodDescriptor.PrototypeMarshaller<ReqT>)
+                .setRequestMarshaller(enhance((MethodDescriptor.PrototypeMarshaller<ReqT>)
                     methodSemanticKey.getRequestMarshaller()))
-                .setResponseMarshaller(withHLC((MethodDescriptor.PrototypeMarshaller<RespT>)
+                .setResponseMarshaller(enhance((MethodDescriptor.PrototypeMarshaller<RespT>)
                     methodSemanticKey.getResponseMarshaller()))
                 .build());
             return this;
@@ -374,44 +368,9 @@ public final class BluePrint {
             return new BluePrint(serviceDescriptor, methodSemanticMap, methodsMap, wrappedMethods);
         }
 
-        private <T> MethodDescriptor.PrototypeMarshaller<T> withHLC(
+        private <T> MethodDescriptor.PrototypeMarshaller<T> enhance(
             MethodDescriptor.PrototypeMarshaller<T> marshaller) {
-            return new MethodDescriptor.PrototypeMarshaller<>() {
-                private final ThreadLocal<UnknownFieldSet.Builder> localFieldSetBuilder =
-                    ThreadLocal.withInitial(UnknownFieldSet::newBuilder);
-
-                private final ThreadLocal<UnknownFieldSet.Field.Builder> localFieldBuilder =
-                    ThreadLocal.withInitial(UnknownFieldSet.Field::newBuilder);
-
-                @Override
-                public Class<T> getMessageClass() {
-                    return marshaller.getMessageClass();
-                }
-
-                @Nullable
-                @Override
-                public T getMessagePrototype() {
-                    return marshaller.getMessagePrototype();
-                }
-
-                @SuppressWarnings("unchecked")
-                @Override
-                public InputStream stream(T value) {
-                    UnknownFieldSet.Field hlcField = localFieldBuilder.get().clear().addFixed64(HLC.INST.get()).build();
-                    UnknownFieldSet fieldSet =
-                        localFieldSetBuilder.get().addField(PIGGYBACK_FIELD_ID, hlcField).build();
-                    return marshaller.stream((T) ((Message) value).toBuilder().setUnknownFields(fieldSet).build());
-                }
-
-                @Override
-                public T parse(InputStream stream) {
-                    T message = marshaller.parse(stream);
-                    UnknownFieldSet.Field piggybackField =
-                        ((Message) message).getUnknownFields().getField(PIGGYBACK_FIELD_ID);
-                    HLC.INST.update(piggybackField.getFixed64List().get(0));
-                    return message;
-                }
-            };
+            return new EnhancedMarshaller<>(marshaller.getMessagePrototype());
         }
     }
 }

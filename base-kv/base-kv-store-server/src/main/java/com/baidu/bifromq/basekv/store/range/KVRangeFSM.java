@@ -38,6 +38,7 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.baseenv.ZeroCopyParser;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.CancelMerging;
@@ -615,7 +616,7 @@ public class KVRangeFSM implements IKVRangeFSM {
             }
             case DATA -> {
                 try {
-                    KVRangeCommand command = KVRangeCommand.parseFrom(entry.getData());
+                    KVRangeCommand command = ZeroCopyParser.parse(entry.getData(), KVRangeCommand.parser());
                     IKVLoadRecorder loadRecorder = new KVLoadRecorder();
                     IKVRangeWriter<?> rangeWriter = kvRange.toWriter(loadRecorder);
                     IKVReader borrowedReader = kvRange.borrowDataReader();
@@ -1257,7 +1258,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                             l -> {
                                 if (l.hasData()) {
                                     try {
-                                        KVRangeCommand nextCmd = KVRangeCommand.parseFrom(l.getData());
+                                        KVRangeCommand nextCmd = ZeroCopyParser.parse(l.getData(), KVRangeCommand.parser());
                                         if (nextCmd.hasMerge()
                                             && nextCmd.getMerge().getStoreId().equals(hostStoreId)) {
                                             return true;

@@ -16,6 +16,7 @@ package com.baidu.bifromq.basekv.store.wal;
 import static java.util.Collections.emptyMap;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.baseenv.ZeroCopyParser;
 import com.baidu.bifromq.basekv.proto.KVRangeCommand;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
@@ -216,7 +217,7 @@ public class KVRangeWAL implements IKVRangeWAL, IRaftNode.ISnapshotInstaller {
     @SneakyThrows
     @Override
     public KVRangeSnapshot latestSnapshot() {
-        return KVRangeSnapshot.parseFrom(raftNode.latestSnapshot());
+        return ZeroCopyParser.parse(raftNode.latestSnapshot(), KVRangeSnapshot.parser());
     }
 
     @Override

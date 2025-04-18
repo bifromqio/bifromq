@@ -15,12 +15,12 @@ package com.baidu.bifromq.basekv.store.wal;
 
 import static com.baidu.bifromq.basekv.store.wal.KVRangeWALKeys.logEntryKey;
 
+import com.baidu.bifromq.baseenv.ZeroCopyParser;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.localengine.IWALableKVSpace;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.store.exception.KVRangeStoreException;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Queue;
@@ -113,11 +113,11 @@ class LogEntryIteratorPool {
             try {
                 ByteString value = iterator.value();
                 currentIndex++;
-                LogEntry entry = LogEntry.parseFrom(value);
+                LogEntry entry = ZeroCopyParser.parse(value, LogEntry.parser());
                 accumulatedSize += entry.getData().size();
                 iterator.next();
                 return entry;
-            } catch (InvalidProtocolBufferException e) {
+            } catch (Throwable e) {
                 throw new KVRangeStoreException("Log data corruption", e);
             }
         }

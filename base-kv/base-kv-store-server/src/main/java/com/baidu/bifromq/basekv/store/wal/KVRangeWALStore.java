@@ -29,6 +29,7 @@ import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.google.protobuf.UnsafeByteOperations.unsafeWrap;
 import static java.lang.String.format;
 
+import com.baidu.bifromq.baseenv.ZeroCopyParser;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceIterator;
 import com.baidu.bifromq.basekv.localengine.IKVSpaceWriter;
 import com.baidu.bifromq.basekv.localengine.IWALableKVSpace;
@@ -45,6 +46,7 @@ import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Deque;
 import java.util.Iterator;
@@ -229,8 +231,8 @@ class KVRangeWALStore implements IKVRangeWALStore {
         }
         try {
             ByteString data = kvSpace.get(logEntryKey(logEntriesKeyInfix, index)).get();
-            return Optional.of(LogEntry.parseFrom(data));
-        } catch (InvalidProtocolBufferException e) {
+            return Optional.of(ZeroCopyParser.parse(data, LogEntry.parser()));
+        } catch (Throwable e) {
             log.error("Failed to parse log entry[index={}]", index, e);
             return Optional.empty();
         }
@@ -368,7 +370,7 @@ class KVRangeWALStore implements IKVRangeWALStore {
         try {
             Optional<ByteString> votingBytes = kvSpace.get(KEY_CURRENT_VOTING_BYTES);
             if (votingBytes.isPresent()) {
-                currentVoting = Voting.parseFrom(votingBytes.get());
+                currentVoting = ZeroCopyParser.parse(votingBytes.get(), Voting.parser());
             }
         } catch (InvalidProtocolBufferException e) {
             throw new KVRangeStoreException("Failed to parse currentVoting", e);
@@ -382,7 +384,7 @@ class KVRangeWALStore implements IKVRangeWALStore {
     private void loadLatestSnapshot() {
         try {
             ByteString latestSnapshotBytes = kvSpace.get(KEY_LATEST_SNAPSHOT_BYTES).get();
-            latestSnapshot = Snapshot.parseFrom(latestSnapshotBytes);
+            latestSnapshot = ZeroCopyParser.parse(latestSnapshotBytes, Snapshot.parser());
         } catch (InvalidProtocolBufferException e) {
             throw new KVRangeStoreException("Failed to parse snapshot", e);
         }
@@ -400,11 +402,11 @@ class KVRangeWALStore implements IKVRangeWALStore {
 
     private ClusterConfig loadConfigEntry(long configEntryIndex) {
         try {
-            LogEntry logEntry = LogEntry.parseFrom(
-                kvSpace.get(logEntryKey(logEntriesKeyInfix, configEntryIndex)).get());
+            ByteString data = kvSpace.get(logEntryKey(logEntriesKeyInfix, configEntryIndex)).get();
+            LogEntry logEntry = ZeroCopyParser.parse(data, LogEntry.parser());
             assert logEntry.hasConfig();
             return logEntry.getConfig();
-        } catch (InvalidProtocolBufferException e) {
+        } catch (IOException e) {
             throw new KVRangeStoreException("Failed to parse", e);
         } catch (NoSuchElementException e) {
             log.error("Cluster config not found at index[{}]", configEntryIndex);

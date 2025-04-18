@@ -18,6 +18,7 @@ import static com.baidu.bifromq.basekv.Constants.toBaseKVAgentId;
 import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecluster.memberlist.agent.IAgent;
 import com.baidu.bifromq.basecluster.memberlist.agent.IAgentMember;
+import com.baidu.bifromq.baseenv.ZeroCopyParser;
 import com.baidu.bifromq.basekv.proto.KVRangeMessage;
 import com.baidu.bifromq.basekv.proto.StoreMessage;
 import com.baidu.bifromq.basekv.store.IStoreMessenger;
@@ -30,11 +31,6 @@ import org.slf4j.Logger;
 
 class AgentHostStoreMessenger implements IStoreMessenger {
     private final Logger log;
-
-    static String agentId(String clusterId) {
-        return "BaseKV:" + clusterId;
-    }
-
     private final AtomicBoolean stopped = new AtomicBoolean();
     private final IAgentHost agentHost;
     private final IAgent agent;
@@ -51,6 +47,10 @@ class AgentHostStoreMessenger implements IStoreMessenger {
         log = SiftLogger.getLogger(AgentHostStoreMessenger.class, "clusterId", clusterId, "storeId", storeId);
     }
 
+    static String agentId(String clusterId) {
+        return "BaseKV:" + clusterId;
+    }
+
     @Override
     public void send(StoreMessage message) {
         if (message.getPayload().hasHostStoreId()) {
@@ -65,7 +65,7 @@ class AgentHostStoreMessenger implements IStoreMessenger {
         return agentMember.receive()
             .mapOptional(agentMessage -> {
                 try {
-                    StoreMessage message = StoreMessage.parseFrom(agentMessage.getPayload());
+                    StoreMessage message = ZeroCopyParser.parse(agentMessage.getPayload(), StoreMessage.parser());
                     KVRangeMessage payload = message.getPayload();
                     if (!payload.hasHostStoreId()) {
                         // this is a broadcast message

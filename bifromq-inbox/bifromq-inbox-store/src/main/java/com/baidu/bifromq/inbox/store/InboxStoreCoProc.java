@@ -31,6 +31,7 @@ import static com.baidu.bifromq.type.MQTTClientInfoConstants.MQTT_USER_ID_KEY;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetainMessageSpaceBytes;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetainTopics;
 
+import com.baidu.bifromq.baseenv.ZeroCopyParser;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
@@ -387,7 +388,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                     startSeq++;
                     continue;
                 }
-                List<InboxMessage> messageList = InboxMessageList.parseFrom(msgListData.get()).getMessageList();
+                List<InboxMessage> messageList = ZeroCopyParser.parse(msgListData.get(), InboxMessageList.parser())
+                    .getMessageList();
                 long lastSeq = messageList.get(messageList.size() - 1).getSeq();
                 if (lastSeq >= startFetchFromSeq) {
                     for (InboxMessage inboxMsg : messageList) {
@@ -1128,7 +1130,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                     // drop partially
                     itr.seekForPrev(keyGenerator.apply(inboxKeyPrefix, startSeq + dropCount));
                     long beginSeq = parseSeq(inboxKeyPrefix, itr.key());
-                    List<InboxMessage> msgList = InboxMessageList.parseFrom(itr.value()).getMessageList();
+                    List<InboxMessage> msgList = ZeroCopyParser.parse(itr.value(), InboxMessageList.parser())
+                        .getMessageList();
                     InboxMessageList.Builder msgListBuilder = InboxMessageList.newBuilder();
                     List<InboxMessage> subMsgList = msgList.subList((int) (startSeq + dropCount - beginSeq),
                         msgList.size());
@@ -1253,7 +1256,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 if (msgListData.isEmpty()) {
                     break;
                 }
-                List<InboxMessage> msgList = InboxMessageList.parseFrom(msgListData.get()).getMessageList();
+                List<InboxMessage> msgList = ZeroCopyParser.parse(msgListData.get(), InboxMessageList.parser())
+                    .getMessageList();
                 long lastSeq = msgList.get(msgList.size() - 1).getSeq();
                 if (lastSeq <= commitSeq) {
                     writer.delete(msgKey);
