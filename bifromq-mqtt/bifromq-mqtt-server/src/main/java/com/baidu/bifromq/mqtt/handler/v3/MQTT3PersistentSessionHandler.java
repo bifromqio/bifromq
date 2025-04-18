@@ -13,10 +13,10 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.handler.IMQTTProtocolHelper;
-import com.baidu.bifromq.mqtt.handler.MQTTConnectHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTPersistentSessionHandler;
 import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.handler.condition.Condition;
@@ -36,7 +36,7 @@ public final class MQTT3PersistentSessionHandler extends MQTTPersistentSessionHa
                                          int keepAliveTimeSeconds,
                                          int sessionExpirySeconds,
                                          ClientInfo clientInfo,
-                                         @Nullable MQTTConnectHandler.ExistingSession existingSession,
+                                         InboxVersion inboxVersion,
                                          @Nullable LWT willMessage,
                                          ChannelHandlerContext ctx) {
         super(settings,
@@ -46,7 +46,7 @@ public final class MQTT3PersistentSessionHandler extends MQTTPersistentSessionHa
             keepAliveTimeSeconds,
             sessionExpirySeconds,
             clientInfo,
-            existingSession,
+            inboxVersion,
             willMessage, ctx);
         this.helper = new MQTT3ProtocolHelper(settings, clientInfo);
     }

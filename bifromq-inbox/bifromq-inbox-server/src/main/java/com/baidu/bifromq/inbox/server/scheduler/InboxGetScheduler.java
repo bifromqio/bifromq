@@ -20,32 +20,32 @@ import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcher;
 import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
 import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExistReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExistRequest;
 import com.baidu.bifromq.sysprops.props.InboxCheckQueuesPerRange;
 import com.google.protobuf.ByteString;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxGetScheduler extends InboxReadScheduler<GetRequest, GetReply> implements IInboxGetScheduler {
+public class InboxGetScheduler extends InboxReadScheduler<ExistRequest, ExistReply> implements IInboxGetScheduler {
     public InboxGetScheduler(IBaseKVStoreClient inboxStoreClient) {
         super(InboxCheckQueuesPerRange.INSTANCE.get(), inboxStoreClient, "inbox_server_check");
     }
 
     @Override
-    protected Batcher<GetRequest, GetReply, QueryCallBatcherKey> newBatcher(String name,
-                                                                            long tolerableLatencyNanos,
-                                                                            long burstLatencyNanos,
-                                                                            QueryCallBatcherKey batcherKey) {
+    protected Batcher<ExistRequest, ExistReply, QueryCallBatcherKey> newBatcher(String name,
+                                                                                long tolerableLatencyNanos,
+                                                                                long burstLatencyNanos,
+                                                                                QueryCallBatcherKey batcherKey) {
         return new InboxGetBatcher(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos, storeClient);
     }
 
     @Override
-    protected ByteString rangeKey(GetRequest request) {
+    protected ByteString rangeKey(ExistRequest request) {
         return inboxStartKeyPrefix(request.getTenantId(), request.getInboxId());
     }
 
-    private static class InboxGetBatcher extends QueryCallBatcher<GetRequest, GetReply> {
+    private static class InboxGetBatcher extends QueryCallBatcher<ExistRequest, ExistReply> {
         InboxGetBatcher(QueryCallBatcherKey batcherKey,
                         String name,
                         long tolerableLatencyNanos,
@@ -55,8 +55,8 @@ public class InboxGetScheduler extends InboxReadScheduler<GetRequest, GetReply> 
         }
 
         @Override
-        protected IBatchCall<GetRequest, GetReply, QueryCallBatcherKey> newBatch() {
-            return new BatchGetCall(storeClient, batcherKey);
+        protected IBatchCall<ExistRequest, ExistReply, QueryCallBatcherKey> newBatch() {
+            return new BatchExistCall(storeClient, batcherKey);
         }
     }
 }

@@ -22,28 +22,26 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchGetRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExistReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExistRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchExistRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Queue;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class BatchGetCall extends BatchQueryCall<GetRequest, GetReply> {
-    protected BatchGetCall(IBaseKVStoreClient storeClient, QueryCallBatcherKey batcherKey) {
+class BatchExistCall extends BatchQueryCall<ExistRequest, ExistReply> {
+    protected BatchExistCall(IBaseKVStoreClient storeClient, QueryCallBatcherKey batcherKey) {
         super(storeClient, true, batcherKey);
     }
 
     @Override
-    protected ROCoProcInput makeBatch(Iterator<GetRequest> reqIterator) {
-        BatchGetRequest.Builder reqBuilder = BatchGetRequest.newBuilder();
+    protected ROCoProcInput makeBatch(Iterator<ExistRequest> reqIterator) {
+        BatchExistRequest.Builder reqBuilder = BatchExistRequest.newBuilder();
         reqIterator.forEachRemaining(
             request -> reqBuilder
-                .addParams(BatchGetRequest.Params.newBuilder()
+                .addParams(BatchExistRequest.Params.newBuilder()
                     .setTenantId(request.getTenantId())
                     .setInboxId(request.getInboxId())
                     .setNow(request.getNow())
@@ -52,56 +50,47 @@ class BatchGetCall extends BatchQueryCall<GetRequest, GetReply> {
         return ROCoProcInput.newBuilder()
             .setInboxService(InboxServiceROCoProcInput.newBuilder()
                 .setReqId(reqId)
-                .setBatchGet(reqBuilder.build())
+                .setBatchExist(reqBuilder.build())
                 .build())
             .build();
     }
 
     @Override
-    protected void handleOutput(Queue<ICallTask<GetRequest, GetReply, QueryCallBatcherKey>> batchedTasks,
+    protected void handleOutput(Queue<ICallTask<ExistRequest, ExistReply, QueryCallBatcherKey>> batchedTasks,
                                 ROCoProcOutput output) {
-        ICallTask<GetRequest, GetReply, QueryCallBatcherKey> task;
-        assert batchedTasks.size() == output.getInboxService().getBatchGet().getResultCount();
+        ICallTask<ExistRequest, ExistReply, QueryCallBatcherKey> task;
+        assert batchedTasks.size() == output.getInboxService().getBatchExist().getExistCount();
         int i = 0;
         while ((task = batchedTasks.poll()) != null) {
-            List<InboxVersion> inboxVersions =
-                output.getInboxService().getBatchGet().getResult(i++).getVersionList();
-            if (inboxVersions.isEmpty()) {
-                task.resultPromise().complete(GetReply.newBuilder()
-                    .setReqId(task.call().getReqId())
-                    .setCode(GetReply.Code.NO_INBOX)
-                    .build());
-            } else {
-                task.resultPromise().complete(GetReply.newBuilder()
-                    .setReqId(task.call().getReqId())
-                    .setCode(GetReply.Code.EXIST)
-                    .addAllInbox(inboxVersions) // always using highest incarnation
-                    .build());
-            }
+            boolean exist = output.getInboxService().getBatchExist().getExist(i++);
+            task.resultPromise().complete(ExistReply.newBuilder()
+                .setReqId(task.call().getReqId())
+                .setCode(exist ? ExistReply.Code.EXIST : ExistReply.Code.NO_INBOX)
+                .build());
         }
     }
 
     @Override
-    protected void handleException(ICallTask<GetRequest, GetReply, QueryCallBatcherKey> callTask,
+    protected void handleException(ICallTask<ExistRequest, ExistReply, QueryCallBatcherKey> callTask,
                                    Throwable e) {
         if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
-            callTask.resultPromise().complete(GetReply.newBuilder()
+            callTask.resultPromise().complete(ExistReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
-                .setCode(GetReply.Code.TRY_LATER)
+                .setCode(ExistReply.Code.TRY_LATER)
                 .build());
             return;
         }
         if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
-            callTask.resultPromise().complete(GetReply.newBuilder()
+            callTask.resultPromise().complete(ExistReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
-                .setCode(GetReply.Code.TRY_LATER)
+                .setCode(ExistReply.Code.TRY_LATER)
                 .build());
             return;
         }
         if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
-            callTask.resultPromise().complete(GetReply.newBuilder()
+            callTask.resultPromise().complete(ExistReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
-                .setCode(GetReply.Code.TRY_LATER)
+                .setCode(ExistReply.Code.TRY_LATER)
                 .build());
             return;
         }

@@ -26,18 +26,14 @@ import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
-import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
-import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExistReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExistRequest;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireAllReply;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireAllRequest;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireRequest;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetchHint;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetched;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
@@ -52,7 +48,6 @@ import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxAttachScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxCheckSubScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxCommitScheduler;
-import com.baidu.bifromq.inbox.server.scheduler.IInboxCreateScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxDeleteScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxDetachScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxFetchScheduler;
@@ -84,7 +79,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final IInboxCheckSubScheduler checkSubScheduler;
     private final IInboxInsertScheduler insertScheduler;
     private final IInboxCommitScheduler commitScheduler;
-    private final IInboxCreateScheduler createScheduler;
     private final IInboxAttachScheduler attachScheduler;
     private final IInboxDetachScheduler detachScheduler;
     private final IInboxDeleteScheduler deleteScheduler;
@@ -101,7 +95,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                  IInboxFetchScheduler fetchScheduler,
                  IInboxInsertScheduler insertScheduler,
                  IInboxCommitScheduler commitScheduler,
-                 IInboxCreateScheduler createScheduler,
                  IInboxAttachScheduler attachScheduler,
                  IInboxDetachScheduler detachScheduler,
                  IInboxDeleteScheduler deleteScheduler,
@@ -116,7 +109,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
         this.fetchScheduler = fetchScheduler;
         this.insertScheduler = insertScheduler;
         this.commitScheduler = commitScheduler;
-        this.createScheduler = createScheduler;
         this.attachScheduler = attachScheduler;
         this.detachScheduler = detachScheduler;
         this.deleteScheduler = deleteScheduler;
@@ -126,45 +118,20 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     }
 
     @Override
-    public void get(GetRequest request, StreamObserver<GetReply> responseObserver) {
+    public void exist(ExistRequest request, StreamObserver<ExistReply> responseObserver) {
         log.trace("Handling get {}", request);
         response(tenantId -> getScheduler.schedule(request)
             .exceptionally(e -> {
                 if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
-                    return GetReply.newBuilder().setReqId(request.getReqId()).setCode(GetReply.Code.TRY_LATER).build();
+                    return ExistReply.newBuilder().setReqId(request.getReqId()).setCode(ExistReply.Code.TRY_LATER)
+                        .build();
                 }
                 if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
-                    return GetReply.newBuilder().setReqId(request.getReqId())
-                        .setCode(GetReply.Code.BACK_PRESSURE_REJECTED).build();
+                    return ExistReply.newBuilder().setReqId(request.getReqId())
+                        .setCode(ExistReply.Code.BACK_PRESSURE_REJECTED).build();
                 }
                 log.debug("Failed to get inbox", e);
-                return GetReply.newBuilder().setReqId(request.getReqId()).setCode(GetReply.Code.ERROR).build();
-            }), responseObserver);
-    }
-
-    @Override
-    public void create(CreateRequest request, StreamObserver<CreateReply> responseObserver) {
-        log.trace("Handling create {}", request);
-        assert !request.hasLwt() || request.getLwt().getDelaySeconds() > 0;
-        response(tenantId -> createScheduler.schedule(request)
-            .exceptionally(e -> {
-                if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
-                    return CreateReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setCode(CreateReply.Code.TRY_LATER)
-                        .build();
-                }
-                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
-                    return CreateReply.newBuilder()
-                        .setReqId(request.getReqId())
-                        .setCode(CreateReply.Code.BACK_PRESSURE_REJECTED)
-                        .build();
-                }
-                log.debug("Failed to create inbox", e);
-                return CreateReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(CreateReply.Code.ERROR)
-                    .build();
+                return ExistReply.newBuilder().setReqId(request.getReqId()).setCode(ExistReply.Code.ERROR).build();
             }), responseObserver);
     }
 
@@ -228,7 +195,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     return distClient.addRoute(request.getReqId(),
                             request.getTenantId(),
                             TopicUtil.from(request.getTopicFilter()),
-                            receiverId(request.getInboxId(), request.getIncarnation()),
+                            receiverId(request.getInboxId(), request.getVersion().getIncarnation()),
                             getDelivererKey(request.getTenantId(), request.getInboxId()),
                             inboxClient.id(),
                             request.getOption().getIncarnation())
@@ -292,7 +259,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                     return unmatch(request.getReqId(),
                         request.getTenantId(),
                         request.getInboxId(),
-                        request.getIncarnation(),
+                        request.getVersion().getIncarnation(),
                         request.getTopicFilter(),
                         v.getOption())
                         .thenApply(unmatchResult -> switch (unmatchResult) {
@@ -346,92 +313,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                                                      TopicFilterOption option) {
         return distClient.removeRoute(reqId, tenantId, TopicUtil.from(topicFilter), receiverId(inboxId, incarnation),
             getDelivererKey(tenantId, inboxId), inboxClient.id(), option.getIncarnation());
-    }
-
-    @Override
-    public void expire(ExpireRequest request, StreamObserver<ExpireReply> responseObserver) {
-        log.trace("Handling expire {}", request);
-        response(tenantId -> getScheduler.schedule(GetRequest.newBuilder()
-                .setReqId(request.getReqId())
-                .setTenantId(request.getTenantId())
-                .setInboxId(request.getInboxId())
-                .setNow(request.getNow())
-                .build())
-            .exceptionally(e -> {
-                if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
-                    return GetReply.newBuilder().setReqId(request.getReqId()).setCode(GetReply.Code.TRY_LATER).build();
-                }
-                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
-                    return GetReply.newBuilder().setReqId(request.getReqId())
-                        .setCode(GetReply.Code.BACK_PRESSURE_REJECTED).build();
-                }
-                log.debug("Failed to expire", e);
-                return GetReply.newBuilder().setReqId(request.getReqId()).setCode(GetReply.Code.ERROR).build();
-            })
-            .thenCompose(reply -> {
-                switch (reply.getCode()) {
-                    case EXIST -> {
-                        List<CompletableFuture<DeleteReply>> deleteFutures = reply.getInboxList().stream()
-                            .map(inboxVersion -> delete(DeleteRequest.newBuilder()
-                                .setReqId(request.getReqId())
-                                .setTenantId(request.getTenantId())
-                                .setInboxId(request.getInboxId())
-                                .setIncarnation(inboxVersion.getIncarnation())
-                                .setVersion(inboxVersion.getVersion())
-                                .build()))
-                            .toList();
-                        return CompletableFuture.allOf(deleteFutures.toArray(CompletableFuture[]::new))
-                            .thenApply(v -> deleteFutures.stream().map(CompletableFuture::join).toList())
-                            .thenApply((deleteReplies) -> {
-                                if (deleteReplies.stream().anyMatch(r ->
-                                    r.getCode() != DeleteReply.Code.OK && r.getCode() != DeleteReply.Code.NO_INBOX)) {
-                                    if (deleteReplies.stream()
-                                        .anyMatch(r -> r.getCode() == DeleteReply.Code.TRY_LATER)) {
-                                        // Any detach reply is TRY_LATER
-                                        return ExpireReply.newBuilder()
-                                            .setReqId(request.getReqId())
-                                            .setCode(ExpireReply.Code.TRY_LATER)
-                                            .build();
-                                    }
-                                    return ExpireReply.newBuilder()
-                                        .setReqId(request.getReqId())
-                                        .setCode(ExpireReply.Code.ERROR)
-                                        .build();
-                                } else {
-                                    // OK or NO_INBOX
-                                    return ExpireReply.newBuilder()
-                                        .setReqId(request.getReqId())
-                                        .setCode(ExpireReply.Code.OK)
-                                        .build();
-                                }
-                            });
-                    }
-                    case NO_INBOX -> {
-                        return CompletableFuture.completedFuture(ExpireReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setCode(ExpireReply.Code.OK)
-                            .build());
-                    }
-                    case TRY_LATER -> {
-                        return CompletableFuture.completedFuture(ExpireReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setCode(ExpireReply.Code.TRY_LATER)
-                            .build());
-                    }
-                    case BACK_PRESSURE_REJECTED -> {
-                        return CompletableFuture.completedFuture(ExpireReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setCode(ExpireReply.Code.BACK_PRESSURE_REJECTED)
-                            .build());
-                    }
-                    default -> {
-                        return CompletableFuture.completedFuture(ExpireReply.newBuilder()
-                            .setReqId(request.getReqId())
-                            .setCode(ExpireReply.Code.ERROR)
-                            .build());
-                    }
-                }
-            }), responseObserver);
     }
 
     @Override
@@ -540,7 +421,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
                             .map(e -> unmatch(System.nanoTime(),
                                 request.getTenantId(),
                                 request.getInboxId(),
-                                request.getIncarnation(),
+                                request.getVersion().getIncarnation(),
                                 e.getKey(),
                                 e.getValue()))
                             .toList();
@@ -585,7 +466,6 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
             attachScheduler.close();
             detachScheduler.close();
             deleteScheduler.close();
-            createScheduler.close();
             subScheduler.close();
             unsubScheduler.close();
 

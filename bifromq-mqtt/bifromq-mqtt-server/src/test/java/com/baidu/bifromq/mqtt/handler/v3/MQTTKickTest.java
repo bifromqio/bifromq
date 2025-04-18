@@ -19,7 +19,7 @@ import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_STA
 import static com.baidu.bifromq.plugin.eventcollector.EventType.MQTT_SESSION_STOP;
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_ACCEPTED;
 
-import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
+import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
 import com.baidu.bifromq.type.ClientInfo;
@@ -34,7 +34,7 @@ public class MQTTKickTest extends BaseMQTTTest {
     public void testKick() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxExpire(ExpireReply.Code.NOT_FOUND);
+        mockInboxDetach(DetachReply.Code.NO_INBOX);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
         MqttConnAckMessage ackMessage = channel.readOutbound();

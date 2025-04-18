@@ -14,8 +14,8 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExistReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExistRequest;
 
-public interface IInboxGetScheduler extends IBatchCallScheduler<GetRequest, GetReply> {
+public interface IInboxGetScheduler extends IBatchCallScheduler<ExistRequest, ExistReply> {
 }

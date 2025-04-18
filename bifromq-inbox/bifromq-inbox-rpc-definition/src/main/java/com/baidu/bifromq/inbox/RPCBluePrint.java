@@ -18,11 +18,9 @@ import static com.baidu.bifromq.inbox.util.InboxServiceUtil.getDelivererKey;
 import com.baidu.bifromq.baserpc.BluePrint;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
-import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireRequest;
-import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExistRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.rpc.proto.SendLWTRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
@@ -39,16 +37,12 @@ public class RPCBluePrint {
         .methodSemantic(InboxServiceGrpc.getCheckSubscriptionsMethod(), BluePrint.WCHUnaryMethod.<CheckRequest>builder()
             .keyHashFunc(CheckRequest::getDelivererKey).build())
         // both broker and reader client rpc
-        .methodSemantic(InboxServiceGrpc.getGetMethod(), BluePrint.WCHUnaryMethod.<GetRequest>builder()
+        .methodSemantic(InboxServiceGrpc.getExistMethod(), BluePrint.WCHUnaryMethod.<ExistRequest>builder()
             .keyHashFunc(request -> getDelivererKey(request.getTenantId(), request.getInboxId())).build())
         // reader client rpc
         .methodSemantic(InboxServiceGrpc.getAttachMethod(), BluePrint.WCHUnaryMethod.<AttachRequest>builder()
             .keyHashFunc(request -> getDelivererKey(request.getClient().getTenantId(), request.getInboxId())).build())
         .methodSemantic(InboxServiceGrpc.getDetachMethod(), BluePrint.WCHUnaryMethod.<DetachRequest>builder()
-            .keyHashFunc(request -> getDelivererKey(request.getClient().getTenantId(), request.getInboxId())).build())
-        .methodSemantic(InboxServiceGrpc.getExpireMethod(), BluePrint.WCHUnaryMethod.<ExpireRequest>builder()
-            .keyHashFunc(request -> getDelivererKey(request.getTenantId(), request.getInboxId())).build())
-        .methodSemantic(InboxServiceGrpc.getCreateMethod(), BluePrint.WCHUnaryMethod.<CreateRequest>builder()
             .keyHashFunc(request -> getDelivererKey(request.getClient().getTenantId(), request.getInboxId())).build())
         .methodSemantic(InboxServiceGrpc.getSubMethod(), BluePrint.WCHUnaryMethod.<SubRequest>builder()
             .keyHashFunc(request -> getDelivererKey(request.getTenantId(), request.getInboxId())).build())

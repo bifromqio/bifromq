@@ -23,12 +23,10 @@ import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basescheduler.exception.BatcherUnavailableException;
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
-import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
-import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExistReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExistRequest;
 import io.grpc.stub.StreamObserver;
 import java.util.concurrent.CompletableFuture;
 import org.testng.annotations.Test;
@@ -36,30 +34,16 @@ import org.testng.annotations.Test;
 public class MockedInboxAdminTest extends MockedInboxService {
 
     @Test
-    public void getInboxThrowsException() {
+    public void existInboxThrowsException() {
         long reqId = HLC.INST.getPhysical();
         when(getScheduler.schedule(any())).thenReturn(
             CompletableFuture.failedFuture(new BatcherUnavailableException("Mocked")));
-        StreamObserver<GetReply> streamObserver = mock(StreamObserver.class);
+        StreamObserver<ExistReply> streamObserver = mock(StreamObserver.class);
 
-        inboxService.get(GetRequest.newBuilder().setReqId(reqId).build(), streamObserver);
-
-        verify(streamObserver).onNext(argThat(reply ->
-            reply.getReqId() == reqId && reply.getCode() == GetReply.Code.TRY_LATER));
-        verify(streamObserver).onCompleted();
-    }
-
-    @Test
-    public void createInboxThrowsException() {
-        long reqId = HLC.INST.getPhysical();
-        when(createScheduler.schedule(any())).thenReturn(
-            CompletableFuture.failedFuture(new BatcherUnavailableException("Mocked")));
-
-        StreamObserver<CreateReply> streamObserver = mock(StreamObserver.class);
-        inboxService.create(CreateRequest.newBuilder().setReqId(reqId).build(), streamObserver);
+        inboxService.exist(ExistRequest.newBuilder().setReqId(reqId).build(), streamObserver);
 
         verify(streamObserver).onNext(argThat(reply ->
-            reply.getReqId() == reqId && reply.getCode() == CreateReply.Code.TRY_LATER));
+            reply.getReqId() == reqId && reply.getCode() == ExistReply.Code.TRY_LATER));
         verify(streamObserver).onCompleted();
     }
 

@@ -45,7 +45,6 @@ class BatchSendLWTCall extends BatchQueryCall<SendLWTRequest, SendLWTReply> {
                 .addParams(BatchSendLWTRequest.Params.newBuilder()
                     .setTenantId(request.getTenantId())
                     .setInboxId(request.getInboxId())
-                    .setIncarnation(request.getIncarnation())
                     .setVersion(request.getVersion())
                     .setNow(request.getNow())
                     .build()));

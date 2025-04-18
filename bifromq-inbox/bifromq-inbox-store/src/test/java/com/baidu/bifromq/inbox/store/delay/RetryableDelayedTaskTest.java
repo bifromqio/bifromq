@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.inbox.store.delay;
 
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import com.baidu.bifromq.inbox.record.InboxInstance;
@@ -21,7 +20,9 @@ import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -29,12 +30,15 @@ import org.testng.annotations.Test;
 public class RetryableDelayedTaskTest {
 
     private TenantInboxInstance tenantInboxInstance;
+    @Mock
     private IDelayTaskRunner<TenantInboxInstance> runner;
+
+    private AutoCloseable closeable;
 
     @BeforeMethod
     public void setUp() {
+        closeable = MockitoAnnotations.openMocks(this);
         tenantInboxInstance = new TenantInboxInstance("tenant1", new InboxInstance("inbox1", 1L));
-        runner = mock(IDelayTaskRunner.class);
     }
 
     @Test
@@ -95,7 +99,7 @@ public class RetryableDelayedTaskTest {
 
         @Override
         protected RetryableDelayedTask<Boolean> createRetryTask(Duration newDelay) {
-            return new TestTask(newDelay, version, retryCount + 1, response);
+            return new TestTask(newDelay, mod, retryCount + 1, response);
         }
 
         @Override

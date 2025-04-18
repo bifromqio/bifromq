@@ -24,7 +24,7 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
+import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.mqtt.MockableTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.ConditionalRejectHandler;
@@ -108,8 +108,8 @@ public class EnhancedAuthTest extends MockableTest {
     public void setup() {
         connectHandler = new MQTT5ConnectHandler();
         when(resourceThrottler.hasResource(any(), any())).thenReturn(true);
-        when(inboxClient.expire(any())).thenReturn(
-            CompletableFuture.completedFuture(ExpireReply.newBuilder().setCode(ExpireReply.Code.OK).build()));
+        when(inboxClient.detach(any())).thenReturn(
+            CompletableFuture.completedFuture(DetachReply.newBuilder().setCode(DetachReply.Code.OK).build()));
         when(clientBalancer.needRedirect(any())).thenReturn(Optional.empty());
         sessionContext = MQTTSessionContext.builder().serverId(serverId).inboxClient(inboxClient)
             .eventCollector(eventCollector).resourceThrottler(resourceThrottler).settingProvider(settingProvider)

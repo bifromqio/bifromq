@@ -14,6 +14,7 @@
 package com.baidu.bifromq.inbox.store.delay;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.RateLimiter;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
@@ -66,13 +67,8 @@ public class DelayTaskRunner<KeyT extends Comparable<KeyT>> implements IDelayTas
             "delay-task-runner");
     }
 
-    /**
-     * Check if there is a task registered with the specified key.
-     *
-     * @param key the key to check
-     * @return true if there is a task registered with the specified key, false otherwise
-     */
-    public boolean hasTask(KeyT key) {
+    @VisibleForTesting
+    boolean hasTask(KeyT key) {
         return deadLines.containsKey(key);
     }
 
@@ -83,6 +79,41 @@ public class DelayTaskRunner<KeyT extends Comparable<KeyT>> implements IDelayTas
         }
         executor.submit(() -> {
             if (isShutdown) {
+                return;
+            }
+            Long prevDeadlineTS = deadLines.remove(key);
+            long now = currentMillisSupplier.get();
+            if (prevDeadlineTS != null) {
+                sortedDeadlines.remove(new SortKey<>(key, prevDeadlineTS));
+            }
+            Duration delayInterval = delayedTask.getDelay();
+            long deadlineTS = deadline(now, delayInterval);
+            deadLines.put(key, deadlineTS);
+            sortedDeadlines.put(new SortKey<>(key, deadlineTS), delayedTask);
+
+            Map.Entry<SortKey<KeyT>, IDelayedTask<KeyT>> firstEntry = sortedDeadlines.firstEntry();
+            long earliestDeadline = firstEntry.getKey().deadlineTS;
+            if (nextTriggerTS == 0 || earliestDeadline < nextTriggerTS) {
+                // postpone trigger task
+                if (triggerTask != null) {
+                    triggerTask.cancel(true);
+                }
+                nextTriggerTS = earliestDeadline;
+                triggerTask = executor.schedule(this::trigger, earliestDeadline - now, TimeUnit.MILLISECONDS);
+            }
+        });
+    }
+
+    @Override
+    public <TaskT extends IDelayedTask<KeyT>> void scheduleIfAbsent(KeyT key, TaskT delayedTask) {
+        if (isShutdown) {
+            return;
+        }
+        executor.submit(() -> {
+            if (isShutdown) {
+                return;
+            }
+            if (deadLines.containsKey(key)) {
                 return;
             }
             Long prevDeadlineTS = deadLines.remove(key);
@@ -145,9 +176,7 @@ public class DelayTaskRunner<KeyT extends Comparable<KeyT>> implements IDelayTas
         });
     }
 
-    /**
-     * Shutdown the DelayTaskRunner.
-     */
+    @Override
     public void shutdown() {
         executor.submit(() -> {
             isShutdown = true;

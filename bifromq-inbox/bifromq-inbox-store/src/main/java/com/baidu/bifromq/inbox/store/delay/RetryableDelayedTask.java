@@ -23,11 +23,11 @@ import lombok.extern.slf4j.Slf4j;
 public abstract class RetryableDelayedTask<R> implements IDelayedTask<TenantInboxInstance> {
     protected final Duration delay;
     protected final int retryCount;
-    protected final long version;
+    protected final long mod;
 
-    protected RetryableDelayedTask(Duration delay, long version, int retryCount) {
+    protected RetryableDelayedTask(Duration delay, long mod, int retryCount) {
         this.delay = delay;
-        this.version = version;
+        this.mod = mod;
         this.retryCount = retryCount;
     }
 

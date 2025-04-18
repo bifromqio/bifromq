@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
+import static java.util.Collections.emptySet;
+
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
@@ -22,13 +24,14 @@ import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
-import com.baidu.bifromq.inbox.record.InboxInstance;
-import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 
@@ -51,7 +54,6 @@ class BatchCommitCall extends BatchMutationCall<CommitRequest, CommitReply> {
             BatchCommitRequest.Params.Builder paramsBuilder = BatchCommitRequest.Params.newBuilder()
                 .setTenantId(req.getTenantId())
                 .setInboxId(req.getInboxId())
-                .setIncarnation(req.getIncarnation())
                 .setVersion(req.getVersion())
                 .setNow(req.getNow());
             if (req.hasQos0UpToSeq()) {
@@ -117,7 +119,7 @@ class BatchCommitCall extends BatchMutationCall<CommitRequest, CommitReply> {
     }
 
     private static class BatchCommitCallTask extends MutationCallTaskBatch<CommitRequest, CommitReply> {
-        private final Set<TenantInboxInstance> inboxes = new HashSet<>();
+        private final Map<String, Set<InboxVersion>> inboxes = new HashMap<>();
 
         private BatchCommitCallTask(long ver) {
             super(ver);
@@ -126,18 +128,14 @@ class BatchCommitCall extends BatchMutationCall<CommitRequest, CommitReply> {
         @Override
         protected void add(ICallTask<CommitRequest, CommitReply, MutationCallBatcherKey> callTask) {
             super.add(callTask);
-            inboxes.add(new TenantInboxInstance(
-                callTask.call().getTenantId(),
-                new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))
-            );
+            inboxes.computeIfAbsent(callTask.call().getTenantId(), k -> new HashSet<>())
+                .add(callTask.call().getVersion());
         }
 
         @Override
         protected boolean isBatchable(ICallTask<CommitRequest, CommitReply, MutationCallBatcherKey> callTask) {
-            return !inboxes.contains(new TenantInboxInstance(
-                callTask.call().getTenantId(),
-                new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))
-            );
+            return !inboxes.getOrDefault(callTask.call().getTenantId(), emptySet())
+                .contains(callTask.call().getVersion());
         }
     }
 }

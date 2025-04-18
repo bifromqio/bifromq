@@ -26,16 +26,12 @@ import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
-import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
-import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExistReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExistRequest;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireAllReply;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireAllRequest;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireRequest;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
@@ -104,28 +100,14 @@ public class InboxClientTest {
     }
 
     @Test
-    public void getRPCException() {
-        GetRequest getRequest = GetRequest.newBuilder().setTenantId("TenantId").build();
+    public void existRPCException() {
+        ExistRequest existRequest = ExistRequest.newBuilder().setTenantId("TenantId").build();
 
         when(rpcClient.invoke(anyString(), isNull(), any(), any()))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Mocked")));
-        GetReply reply = inboxClient.get(getRequest).join();
-        verify(rpcClient).invoke(eq(getRequest.getTenantId()), isNull(), eq(getRequest), any());
-        assertEquals(reply.getCode(), GetReply.Code.ERROR);
-    }
-
-    @Test
-    public void createRPCException() {
-        CreateRequest createRequest = CreateRequest.newBuilder()
-            .setClient(ClientInfo.newBuilder()
-                .setTenantId("TenantId")
-                .build()).build();
-
-        when(rpcClient.invoke(anyString(), isNull(), any(), any()))
-            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Mocked")));
-        CreateReply reply = inboxClient.create(createRequest).join();
-        verify(rpcClient).invoke(eq(createRequest.getClient().getTenantId()), isNull(), eq(createRequest), any());
-        assertEquals(reply.getCode(), CreateReply.Code.ERROR);
+        ExistReply reply = inboxClient.exist(existRequest).join();
+        verify(rpcClient).invoke(eq(existRequest.getTenantId()), isNull(), eq(existRequest), any());
+        assertEquals(reply.getCode(), ExistReply.Code.ERROR);
     }
 
     @Test
@@ -176,17 +158,6 @@ public class InboxClientTest {
         UnsubReply reply = inboxClient.unsub(unsubRequest).join();
         verify(rpcClient).invoke(eq(unsubRequest.getTenantId()), isNull(), eq(unsubRequest), any());
         assertEquals(reply.getCode(), UnsubReply.Code.ERROR);
-    }
-
-    @Test
-    public void expireRPCException() {
-        ExpireRequest expireRequest = ExpireRequest.newBuilder().setTenantId("TenantId").build();
-
-        when(rpcClient.invoke(anyString(), isNull(), any(), any()))
-            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Mocked")));
-        ExpireReply reply = inboxClient.expire(expireRequest).join();
-        verify(rpcClient).invoke(eq(expireRequest.getTenantId()), isNull(), eq(expireRequest), any());
-        assertEquals(reply.getCode(), ExpireReply.Code.ERROR);
     }
 
     @Test

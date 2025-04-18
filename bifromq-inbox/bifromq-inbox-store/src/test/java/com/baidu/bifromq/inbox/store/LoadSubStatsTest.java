@@ -18,8 +18,9 @@ import static org.testng.Assert.assertNotSame;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.utils.BoundaryUtil;
-import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.type.ClientInfo;
 import io.micrometer.core.instrument.Gauge;
 import org.testng.annotations.Test;
@@ -33,19 +34,19 @@ public class LoadSubStatsTest extends InboxStoreTest {
         String topicFilter = "/a/b/c";
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        requestCreate(BatchCreateRequest.Params.newBuilder()
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setExpirySeconds(5)
             .setClient(client)
             .setNow(now)
-            .build());
+            .build();
+        InboxVersion inboxVersion = requestAttach(attachParams).get(0);
 
         BatchSubRequest.Params subParams = BatchSubRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
             .setNow(now)
             .build();

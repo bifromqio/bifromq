@@ -59,6 +59,7 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_USE_ANOTHER_SERVER;
 import static io.netty.handler.codec.mqtt.MqttProperties.MqttPropertyType.SESSION_EXPIRY_INTERVAL;
 
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
@@ -647,7 +648,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
     }
 
     @Override
-    protected boolean isCleanSession(MqttConnectMessage message, TenantSettings settings) {
+    protected boolean isCleanStart(MqttConnectMessage message, TenantSettings settings) {
         return settings.forceTransient || message.variableHeader().isCleanSession();
     }
 
@@ -662,56 +663,44 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
     }
 
     @Override
-    protected GoAway onCleanSessionFailed(ClientInfo clientInfo) {
+    protected GoAway onInboxCallError(ClientInfo clientInfo, String reason) {
         return new GoAway(MqttMessageBuilders
             .connAck()
             .returnCode(CONNECTION_REFUSED_IMPLEMENTATION_SPECIFIC)
             .properties(MQTT5MessageBuilders.connAckProperties()
-                .reasonString("Unable to expire previous session, Try later")
+                .reasonString(reason)
                 .build())
             .build(),
             getLocal(InboxTransientError.class)
-                .reason("Unable to expire previous session, Try later")
+                .reason(reason)
                 .clientInfo(clientInfo));
     }
 
     @Override
-    protected GoAway onCleanSessionRejected(ClientInfo clientInfo) {
-        return new GoAway(MqttMessageBuilders
-            .connAck()
-            .returnCode(CONNECTION_REFUSED_SERVER_BUSY)
-            .properties(MQTT5MessageBuilders.connAckProperties()
-                .build())
-            .build(),
-            getLocal(ServerBusy.class)
-                .reason("Unable to expire previous session, Server Busy")
-                .clientInfo(clientInfo));
-    }
-
-    @Override
-    protected GoAway onGetSessionFailed(ClientInfo clientInfo) {
+    protected GoAway onInboxCallRetry(ClientInfo clientInfo, String reason) {
         return new GoAway(MqttMessageBuilders
             .connAck()
             .returnCode(CONNECTION_REFUSED_IMPLEMENTATION_SPECIFIC)
             .properties(MQTT5MessageBuilders.connAckProperties()
-                .reasonString("Unable to retrieve previous session, Try later")
+                .reasonString(reason)
                 .build())
             .build(),
             getLocal(InboxTransientError.class)
-                .reason("Unable to retrieve previous session, Try later")
+                .reason(reason)
                 .clientInfo(clientInfo));
     }
 
     @Override
-    protected GoAway onGetSessionRejected(ClientInfo clientInfo) {
+    protected GoAway onInboxCallBusy(ClientInfo clientInfo, String reason) {
         return new GoAway(MqttMessageBuilders
             .connAck()
             .returnCode(CONNECTION_REFUSED_SERVER_BUSY)
             .properties(MQTT5MessageBuilders.connAckProperties()
+                .reasonString(reason)
                 .build())
             .build(),
             getLocal(ServerBusy.class)
-                .reason("Unable to retrieve previous session, Server Busy")
+                .reason(reason)
                 .clientInfo(clientInfo));
     }
 
@@ -744,7 +733,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                                                                String userSessionId,
                                                                int keepAliveSeconds,
                                                                int sessionExpiryInterval,
-                                                               @Nullable ExistingSession existingSession,
+                                                               InboxVersion inboxVersion,
                                                                @Nullable LWT willMessage,
                                                                ClientInfo clientInfo,
                                                                ChannelHandlerContext ctx) {
@@ -755,7 +744,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
             .oomCondition(or(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE))
             .userSessionId(userSessionId)
             .clientInfo(clientInfo)
-            .existingSession(existingSession)
+            .inboxVersion(inboxVersion)
             .keepAliveTimeSeconds(keepAliveSeconds)
             .sessionExpirySeconds(sessionExpiryInterval)
             .willMessage(willMessage)

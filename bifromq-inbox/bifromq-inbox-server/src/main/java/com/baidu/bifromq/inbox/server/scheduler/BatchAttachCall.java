@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
+import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
@@ -22,15 +23,15 @@ import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
-import com.baidu.bifromq.inbox.record.InboxInstance;
-import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchAttachReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.Replica;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -60,9 +61,10 @@ class BatchAttachCall extends BatchMutationCall<AttachRequest, AttachReply> {
             AttachRequest request = call.call();
             BatchAttachRequest.Params.Builder paramsBuilder = BatchAttachRequest.Params.newBuilder()
                 .setInboxId(request.getInboxId())
-                .setIncarnation(request.getIncarnation()) // new incarnation
-                .setVersion(request.getVersion())
+                .setIncarnation(HLC.INST.get()) // new incarnation
                 .setExpirySeconds(request.getExpirySeconds())
+                .setLimit(request.getLimit())
+                .setDropOldest(request.getDropOldest())
                 .setClient(request.getClient())
                 .setNow(request.getNow());
             if (request.hasLwt()) {
@@ -83,29 +85,16 @@ class BatchAttachCall extends BatchMutationCall<AttachRequest, AttachReply> {
     protected void handleOutput(Queue<ICallTask<AttachRequest, AttachReply, MutationCallBatcherKey>> batchedTasks,
                                 RWCoProcOutput output) {
         ICallTask<AttachRequest, AttachReply, MutationCallBatcherKey> callTask;
-        assert batchedTasks.size() == output.getInboxService().getBatchAttach().getCodeCount();
+        assert batchedTasks.size() == output.getInboxService().getBatchAttach().getVersionCount();
 
         int i = 0;
         while ((callTask = batchedTasks.poll()) != null) {
-            BatchAttachReply.Code code = output.getInboxService().getBatchAttach().getCode(i++);
-            AttachReply.Builder replyBuilder = AttachReply.newBuilder().setReqId(callTask.call().getReqId());
-            switch (code) {
-                case OK -> callTask.resultPromise().complete(replyBuilder
+            callTask.resultPromise()
+                .complete(AttachReply.newBuilder()
+                    .setReqId(callTask.call().getReqId())
                     .setCode(AttachReply.Code.OK)
+                    .setVersion(output.getInboxService().getBatchAttach().getVersion(i++))
                     .build());
-                case NO_INBOX -> callTask.resultPromise().complete(replyBuilder
-                    .setCode(AttachReply.Code.NO_INBOX)
-                    .build());
-                case CONFLICT -> callTask.resultPromise().complete(replyBuilder
-                    .setCode(AttachReply.Code.CONFLICT)
-                    .build());
-                default -> {
-                    log.error("Unexpected attach result: {}", code);
-                    callTask.resultPromise().complete(replyBuilder
-                        .setCode(AttachReply.Code.ERROR)
-                        .build());
-                }
-            }
         }
     }
 
@@ -137,7 +126,7 @@ class BatchAttachCall extends BatchMutationCall<AttachRequest, AttachReply> {
     }
 
     private static class BatchAttachCallTask extends MutationCallTaskBatch<AttachRequest, AttachReply> {
-        private final Set<TenantInboxInstance> inboxes = new HashSet<>();
+        private final Map<String, Set<String>> inboxes = new HashMap<>();
 
         private BatchAttachCallTask(long ver) {
             super(ver);
@@ -146,18 +135,14 @@ class BatchAttachCall extends BatchMutationCall<AttachRequest, AttachReply> {
         @Override
         protected void add(ICallTask<AttachRequest, AttachReply, MutationCallBatcherKey> callTask) {
             super.add(callTask);
-            inboxes.add(new TenantInboxInstance(
-                callTask.call().getClient().getTenantId(),
-                new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))
-            );
+            inboxes.computeIfAbsent(callTask.call().getClient().getTenantId(), k -> new HashSet<>())
+                .add(callTask.call().getInboxId());
         }
 
         @Override
         protected boolean isBatchable(ICallTask<AttachRequest, AttachReply, MutationCallBatcherKey> callTask) {
-            return !inboxes.contains(new TenantInboxInstance(
-                callTask.call().getClient().getTenantId(),
-                new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))
-            );
+            return !inboxes.getOrDefault(callTask.call().getClient().getTenantId(), Collections.emptySet())
+                .contains(callTask.call().getInboxId());
         }
     }
 }

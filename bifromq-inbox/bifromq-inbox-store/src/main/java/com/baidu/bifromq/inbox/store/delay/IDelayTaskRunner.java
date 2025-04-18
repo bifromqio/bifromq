@@ -31,9 +31,23 @@ public interface IDelayTaskRunner<KeyT> {
     <TaskT extends IDelayedTask<KeyT>> void schedule(KeyT key, TaskT delayedTask);
 
     /**
+     * Schedule a new delayedTask if the key is not already scheduled.
+     *
+     * @param key         the key under monitoring
+     * @param delayedTask the delayedTask to be triggered
+     * @param <TaskT>     the type of the delayedTask
+     */
+    <TaskT extends IDelayedTask<KeyT>> void scheduleIfAbsent(KeyT key, TaskT delayedTask);
+
+    /**
      * Cancel the task associated with the specified key.
      *
      * @param keys the keys to cancel
      */
     void cancelAll(Set<KeyT> keys);
+
+    /**
+     * Shutdown the DelayTaskRunner.
+     */
+    void shutdown();
 }

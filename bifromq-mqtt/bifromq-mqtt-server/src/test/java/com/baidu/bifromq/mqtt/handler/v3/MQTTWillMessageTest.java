@@ -36,7 +36,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.testng.Assert.assertEquals;
 
-import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
+import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
 import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
@@ -183,7 +183,7 @@ public class MQTTWillMessageTest extends BaseMQTTTest {
     protected void setupTransientSessionWithLWT(boolean willRetain) {
         mockAuthPass();
         mockSessionReg();
-        mockInboxExpire(ExpireReply.Code.NOT_FOUND);
+        mockInboxDetach(DetachReply.Code.NO_INBOX);
         MqttConnectMessage connectMessage;
         if (!willRetain) {
             connectMessage = MQTTMessageUtils.qoSWillMqttConnectMessage(1, true);

@@ -40,8 +40,9 @@ import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
+import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
+import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExistReply;
 import com.baidu.bifromq.mqtt.MockableTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.session.MQTTSessionContext;
@@ -364,8 +365,8 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn))).thenReturn(
             CompletableFuture.completedFuture(
                 CheckResult.newBuilder().setGranted(Granted.getDefaultInstance()).build()));
-        when(inboxClient.expire(any())).thenReturn(CompletableFuture.completedFuture(ExpireReply.newBuilder()
-            .setCode(ExpireReply.Code.BACK_PRESSURE_REJECTED)
+        when(inboxClient.detach(any())).thenReturn(CompletableFuture.completedFuture(DetachReply.newBuilder()
+            .setCode(DetachReply.Code.BACK_PRESSURE_REJECTED)
             .build()));
 
         MqttConnectMessage connMsg = MqttMessageBuilders.connect().clientId("client")
@@ -385,14 +386,41 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
     }
 
     @Test
-    public void getInboxBackPressureRejected() {
+    public void inboxExistCallBackPressureRejected() {
         when(authProvider.auth(any(MQTT5AuthData.class))).thenReturn(CompletableFuture.completedFuture(
             MQTT5AuthResult.newBuilder().setSuccess(Success.newBuilder().setTenantId("tenantId").build()).build()));
         when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn))).thenReturn(
             CompletableFuture.completedFuture(
                 CheckResult.newBuilder().setGranted(Granted.getDefaultInstance()).build()));
-        when(inboxClient.get(any())).thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder()
-            .setCode(GetReply.Code.BACK_PRESSURE_REJECTED)
+        when(inboxClient.exist(any())).thenReturn(CompletableFuture.completedFuture(ExistReply.newBuilder()
+            .setCode(ExistReply.Code.BACK_PRESSURE_REJECTED)
+            .build()));
+
+        MqttConnectMessage connMsg = MqttMessageBuilders.connect().clientId("client")
+            .cleanSession(false)
+            .properties(MQTT5MessageUtils.mqttProps()
+                .addSessionExpiryInterval(0)
+                .build())
+            .protocolVersion(MqttVersion.MQTT_5)
+            .build();
+        channel.writeInbound(connMsg);
+        channel.advanceTimeBy(6, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        MqttConnAckMessage connAckMessage = channel.readOutbound();
+        assertEquals(connAckMessage.variableHeader().connectReturnCode(), CONNECTION_REFUSED_SERVER_BUSY);
+        assertFalse(channel.isOpen());
+        verify(eventCollector).report(argThat(e -> e.type() == EventType.SERVER_BUSY));
+    }
+
+    @Test
+    public void attachCallBackPressureRejected() {
+        when(authProvider.auth(any(MQTT5AuthData.class))).thenReturn(CompletableFuture.completedFuture(
+            MQTT5AuthResult.newBuilder().setSuccess(Success.newBuilder().setTenantId("tenantId").build()).build()));
+        when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn))).thenReturn(
+            CompletableFuture.completedFuture(
+                CheckResult.newBuilder().setGranted(Granted.getDefaultInstance()).build()));
+        when(inboxClient.attach(any())).thenReturn(CompletableFuture.completedFuture(AttachReply.newBuilder()
+            .setCode(AttachReply.Code.BACK_PRESSURE_REJECTED)
             .build()));
 
         MqttConnectMessage connMsg = MqttMessageBuilders.connect().clientId("client")
@@ -410,4 +438,5 @@ public class MQTT5ConnectHandlerTest extends MockableTest {
         assertFalse(channel.isOpen());
         verify(eventCollector).report(argThat(e -> e.type() == EventType.SERVER_BUSY));
     }
+
 }

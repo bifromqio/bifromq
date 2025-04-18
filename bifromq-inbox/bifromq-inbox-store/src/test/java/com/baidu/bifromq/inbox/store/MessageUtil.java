@@ -15,12 +15,12 @@ package com.baidu.bifromq.inbox.store;
 
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchDeleteRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchDetachRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchExistRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchGetRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchSendLWTRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
@@ -41,13 +41,6 @@ public class MessageUtil {
             .build();
     }
 
-    public static InboxServiceRWCoProcInput buildCreateRequest(long reqId, BatchCreateRequest request) {
-        return InboxServiceRWCoProcInput.newBuilder()
-            .setReqId(reqId)
-            .setBatchCreate(request)
-            .build();
-    }
-
     public static InboxServiceRWCoProcInput buildSubRequest(long reqId, BatchSubRequest request) {
         return InboxServiceRWCoProcInput.newBuilder()
             .setReqId(reqId)
@@ -62,10 +55,17 @@ public class MessageUtil {
             .build();
     }
 
-    public static InboxServiceROCoProcInput buildGetRequest(long reqId, BatchGetRequest request) {
+    public static InboxServiceROCoProcInput buildExistRequest(long reqId, BatchExistRequest request) {
         return InboxServiceROCoProcInput.newBuilder()
             .setReqId(reqId)
-            .setBatchGet(request)
+            .setBatchExist(request)
+            .build();
+    }
+
+    public static InboxServiceROCoProcInput buildSendLWTRequest(long reqId, BatchSendLWTRequest request) {
+        return InboxServiceROCoProcInput.newBuilder()
+            .setReqId(reqId)
+            .setBatchSendLWT(request)
             .build();
     }
 

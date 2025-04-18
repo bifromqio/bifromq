@@ -29,7 +29,6 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.ReplyCode;
 import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
-import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.storage.proto.GCReply;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import java.util.TreeMap;
@@ -49,9 +48,6 @@ public class InboxGCProcessorTest {
     private final String remoteStoreId = "testRemoteStoreId";
     private final KVRangeSetting remoteRangeSetting = new KVRangeSetting("cluster", remoteStoreId,
         KVRangeDescriptor.newBuilder().setId(KVRangeIdUtil.generate()).setBoundary(FULL_BOUNDARY).build());
-    private final String tenantId = "testTenantId";
-    @Mock
-    private IInboxClient inboxClient;
     @Mock
     private IBaseKVStoreClient storeClient;
     private InboxStoreGCProcessor inboxGCProc;

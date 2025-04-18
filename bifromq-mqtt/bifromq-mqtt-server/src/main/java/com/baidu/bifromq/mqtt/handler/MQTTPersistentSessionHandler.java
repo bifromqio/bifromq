@@ -36,15 +36,14 @@ import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersi
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basescheduler.AsyncRetry;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
-import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.metrics.ITenantMeter;
@@ -83,8 +82,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler implements IMQTTPersistentSession {
     private final int sessionExpirySeconds;
-    private final boolean sessionPresent;
-    private final long incarnation;
+    private final InboxVersion inboxVersion;
     private final NavigableMap<Long, SubMessage> stagingBuffer = new TreeMap<>();
     private final IInboxClient inboxClient;
     private final Cache<String, AtomicReference<Long>> qoS0TimestampsByMQTTPublisher = Caffeine.newBuilder()
@@ -93,7 +91,6 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     private final Cache<String, AtomicReference<Long>> qoS12TimestampsByMQTTPublisher = Caffeine.newBuilder()
         .expireAfterAccess(2 * DataPlaneBurstLatencyMillis.INSTANCE.get(), TimeUnit.MILLISECONDS)
         .build();
-    private long version = 0;
     private boolean qos0Confirming = false;
     private boolean inboxConfirming = false;
     private long nextSendSeq = 0;
@@ -109,18 +106,12 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                                            int keepAliveTimeSeconds,
                                            int sessionExpirySeconds,
                                            ClientInfo clientInfo,
-                                           @Nullable MQTTConnectHandler.ExistingSession existingSession,
+                                           InboxVersion inboxVersion,
                                            @Nullable LWT willMessage,
                                            ChannelHandlerContext ctx) {
         super(settings, tenantMeter, oomCondition, userSessionId, keepAliveTimeSeconds, clientInfo, willMessage, ctx);
-        this.sessionPresent = existingSession != null;
+        this.inboxVersion = inboxVersion;
         this.inboxClient = sessionCtx.inboxClient;
-        if (sessionPresent) {
-            incarnation = existingSession.incarnation();
-            version = existingSession.version();
-        } else {
-            incarnation = HLC.INST.get();
-        }
         this.sessionExpirySeconds = sessionExpirySeconds;
     }
 
@@ -131,32 +122,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
         super.handlerAdded(ctx);
-        if (sessionPresent) {
-            AttachRequest.Builder reqBuilder = AttachRequest.newBuilder()
-                .setReqId(System.nanoTime())
-                .setInboxId(userSessionId)
-                .setIncarnation(incarnation)
-                .setVersion(version)
-                .setExpirySeconds(sessionExpirySeconds)
-                .setClient(clientInfo())
-                .setNow(HLC.INST.getPhysical());
-            if (willMessage() != null && willMessage().getDelaySeconds() > 0) {
-                reqBuilder.setLwt(willMessage());
-                discardLWT(); // lwt will be triggered by inbox service
-            }
-            addFgTask(inboxClient.attach(reqBuilder.build())
-                .thenAcceptAsync(reply -> {
-                    switch (reply.getCode()) {
-                        case OK -> {
-                            version++;
-                            setupInboxReader();
-                        }
-                        case BACK_PRESSURE_REJECTED ->
-                            handleProtocolResponse(helper().onInboxBusy(reply.getCode().name()));
-                        default -> handleProtocolResponse(helper().onInboxTransientError(reply.getCode().name()));
-                    }
-                }, ctx.executor()));
-        } else {
+        if (inboxVersion.getMod() == 0) {
             // check resource
             if (!resourceThrottler.hasResource(clientInfo.getTenantId(), TotalPersistentSessions)) {
                 handleProtocolResponse(helper().onResourceExhaustedDisconnect(TotalPersistentSessions));
@@ -166,29 +132,8 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                 handleProtocolResponse(helper().onResourceExhaustedDisconnect(TotalPersistentSessionSpaceBytes));
                 return;
             }
-            CreateRequest.Builder reqBuilder = CreateRequest.newBuilder()
-                .setReqId(System.nanoTime())
-                .setInboxId(userSessionId)
-                .setIncarnation(incarnation)
-                .setExpirySeconds(sessionExpirySeconds)
-                .setLimit(settings.inboxQueueLength)
-                .setDropOldest(settings.inboxDropOldest)
-                .setClient(clientInfo)
-                .setNow(HLC.INST.getPhysical());
-            if (willMessage() != null && willMessage().getDelaySeconds() > 0) {
-                reqBuilder.setLwt(willMessage());
-                discardLWT(); // lwt will be triggered by inbox service
-            }
-            addFgTask(inboxClient.create(reqBuilder.build())
-                .thenAcceptAsync(reply -> {
-                    switch (reply.getCode()) {
-                        case OK -> setupInboxReader();
-                        case BACK_PRESSURE_REJECTED ->
-                            handleProtocolResponse(helper().onInboxBusy(reply.getCode().name()));
-                        default -> handleProtocolResponse(helper().onInboxTransientError(reply.getCode().name()));
-                    }
-                }, ctx.executor()));
         }
+        setupInboxReader();
         memUsage.addAndGet(estBaseMemSize());
     }
 
@@ -208,8 +153,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
             detach(DetachRequest.newBuilder()
                 .setReqId(System.nanoTime())
                 .setInboxId(userSessionId)
-                .setIncarnation(incarnation)
-                .setVersion(version)
+                .setVersion(inboxVersion)
                 .setExpirySeconds(sessionExpirySeconds)
                 .setDiscardLWT(false)
                 .setClient(clientInfo)
@@ -230,8 +174,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                 detach(DetachRequest.newBuilder()
                     .setReqId(System.nanoTime())
                     .setInboxId(userSessionId)
-                    .setIncarnation(incarnation)
-                    .setVersion(version)
+                    .setVersion(inboxVersion)
                     .setExpirySeconds(0)
                     .setDiscardLWT(true)
                     .setClient(clientInfo)
@@ -242,8 +185,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                 detach(DetachRequest.newBuilder()
                     .setReqId(System.nanoTime())
                     .setInboxId(userSessionId)
-                    .setIncarnation(incarnation)
-                    .setVersion(version)
+                    .setVersion(inboxVersion)
                     .setExpirySeconds(finalSEI)
                     .setDiscardLWT(true)
                     .setClient(clientInfo)
@@ -254,8 +196,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
             detach(DetachRequest.newBuilder()
                 .setReqId(System.nanoTime())
                 .setInboxId(userSessionId)
-                .setIncarnation(incarnation)
-                .setVersion(version)
+                .setVersion(inboxVersion)
                 .setExpirySeconds(finalSEI)
                 .setDiscardLWT(false)
                 .setClient(clientInfo)
@@ -301,8 +242,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                 .setReqId(reqId)
                 .setTenantId(clientInfo.getTenantId())
                 .setInboxId(userSessionId)
-                .setIncarnation(incarnation)
-                .setVersion(version)
+                .setVersion(inboxVersion)
                 .setTopicFilter(topicFilter)
                 .setOption(option)
                 .setNow(HLC.INST.getPhysical())
@@ -351,7 +291,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
             .setTenantId(tenantId)
             .setMatchInfo(MatchInfo.newBuilder()
                 .setMatcher(TopicUtil.from(topicFilter))
-                .setReceiverId(receiverId(userSessionId, incarnation))
+                .setReceiverId(receiverId(userSessionId, inboxVersion.getIncarnation()))
                 .setIncarnation(option.getIncarnation())
                 .build())
             .setDelivererKey(getDelivererKey(tenantId, userSessionId))
@@ -377,8 +317,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                 .setReqId(reqId)
                 .setTenantId(clientInfo.getTenantId())
                 .setInboxId(userSessionId)
-                .setIncarnation(incarnation)
-                .setVersion(version)
+                .setVersion(inboxVersion)
                 .setTopicFilter(topicFilter)
                 .setNow(HLC.INST.getPhysical())
                 .build())
@@ -415,7 +354,8 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         if (!ctx.channel().isActive()) {
             return;
         }
-        inboxReader = inboxClient.openInboxReader(clientInfo().getTenantId(), userSessionId, incarnation);
+        inboxReader = inboxClient.openInboxReader(clientInfo().getTenantId(), userSessionId,
+            inboxVersion.getIncarnation());
         inboxReader.fetch(this::consume);
         inboxReader.hint(clientReceiveMaximum());
         // resume channel read after inbox being setup
@@ -433,8 +373,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
             .setReqId(HLC.INST.get())
             .setTenantId(clientInfo.getTenantId())
             .setInboxId(userSessionId)
-            .setIncarnation(incarnation)
-            .setVersion(version)
+            .setVersion(inboxVersion)
             .setQos0UpToSeq(upToSeq)
             .setNow(HLC.INST.getPhysical())
             .build()))
@@ -489,8 +428,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
             .setReqId(HLC.INST.get())
             .setTenantId(clientInfo.getTenantId())
             .setInboxId(userSessionId)
-            .setIncarnation(incarnation)
-            .setVersion(version)
+            .setVersion(inboxVersion)
             .setSendBufferUpToSeq(upToSeq)
             .setNow(HLC.INST.getPhysical())
             .build()))

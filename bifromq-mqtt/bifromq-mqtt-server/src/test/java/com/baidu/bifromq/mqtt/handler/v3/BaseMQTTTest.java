@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.handler.v3;
 
+import static com.baidu.bifromq.inbox.rpc.proto.AttachReply.Code.OK;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ByPassPermCheckError;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.DebugModeEnabled;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.ForceTransient;
@@ -39,7 +40,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 import static org.testng.internal.junit.ArrayAsserts.assertArrayEquals;
 
 import com.baidu.bifromq.dist.client.IDistClient;
@@ -49,10 +49,8 @@ import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
-import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExistReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
@@ -276,40 +274,46 @@ public abstract class BaseMQTTTest {
 
     protected void mockAuthCheck(boolean allow) {
         when(authProvider.checkPermission(any(ClientInfo.class), any()))
-            .thenReturn(CompletableFuture.completedFuture(allow ?
-                CheckResult.newBuilder()
-                    .setGranted(Granted.getDefaultInstance())
-                    .build() :
-                CheckResult.newBuilder()
-                    .setDenied(Denied.getDefaultInstance())
-                    .build()));
-    }
-
-    protected void mockInboxGet(boolean success) {
-        when(inboxClient.get(any()))
-            .thenReturn(CompletableFuture.completedFuture(success ?
-                GetReply.newBuilder().setCode(GetReply.Code.EXIST).build() :
-                GetReply.newBuilder().setCode(GetReply.Code.NO_INBOX).build()));
-    }
-
-    protected void mockInboxGet(InboxVersion... inboxVersions) {
-        when(inboxClient.get(any()))
-            .thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder()
-                .setCode(inboxVersions.length > 0 ? GetReply.Code.EXIST : GetReply.Code.NO_INBOX)
-                .addAllInbox(List.of(inboxVersions))
+            .thenReturn(CompletableFuture.completedFuture(allow
+                ? CheckResult.newBuilder()
+                .setGranted(Granted.getDefaultInstance())
+                .build()
+                : CheckResult.newBuilder()
+                .setDenied(Denied.getDefaultInstance())
                 .build()));
     }
 
-    protected void mockInboxGetError() {
-        when(inboxClient.get(any()))
-            .thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder()
-                .setCode(GetReply.Code.ERROR)
+    protected void mockInboxExist(boolean success) {
+        when(inboxClient.exist(any()))
+            .thenReturn(CompletableFuture.completedFuture(success
+                ? ExistReply.newBuilder().setCode(ExistReply.Code.EXIST).build()
+                : ExistReply.newBuilder().setCode(ExistReply.Code.NO_INBOX).build()));
+    }
+
+    protected void mockInboxExistError(ExistReply.Code code) {
+        when(inboxClient.exist(any()))
+            .thenReturn(CompletableFuture.completedFuture(ExistReply.newBuilder()
+                .setCode(code)
                 .build()));
     }
 
-    protected void mockAttach(AttachReply.Code code) {
+    protected void mockInboxAttach(AttachReply.Code code) {
+        assert code != OK;
         when(inboxClient.attach(any()))
-            .thenReturn(CompletableFuture.completedFuture(AttachReply.newBuilder().setCode(code).build()));
+            .thenReturn(CompletableFuture.completedFuture(AttachReply.newBuilder()
+                .setCode(code)
+                .build()));
+    }
+
+    protected void mockInboxAttach(long mod, long incarnation) {
+        when(inboxClient.attach(any()))
+            .thenReturn(CompletableFuture.completedFuture(AttachReply.newBuilder()
+                .setCode(OK)
+                .setVersion(InboxVersion.newBuilder()
+                    .setMod(mod)
+                    .setIncarnation(incarnation)
+                    .build())
+                .build()));
     }
 
     protected void mockDetach(DetachReply.Code code) {
@@ -317,32 +321,9 @@ public abstract class BaseMQTTTest {
             .thenReturn(CompletableFuture.completedFuture(DetachReply.newBuilder().setCode(code).build()));
     }
 
-    protected void mockInboxCreate(boolean success) {
-        when(inboxClient.create(any()))
-            .thenReturn(CompletableFuture.completedFuture(CreateReply.newBuilder()
-                .setCode(success ? CreateReply.Code.OK : CreateReply.Code.ERROR)
-                .build())
-            );
-    }
-
-    protected void mockInboxCreate(CreateReply.Code code) {
-        when(inboxClient.create(any()))
-            .thenReturn(CompletableFuture.completedFuture(CreateReply.newBuilder()
-                .setCode(code)
-                .build())
-            );
-    }
-
-    protected void mockInboxExpire(boolean success) {
-        when(inboxClient.expire(any()))
-            .thenReturn(CompletableFuture.completedFuture(ExpireReply.newBuilder()
-                .setCode(success ? ExpireReply.Code.OK : ExpireReply.Code.ERROR)
-                .build()));
-    }
-
-    protected void mockInboxExpire(ExpireReply.Code code) {
-        when(inboxClient.expire(any()))
-            .thenReturn(CompletableFuture.completedFuture(ExpireReply.newBuilder()
+    protected void mockInboxDetach(DetachReply.Code code) {
+        when(inboxClient.detach(any()))
+            .thenReturn(CompletableFuture.completedFuture(DetachReply.newBuilder()
                 .setCode(code)
                 .build()));
     }
@@ -364,7 +345,6 @@ public abstract class BaseMQTTTest {
             anyLong()))
             .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
     }
-
 
     protected void mockInboxSub(QoS qos, boolean success) {
         when(inboxClient.sub(any())).thenReturn(CompletableFuture.completedFuture(
@@ -439,7 +419,7 @@ public abstract class BaseMQTTTest {
     protected void setupTransientSession() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxExpire(ExpireReply.Code.NOT_FOUND);
+        mockInboxDetach(DetachReply.Code.NO_INBOX);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
@@ -451,8 +431,8 @@ public abstract class BaseMQTTTest {
     protected void setupPersistentSession() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxGet();
-        mockInboxCreate(CreateReply.Code.OK);
+        mockInboxExist(true);
+        mockInboxAttach(1, 0);
         mockInboxReader();
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(false);
         channel.writeInbound(connectMessage);
@@ -461,42 +441,4 @@ public abstract class BaseMQTTTest {
         assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_ACCEPTED);
         verifyEvent(EventType.CLIENT_CONNECTED);
     }
-
-    protected MqttConnAckMessage connectAndVerify(boolean cleanSession,
-                                                  boolean hasInbox,
-                                                  int keepAliveInSec,
-                                                  boolean willMessage,
-                                                  boolean willRetain) {
-        mockAuthPass();
-        mockSessionReg();
-        mockInboxGet(hasInbox);
-        if (cleanSession && hasInbox) {
-            mockInboxExpire(true);
-        }
-        if (!cleanSession) {
-            mockInboxReader();
-            if (!hasInbox) {
-                mockInboxCreate(true);
-            }
-        }
-        MqttConnectMessage connectMessage;
-        if (!willMessage) {
-            connectMessage = MQTTMessageUtils.mqttConnectMessage(cleanSession, clientId, keepAliveInSec);
-        } else {
-            if (!willRetain) {
-                connectMessage = MQTTMessageUtils.qoSWillMqttConnectMessage(1, cleanSession);
-            } else {
-                connectMessage = MQTTMessageUtils.willRetainMqttConnectMessage(1, cleanSession);
-            }
-        }
-        channel.writeInbound(connectMessage);
-        channel.runPendingTasks();
-        MqttConnAckMessage ackMessage = channel.readOutbound();
-        assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_ACCEPTED);
-        if (!cleanSession && hasInbox) {
-            assertTrue(ackMessage.variableHeader().isSessionPresent());
-        }
-        return ackMessage;
-    }
-
 }

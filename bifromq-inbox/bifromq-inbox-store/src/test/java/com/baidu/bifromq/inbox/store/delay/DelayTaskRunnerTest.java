@@ -14,6 +14,8 @@
 package com.baidu.bifromq.inbox.store.delay;
 
 import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -28,7 +30,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
-import org.mockito.Mockito;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -47,6 +48,30 @@ public class DelayTaskRunnerTest {
     }
 
     @Test
+    public void testScheduleIfAbsent() {
+        TestDelayedTask first = new TestDelayedTask(Duration.ZERO, taskFunction1);
+        TestDelayedTask second = new TestDelayedTask(Duration.ZERO, taskFunction2);
+
+        runner.scheduleIfAbsent("absKey", first);
+        runner.scheduleIfAbsent("absKey", second);
+
+        verify(taskFunction1, timeout(100).times(1)).apply("absKey", runner);
+        verify(taskFunction2, timeout(100).times(0)).apply(anyString(), any());
+    }
+
+    @Test
+    public void testScheduleIfAbsentNoOverride() {
+        TestDelayedTask scheduled = new TestDelayedTask(Duration.ZERO, taskFunction1);
+        TestDelayedTask absent = new TestDelayedTask(Duration.ZERO, taskFunction2);
+
+        runner.schedule("absKey2", scheduled);
+        runner.scheduleIfAbsent("absKey2", absent);
+
+        verify(taskFunction1, timeout(100).times(1)).apply("absKey2", runner);
+        verify(taskFunction2, timeout(100).times(0)).apply(anyString(), any());
+    }
+
+    @Test
     public void testImmediateExecution() {
         TestDelayedTask task = new TestDelayedTask(Duration.ZERO, taskFunction1);
 
@@ -61,7 +86,7 @@ public class DelayTaskRunnerTest {
 
         runner.schedule("delayedKey", task);
 
-        verify(taskFunction1, timeout(40).times(0)).apply(Mockito.anyString(), Mockito.any());
+        verify(taskFunction1, timeout(40).times(0)).apply(anyString(), any());
         verify(taskFunction1, timeout(100).times(1)).apply("delayedKey", runner);
         assertFalse(runner.hasTask("delayedKey"));
     }

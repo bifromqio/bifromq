@@ -12,7 +12,7 @@ package inboxservice;
 message InboxMetadata{
   string inboxId = 1;
   uint64 incarnation = 2;
-  uint64 version = 3;
+  uint64 mod = 3;
   uint64 lastActiveTime = 4;
   uint32 expirySeconds = 5;
   uint32 limit = 6;

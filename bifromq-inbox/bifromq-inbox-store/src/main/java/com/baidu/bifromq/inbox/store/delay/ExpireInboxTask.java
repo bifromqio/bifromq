@@ -17,6 +17,7 @@ import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 
@@ -26,8 +27,8 @@ import java.util.concurrent.CompletableFuture;
 public class ExpireInboxTask extends RetryableDelayedTask<DeleteReply> {
     private final IInboxClient inboxClient;
 
-    public ExpireInboxTask(Duration delay, long version, IInboxClient inboxClient) {
-        this(delay, version, inboxClient, 0);
+    public ExpireInboxTask(Duration delay, long mod, IInboxClient inboxClient) {
+        this(delay, mod, inboxClient, 0);
     }
 
     private ExpireInboxTask(Duration delay, long version, IInboxClient inboxClient, int retryCount) {
@@ -42,8 +43,10 @@ public class ExpireInboxTask extends RetryableDelayedTask<DeleteReply> {
             .setReqId(System.nanoTime())
             .setTenantId(key.tenantId())
             .setInboxId(key.instance().inboxId())
-            .setIncarnation(key.instance().incarnation())
-            .setVersion(version)
+            .setVersion(InboxVersion.newBuilder()
+                .setIncarnation(key.instance().incarnation())
+                .setMod(mod)
+                .build())
             .build());
     }
 
@@ -55,7 +58,7 @@ public class ExpireInboxTask extends RetryableDelayedTask<DeleteReply> {
 
     @Override
     protected RetryableDelayedTask<DeleteReply> createRetryTask(Duration newDelay) {
-        return new ExpireInboxTask(newDelay, version, inboxClient, retryCount + 1);
+        return new ExpireInboxTask(newDelay, mod, inboxClient, retryCount + 1);
     }
 
     @Override

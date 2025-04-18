@@ -30,6 +30,7 @@ import com.baidu.bifromq.basescheduler.exception.BatcherUnavailableException;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.RetainHandling;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
@@ -75,8 +76,7 @@ public class MockedInboxSubTest extends MockedInboxService {
             .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setOption(TopicFilterOption.newBuilder().setQos(QoS.AT_LEAST_ONCE).build())
-            .setIncarnation(incarnation)
-            .setVersion(version)
+            .setVersion(InboxVersion.newBuilder().setMod(version).setIncarnation(incarnation).build())
             .setTopicFilter(topicFilter)
             .setNow(now)
             .build(), streamObserver);
@@ -115,8 +115,7 @@ public class MockedInboxSubTest extends MockedInboxService {
                 .setQos(qos)
                 .setRetainHandling(RetainHandling.SEND_AT_SUBSCRIBE)
                 .build())
-            .setIncarnation(incarnation)
-            .setVersion(version)
+            .setVersion(InboxVersion.newBuilder().setMod(version).setIncarnation(incarnation).build())
             .setTopicFilter(topicFilter)
             .setNow(now)
             .build(), streamObserver);
@@ -153,8 +152,7 @@ public class MockedInboxSubTest extends MockedInboxService {
                 .setQos(qos)
                 .setRetainHandling(RetainHandling.SEND_AT_SUBSCRIBE_IF_NOT_YET_EXISTS)
                 .build())
-            .setIncarnation(incarnation)
-            .setVersion(version)
+            .setVersion(InboxVersion.newBuilder().setMod(version).setIncarnation(incarnation).build())
             .setTopicFilter(topicFilter)
             .setNow(now)
             .build(), streamObserver);
@@ -187,8 +185,7 @@ public class MockedInboxSubTest extends MockedInboxService {
             .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setOption(TopicFilterOption.newBuilder().setQos(QoS.AT_LEAST_ONCE).build())
-            .setIncarnation(incarnation)
-            .setVersion(version)
+            .setVersion(InboxVersion.newBuilder().setMod(version).setIncarnation(incarnation).build())
             .setTopicFilter(sharedSubTopicFilter)
             .setNow(now)
             .build(), streamObserver);
@@ -223,8 +220,7 @@ public class MockedInboxSubTest extends MockedInboxService {
             .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setOption(TopicFilterOption.newBuilder().setQos(QoS.AT_LEAST_ONCE).build())
-            .setIncarnation(incarnation)
-            .setVersion(version)
+            .setVersion(InboxVersion.newBuilder().setMod(version).setIncarnation(incarnation).build())
             .setTopicFilter(topicFilter)
             .setNow(now)
             .build(), streamObserver);
@@ -260,8 +256,7 @@ public class MockedInboxSubTest extends MockedInboxService {
             .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setOption(TopicFilterOption.newBuilder().setQos(QoS.AT_LEAST_ONCE).build())
-            .setIncarnation(incarnation)
-            .setVersion(version)
+            .setVersion(InboxVersion.newBuilder().setMod(version).setIncarnation(incarnation).build())
             .setTopicFilter(topicFilter)
             .setNow(now)
             .build(), streamObserver);

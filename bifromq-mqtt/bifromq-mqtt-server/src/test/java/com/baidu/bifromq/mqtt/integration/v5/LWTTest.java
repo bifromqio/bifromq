@@ -131,13 +131,13 @@ public class LWTTest extends MQTTTest {
             }
         });
         lwtPubConnOpts.setUserName(userId);
-        MqttTestClient lwtPubClient = new MqttTestClient(BROKER_URI, "lwtPubClient");
+        MqttTestClient lwtPubClient = new MqttTestClient(BROKER_URI, "lwtPubClient" + willTopic);
         lwtPubClient.connect(lwtPubConnOpts);
 
         MqttConnectionOptions lwtSubConnOpts = new MqttConnectionOptions();
         lwtSubConnOpts.setCleanStart(true);
         lwtSubConnOpts.setUserName(userId);
-        MqttTestClient lwtSubClient = new MqttTestClient(BROKER_URI, "lwtSubClient");
+        MqttTestClient lwtSubClient = new MqttTestClient(BROKER_URI, "lwtSubClient" + willTopic);
         lwtSubClient.connect(lwtSubConnOpts);
         // Subscribe to the will topic
         TestObserver<MqttMsg> topicSub = lwtSubClient.subscribe(willTopic, willQoS).test();
@@ -148,7 +148,7 @@ public class LWTTest extends MQTTTest {
         });
 
         log.info("Kill client");
-        assertSame(kill(userId, "lwtPubClient").join(), KillReply.Result.OK);
+        assertSame(kill(userId, "lwtPubClient" + willTopic).join(), KillReply.Result.OK);
 
         await().atMost(Duration.ofSeconds(30)).until(() -> topicSub.values().size() >= 2);
         MqttMsg msg = topicSub.values().get(topicSub.values().size() - 1);

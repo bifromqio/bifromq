@@ -35,6 +35,7 @@ import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUS
 import static io.netty.handler.codec.mqtt.MqttConnectReturnCode.CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION;
 
 import com.baidu.bifromq.basehlc.HLC;
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
@@ -354,52 +355,42 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
     }
 
     @Override
-    protected boolean isCleanSession(MqttConnectMessage message, TenantSettings settings) {
+    protected boolean isCleanStart(MqttConnectMessage message, TenantSettings settings) {
         return settings.forceTransient || message.variableHeader().isCleanSession();
     }
 
     @Override
     protected int getSessionExpiryInterval(MqttConnectMessage message, TenantSettings settings) {
-        return isCleanSession(message, settings) ? 0 : settings.maxSEI;
+        return isCleanStart(message, settings) ? 0 : settings.maxSEI;
     }
 
     @Override
-    protected GoAway onCleanSessionFailed(ClientInfo clientInfo) {
+    protected GoAway onInboxCallError(ClientInfo clientInfo, String reason) {
         return new GoAway(MqttMessageBuilders.connAck()
             .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
             .build(),
             getLocal(InboxTransientError.class)
-                .reason("Unable to expire previous session, Try later")
+                .reason(reason)
                 .clientInfo(clientInfo));
     }
 
     @Override
-    protected GoAway onCleanSessionRejected(ClientInfo clientInfo) {
-        return new GoAway(MqttMessageBuilders.connAck()
-            .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
-            .build(),
-            getLocal(ServerBusy.class)
-                .reason("Unable to expire previous session, Server Busy")
-                .clientInfo(clientInfo));
-    }
-
-    @Override
-    protected GoAway onGetSessionFailed(ClientInfo clientInfo) {
+    protected GoAway onInboxCallRetry(ClientInfo clientInfo, String reason) {
         return new GoAway(MqttMessageBuilders.connAck()
             .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
             .build(),
             getLocal(InboxTransientError.class)
-                .reason("Unable to retrieve previous session, Try later")
+                .reason(reason)
                 .clientInfo(clientInfo));
     }
 
     @Override
-    protected GoAway onGetSessionRejected(ClientInfo clientInfo) {
+    protected GoAway onInboxCallBusy(ClientInfo clientInfo, String reason) {
         return new GoAway(MqttMessageBuilders.connAck()
             .returnCode(CONNECTION_REFUSED_SERVER_UNAVAILABLE)
             .build(),
             getLocal(ServerBusy.class)
-                .reason("Unable to retrieve previous session, Server Busy")
+                .reason(reason)
                 .clientInfo(clientInfo));
     }
 
@@ -431,7 +422,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                                                                      String userSessionId,
                                                                      int keepAliveSeconds,
                                                                      int sessionExpiryInterval,
-                                                                     @Nullable ExistingSession existingSession,
+                                                                     InboxVersion inboxVersion,
                                                                      @Nullable LWT willMessage,
                                                                      ClientInfo clientInfo,
                                                                      ChannelHandlerContext ctx) {
@@ -443,7 +434,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
             .keepAliveTimeSeconds(keepAliveSeconds)
             .sessionExpirySeconds(sessionExpiryInterval)
             .clientInfo(clientInfo)
-            .existingSession(existingSession)
+            .inboxVersion(inboxVersion)
             .willMessage(willMessage)
             .ctx(ctx)
             .build();

@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
+import static java.util.Collections.emptySet;
+
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
@@ -22,15 +24,16 @@ import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
-import com.baidu.bifromq.inbox.record.InboxInstance;
-import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchDetachReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchDetachRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.Replica;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -60,7 +63,6 @@ class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
             BatchDetachRequest.Params.Builder paramsBuilder = BatchDetachRequest.Params.newBuilder()
                 .setTenantId(request.getClient().getTenantId())
                 .setInboxId(request.getInboxId())
-                .setIncarnation(request.getIncarnation()) // new incarnation
                 .setVersion(request.getVersion())
                 .setExpirySeconds(request.getExpirySeconds())
                 .setDiscardLWT(request.getDiscardLWT())
@@ -128,7 +130,7 @@ class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
     }
 
     private static class BatchDetachCallTask extends MutationCallTaskBatch<DetachRequest, DetachReply> {
-        private final Set<TenantInboxInstance> inboxes = new HashSet<>();
+        private final Map<String, Set<InboxVersion>> inboxes = new HashMap<>();
 
         private BatchDetachCallTask(long ver) {
             super(ver);
@@ -137,16 +139,14 @@ class BatchDetachCall extends BatchMutationCall<DetachRequest, DetachReply> {
         @Override
         protected void add(ICallTask<DetachRequest, DetachReply, MutationCallBatcherKey> callTask) {
             super.add(callTask);
-            inboxes.add(new TenantInboxInstance(callTask.call().getClient().getTenantId(),
-                new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))
-            );
+            inboxes.computeIfAbsent(callTask.call().getClient().getTenantId(), k -> new HashSet<>())
+                .add(callTask.call().getVersion());
         }
 
         @Override
         protected boolean isBatchable(ICallTask<DetachRequest, DetachReply, MutationCallBatcherKey> callTask) {
-            return !inboxes.contains(new TenantInboxInstance(callTask.call().getClient().getTenantId(),
-                new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))
-            );
+            return !inboxes.getOrDefault(callTask.call().getClient().getTenantId(), emptySet())
+                .contains(callTask.call().getVersion());
         }
     }
 }

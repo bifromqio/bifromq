@@ -20,18 +20,14 @@ import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
-import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
-import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExistReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExistRequest;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireAllReply;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireAllRequest;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireRequest;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.inbox.rpc.proto.InboxServiceGrpc;
 import com.baidu.bifromq.inbox.rpc.proto.SendLWTReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendLWTRequest;
@@ -109,25 +105,14 @@ final class InboxClient implements IInboxClient {
     }
 
     @Override
-    public CompletableFuture<GetReply> get(GetRequest request) {
-        return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getGetMethod())
+    public CompletableFuture<ExistReply> exist(ExistRequest request) {
+        return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getExistMethod())
             .exceptionally(e -> {
                 log.debug("Failed to get inbox", e);
-                return GetReply.newBuilder()
+                return ExistReply.newBuilder()
                     .setReqId(request.getReqId())
-                    .setCode(GetReply.Code.ERROR)
+                    .setCode(ExistReply.Code.ERROR)
                     .build();
-            });
-    }
-
-    @Override
-    public CompletableFuture<CreateReply> create(CreateRequest request) {
-        return rpcClient.invoke(request.getClient().getTenantId(), null, request, InboxServiceGrpc.getCreateMethod())
-            .exceptionally(e -> {
-                log.debug("Failed to create inbox", e);
-                return CreateReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(CreateReply.Code.ERROR).build();
             });
     }
 
@@ -197,18 +182,6 @@ final class InboxClient implements IInboxClient {
                 return DeleteReply.newBuilder()
                     .setReqId(request.getReqId())
                     .setCode(DeleteReply.Code.ERROR)
-                    .build();
-            });
-    }
-
-    @Override
-    public CompletableFuture<ExpireReply> expire(ExpireRequest request) {
-        return rpcClient.invoke(request.getTenantId(), null, request, InboxServiceGrpc.getExpireMethod())
-            .exceptionally(e -> {
-                log.debug("Failed to expire inbox", e);
-                return ExpireReply.newBuilder()
-                    .setReqId(request.getReqId())
-                    .setCode(ExpireReply.Code.ERROR)
                     .build();
             });
     }

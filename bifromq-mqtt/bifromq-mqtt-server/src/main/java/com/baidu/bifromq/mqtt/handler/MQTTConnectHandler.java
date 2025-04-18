@@ -29,11 +29,13 @@ import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalSessi
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.baserpc.utils.FutureTracker;
 import com.baidu.bifromq.basescheduler.AsyncRetry;
+import com.baidu.bifromq.basescheduler.exception.RetryTimeoutException;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireRequest;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
+import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
+import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
+import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExistReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExistRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.metrics.ITenantMeter;
@@ -65,8 +67,6 @@ import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttDecoder;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageType;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
@@ -158,159 +158,210 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                             settings);
                         String userSessionId = userSessionId(clientInfo);
                         String requestClientId = connMsg.payload().clientIdentifier();
-                        if (isCleanSession(connMsg, settings)) {
-                            if (requestClientId.isEmpty()) {
-                                int sessionExpiryInterval = getSessionExpiryInterval(connMsg, settings);
-                                if (sessionExpiryInterval == 0) {
-                                    setupTransientSessionHandler(connMsg,
-                                        settings,
-                                        userSessionId,
-                                        keepAliveSeconds,
-                                        false,
-                                        willMessage,
-                                        okOrGoAway.successInfo,
-                                        ctx);
-
-                                } else {
-                                    setupPersistentSessionHandler(connMsg,
-                                        settings,
-                                        userSessionId,
-                                        keepAliveSeconds,
-                                        sessionExpiryInterval,
-                                        null,
-                                        willMessage,
-                                        okOrGoAway.successInfo,
-                                        ctx);
-                                }
-                                return CompletableFuture.completedFuture(null);
-                            } else {
-                                return AsyncRetry.exec(() -> inboxClient.expire(ExpireRequest.newBuilder()
+                        if (isCleanStart(connMsg, settings)) {
+                            return expireInbox(reqId, requestClientId, userSessionId, clientInfo)
+                                .thenAccept(result -> {
+                                    if (result == ExpireResult.ERROR) {
+                                        return;
+                                    }
+                                    int sessionExpiryInterval = getSessionExpiryInterval(connMsg, settings);
+                                    if (sessionExpiryInterval == 0) {
+                                        setupTransientSessionHandler(connMsg,
+                                            settings,
+                                            userSessionId,
+                                            keepAliveSeconds,
+                                            result == ExpireResult.OK,
+                                            willMessage,
+                                            okOrGoAway.successInfo,
+                                            ctx);
+                                    } else {
+                                        AttachRequest.Builder reqBuilder = AttachRequest.newBuilder()
+                                            .setReqId(System.nanoTime())
+                                            .setInboxId(userSessionId) // server generated client id
+                                            .setExpirySeconds(sessionExpiryInterval)
+                                            .setLimit(settings.inboxQueueLength)
+                                            .setDropOldest(settings.inboxDropOldest)
+                                            .setClient(clientInfo)
+                                            .setNow(HLC.INST.getPhysical());
+                                        if (willMessage != null && willMessage.getDelaySeconds() > 0) {
+                                            reqBuilder.setLwt(willMessage);
+                                        }
+                                        inboxClient.attach(reqBuilder.build())
+                                            .thenAcceptAsync(attachReply -> {
+                                                switch (attachReply.getCode()) {
+                                                    case OK -> {
+                                                        InboxVersion inboxVersion = attachReply.getVersion();
+                                                        if (inboxVersion.getMod() > 0) {
+                                                            // the server generated client id is already in use
+                                                            // disconnected and try again
+                                                            handleGoAway(
+                                                                onInboxCallRetry(clientInfo, "Client id conflict"));
+                                                        } else {
+                                                            // setup persistent session and reuse
+                                                            // existing inbox but the SEI is reset to 0
+                                                            setupPersistentSessionHandler(connMsg,
+                                                                settings,
+                                                                userSessionId,
+                                                                keepAliveSeconds,
+                                                                sessionExpiryInterval, // reset SEI to 0
+                                                                inboxVersion,
+                                                                willMessage,
+                                                                okOrGoAway.successInfo,
+                                                                ctx);
+                                                        }
+                                                    }
+                                                    case TRY_LATER -> handleGoAway(
+                                                        onInboxCallRetry(clientInfo, "Inbox service call needs retry"));
+                                                    case BACK_PRESSURE_REJECTED ->
+                                                        handleGoAway(onInboxCallBusy(clientInfo, "Inbox service busy"));
+                                                    default ->
+                                                        handleGoAway(onInboxCallError(clientInfo, "Inbox service error"));
+                                                }
+                                            }, ctx.executor());
+                                    }
+                                });
+                        } else {
+                            int sessionExpiryInterval = getSessionExpiryInterval(connMsg, settings);
+                            if (sessionExpiryInterval == 0) {
+                                // try to attach to previous session and reset its SEI to 0
+                                // or set up a new transient session
+                                return AsyncRetry.exec(() -> inboxClient.exist(ExistRequest.newBuilder()
                                             .setReqId(reqId)
                                             .setTenantId(clientInfo.getTenantId())
                                             .setInboxId(userSessionId)
-                                            .setNow(HLC.INST.getPhysical())
                                             .build()),
                                         (reply, t) -> {
                                             if (t != null) {
                                                 return true;
                                             }
-                                            return reply.getCode() != ExpireReply.Code.TRY_LATER;
+                                            return reply.getCode() != ExistReply.Code.TRY_LATER;
                                         }, 1000, 5000)
                                     .exceptionally(e -> {
-                                        log.debug("Failed to expire inbox", e);
-                                        return ExpireReply.newBuilder()
+                                        if (e instanceof RetryTimeoutException
+                                            || e.getCause() instanceof RetryTimeoutException) {
+                                            return ExistReply.newBuilder()
+                                                .setReqId(reqId)
+                                                .setCode(ExistReply.Code.TRY_LATER)
+                                                .build();
+                                        }
+                                        log.debug("Failed to get inbox", e);
+                                        return ExistReply.newBuilder()
                                             .setReqId(reqId)
-                                            .setCode(ExpireReply.Code.ERROR)
+                                            .setCode(ExistReply.Code.ERROR)
                                             .build();
                                     })
-                                    .thenAcceptAsync(reply -> {
-                                        switch (reply.getCode()) {
-                                            case OK, NOT_FOUND -> {
-                                                int sessionExpiryInterval = getSessionExpiryInterval(connMsg, settings);
-                                                if (sessionExpiryInterval == 0) {
-                                                    setupTransientSessionHandler(connMsg,
-                                                        settings,
-                                                        userSessionId,
-                                                        keepAliveSeconds,
-                                                        reply.getCode() == ExpireReply.Code.OK,
-                                                        willMessage,
-                                                        okOrGoAway.successInfo,
-                                                        ctx);
-                                                } else {
-                                                    setupPersistentSessionHandler(connMsg,
-                                                        settings,
-                                                        userSessionId,
-                                                        keepAliveSeconds,
-                                                        sessionExpiryInterval,
-                                                        null,
-                                                        willMessage,
-                                                        okOrGoAway.successInfo,
-                                                        ctx);
+                                    .thenAcceptAsync(getReply -> {
+                                        switch (getReply.getCode()) {
+                                            case EXIST -> {
+                                                // reuse existing inbox with the highest incarnation,
+                                                // the old ones will be cleaned up eventually
+                                                AttachRequest.Builder reqBuilder = AttachRequest.newBuilder()
+                                                    .setReqId(System.nanoTime())
+                                                    .setInboxId(userSessionId)
+                                                    .setExpirySeconds(sessionExpiryInterval)
+                                                    .setLimit(settings.inboxQueueLength)
+                                                    .setDropOldest(settings.inboxDropOldest)
+                                                    .setClient(clientInfo)
+                                                    .setNow(HLC.INST.getPhysical());
+                                                if (willMessage != null && willMessage.getDelaySeconds() > 0) {
+                                                    reqBuilder.setLwt(willMessage);
                                                 }
+                                                inboxClient.attach(reqBuilder.build())
+                                                    .thenAcceptAsync(attachReply -> {
+                                                        switch (attachReply.getCode()) {
+                                                            case OK -> {
+                                                                InboxVersion inboxInstance = attachReply.getVersion();
+                                                                if (inboxInstance.getMod() > 0) {
+                                                                    // setup persistent session and reuse
+                                                                    // existing inbox but the SEI is reset to 0
+                                                                    setupPersistentSessionHandler(connMsg,
+                                                                        settings,
+                                                                        userSessionId,
+                                                                        keepAliveSeconds,
+                                                                        sessionExpiryInterval, // reset SEI to 0
+                                                                        inboxInstance,
+                                                                        willMessage,
+                                                                        okOrGoAway.successInfo,
+                                                                        ctx);
+                                                                } else {
+                                                                    // setup transient session, this may happen
+                                                                    // when the inbox is expired between get and attach
+                                                                    setupTransientSessionHandler(connMsg,
+                                                                        settings,
+                                                                        userSessionId,
+                                                                        keepAliveSeconds,
+                                                                        false,
+                                                                        willMessage,
+                                                                        okOrGoAway.successInfo,
+                                                                        ctx);
+                                                                }
+                                                            }
+                                                            case TRY_LATER -> handleGoAway(
+                                                                onInboxCallRetry(clientInfo,
+                                                                    "Inbox service call[attach] needs retry"));
+                                                            case BACK_PRESSURE_REJECTED -> handleGoAway(
+                                                                onInboxCallBusy(clientInfo,
+                                                                    "Inbox service call[attach] busy"));
+                                                            default -> handleGoAway(
+                                                                onInboxCallError(clientInfo,
+                                                                    "Inbox service call[attach] error"));
+                                                        }
+                                                    }, ctx.executor());
                                             }
+                                            case NO_INBOX -> setupTransientSessionHandler(connMsg,
+                                                settings,
+                                                userSessionId,
+                                                keepAliveSeconds,
+                                                false,
+                                                willMessage,
+                                                okOrGoAway.successInfo,
+                                                ctx);
                                             case BACK_PRESSURE_REJECTED ->
-                                                handleGoAway(onCleanSessionRejected(clientInfo));
-                                            case ERROR -> handleGoAway(onCleanSessionFailed(clientInfo));
+                                                handleGoAway(
+                                                    onInboxCallBusy(clientInfo, "Inbox service call[exist] busy"));
+                                            case TRY_LATER -> handleGoAway(
+                                                onInboxCallRetry(clientInfo, "Inbox service call[exist] needs retry"));
+                                            case ERROR -> handleGoAway(
+                                                onInboxCallError(clientInfo, "Inbox service call[exist] error"));
+                                            default -> {
+                                                // do nothing
+                                            }
                                         }
                                     }, ctx.executor());
-                            }
-                        } else {
-                            return AsyncRetry.exec(() -> inboxClient.get(GetRequest.newBuilder()
-                                        .setReqId(reqId)
-                                        .setTenantId(clientInfo.getTenantId())
-                                        .setInboxId(userSessionId)
-                                        .build()),
-                                    (reply, t) -> {
-                                        if (t != null) {
-                                            return true;
-                                        }
-                                        return reply.getCode() != GetReply.Code.TRY_LATER;
-                                    }, 1000, 5000)
-                                .exceptionally(e -> {
-                                    log.debug("Failed to get inbox", e);
-                                    return GetReply.newBuilder()
-                                        .setReqId(reqId)
-                                        .setCode(GetReply.Code.ERROR)
-                                        .build();
-                                })
-                                .thenAcceptAsync(reply -> {
-                                    switch (reply.getCode()) {
-                                        case EXIST -> {
-                                            // reuse existing inbox with the highest incarnation,
-                                            // the old ones will be cleaned up eventually
-                                            List<InboxVersion> inboxes = reply.getInboxList();
-                                            InboxVersion inbox;
-                                            if (inboxes.size() == 1) {
-                                                inbox = inboxes.get(0);
-                                            } else {
-                                                inboxes = new ArrayList<>(inboxes);
-                                                inboxes.sort((o1, o2) ->
-                                                    Long.compare(o2.getIncarnation(), o1.getIncarnation()));
-                                                inbox = reply.getInbox(0);
-                                            }
-                                            int sessionExpiryInterval = getSessionExpiryInterval(connMsg, settings);
-                                            setupPersistentSessionHandler(connMsg,
+                            } else {
+                                // create a new or attach to an existing persistent session
+                                AttachRequest.Builder reqBuilder = AttachRequest.newBuilder()
+                                    .setReqId(System.nanoTime())
+                                    .setInboxId(userSessionId)
+                                    .setExpirySeconds(sessionExpiryInterval)
+                                    .setLimit(settings.inboxQueueLength)
+                                    .setDropOldest(settings.inboxDropOldest)
+                                    .setClient(clientInfo)
+                                    .setNow(HLC.INST.getPhysical());
+                                if (willMessage != null && willMessage.getDelaySeconds() > 0) {
+                                    reqBuilder.setLwt(willMessage);
+                                }
+                                return inboxClient.attach(reqBuilder.build())
+                                    .thenAcceptAsync(attachReply -> {
+                                        switch (attachReply.getCode()) {
+                                            case OK -> setupPersistentSessionHandler(connMsg,
                                                 settings,
                                                 userSessionId,
                                                 keepAliveSeconds,
                                                 sessionExpiryInterval,
-                                                new ExistingSession(
-                                                    inbox.getIncarnation(),
-                                                    inbox.getVersion()),
+                                                attachReply.getVersion(),
                                                 willMessage,
                                                 okOrGoAway.successInfo,
                                                 ctx);
+                                            case TRY_LATER -> handleGoAway(
+                                                onInboxCallRetry(clientInfo, "Inbox service call[attach] needs retry"));
+                                            case BACK_PRESSURE_REJECTED -> handleGoAway(
+                                                onInboxCallBusy(clientInfo, "Inbox service call[attach] busy"));
+                                            default -> handleGoAway(
+                                                onInboxCallError(clientInfo, "Inbox service call[attach] error"));
                                         }
-                                        case NO_INBOX -> {
-                                            int sessionExpiryInterval = getSessionExpiryInterval(connMsg, settings);
-                                            if (sessionExpiryInterval == 0) {
-                                                setupTransientSessionHandler(connMsg,
-                                                    settings,
-                                                    userSessionId,
-                                                    keepAliveSeconds,
-                                                    false,
-                                                    willMessage,
-                                                    okOrGoAway.successInfo,
-                                                    ctx);
-                                            } else {
-                                                setupPersistentSessionHandler(connMsg,
-                                                    settings,
-                                                    userSessionId,
-                                                    keepAliveSeconds,
-                                                    sessionExpiryInterval,
-                                                    null,
-                                                    willMessage,
-                                                    okOrGoAway.successInfo,
-                                                    ctx);
-                                            }
-                                        }
-                                        case BACK_PRESSURE_REJECTED -> handleGoAway(onGetSessionRejected(clientInfo));
-                                        case ERROR -> handleGoAway(onGetSessionFailed(clientInfo));
-                                        default -> {
-                                            // do nothing
-                                        }
-                                    }
-                                }, ctx.executor());
+                                    }, ctx.executor());
+                            }
                         }
                     }
                 }, ctx.executor());
@@ -323,6 +374,53 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                     .statement(mqttMessage.decoderResult().cause().getMessage())));
             }
         }
+    }
+
+    private CompletableFuture<ExpireResult> expireInbox(long reqId,
+                                                        String requestClientId,
+                                                        String userSessionId,
+                                                        ClientInfo clientInfo) {
+        if (requestClientId.isEmpty()) {
+            return CompletableFuture.completedFuture(ExpireResult.NOT_FOUND);
+        }
+        return inboxClient.detach(DetachRequest.newBuilder()
+                .setReqId(reqId)
+                .setInboxId(userSessionId)
+                .setExpirySeconds(0)
+                .setDiscardLWT(true)
+                .setClient(clientInfo)
+                .setNow(HLC.INST.getPhysical())
+                .build())
+            .exceptionally(e -> {
+                log.debug("Failed to expire inbox", e);
+                return DetachReply.newBuilder()
+                    .setReqId(reqId)
+                    .setCode(DetachReply.Code.ERROR)
+                    .build();
+            })
+            .thenApplyAsync(reply -> {
+                switch (reply.getCode()) {
+                    case OK -> {
+                        return ExpireResult.OK;
+                    }
+                    case NO_INBOX -> {
+                        return ExpireResult.NOT_FOUND;
+                    }
+                    case TRY_LATER -> {
+                        handleGoAway(onInboxCallRetry(clientInfo, "Inbox service call[expire] needs retry"));
+                        return ExpireResult.ERROR;
+                    }
+                    case BACK_PRESSURE_REJECTED -> {
+                        handleGoAway(onInboxCallBusy(clientInfo, "Inbox service call[expire] busy"));
+                        return ExpireResult.ERROR;
+                    }
+                    default -> {
+                        handleGoAway(onInboxCallError(clientInfo, "Inbox service call[expire] error"));
+                        return ExpireResult.ERROR;
+                    }
+                }
+            }, ctx.executor());
+
     }
 
     protected abstract GoAway sanityCheck(MqttConnectMessage message);
@@ -343,17 +441,15 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
 
     protected abstract LWT getWillMessage(MqttConnectMessage message);
 
-    protected abstract boolean isCleanSession(MqttConnectMessage message, TenantSettings settings);
+    protected abstract boolean isCleanStart(MqttConnectMessage message, TenantSettings settings);
 
     protected abstract int getSessionExpiryInterval(MqttConnectMessage message, TenantSettings settings);
 
-    protected abstract GoAway onCleanSessionFailed(ClientInfo clientInfo);
+    protected abstract GoAway onInboxCallError(ClientInfo clientInfo, String reason);
 
-    protected abstract GoAway onCleanSessionRejected(ClientInfo clientInfo);
+    protected abstract GoAway onInboxCallRetry(ClientInfo clientInfo, String reason);
 
-    protected abstract GoAway onGetSessionFailed(ClientInfo clientInfo);
-
-    protected abstract GoAway onGetSessionRejected(ClientInfo clientInfo);
+    protected abstract GoAway onInboxCallBusy(ClientInfo clientInfo, String reason);
 
     protected abstract MQTTSessionHandler buildTransientSessionHandler(MqttConnectMessage connMsg,
                                                                        TenantSettings settings,
@@ -370,7 +466,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                                         String userSessionId,
                                                                         int keepAliveSeconds,
                                                                         int sessionExpiryInterval,
-                                                                        @Nullable ExistingSession existingSession,
+                                                                        InboxVersion inboxInstance,
                                                                         @Nullable LWT willMessage,
                                                                         ClientInfo clientInfo,
                                                                         ChannelHandlerContext ctx);
@@ -437,7 +533,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                String userSessionId,
                                                int keepAliveSeconds,
                                                int sessionExpiryInterval,
-                                               @Nullable ExistingSession existingSession,
+                                               InboxVersion inboxVersion,
                                                @Nullable LWT willMessage,
                                                SuccessInfo successInfo,
                                                ChannelHandlerContext ctx) {
@@ -464,7 +560,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
             userSessionId,
             keepAliveSeconds,
             sessionExpiryInterval,
-            existingSession,
+            inboxVersion,
             willMessage,
             clientInfo,
             ctx);
@@ -474,7 +570,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
         sessionHandler.awaitInitialized()
             .thenAcceptAsync(v -> {
                 ctx.writeAndFlush(onConnected(connMsg, settings, userSessionId, keepAliveSeconds, sessionExpiryInterval,
-                    existingSession != null, finalClientInfo, successInfo.responseInfo, successInfo.authData,
+                    inboxVersion.getMod() > 0, finalClientInfo, successInfo.responseInfo, successInfo.authData,
                     successInfo.userProperties));
                 // report client connected event
                 eventCollector.report(getLocal(ClientConnected.class)
@@ -483,7 +579,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                     .userSessionId(userSessionId)
                     .keepAliveTimeSeconds(keepAliveSeconds)
                     .cleanSession(connMsg.variableHeader().isCleanSession())
-                    .sessionPresent(existingSession != null)
+                    .sessionPresent(inboxVersion.getMod() > 0)
                     .lastWill(willMessage != null ? new ClientConnected.WillInfo()
                         .topic(willMessage.getTopic())
                         .isRetain(willMessage.getMessage().getIsRetain())
@@ -539,8 +635,10 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
         return requestKeepAliveSeconds;
     }
 
-    public record ExistingSession(long incarnation, long version) {
-
+    private enum ExpireResult {
+        OK,
+        NOT_FOUND,
+        ERROR
     }
 
     public record SuccessInfo(ClientInfo clientInfo,

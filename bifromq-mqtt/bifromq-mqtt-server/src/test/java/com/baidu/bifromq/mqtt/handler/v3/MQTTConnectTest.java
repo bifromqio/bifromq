@@ -31,9 +31,7 @@ import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
-import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
-import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
+import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.plugin.authprovider.type.Reject;
 import com.baidu.bifromq.plugin.eventcollector.Event;
@@ -55,7 +53,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
     public void transientSessionWithoutInbox() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxExpire(ExpireReply.Code.NOT_FOUND);
+        mockInboxDetach(DetachReply.Code.NO_INBOX);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
@@ -68,7 +66,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
     public void transientSessionWithInbox() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxExpire(ExpireReply.Code.OK);
+        mockInboxDetach(DetachReply.Code.OK);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
@@ -82,14 +80,14 @@ public class MQTTConnectTest extends BaseMQTTTest {
         // clear failed
         mockAuthPass();
         mockSessionReg();
-        mockInboxExpire(ExpireReply.Code.ERROR);
+        mockInboxDetach(DetachReply.Code.ERROR);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
         channel.advanceTimeBy(disconnectDelay, TimeUnit.MILLISECONDS);
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         // verifications
-        Assert.assertEquals(CONNECTION_REFUSED_SERVER_UNAVAILABLE, ackMessage.variableHeader().connectReturnCode());
+        assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_REFUSED_SERVER_UNAVAILABLE);
         verifyEvent(INBOX_TRANSIENT_ERROR);
     }
 
@@ -97,9 +95,9 @@ public class MQTTConnectTest extends BaseMQTTTest {
     public void attachToExistingSession() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxGet(InboxVersion.newBuilder().setIncarnation(1).build());
+        mockInboxExist(true);
         mockInboxReader();
-        mockAttach(AttachReply.Code.OK);
+        mockInboxAttach(1, 1);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(false);
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
@@ -113,8 +111,8 @@ public class MQTTConnectTest extends BaseMQTTTest {
     public void attachToExistingSessionError() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxGet(InboxVersion.newBuilder().setIncarnation(1).build());
-        mockAttach(AttachReply.Code.ERROR);
+        mockInboxExist(true);
+        mockInboxAttach(AttachReply.Code.ERROR);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(false);
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
@@ -122,14 +120,13 @@ public class MQTTConnectTest extends BaseMQTTTest {
         verifyEvent(INBOX_TRANSIENT_ERROR);
     }
 
-
     @Test
     public void createNewPersistentSession() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxGet();
+        mockInboxExist(false);
         mockInboxReader();
-        mockInboxCreate(CreateReply.Code.OK);
+        mockInboxAttach(0, 0);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(false);
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
@@ -142,9 +139,9 @@ public class MQTTConnectTest extends BaseMQTTTest {
     public void createPersistentSessionError() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxGet();
+        mockInboxExist(false);
         mockInboxReader();
-        mockInboxCreate(CreateReply.Code.ERROR);
+        mockInboxAttach(AttachReply.Code.ERROR);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(false);
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
@@ -158,7 +155,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         String attrVal = "attrVal";
         mockAuthPass(attrKey, attrVal);
         mockSessionReg();
-        mockInboxExpire(true);
+        mockInboxDetach(DetachReply.Code.OK);
 
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
@@ -166,7 +163,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         // verifications
-        Assert.assertEquals(CONNECTION_ACCEPTED, ackMessage.variableHeader().connectReturnCode());
+        assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_ACCEPTED);
         ArgumentCaptor<ClientConnected> eventArgumentCaptor = ArgumentCaptor.forClass(ClientConnected.class);
         verify(eventCollector).report(eventArgumentCaptor.capture());
         ClientConnected clientConnected = eventArgumentCaptor.getValue();
@@ -180,7 +177,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         String attrVal = "attrVal";
         mockAuthPass(attrKey, attrVal);
         mockSessionReg();
-        mockInboxExpire(ExpireReply.Code.OK);
+        mockInboxDetach(DetachReply.Code.OK);
 
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
@@ -232,7 +229,7 @@ public class MQTTConnectTest extends BaseMQTTTest {
         channel.runPendingTasks();
         MqttConnAckMessage ackMessage = channel.readOutbound();
         // verifications
-        Assert.assertEquals(CONNECTION_REFUSED_SERVER_UNAVAILABLE, ackMessage.variableHeader().connectReturnCode());
+        assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_REFUSED_SERVER_UNAVAILABLE);
         ArgumentCaptor<Event> eventArgumentCaptor = ArgumentCaptor.forClass(Event.class);
         verify(eventCollector, times(1)).report(eventArgumentCaptor.capture());
         verifyEvent(EventType.AUTH_ERROR);
@@ -242,12 +239,12 @@ public class MQTTConnectTest extends BaseMQTTTest {
     public void validWillTopic() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxExpire(ExpireReply.Code.OK);
+        mockInboxDetach(DetachReply.Code.OK);
         MqttConnectMessage connectMessage = MQTTMessageUtils.qoSWillMqttConnectMessage(1, true);
         channel.writeInbound(connectMessage);
         MqttConnAckMessage ackMessage = channel.readOutbound();
         // verifications
-        Assert.assertEquals(CONNECTION_ACCEPTED, ackMessage.variableHeader().connectReturnCode());
+        assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_ACCEPTED);
         verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED);
     }
 
@@ -255,16 +252,16 @@ public class MQTTConnectTest extends BaseMQTTTest {
     public void pingAndPingResp() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxExpire(ExpireReply.Code.OK);
+        mockInboxDetach(DetachReply.Code.OK);
         MqttConnectMessage connectMessage = MQTTMessageUtils.qoSWillMqttConnectMessage(1, true);
         channel.writeInbound(connectMessage);
         MqttConnAckMessage ackMessage = channel.readOutbound();
         // verifications
-        Assert.assertEquals(CONNECTION_ACCEPTED, ackMessage.variableHeader().connectReturnCode());
+        assertEquals(ackMessage.variableHeader().connectReturnCode(), CONNECTION_ACCEPTED);
 
         channel.writeInbound(MqttMessage.PINGREQ);
         MqttMessage pingResp = channel.readOutbound();
-        Assert.assertEquals(MqttMessage.PINGRESP, pingResp);
+        assertEquals(pingResp, MqttMessage.PINGRESP);
         verifyEvent(MQTT_SESSION_START, CLIENT_CONNECTED, PING_REQ);
     }
 }

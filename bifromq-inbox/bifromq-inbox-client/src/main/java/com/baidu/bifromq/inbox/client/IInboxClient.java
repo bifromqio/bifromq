@@ -18,18 +18,14 @@ import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
-import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
-import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExistReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExistRequest;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireAllReply;
 import com.baidu.bifromq.inbox.rpc.proto.ExpireAllRequest;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireRequest;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SendLWTReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendLWTRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
@@ -52,9 +48,7 @@ public interface IInboxClient extends ISubBroker, IConnectable, AutoCloseable {
         return 1;
     }
 
-    CompletableFuture<GetReply> get(GetRequest request);
-
-    CompletableFuture<CreateReply> create(CreateRequest request);
+    CompletableFuture<ExistReply> exist(ExistRequest request);
 
     CompletableFuture<AttachReply> attach(AttachRequest request);
 
@@ -67,8 +61,6 @@ public interface IInboxClient extends ISubBroker, IConnectable, AutoCloseable {
     CompletableFuture<SendLWTReply> sendLWT(SendLWTRequest request);
 
     CompletableFuture<DeleteReply> delete(DeleteRequest request);
-
-    CompletableFuture<ExpireReply> expire(ExpireRequest request);
 
     CompletableFuture<ExpireAllReply> expireAll(ExpireAllRequest request);
 

@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
+import static java.util.Collections.emptySet;
+
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
@@ -22,14 +24,15 @@ import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
-import com.baidu.bifromq.inbox.record.InboxInstance;
-import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -53,7 +56,6 @@ class BatchUnsubCall extends BatchMutationCall<UnsubRequest, UnsubReply> {
             reqBuilder.addParams(BatchUnsubRequest.Params.newBuilder()
                 .setTenantId(request.getTenantId())
                 .setInboxId(request.getInboxId())
-                .setIncarnation(request.getIncarnation())
                 .setVersion(request.getVersion())
                 .setTopicFilter(request.getTopicFilter())
                 .setNow(request.getNow())
@@ -121,7 +123,7 @@ class BatchUnsubCall extends BatchMutationCall<UnsubRequest, UnsubReply> {
     }
 
     private static class BatchUnsubCallTask extends MutationCallTaskBatch<UnsubRequest, UnsubReply> {
-        private final Set<TenantInboxInstance> inboxes = new HashSet<>();
+        private final Map<String, Set<InboxVersion>> inboxes = new HashMap<>();
 
         private BatchUnsubCallTask(long ver) {
             super(ver);
@@ -130,18 +132,14 @@ class BatchUnsubCall extends BatchMutationCall<UnsubRequest, UnsubReply> {
         @Override
         protected void add(ICallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey> callTask) {
             super.add(callTask);
-            inboxes.add(new TenantInboxInstance(
-                callTask.call().getTenantId(),
-                new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))
-            );
+            inboxes.computeIfAbsent(callTask.call().getTenantId(), k -> new HashSet<>())
+                .add(callTask.call().getVersion());
         }
 
         @Override
         protected boolean isBatchable(ICallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey> callTask) {
-            return !inboxes.contains(new TenantInboxInstance(
-                callTask.call().getTenantId(),
-                new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))
-            );
+            return !inboxes.getOrDefault(callTask.call().getTenantId(), emptySet())
+                .contains(callTask.call().getVersion());
         }
     }
 }

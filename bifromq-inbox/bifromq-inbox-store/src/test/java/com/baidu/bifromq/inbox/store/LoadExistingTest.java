@@ -22,7 +22,8 @@ import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.sessiondict.client.type.ExistResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MQTTClientInfoConstants;
@@ -41,13 +42,15 @@ public class LoadExistingTest extends InboxStoreTest {
             .putMetadata(MQTTClientInfoConstants.MQTT_USER_ID_KEY, "userId")
             .putMetadata(MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY, "clientId")
             .build();
-        requestCreate(BatchCreateRequest.Params.newBuilder()
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setExpirySeconds(3)
             .setClient(client)
             .setNow(now)
-            .build());
+            .build();
+        InboxVersion inboxVersion = requestAttach(attachParams).get(0);
+
         restartStoreServer();
         await().until(() -> BoundaryUtil.isValidSplitSet(storeClient.latestEffectiveRouter().keySet()));
         when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(ExistResult.NOT_EXISTS));
@@ -56,6 +59,6 @@ public class LoadExistingTest extends InboxStoreTest {
         DeleteRequest request = deleteCaptor.getValue();
         assertEquals(request.getTenantId(), tenantId);
         assertEquals(request.getInboxId(), inboxId);
-        assertEquals(request.getIncarnation(), incarnation);
+        assertEquals(request.getVersion(), inboxVersion);
     }
 }

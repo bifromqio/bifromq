@@ -28,9 +28,11 @@ import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.dist.client.MatchResult;
-import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
+import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
+import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
@@ -51,15 +53,13 @@ public class InboxSubRPCTest extends InboxServiceTest {
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         String topicFilter = "/a/b/c";
 
         SubReply subReply2 = inboxClient.sub(SubRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(1)
+            .setVersion(InboxVersion.newBuilder().build())
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder()
                 .setIncarnation(1L)
@@ -71,9 +71,9 @@ public class InboxSubRPCTest extends InboxServiceTest {
 
         CheckReply checkReply = inboxClient.check(CheckRequest.newBuilder()
             .setTenantId(tenantId)
-            .setDelivererKey(getDelivererKey(inboxId, receiverId(inboxId, incarnation)))
+            .setDelivererKey(getDelivererKey(inboxId, receiverId(inboxId, 0)))
             .addMatchInfo(MatchInfo.newBuilder()
-                .setReceiverId(receiverId(inboxId, incarnation))
+                .setReceiverId(receiverId(inboxId, 0))
                 .setMatcher(TopicUtil.from(topicFilter))
                 .build())
             .build()).join();
@@ -90,14 +90,12 @@ public class InboxSubRPCTest extends InboxServiceTest {
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
-        inboxClient.create(CreateRequest.newBuilder()
+        AttachReply reply = inboxClient.attach(AttachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
             .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
@@ -111,8 +109,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(1)
+            .setVersion(reply.getVersion().toBuilder().setMod(reply.getVersion().getMod() + 1).build())
             .setTopicFilter(topicFilter)
             .setNow(now)
             .build()).join();
@@ -130,15 +127,13 @@ public class InboxSubRPCTest extends InboxServiceTest {
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         String topicFilter = "/a/b/c";
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
-        inboxClient.create(CreateRequest.newBuilder()
+        AttachReply attachReply = inboxClient.attach(AttachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
             .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
@@ -149,9 +144,9 @@ public class InboxSubRPCTest extends InboxServiceTest {
 
         CheckReply checkReply = inboxClient.check(CheckRequest.newBuilder()
             .setTenantId(tenantId)
-            .setDelivererKey(getDelivererKey(inboxId, receiverId(inboxId, incarnation)))
+            .setDelivererKey(getDelivererKey(inboxId, receiverId(inboxId, attachReply.getVersion().getIncarnation())))
             .addMatchInfo(MatchInfo.newBuilder()
-                .setReceiverId(receiverId(inboxId, incarnation))
+                .setReceiverId(receiverId(inboxId, attachReply.getVersion().getIncarnation()))
                 .setMatcher(TopicUtil.from(topicFilter))
                 .build())
             .build()).join();
@@ -163,8 +158,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(attachReply.getVersion())
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setQos(QoS.AT_LEAST_ONCE).build())
             .setNow(now)
@@ -174,9 +168,9 @@ public class InboxSubRPCTest extends InboxServiceTest {
 
         checkReply = inboxClient.check(CheckRequest.newBuilder()
             .setTenantId(tenantId)
-            .setDelivererKey(getDelivererKey(inboxId, receiverId(inboxId, incarnation)))
+            .setDelivererKey(getDelivererKey(inboxId, receiverId(inboxId, attachReply.getVersion().getIncarnation())))
             .addMatchInfo(MatchInfo.newBuilder()
-                .setReceiverId(receiverId(inboxId, incarnation))
+                .setReceiverId(receiverId(inboxId, attachReply.getVersion().getIncarnation()))
                 .setMatcher(TopicUtil.from(topicFilter))
                 .build())
             .build()).join();
@@ -193,14 +187,12 @@ public class InboxSubRPCTest extends InboxServiceTest {
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
-        inboxClient.create(CreateRequest.newBuilder()
+        AttachReply attachReply = inboxClient.attach(AttachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
             .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
@@ -214,8 +206,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(attachReply.getVersion())
             .setTopicFilter(topicFilter)
             .setNow(now)
             .build()).join();
@@ -228,8 +219,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(attachReply.getVersion())
             .setTopicFilter(topicFilter)
             .setNow(now)
             .build()).join();
@@ -247,14 +237,12 @@ public class InboxSubRPCTest extends InboxServiceTest {
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
-        inboxClient.create(CreateRequest.newBuilder()
+        AttachReply attachReply = inboxClient.attach(AttachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
             .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
@@ -270,8 +258,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(attachReply.getVersion())
             .setTopicFilter("/a/b/c")
             .setNow(now)
             .build()).join();
@@ -282,8 +269,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(attachReply.getVersion())
             .setTopicFilter("/a/b")
             .setNow(now)
             .build()).join();
@@ -300,14 +286,12 @@ public class InboxSubRPCTest extends InboxServiceTest {
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
-        inboxClient.create(CreateRequest.newBuilder()
+        AttachReply attachReply = inboxClient.attach(AttachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
             .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
@@ -324,8 +308,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(attachReply.getVersion())
             .setTopicFilter(topicFilter)
             .setNow(now)
             .build()).join();
@@ -339,14 +322,12 @@ public class InboxSubRPCTest extends InboxServiceTest {
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
-        inboxClient.create(CreateRequest.newBuilder()
+        AttachReply attachReply = inboxClient.attach(AttachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
             .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
@@ -363,13 +344,11 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(attachReply.getVersion())
             .setTopicFilter(topicFilter)
             .setNow(now)
             .build()).join();
         assertEquals(subReply2.getReqId(), reqId);
         assertEquals(subReply2.getCode(), SubReply.Code.ERROR);
     }
-
 }

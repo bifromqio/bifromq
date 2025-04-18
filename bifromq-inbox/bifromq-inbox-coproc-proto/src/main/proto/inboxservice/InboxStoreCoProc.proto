@@ -12,7 +12,7 @@ option java_outer_classname = "InboxCoProcProtos";
 
 package inboxservice;
 
-message BatchGetRequest{
+message BatchExistRequest{
   message Params{
     string tenantId = 1;
     string inboxId = 2;
@@ -21,18 +21,8 @@ message BatchGetRequest{
   repeated Params params = 1;
 }
 
-message InboxVersion{
-  uint64 incarnation = 1;
-  uint64 version = 2; // state version
-  uint32 expirySeconds = 3;
-  optional LWT lwt = 4;
-  commontype.ClientInfo client = 5;
-}
-message BatchGetReply{
-  message Result{
-    repeated InboxVersion version = 1;
-  }
-  repeated Result result = 1;
+message BatchExistReply{
+  repeated bool exist = 1;
 }
 
 message BatchCheckSubRequest{
@@ -55,32 +45,13 @@ message BatchCheckSubReply{
   repeated Code code = 1;
 }
 
-message BatchCreateRequest{
-  message Params {
-    string inboxId = 1;
-    uint64 incarnation = 2;
-    uint32 expirySeconds = 3;
-    uint32 keepAliveSeconds = 4;
-    uint32 limit = 5;
-    bool dropOldest = 6;
-    optional LWT lwt = 7;
-    commontype.ClientInfo client = 8; // the connected client
-    uint64 now = 9;
-  }
-  repeated Params params = 1;
-}
-
-message BatchCreateReply{
-  repeated bool succeed = 1;
-}
-
 message BatchAttachRequest{
   message Params {
     string inboxId = 1;
-    uint64 incarnation = 2;
-    uint64 version = 3;
-    uint32 expirySeconds = 4;
-    uint32 keepAliveSeconds = 5;
+    uint64 incarnation = 2; // won't change when reuse existing inbox
+    uint32 expirySeconds = 3;
+    uint32 limit = 4; // won't change when reuse existing inbox
+    bool dropOldest = 5; // only work for qos0
     optional LWT lwt = 6;
     commontype.ClientInfo client = 7; // the attached client
     uint64 now = 8;
@@ -89,24 +60,23 @@ message BatchAttachRequest{
   Replica leader = 2; // the leader replica
 }
 
+message InboxVersion{
+  uint64 incarnation = 1; // incarnation helps tracking the lifecycle of a inbox
+  uint64 mod = 2; // mod helps detects conflict within a incarnation
+}
+
 message BatchAttachReply{
-  enum Code{
-    OK = 0;
-    NO_INBOX = 1;
-    CONFLICT = 2;
-  }
-  repeated Code code = 1;
+  repeated InboxVersion version = 1;
 }
 
 message BatchDetachRequest{
   message Params {
     string tenantId = 1;
     string inboxId = 2;
-    uint64 incarnation = 3;
-    uint64 version = 4;
-    uint32 expirySeconds = 5;
-    bool discardLWT = 6;
-    uint64 now = 7;
+    optional InboxVersion version = 3; // if not set, the latest incarnation will be detached
+    uint32 expirySeconds = 4;
+    bool discardLWT = 5;
+    uint64 now = 6;
   }
   repeated Params params = 1;
   Replica leader = 2; // the leader replica
@@ -125,8 +95,7 @@ message BatchDeleteRequest{
   message Params{
     string tenantId = 1;
     string inboxId = 2;
-    uint64 incarnation = 3;
-    uint64 version = 4;
+    InboxVersion version = 3;
   }
   repeated Params params = 1;
 }
@@ -148,8 +117,7 @@ message BatchSubRequest{
   message Params{
     string tenantId = 1;
     string inboxId = 2;
-    uint64 incarnation = 3;
-    uint64 version = 4;
+    InboxVersion version = 3;
     string topicFilter = 5;
     TopicFilterOption option = 6;
     uint64 now = 7;
@@ -172,10 +140,9 @@ message BatchUnsubRequest{
   message Params{
     string tenantId = 1;
     string inboxId = 2;
-    uint64 incarnation = 3;
-    uint64 version = 4;
-    string topicFilter = 5;
-    uint64 now = 6;
+    InboxVersion version = 3;
+    string topicFilter = 4;
+    uint64 now = 5;
   }
   repeated Params params = 1;
 }
@@ -215,12 +182,14 @@ message SubMessagePack{
   map<string, uint64> matchedTopicFilters = 1; // key: topicFilter, value: route incarnation
   commontype.TopicMessagePack messages = 2;
 }
+
 message InboxSubMessagePack{
   string tenantId = 1;
   string inboxId = 2;
   uint64 incarnation = 3;
   repeated SubMessagePack messagePack = 4;
 }
+
 message BatchInsertRequest{
   repeated InboxSubMessagePack inboxSubMsgPack = 1;
 }
@@ -247,11 +216,10 @@ message BatchCommitRequest{
   message Params{
     string tenantId = 1;
     string inboxId = 2;
-    uint64 incarnation = 3;
-    uint64 version = 4;
-    optional uint64 qos0UpToSeq = 5;
-    optional uint64 sendBufferUpToSeq = 6;
-    uint64 now = 8;
+    InboxVersion version = 3;
+    optional uint64 qos0UpToSeq = 4;
+    optional uint64 sendBufferUpToSeq = 5;
+    uint64 now = 6;
   }
   repeated Params params = 1;
 }
@@ -269,9 +237,8 @@ message BatchSendLWTRequest{
   message Params{
     string tenantId = 1;
     string inboxId = 2;
-    uint64 incarnation = 3;
-    uint64 version = 4;
-    uint64 now = 5;
+    InboxVersion version = 3;
+    uint64 now = 4;
   }
   repeated Params params = 1;
 }
@@ -317,36 +284,33 @@ message CollectMetricsReply{
 message InboxServiceRWCoProcInput{
   uint64 reqId = 1;
   oneof type{
-    BatchCreateRequest batchCreate = 2;
-    BatchAttachRequest batchAttach = 3;
-    BatchDetachRequest batchDetach = 4;
-    BatchDeleteRequest batchDelete = 5;
-    BatchSubRequest batchSub = 6;
-    BatchUnsubRequest batchUnsub = 7;
-    BatchInsertRequest batchInsert = 8;
-    BatchCommitRequest batchCommit = 9;
+    BatchAttachRequest batchAttach = 2;
+    BatchDetachRequest batchDetach = 3;
+    BatchDeleteRequest batchDelete = 4;
+    BatchSubRequest batchSub = 5;
+    BatchUnsubRequest batchUnsub = 6;
+    BatchInsertRequest batchInsert = 7;
+    BatchCommitRequest batchCommit = 8;
   }
 }
 
 message InboxServiceRWCoProcOutput{
   uint64 reqId = 1;
   oneof type{
-    BatchCreateReply batchCreate = 2;
-    BatchAttachReply batchAttach = 3;
-    BatchDetachReply batchDetach = 4;
-    BatchDeleteReply batchDelete = 5;
-    BatchSubReply batchSub = 6;
-    BatchUnsubReply batchUnsub = 7;
-    BatchInsertReply batchInsert = 8;
-    BatchCommitReply batchCommit = 9;
-    ExpireTenantReply expireTenant = 10;
+    BatchAttachReply batchAttach = 2;
+    BatchDetachReply batchDetach = 3;
+    BatchDeleteReply batchDelete = 4;
+    BatchSubReply batchSub = 5;
+    BatchUnsubReply batchUnsub = 6;
+    BatchInsertReply batchInsert = 7;
+    BatchCommitReply batchCommit = 8;
   }
 }
 
 message InboxServiceROCoProcInput{
   uint64 reqId = 1;
   oneof input{
-    BatchGetRequest batchGet = 2;
+    BatchExistRequest batchExist = 2;
     BatchFetchRequest batchFetch = 3;
     BatchCheckSubRequest batchCheckSub = 4;
     BatchSendLWTRequest batchSendLWT = 5;
@@ -358,7 +322,7 @@ message InboxServiceROCoProcInput{
 message InboxServiceROCoProcOutput{
   uint64 reqId = 1;
   oneof output{
-    BatchGetReply batchGet = 2;
+    BatchExistReply batchExist = 2;
     BatchFetchReply batchFetch = 3;
     BatchCheckSubReply batchCheckSub = 4;
     BatchSendLWTReply batchSendLWT = 5;

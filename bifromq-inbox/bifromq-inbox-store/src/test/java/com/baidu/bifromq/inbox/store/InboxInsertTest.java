@@ -21,15 +21,16 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchCommitRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.SubMessagePack;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.plugin.eventcollector.inboxservice.Overflowed;
@@ -69,12 +70,10 @@ public class InboxInsertTest extends InboxStoreTest {
         long now = 0;
         String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         BatchCommitReply.Code commitCode = requestCommit(BatchCommitRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(1)
+            .setVersion(InboxVersion.newBuilder().build())
             .setQos0UpToSeq(1)
             .setNow(now)
             .build()).get(0);
@@ -88,20 +87,20 @@ public class InboxInsertTest extends InboxStoreTest {
         long incarnation = System.nanoTime();
         String topicFilter = "/a/b/c";
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-
-        requestCreate(BatchCreateRequest.Params.newBuilder()
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setExpirySeconds(2)
             .setLimit(10)
             .setClient(client)
             .setNow(now)
-            .build());
+            .build();
+        InboxVersion inboxVersion = requestAttach(attachParams).get(0);
+
         requestSub(BatchSubRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setIncarnation(1L).setQos(qos).build())
             .setNow(now)
@@ -157,20 +156,21 @@ public class InboxInsertTest extends InboxStoreTest {
         long incarnation = System.nanoTime();
         String topicFilter = "/a/b/c";
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-
-        requestCreate(BatchCreateRequest.Params.newBuilder()
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
+            .setExpirySeconds(5)
             .setExpirySeconds(2)
             .setLimit(10)
             .setClient(client)
             .setNow(now)
-            .build());
+            .build();
+        InboxVersion inboxVersion = requestAttach(attachParams).get(0);
+
         requestSub(BatchSubRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setIncarnation(1L).setQos(qos).build())
             .setNow(now)
@@ -230,20 +230,21 @@ public class InboxInsertTest extends InboxStoreTest {
         long incarnation = System.nanoTime();
         String topicFilter = "/a/b/c";
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-
-        requestCreate(BatchCreateRequest.Params.newBuilder()
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
+            .setExpirySeconds(5)
             .setExpirySeconds(2)
             .setLimit(10)
             .setClient(client)
             .setNow(now)
-            .build());
+            .build();
+        InboxVersion inboxVersion = requestAttach(attachParams).get(0);
+
         requestSub(BatchSubRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setQos(qos).build())
             .setNow(now)
@@ -347,20 +348,21 @@ public class InboxInsertTest extends InboxStoreTest {
         long incarnation = System.nanoTime();
         String topicFilter = "/a/b/c";
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-
-        requestCreate(BatchCreateRequest.Params.newBuilder()
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
+            .setExpirySeconds(5)
             .setExpirySeconds(2)
             .setLimit(10)
             .setClient(client)
             .setNow(now)
-            .build());
+            .build();
+        InboxVersion inboxVersion = requestAttach(attachParams).get(0);
+
         requestSub(BatchSubRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setQos(qos).build())
             .setNow(now)
@@ -387,8 +389,7 @@ public class InboxInsertTest extends InboxStoreTest {
         BatchCommitRequest.Params.Builder paramsBuilder = BatchCommitRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(inboxVersion)
             .setNow(now);
         switch (qos) {
             case AT_MOST_ONCE -> paramsBuilder.setQos0UpToSeq(1);
@@ -412,8 +413,7 @@ public class InboxInsertTest extends InboxStoreTest {
         paramsBuilder = BatchCommitRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(inboxVersion)
             .setNow(now);
         switch (qos) {
             case AT_MOST_ONCE -> paramsBuilder.setQos0UpToSeq(1);
@@ -437,8 +437,7 @@ public class InboxInsertTest extends InboxStoreTest {
         paramsBuilder = BatchCommitRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(inboxVersion)
             .setNow(now);
         switch (qos) {
             case AT_MOST_ONCE -> paramsBuilder.setQos0UpToSeq(2);
@@ -463,19 +462,21 @@ public class InboxInsertTest extends InboxStoreTest {
         long incarnation = System.nanoTime();
         String topicFilter = "/a/b/c";
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        requestCreate(BatchCreateRequest.Params.newBuilder()
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
+            .setExpirySeconds(5)
             .setExpirySeconds(2)
             .setLimit(10)
             .setClient(client)
             .setNow(now)
-            .build());
+            .build();
+        InboxVersion inboxVersion = requestAttach(attachParams).get(0);
+
         requestSub(BatchSubRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setQos(qos).build())
             .setNow(now)
@@ -519,8 +520,7 @@ public class InboxInsertTest extends InboxStoreTest {
         BatchCommitRequest.Params.Builder paramsBuilder = BatchCommitRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(inboxVersion)
             .setNow(now);
         switch (qos) {
             case AT_MOST_ONCE -> paramsBuilder.setQos0UpToSeq(5);
@@ -547,7 +547,7 @@ public class InboxInsertTest extends InboxStoreTest {
         long incarnation = System.nanoTime();
         String topicFilter = "/a/b/c";
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        requestCreate(BatchCreateRequest.Params.newBuilder()
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setExpirySeconds(2)
@@ -555,12 +555,13 @@ public class InboxInsertTest extends InboxStoreTest {
             .setLimit(2)
             .setClient(client)
             .setNow(now)
-            .build());
+            .build();
+        InboxVersion inboxVersion = requestAttach(attachParams).get(0);
+
         requestSub(BatchSubRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setQos(qos).build())
             .setNow(now)
@@ -673,7 +674,7 @@ public class InboxInsertTest extends InboxStoreTest {
         long incarnation = System.nanoTime();
         String topicFilter = "/a/b/c";
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        requestCreate(BatchCreateRequest.Params.newBuilder()
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setExpirySeconds(2)
@@ -681,12 +682,13 @@ public class InboxInsertTest extends InboxStoreTest {
             .setLimit(2)
             .setClient(client)
             .setNow(now)
-            .build());
+            .build();
+        InboxVersion inboxVersion = requestAttach(attachParams).get(0);
+
         requestSub(BatchSubRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setQos(qos).build())
             .setNow(now)
@@ -784,20 +786,21 @@ public class InboxInsertTest extends InboxStoreTest {
         TopicMessagePack.PublisherPack msg0 = message(QoS.AT_MOST_ONCE, "hello");
         TopicMessagePack.PublisherPack msg1 = message(QoS.AT_LEAST_ONCE, "world");
         TopicMessagePack.PublisherPack msg2 = message(QoS.EXACTLY_ONCE, "!!!!!");
-        requestCreate(BatchCreateRequest.Params.newBuilder()
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setExpirySeconds(5)
-            .setLimit(3)
             .setDropOldest(false)
+            .setLimit(3)
             .setClient(client)
             .setNow(now)
-            .build());
+            .build();
+        InboxVersion inboxVersion = requestAttach(attachParams).get(0);
+
         requestSub(BatchSubRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setQos(QoS.EXACTLY_ONCE).build())
             .setNow(now)

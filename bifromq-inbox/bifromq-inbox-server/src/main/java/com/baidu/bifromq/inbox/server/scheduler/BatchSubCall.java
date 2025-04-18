@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
+import static java.util.Collections.emptySet;
+
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
@@ -22,14 +24,15 @@ import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.basescheduler.ICallTask;
-import com.baidu.bifromq.inbox.record.InboxInstance;
-import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -53,7 +56,6 @@ class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
             BatchSubRequest.Params.Builder paramsBuilder = BatchSubRequest.Params.newBuilder()
                 .setTenantId(request.getTenantId())
                 .setInboxId(request.getInboxId())
-                .setIncarnation(request.getIncarnation())
                 .setVersion(request.getVersion())
                 .setTopicFilter(request.getTopicFilter())
                 .setOption(request.getOption())
@@ -120,7 +122,7 @@ class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
     }
 
     private static class BatchSubCallTask extends MutationCallTaskBatch<SubRequest, SubReply> {
-        private final Set<TenantInboxInstance> inboxes = new HashSet<>();
+        private final Map<String, Set<InboxVersion>> inboxes = new HashMap<>();
 
         private BatchSubCallTask(long ver) {
             super(ver);
@@ -129,18 +131,14 @@ class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
         @Override
         protected void add(ICallTask<SubRequest, SubReply, MutationCallBatcherKey> callTask) {
             super.add(callTask);
-            inboxes.add(new TenantInboxInstance(
-                callTask.call().getTenantId(),
-                new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))
-            );
+            inboxes.computeIfAbsent(callTask.call().getTenantId(), k -> new HashSet<>())
+                .add(callTask.call().getVersion());
         }
 
         @Override
         protected boolean isBatchable(ICallTask<SubRequest, SubReply, MutationCallBatcherKey> callTask) {
-            return !inboxes.contains(new TenantInboxInstance(
-                callTask.call().getTenantId(),
-                new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))
-            );
+            return !inboxes.getOrDefault(callTask.call().getTenantId(), emptySet())
+                .contains(callTask.call().getVersion());
         }
     }
 }

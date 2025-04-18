@@ -55,17 +55,11 @@ import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.client.UnmatchResult;
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.CommitReply;
-import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
-import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.Fetched.Builder;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
-import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
 import com.baidu.bifromq.metrics.ITenantMeter;
 import com.baidu.bifromq.mqtt.MockableTest;
@@ -90,12 +84,10 @@ import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.baidu.bifromq.sessiondict.client.ISessionRegistration;
 import com.baidu.bifromq.type.ClientInfo;
-import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
 import com.baidu.bifromq.type.TopicMessage;
 import com.baidu.bifromq.type.TopicMessagePack;
-import com.baidu.bifromq.util.TopicUtil;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
@@ -296,13 +288,6 @@ public abstract class BaseSessionHandlerTest extends MockableTest {
             .thenReturn(CompletableFuture.completedFuture(success ? MatchResult.OK : MatchResult.ERROR));
     }
 
-    protected MatchInfo matchInfo(String topicFilter) {
-        return MatchInfo.newBuilder()
-            .setMatcher(TopicUtil.from(topicFilter))
-            .setReceiverId("testInboxId")
-            .build();
-    }
-
     protected TopicMessagePack s2cMQTT5MessageList(String topic, int count, QoS qos) {
         TopicMessagePack.Builder packBuilder = TopicMessagePack.newBuilder().setTopic(topic);
         for (int i = 0; i < count; i++) {
@@ -374,54 +359,6 @@ public abstract class BaseSessionHandlerTest extends MockableTest {
             list.add(ByteBuffer.wrap(bytes));
         }
         return list;
-    }
-
-    protected void mockInboxGet(InboxVersion... inboxVersions) {
-        when(inboxClient.get(any()))
-            .thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder()
-                .setCode(inboxVersions.length > 0 ? GetReply.Code.EXIST : GetReply.Code.NO_INBOX)
-                .addAllInbox(List.of(inboxVersions))
-                .build()));
-    }
-
-    protected void mockAttach(AttachReply.Code code) {
-        when(inboxClient.attach(any()))
-            .thenReturn(CompletableFuture.completedFuture(AttachReply.newBuilder().setCode(code).build()));
-    }
-
-    protected void mockDetach(DetachReply.Code code) {
-        when(inboxClient.detach(any()))
-            .thenReturn(CompletableFuture.completedFuture(DetachReply.newBuilder().setCode(code).build()));
-    }
-
-    protected void mockInboxCreate(boolean success) {
-        when(inboxClient.create(any()))
-            .thenReturn(CompletableFuture.completedFuture(CreateReply.newBuilder()
-                .setCode(success ? CreateReply.Code.OK : CreateReply.Code.ERROR)
-                .build())
-            );
-    }
-
-    protected void mockInboxCreate(CreateReply.Code code) {
-        when(inboxClient.create(any()))
-            .thenReturn(CompletableFuture.completedFuture(CreateReply.newBuilder()
-                .setCode(code)
-                .build())
-            );
-    }
-
-    protected void mockInboxExpire(boolean success) {
-        when(inboxClient.expire(any()))
-            .thenReturn(CompletableFuture.completedFuture(ExpireReply.newBuilder()
-                .setCode(success ? ExpireReply.Code.OK : ExpireReply.Code.ERROR)
-                .build()));
-    }
-
-    protected void mockInboxExpire(ExpireReply.Code code) {
-        when(inboxClient.expire(any()))
-            .thenReturn(CompletableFuture.completedFuture(ExpireReply.newBuilder()
-                .setCode(code)
-                .build()));
     }
 
     protected void mockInboxCommit(CommitReply.Code code) {

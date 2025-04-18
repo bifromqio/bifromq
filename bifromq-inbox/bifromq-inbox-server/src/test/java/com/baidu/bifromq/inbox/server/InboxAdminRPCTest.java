@@ -14,17 +14,14 @@
 package com.baidu.bifromq.inbox.server;
 
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
-import com.baidu.bifromq.inbox.rpc.proto.CreateReply;
-import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExistReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExistRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.type.ClientInfo;
@@ -33,266 +30,210 @@ import org.testng.annotations.Test;
 public class InboxAdminRPCTest extends InboxServiceTest {
 
     @Test(groups = "integration")
-    public void createWithLWT() {
+    public void attachToCreate() {
         long now = System.currentTimeMillis();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
-        GetReply getReply = inboxClient.get(GetRequest.newBuilder()
+        ExistReply existReply = inboxClient.exist(ExistRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setNow(0)
             .build()).join();
-        assertEquals(getReply.getReqId(), reqId);
-        assertEquals(getReply.getCode(), GetReply.Code.NO_INBOX);
-        assertTrue(getReply.getInboxList().isEmpty());
-
-        CreateReply createReply = inboxClient.create(CreateRequest.newBuilder()
-            .setReqId(reqId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setExpirySeconds(5)
-            .setLimit(10)
-            .setDropOldest(true)
-            .setLwt(lwt)
-            .setClient(clientInfo)
-            .setNow(now)
-            .build()).join();
-        assertEquals(createReply.getReqId(), reqId);
-        assertEquals(createReply.getCode(), CreateReply.Code.OK);
-
-        getReply = inboxClient.get(GetRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setNow(0)
-            .build()).join();
-        assertEquals(getReply.getReqId(), reqId);
-        assertEquals(getReply.getCode(), GetReply.Code.EXIST);
-        assertEquals(getReply.getInboxCount(), 1);
-
-        InboxVersion inboxVersion = getReply.getInbox(0);
-        assertEquals(inboxVersion.getIncarnation(), incarnation);
-        assertEquals(inboxVersion.getExpirySeconds(), 5);
-        assertEquals(inboxVersion.getVersion(), 0);
-        assertEquals(inboxVersion.getLwt(), lwt);
-        assertEquals(inboxVersion.getClient(), clientInfo);
-    }
-
-    @Test(groups = "integration")
-    public void createWithoutLWT() {
-        long now = System.currentTimeMillis();
-        long reqId = System.nanoTime();
-        String tenantId = "traffic-" + System.nanoTime();
-        String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-
-        GetReply getReply = inboxClient.get(GetRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setNow(0)
-            .build()).join();
-        assertEquals(getReply.getReqId(), reqId);
-        assertEquals(getReply.getCode(), GetReply.Code.NO_INBOX);
-        assertTrue(getReply.getInboxList().isEmpty());
-
-        CreateReply createReply = inboxClient.create(CreateRequest.newBuilder()
-            .setReqId(reqId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setExpirySeconds(5)
-            .setLimit(10)
-            .setDropOldest(true)
-            .setClient(clientInfo)
-            .setNow(now)
-            .build()).join();
-        assertEquals(createReply.getReqId(), reqId);
-        assertEquals(createReply.getCode(), CreateReply.Code.OK);
-
-        getReply = inboxClient.get(GetRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setNow(0)
-            .build()).join();
-        assertEquals(getReply.getReqId(), reqId);
-        assertEquals(getReply.getCode(), GetReply.Code.EXIST);
-        assertEquals(getReply.getInboxCount(), 1);
-
-        InboxVersion inboxVersion = getReply.getInbox(0);
-        assertEquals(inboxVersion.getIncarnation(), incarnation);
-        assertEquals(inboxVersion.getExpirySeconds(), 5);
-        assertEquals(inboxVersion.getVersion(), 0);
-        assertFalse(inboxVersion.hasLwt());
-        assertEquals(inboxVersion.getClient(), clientInfo);
-    }
-
-    @Test(groups = "integration")
-    public void attachNoInbox() {
-        long now = System.currentTimeMillis();
-        long reqId = System.nanoTime();
-        String tenantId = "traffic-" + System.nanoTime();
-        String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        assertEquals(existReply.getReqId(), reqId);
+        assertEquals(existReply.getCode(), ExistReply.Code.NO_INBOX);
 
         AttachReply attachReply = inboxClient.attach(AttachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(1)
             .setExpirySeconds(5)
+            .setLimit(10)
+            .setDropOldest(true)
+            .setLwt(lwt)
             .setClient(clientInfo)
             .setNow(now)
             .build()).join();
         assertEquals(attachReply.getReqId(), reqId);
-        assertEquals(attachReply.getCode(), AttachReply.Code.NO_INBOX);
+        assertEquals(attachReply.getCode(), AttachReply.Code.OK);
+        assertTrue(attachReply.hasVersion());
+        assertEquals(attachReply.getVersion().getMod(), 0);
+
+        existReply = inboxClient.exist(ExistRequest.newBuilder()
+            .setReqId(reqId)
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setNow(0)
+            .build()).join();
+        assertEquals(existReply.getReqId(), reqId);
+        assertEquals(existReply.getCode(), ExistReply.Code.EXIST);
     }
 
     @Test(groups = "integration")
-    public void attachConflict() {
+    public void attachToExisting() {
         long now = System.currentTimeMillis();
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-
-        inboxClient.create(CreateRequest.newBuilder()
+        ExistReply existReply = inboxClient.exist(ExistRequest.newBuilder()
             .setReqId(reqId)
+            .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setExpirySeconds(5)
-            .setLimit(10)
-            .setDropOldest(true)
-            .setLwt(lwt)
-            .setClient(clientInfo)
-            .setNow(now)
+            .setNow(0)
             .build()).join();
+        assertEquals(existReply.getReqId(), reqId);
+        assertEquals(existReply.getCode(), ExistReply.Code.NO_INBOX);
 
         AttachReply attachReply = inboxClient.attach(AttachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(1) // mismatched version
             .setExpirySeconds(5)
+            .setLimit(10)
+            .setDropOldest(true)
+            .setLwt(lwt)
             .setClient(clientInfo)
             .setNow(now)
             .build()).join();
         assertEquals(attachReply.getReqId(), reqId);
-        assertEquals(attachReply.getCode(), AttachReply.Code.CONFLICT);
-    }
+        assertEquals(attachReply.getCode(), AttachReply.Code.OK);
+        assertTrue(attachReply.hasVersion());
+        assertEquals(attachReply.getVersion().getMod(), 0);
 
-    @Test(groups = "integration")
-    public void attachWithLWT() {
-        long now = System.currentTimeMillis();
-        long reqId = System.nanoTime();
-        String tenantId = "traffic-" + System.nanoTime();
-        String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
-        LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-
-        inboxClient.create(CreateRequest.newBuilder()
+        AttachReply attachReply1 = inboxClient.attach(AttachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
             .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
+            .setLwt(lwt)
             .setClient(clientInfo)
             .setNow(now)
             .build()).join();
+        assertEquals(attachReply1.getCode(), AttachReply.Code.OK);
+        assertTrue(attachReply1.hasVersion());
+        assertEquals(attachReply1.getVersion().getMod(), 1);
+        assertEquals(attachReply.getVersion().getIncarnation(), attachReply1.getVersion().getIncarnation());
+    }
+
+    @Test(groups = "integration")
+    public void attachAfterExpired() {
+        long now = 0;
+        long reqId = System.nanoTime();
+        String tenantId = "traffic-" + System.nanoTime();
+        String inboxId = "inbox-" + System.nanoTime();
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
+
+        ExistReply existReply = inboxClient.exist(ExistRequest.newBuilder()
+            .setReqId(reqId)
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setNow(now)
+            .build()).join();
+        assertEquals(existReply.getReqId(), reqId);
+        assertEquals(existReply.getCode(), ExistReply.Code.NO_INBOX);
 
         AttachReply attachReply = inboxClient.attach(AttachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
-            .setExpirySeconds(1)
-            .setLwt(lwt)
+            .setExpirySeconds(5)
+            .setLimit(10)
+            .setDropOldest(true)
             .setClient(clientInfo)
             .setNow(now)
             .build()).join();
         assertEquals(attachReply.getReqId(), reqId);
         assertEquals(attachReply.getCode(), AttachReply.Code.OK);
+        assertTrue(attachReply.hasVersion());
+        assertEquals(attachReply.getVersion().getMod(), 0);
 
-        GetReply getReply = inboxClient.get(GetRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setNow(0)
-            .build()).join();
-        assertEquals(getReply.getReqId(), reqId);
-        assertEquals(getReply.getCode(), GetReply.Code.EXIST);
-        assertEquals(getReply.getInboxCount(), 1);
-
-        InboxVersion inboxVersion = getReply.getInbox(0);
-        assertEquals(inboxVersion.getIncarnation(), incarnation);
-        assertEquals(inboxVersion.getExpirySeconds(), 1);
-        assertEquals(inboxVersion.getVersion(), 1);
-        assertEquals(inboxVersion.getLwt(), lwt);
-        assertEquals(inboxVersion.getClient(), clientInfo);
-    }
-
-    @Test(groups = "integration")
-    public void attachWithoutLWT() {
-        long now = System.currentTimeMillis();
-        long reqId = System.nanoTime();
-        String tenantId = "traffic-" + System.nanoTime();
-        String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
-        LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-
-        inboxClient.create(CreateRequest.newBuilder()
+        DetachReply detachReply = inboxClient.detach(DetachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setExpirySeconds(5)
-            .setLimit(10)
-            .setDropOldest(true)
-            .setLwt(lwt)
+            .setVersion(attachReply.getVersion())
+            .setExpirySeconds(1)
             .setClient(clientInfo)
             .setNow(now)
             .build()).join();
+        assertEquals(detachReply.getReqId(), reqId);
+        assertEquals(detachReply.getCode(), DetachReply.Code.OK);
+
+        AttachReply attachReply1 = inboxClient.attach(AttachRequest.newBuilder()
+            .setReqId(reqId)
+            .setInboxId(inboxId)
+            .setExpirySeconds(5)
+            .setLimit(10)
+            .setDropOldest(true)
+            .setClient(clientInfo)
+            .setNow(now + 100000)
+            .build()).join();
+        assertEquals(attachReply1.getReqId(), reqId);
+        assertEquals(attachReply1.getCode(), AttachReply.Code.OK);
+        assertTrue(attachReply1.hasVersion());
+        assertEquals(attachReply1.getVersion().getMod(), 0);
+        assertTrue(attachReply1.getVersion().getIncarnation() > attachReply.getVersion().getIncarnation());
+    }
+
+    @Test(groups = "integration")
+    public void attachBeforeExpired() {
+        long now = 0;
+        long reqId = System.nanoTime();
+        String tenantId = "traffic-" + System.nanoTime();
+        String inboxId = "inbox-" + System.nanoTime();
+        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
+
+        ExistReply existReply = inboxClient.exist(ExistRequest.newBuilder()
+            .setReqId(reqId)
+            .setTenantId(tenantId)
+            .setInboxId(inboxId)
+            .setNow(now)
+            .build()).join();
+        assertEquals(existReply.getReqId(), reqId);
+        assertEquals(existReply.getCode(), ExistReply.Code.NO_INBOX);
 
         AttachReply attachReply = inboxClient.attach(AttachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
-            .setExpirySeconds(1)
+            .setExpirySeconds(5)
+            .setLimit(10)
+            .setDropOldest(true)
             .setClient(clientInfo)
             .setNow(now)
             .build()).join();
         assertEquals(attachReply.getReqId(), reqId);
         assertEquals(attachReply.getCode(), AttachReply.Code.OK);
+        assertTrue(attachReply.hasVersion());
+        assertEquals(attachReply.getVersion().getMod(), 0);
 
-        GetReply getReply = inboxClient.get(GetRequest.newBuilder()
+        DetachReply detachReply = inboxClient.detach(DetachRequest.newBuilder()
             .setReqId(reqId)
-            .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setNow(0)
+            .setVersion(attachReply.getVersion())
+            .setExpirySeconds(5)
+            .setClient(clientInfo)
+            .setNow(now)
             .build()).join();
-        assertEquals(getReply.getReqId(), reqId);
-        assertEquals(getReply.getCode(), GetReply.Code.EXIST);
-        assertEquals(getReply.getInboxCount(), 1);
+        assertEquals(detachReply.getReqId(), reqId);
+        assertEquals(detachReply.getCode(), DetachReply.Code.OK);
 
-        InboxVersion inboxVersion = getReply.getInbox(0);
-        assertEquals(inboxVersion.getIncarnation(), incarnation);
-        assertEquals(inboxVersion.getExpirySeconds(), 1);
-        assertEquals(inboxVersion.getVersion(), 1);
-        assertFalse(inboxVersion.hasLwt());
-        assertEquals(inboxVersion.getClient(), clientInfo);
+        AttachReply attachReply1 = inboxClient.attach(AttachRequest.newBuilder()
+            .setReqId(reqId)
+            .setInboxId(inboxId)
+            .setExpirySeconds(5)
+            .setLimit(10)
+            .setDropOldest(true)
+            .setClient(clientInfo)
+            .setNow(now + 1000)
+            .build()).join();
+        assertEquals(attachReply1.getReqId(), reqId);
+        assertEquals(attachReply1.getCode(), AttachReply.Code.OK);
+        assertTrue(attachReply1.hasVersion());
+        assertEquals(attachReply1.getVersion().getMod(), 2);
+        assertEquals(attachReply1.getVersion().getIncarnation(), attachReply.getVersion().getIncarnation());
     }
 
     @Test(groups = "integration")
@@ -301,14 +242,12 @@ public class InboxAdminRPCTest extends InboxServiceTest {
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
         DetachReply detachReply = inboxClient.detach(DetachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(1)
+            .setVersion(InboxVersion.newBuilder().build())
             .setClient(clientInfo)
             .setNow(now)
             .build()).join();
@@ -322,13 +261,11 @@ public class InboxAdminRPCTest extends InboxServiceTest {
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
-        inboxClient.create(CreateRequest.newBuilder()
+        AttachReply attachReply = inboxClient.attach(AttachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
             .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
@@ -339,8 +276,7 @@ public class InboxAdminRPCTest extends InboxServiceTest {
         DetachReply detachReply = inboxClient.detach(DetachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(1) // mismatched version
+            .setVersion(attachReply.getVersion().toBuilder().setMod(attachReply.getVersion().getMod() + 1).build())
             .setClient(clientInfo)
             .setNow(now)
             .build()).join();
@@ -354,14 +290,12 @@ public class InboxAdminRPCTest extends InboxServiceTest {
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
-        inboxClient.create(CreateRequest.newBuilder()
+        AttachReply attachReply = inboxClient.attach(AttachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
             .setExpirySeconds(5)
             .setLimit(10)
             .setDropOldest(true)
@@ -373,8 +307,7 @@ public class InboxAdminRPCTest extends InboxServiceTest {
         DetachReply detachReply = inboxClient.detach(DetachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(attachReply.getVersion())
             .setExpirySeconds(1)
             .setClient(clientInfo)
             .setNow(now)
@@ -382,73 +315,13 @@ public class InboxAdminRPCTest extends InboxServiceTest {
         assertEquals(detachReply.getReqId(), reqId);
         assertEquals(detachReply.getCode(), DetachReply.Code.OK);
 
-        GetReply getReply = inboxClient.get(GetRequest.newBuilder()
+        ExistReply existReply = inboxClient.exist(ExistRequest.newBuilder()
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setNow(0)
             .build()).join();
-        assertEquals(getReply.getReqId(), reqId);
-        assertEquals(getReply.getCode(), GetReply.Code.EXIST);
-        assertEquals(getReply.getInboxCount(), 1);
-
-        InboxVersion inboxVersion = getReply.getInbox(0);
-        assertEquals(inboxVersion.getIncarnation(), incarnation);
-        assertEquals(inboxVersion.getExpirySeconds(), 1);
-        assertEquals(inboxVersion.getVersion(), 1);
-        assertEquals(inboxVersion.getLwt(), lwt);
-        assertEquals(inboxVersion.getClient(), clientInfo);
-    }
-
-    @Test(groups = "integration")
-    public void detachAndDiscardLWT() {
-        long now = System.currentTimeMillis();
-        long reqId = System.nanoTime();
-        String tenantId = "traffic-" + System.nanoTime();
-        String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
-        LWT lwt = LWT.newBuilder().setTopic("LastWill").setDelaySeconds(5).build();
-        ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-
-        inboxClient.create(CreateRequest.newBuilder()
-            .setReqId(reqId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setExpirySeconds(5)
-            .setLimit(10)
-            .setDropOldest(true)
-            .setLwt(lwt)
-            .setClient(clientInfo)
-            .setNow(now)
-            .build()).join();
-
-        DetachReply detachReply = inboxClient.detach(DetachRequest.newBuilder()
-            .setReqId(reqId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
-            .setExpirySeconds(1)
-            .setDiscardLWT(true)
-            .setClient(clientInfo)
-            .setNow(now)
-            .build()).join();
-        assertEquals(detachReply.getReqId(), reqId);
-        assertEquals(detachReply.getCode(), DetachReply.Code.OK);
-
-        GetReply getReply = inboxClient.get(GetRequest.newBuilder()
-            .setReqId(reqId)
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setNow(0)
-            .build()).join();
-        assertEquals(getReply.getReqId(), reqId);
-        assertEquals(getReply.getCode(), GetReply.Code.EXIST);
-        assertEquals(getReply.getInboxCount(), 1);
-
-        InboxVersion inboxVersion = getReply.getInbox(0);
-        assertEquals(inboxVersion.getIncarnation(), incarnation);
-        assertEquals(inboxVersion.getExpirySeconds(), 1);
-        assertEquals(inboxVersion.getVersion(), 1);
-        assertEquals(inboxVersion.getClient(), clientInfo);
+        assertEquals(existReply.getReqId(), reqId);
+        assertEquals(existReply.getCode(), ExistReply.Code.EXIST);
     }
 }

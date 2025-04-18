@@ -30,10 +30,11 @@ import static org.testng.Assert.assertTrue;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.dist.client.MatchResult;
 import com.baidu.bifromq.dist.client.PubResult;
-import com.baidu.bifromq.inbox.rpc.proto.CreateRequest;
+import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
+import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DetachRequest;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetRequest;
+import com.baidu.bifromq.inbox.rpc.proto.ExistReply;
+import com.baidu.bifromq.inbox.rpc.proto.ExistRequest;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
@@ -59,7 +60,6 @@ public class InboxExpiryTest extends InboxServiceTest {
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder()
             .setTopic("LastWill")
             .setMessage(Message.newBuilder()
@@ -74,10 +74,9 @@ public class InboxExpiryTest extends InboxServiceTest {
         when(retainClient.retain(anyLong(), anyString(), any(), any(), anyInt(), any())).thenReturn(
             CompletableFuture.completedFuture(
                 RetainReply.newBuilder().setResult(RetainReply.Result.RETAINED).build()));
-        inboxClient.create(CreateRequest.newBuilder()
+        AttachReply attachReply = inboxClient.attach(AttachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
             .setExpirySeconds(2)
             .setLimit(10)
             .setDropOldest(true)
@@ -88,8 +87,7 @@ public class InboxExpiryTest extends InboxServiceTest {
         inboxClient.detach(DetachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(attachReply.getVersion())
             .setExpirySeconds(1)
             .setClient(clientInfo)
             .setNow(now)
@@ -103,13 +101,13 @@ public class InboxExpiryTest extends InboxServiceTest {
             .collect(Collectors.toSet())
             .containsAll(List.of(EventType.MSG_RETAINED, EventType.WILL_DISTED, EventType.MQTT_SESSION_STOP)));
         await().until(() -> {
-            GetReply getReply = inboxClient.get(GetRequest.newBuilder()
+            ExistReply existReply = inboxClient.exist(ExistRequest.newBuilder()
                 .setReqId(reqId)
                 .setTenantId(tenantId)
                 .setInboxId(inboxId)
                 .setNow(0)
                 .build()).join();
-            return getReply.getCode() == GetReply.Code.NO_INBOX;
+            return existReply.getCode() == ExistReply.Code.NO_INBOX;
         });
     }
 
@@ -120,7 +118,6 @@ public class InboxExpiryTest extends InboxServiceTest {
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("LastWill")
             .setMessage(Message.newBuilder().setIsRetain(true).build())
             .setDelaySeconds(1)
@@ -133,10 +130,9 @@ public class InboxExpiryTest extends InboxServiceTest {
                 RetainReply.newBuilder().setResult(RetainReply.Result.TRY_LATER).build()),
             CompletableFuture.completedFuture(
                 RetainReply.newBuilder().setResult(RetainReply.Result.RETAINED).build()));
-        inboxClient.create(CreateRequest.newBuilder()
+        AttachReply attachReply = inboxClient.attach(AttachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
             .setExpirySeconds(2)
             .setLimit(10)
             .setDropOldest(true)
@@ -147,8 +143,7 @@ public class InboxExpiryTest extends InboxServiceTest {
         inboxClient.detach(DetachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(attachReply.getVersion())
             .setExpirySeconds(10)
             .setClient(clientInfo)
             .setNow(now)
@@ -156,13 +151,13 @@ public class InboxExpiryTest extends InboxServiceTest {
         verify(distClient, timeout(10000).times(2)).pub(anyLong(), anyString(), any(), any());
         verify(retainClient, timeout(10000).times(2)).retain(anyLong(), anyString(), any(), any(), anyInt(), any());
         await().until(() -> {
-            GetReply getReply = inboxClient.get(GetRequest.newBuilder()
+            ExistReply existReply = inboxClient.exist(ExistRequest.newBuilder()
                 .setReqId(reqId)
                 .setTenantId(tenantId)
                 .setInboxId(inboxId)
                 .setNow(0)
                 .build()).join();
-            return getReply.getCode() == GetReply.Code.NO_INBOX;
+            return existReply.getCode() == ExistReply.Code.NO_INBOX;
         });
     }
 
@@ -173,7 +168,6 @@ public class InboxExpiryTest extends InboxServiceTest {
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         LWT lwt = LWT.newBuilder().setTopic("LastWill")
             .setDelaySeconds(1)
             .setMessage(Message.newBuilder()
@@ -184,10 +178,9 @@ public class InboxExpiryTest extends InboxServiceTest {
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
         when(distClient.pub(anyLong(), anyString(), any(), any()))
             .thenReturn(CompletableFuture.completedFuture(PubResult.OK));
-        inboxClient.create(CreateRequest.newBuilder()
+        AttachReply attachReply = inboxClient.attach(AttachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
             .setExpirySeconds(10)
             .setLimit(10)
             .setDropOldest(true)
@@ -198,8 +191,7 @@ public class InboxExpiryTest extends InboxServiceTest {
         inboxClient.detach(DetachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(attachReply.getVersion())
             .setExpirySeconds(10)
             .setClient(clientInfo)
             .setNow(now)
@@ -219,12 +211,10 @@ public class InboxExpiryTest extends InboxServiceTest {
         long reqId = System.nanoTime();
         String tenantId = "traffic-" + System.nanoTime();
         String inboxId = "inbox-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         ClientInfo clientInfo = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        inboxClient.create(CreateRequest.newBuilder()
+        AttachReply attachReply = inboxClient.attach(AttachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
             .setExpirySeconds(2)
             .setLimit(10)
             .setDropOldest(true)
@@ -239,8 +229,7 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setReqId(reqId)
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(attachReply.getVersion())
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder()
                 .setIncarnation(1L)
@@ -250,8 +239,7 @@ public class InboxExpiryTest extends InboxServiceTest {
         inboxClient.detach(DetachRequest.newBuilder()
             .setReqId(reqId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(attachReply.getVersion())
             .setExpirySeconds(1)
             .setClient(clientInfo)
             .setNow(now)
@@ -262,13 +250,13 @@ public class InboxExpiryTest extends InboxServiceTest {
             .removeRoute(anyLong(), eq(tenantId), eq(TopicUtil.from(topicFilter)), anyString(), anyString(), anyInt(),
                 eq(1L));
         await().until(() -> {
-            GetReply getReply = inboxClient.get(GetRequest.newBuilder()
+            ExistReply existReply = inboxClient.exist(ExistRequest.newBuilder()
                 .setReqId(reqId)
                 .setTenantId(tenantId)
                 .setInboxId(inboxId)
                 .setNow(0)
                 .build()).join();
-            return getReply.getCode() == GetReply.Code.NO_INBOX;
+            return existReply.getCode() == ExistReply.Code.NO_INBOX;
         });
     }
 }

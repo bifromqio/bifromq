@@ -27,10 +27,7 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
-import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.mqtt.utils.MQTTMessageUtils;
 import com.baidu.bifromq.plugin.settingprovider.Setting;
 import io.netty.handler.codec.mqtt.MqttConnAckMessage;
@@ -47,7 +44,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
     public void transientSession() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxExpire(ExpireReply.Code.OK);
+        mockInboxDetach(DetachReply.Code.OK);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
@@ -65,8 +62,8 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
         mockAuthPass();
         mockSessionReg();
         mockInboxReader();
-        mockInboxGet(InboxVersion.newBuilder().setIncarnation(1).build());
-        mockAttach(AttachReply.Code.OK);
+        mockInboxExist(true);
+        mockInboxAttach(0, 0);
         mockDetach(DetachReply.Code.OK);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(false);
         channel.writeInbound(connectMessage);
@@ -83,7 +80,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
     public void idle() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxExpire(ExpireReply.Code.NOT_FOUND);
+        mockInboxDetach(DetachReply.Code.NO_INBOX);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true, "testClientId", 60);
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
@@ -99,7 +96,8 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
     public void noKeepAlive() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxExpire(ExpireReply.Code.NOT_FOUND);
+        mockInboxDetach(DetachReply.Code.NO_INBOX);
+
         // keepalive = 0
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true, "abc", 0);
         channel.writeInbound(connectMessage);
@@ -117,8 +115,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
     public void enforceMinKeepAlive() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxExpire(ExpireReply.Code.NOT_FOUND);
-        int keepAlive = settingProvider.provide(Setting.MinKeepAliveSeconds, tenantId);
+        mockInboxDetach(DetachReply.Code.NO_INBOX);
 
         // keepalive too short, least is 60s
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true, "abc", 1);
@@ -136,7 +133,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
     public void connectTwice() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxExpire(ExpireReply.Code.NOT_FOUND);
+        mockInboxDetach(DetachReply.Code.NO_INBOX);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
@@ -153,7 +150,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
     public void disconnectByServer() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxExpire(ExpireReply.Code.NOT_FOUND);
+        mockInboxDetach(DetachReply.Code.NO_INBOX);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();
@@ -168,7 +165,7 @@ public class MQTTDisconnectTest extends BaseMQTTTest {
     public void badPacketAfterConnected() {
         mockAuthPass();
         mockSessionReg();
-        mockInboxExpire(ExpireReply.Code.NOT_FOUND);
+        mockInboxDetach(DetachReply.Code.NO_INBOX);
         MqttConnectMessage connectMessage = MQTTMessageUtils.mqttConnectMessage(true);
         channel.writeInbound(connectMessage);
         channel.runPendingTasks();

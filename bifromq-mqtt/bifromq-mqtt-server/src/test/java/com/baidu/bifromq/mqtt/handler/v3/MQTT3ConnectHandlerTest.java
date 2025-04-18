@@ -25,8 +25,8 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNull;
 
 import com.baidu.bifromq.inbox.client.IInboxClient;
-import com.baidu.bifromq.inbox.rpc.proto.ExpireReply;
-import com.baidu.bifromq.inbox.rpc.proto.GetReply;
+import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
+import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
 import com.baidu.bifromq.mqtt.MockableTest;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.v5.MQTT5MessageUtils;
@@ -213,7 +213,7 @@ public class MQTT3ConnectHandlerTest extends MockableTest {
     }
 
     @Test
-    public void expireInboxBackPressureRejected() {
+    public void detachInboxBackPressureRejected() {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
@@ -223,8 +223,8 @@ public class MQTT3ConnectHandlerTest extends MockableTest {
         when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn))).thenReturn(
             CompletableFuture.completedFuture(
                 CheckResult.newBuilder().setGranted(Granted.getDefaultInstance()).build()));
-        when(inboxClient.expire(any())).thenReturn(CompletableFuture.completedFuture(ExpireReply.newBuilder()
-            .setCode(ExpireReply.Code.BACK_PRESSURE_REJECTED)
+        when(inboxClient.detach(any())).thenReturn(CompletableFuture.completedFuture(DetachReply.newBuilder()
+            .setCode(DetachReply.Code.BACK_PRESSURE_REJECTED)
             .build()));
 
         MqttConnectMessage connMsg = MqttMessageBuilders.connect().clientId("client")
@@ -244,7 +244,7 @@ public class MQTT3ConnectHandlerTest extends MockableTest {
     }
 
     @Test
-    public void getInboxBackPressureRejected() {
+    public void attachCallBackPressureRejected() {
         when(authProvider.auth(any(MQTT3AuthData.class)))
             .thenReturn(CompletableFuture.completedFuture(MQTT3AuthResult.newBuilder()
                 .setOk(Ok.newBuilder()
@@ -254,8 +254,8 @@ public class MQTT3ConnectHandlerTest extends MockableTest {
         when(authProvider.checkPermission(any(ClientInfo.class), argThat(MQTTAction::hasConn))).thenReturn(
             CompletableFuture.completedFuture(
                 CheckResult.newBuilder().setGranted(Granted.getDefaultInstance()).build()));
-        when(inboxClient.get(any())).thenReturn(CompletableFuture.completedFuture(GetReply.newBuilder()
-            .setCode(GetReply.Code.BACK_PRESSURE_REJECTED)
+        when(inboxClient.attach(any())).thenReturn(CompletableFuture.completedFuture(AttachReply.newBuilder()
+            .setCode(AttachReply.Code.BACK_PRESSURE_REJECTED)
             .build()));
 
         MqttConnectMessage connMsg = MqttMessageBuilders.connect().clientId("client")

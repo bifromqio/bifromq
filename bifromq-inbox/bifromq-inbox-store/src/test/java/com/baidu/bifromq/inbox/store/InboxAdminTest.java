@@ -13,113 +13,44 @@
 
 package com.baidu.bifromq.inbox.store;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertSame;
-import static org.testng.Assert.assertTrue;
 
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.inbox.storage.proto.BatchAttachReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchCreateRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchDeleteReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchDeleteRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchDetachReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchDetachRequest;
-import com.baidu.bifromq.inbox.storage.proto.BatchGetReply;
-import com.baidu.bifromq.inbox.storage.proto.BatchGetRequest;
+import com.baidu.bifromq.inbox.storage.proto.BatchExistRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
+import com.baidu.bifromq.sessiondict.client.type.ExistResult;
 import com.baidu.bifromq.type.ClientInfo;
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 import org.testng.annotations.Test;
 
 public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
-    public void get() {
-        long now = 0;
-        String tenantId = "tenantId-" + System.nanoTime();
-        String inboxId1 = "inboxId1-" + System.nanoTime();
-        String inboxId2 = "inboxId2-" + System.nanoTime();
-        BatchGetRequest.Params getParams1 = BatchGetRequest.Params.newBuilder()
-            .setTenantId(tenantId)
-            .setInboxId(inboxId1)
-            .setNow(now)
-            .build();
-        BatchGetRequest.Params getParams2 = BatchGetRequest.Params.newBuilder()
-            .setTenantId(tenantId)
-            .setInboxId(inboxId2)
-            .setNow(now)
-            .build();
-        for (BatchGetReply.Result result : requestGet(getParams1, getParams2)) {
-            assertEquals(result.getVersionCount(), 0);
-        }
-    }
+    public void attachToCreate() {
+        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(ExistResult.EXISTS));
 
-    @Test(groups = "integration")
-    public void getAfterExpired() {
         long now = HLC.INST.getPhysical();
         String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setExpirySeconds(5)
-            .setClient(client)
-            .setNow(now)
-            .build();
-        requestCreate(createParams);
-
-        BatchGetRequest.Params getParams = BatchGetRequest.Params.newBuilder()
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setNow(now)
-            .build();
-        BatchGetReply.Result result = requestGet(getParams).get(0);
-        assertEquals(result.getVersionCount(), 1);
-
-        BatchDetachRequest.Params detachedParams = BatchDetachRequest.Params.newBuilder()
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(result.getVersion(0).getVersion())
-            .setNow(now)
-            .build();
-        assertEquals(requestDetach(detachedParams).get(0), BatchDetachReply.Code.OK);
-
-        getParams = BatchGetRequest.Params.newBuilder()
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setNow(Duration.ofMillis(now).plusSeconds(13).toMillis())
-            .build();
-        result = requestGet(getParams).get(0);
-        assertEquals(result.getVersionCount(), 0);
-        verify(eventCollector).report(argThat(e -> e.type() == EventType.MQTT_SESSION_START));
-    }
-
-    @Test(groups = "integration")
-    public void createWithLWT() {
-        long now = HLC.INST.getPhysical();
-        String tenantId = "tenantId-" + System.nanoTime();
-        String inboxId = "inboxId-" + System.nanoTime();
-        long incarnation = System.nanoTime();
-        LWT lwt = LWT.newBuilder().setTopic("lastWill").setDelaySeconds(5).build();
-        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        BatchGetRequest.Params getParams = BatchGetRequest.Params.newBuilder()
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setNow(0)
-            .build();
-        BatchGetReply.Result result = requestGet(getParams).get(0);
-        assertEquals(result.getVersionCount(), 0);
-
-        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+        LWT lwt = LWT.newBuilder().setTopic("lastWill").build();
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setExpirySeconds(5)
@@ -127,134 +58,21 @@ public class InboxAdminTest extends InboxStoreTest {
             .setClient(client)
             .setNow(now)
             .build();
-        boolean succeed = requestCreate(createParams).get(0);
-        assertTrue(succeed);
-        result = requestGet(getParams).get(0);
-        verify(eventCollector).report(argThat(e -> e.type() == EventType.MQTT_SESSION_START));
-        assertEquals(result.getVersionCount(), 1);
-        InboxVersion inboxVersion = result.getVersion(0);
-        assertEquals(inboxVersion.getVersion(), 0);
+        InboxVersion inboxVersion = requestAttach(attachParams).get(0);
         assertEquals(inboxVersion.getIncarnation(), incarnation);
-        assertEquals(inboxVersion.getExpirySeconds(), 5);
-        assertEquals(inboxVersion.getLwt(), lwt);
-        assertEquals(inboxVersion.getClient(), client);
+        assertEquals(inboxVersion.getMod(), 0);
     }
 
     @Test(groups = "integration")
-    public void createWithoutLWT() {
+    public void attachToExisting() {
+        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(ExistResult.EXISTS));
         long now = HLC.INST.getPhysical();
         String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        BatchGetRequest.Params getParams = BatchGetRequest.Params.newBuilder()
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setNow(now)
-            .build();
-        BatchGetReply.Result result = requestGet(getParams).get(0);
-        assertEquals(result.getVersionCount(), 0);
-
-        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setExpirySeconds(5)
-            .setClient(client)
-            .setNow(now)
-            .build();
-        boolean succeed = requestCreate(createParams).get(0);
-        assertTrue(succeed);
-        verify(eventCollector).report(argThat(e -> e.type() == EventType.MQTT_SESSION_START));
-        result = requestGet(getParams).get(0);
-        assertEquals(result.getVersionCount(), 1);
-        InboxVersion inboxVersion = result.getVersion(0);
-        assertEquals(inboxVersion.getVersion(), 0);
-        assertEquals(inboxVersion.getIncarnation(), incarnation);
-        assertEquals(inboxVersion.getExpirySeconds(), 5);
-        assertFalse(inboxVersion.hasLwt());
-        assertEquals(inboxVersion.getClient(), client);
-    }
-
-    @Test(groups = "integration")
-    public void createOverExisting() {
-        long now = 0;
-        String tenantId = "tenantId-" + System.nanoTime();
-        String inboxId = "inboxId-" + System.nanoTime();
-        long incarnation = System.nanoTime();
-        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setExpirySeconds(5)
-            .setClient(client)
-            .setNow(now)
-            .build();
-        boolean succeed = requestCreate(createParams).get(0);
-        assertTrue(succeed);
-        succeed = requestCreate(createParams).get(0);
-        assertFalse(succeed);
-        verify(eventCollector).report(argThat(e -> e.type() == EventType.MQTT_SESSION_START));
-    }
-
-    @Test(groups = "integration")
-    public void attachNoInbox() {
-        long now = 0;
-        String tenantId = "tenantId-" + System.nanoTime();
-        String inboxId = "inboxId-" + System.nanoTime();
-        long incarnation = System.nanoTime();
-        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
+        LWT lwt = LWT.newBuilder().setTopic("lastWill").build();
         BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
-            .setKeepAliveSeconds(5)
-            .setExpirySeconds(5)
-            .setClient(client)
-            .setNow(now)
-            .build();
-        BatchAttachReply.Code code = requestAttach(attachParams).get(0);
-        assertEquals(code, BatchAttachReply.Code.NO_INBOX);
-    }
-
-    @Test(groups = "integration")
-    public void attachConflict() {
-        long now = 0;
-        String tenantId = "tenantId-" + System.nanoTime();
-        String inboxId = "inboxId-" + System.nanoTime();
-        long incarnation = System.nanoTime();
-        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setExpirySeconds(5)
-            .setClient(client)
-            .setNow(now)
-            .build();
-        requestCreate(createParams);
-
-        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(1)
-            .setKeepAliveSeconds(5)
-            .setExpirySeconds(5)
-            .setClient(client)
-            .setNow(now)
-            .build();
-        BatchAttachReply.Code code = requestAttach(attachParams).get(0);
-        assertSame(code, BatchAttachReply.Code.CONFLICT);
-        verify(eventCollector).report(argThat(e -> e.type() == EventType.MQTT_SESSION_START));
-    }
-
-    @Test(groups = "integration")
-    public void attachWithoutLWT() {
-        long now = HLC.INST.getPhysical();
-        String tenantId = "tenantId-" + System.nanoTime();
-        String inboxId = "inboxId-" + System.nanoTime();
-        long incarnation = System.nanoTime();
-        LWT lwt = LWT.newBuilder().setTopic("lastWill").setDelaySeconds(5).build();
-        ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setExpirySeconds(5)
@@ -262,74 +80,33 @@ public class InboxAdminTest extends InboxStoreTest {
             .setClient(client)
             .setNow(now)
             .build();
-        requestCreate(createParams);
+        InboxVersion inboxVersion = requestAttach(attachParams).get(0);
 
-        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
-            .setKeepAliveSeconds(1)
-            .setExpirySeconds(1)
-            .setClient(client)
-            .setNow(now)
-            .build();
-        BatchAttachReply.Code code = requestAttach(attachParams).get(0);
-        assertSame(code, BatchAttachReply.Code.OK);
-
-        BatchGetRequest.Params getParams = BatchGetRequest.Params.newBuilder()
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setNow(now)
-            .build();
-        InboxVersion inboxVersion = requestGet(getParams).get(0).getVersion(0);
-        assertEquals(inboxVersion.getVersion(), 1);
-        assertEquals(inboxVersion.getExpirySeconds(), 1);
-        assertFalse(inboxVersion.hasLwt());
-
-        verify(eventCollector).report(argThat(e -> e.type() == EventType.MQTT_SESSION_START));
+        InboxVersion inboxVersion1 = requestAttach(attachParams).get(0);
+        assertEquals(inboxVersion1.getIncarnation(), inboxVersion.getIncarnation());
+        assertEquals(inboxVersion1.getMod(), inboxVersion.getMod() + 1);
     }
 
     @Test(groups = "integration")
-    public void attachWithLWT() {
+    public void attachToCreatePhantomInbox() {
+        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(ExistResult.EXISTS));
         long now = HLC.INST.getPhysical();
         String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
-        LWT lwt = LWT.newBuilder().setTopic("lastWill").setDelaySeconds(5).build();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
-            .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setExpirySeconds(5)
-            .setClient(client)
-            .setNow(now)
-            .build();
-        requestCreate(createParams);
-
+        LWT lwt = LWT.newBuilder().setTopic("lastWill").build();
         BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
-            .setVersion(0)
-            .setKeepAliveSeconds(1)
-            .setExpirySeconds(1)
+            .setExpirySeconds(0)
             .setLwt(lwt)
             .setClient(client)
             .setNow(now)
             .build();
-        BatchAttachReply.Code code = requestAttach(attachParams).get(0);
-        assertSame(code, BatchAttachReply.Code.OK);
-
-        BatchGetRequest.Params getParams = BatchGetRequest.Params.newBuilder()
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setNow(now)
-            .build();
-        InboxVersion inboxVersion = requestGet(getParams).get(0).getVersion(0);
-        assertEquals(inboxVersion.getVersion(), 1);
-        assertEquals(inboxVersion.getExpirySeconds(), 1);
-        assertEquals(inboxVersion.getLwt(), lwt);
-
-        verify(eventCollector).report(argThat(e -> e.type() == EventType.MQTT_SESSION_START));
+        InboxVersion inboxVersion = requestAttach(attachParams).get(0);
+        assertEquals(inboxVersion.getIncarnation(), 0);
+        assertEquals(inboxVersion.getMod(), 0);
     }
 
     @Test(groups = "integration")
@@ -341,8 +118,7 @@ public class InboxAdminTest extends InboxStoreTest {
         BatchDetachRequest.Params detachParams = BatchDetachRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(InboxVersion.newBuilder().setIncarnation(0).setMod(0).build())
             .setExpirySeconds(5)
             .setNow(now)
             .build();
@@ -357,27 +133,24 @@ public class InboxAdminTest extends InboxStoreTest {
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setExpirySeconds(5)
             .setClient(client)
             .setNow(now)
             .build();
-        requestCreate(createParams);
+        InboxVersion inboxVersion = requestAttach(attachParams).get(0);
 
         BatchDetachRequest.Params detachParams = BatchDetachRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(1)
+            .setVersion(inboxVersion.toBuilder().setMod(inboxVersion.getMod() + 1).build())
             .setExpirySeconds(5)
             .setNow(now)
             .build();
         BatchDetachReply.Code code = requestDetach(detachParams).get(0);
         assertEquals(code, BatchDetachReply.Code.CONFLICT);
-
-        verify(eventCollector).report(argThat(e -> e.type() == EventType.MQTT_SESSION_START));
     }
 
     @Test(groups = "integration")
@@ -388,7 +161,7 @@ public class InboxAdminTest extends InboxStoreTest {
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
         LWT lwt = LWT.newBuilder().setTopic("lastWill").build();
-        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setExpirySeconds(5)
@@ -396,48 +169,29 @@ public class InboxAdminTest extends InboxStoreTest {
             .setClient(client)
             .setNow(now)
             .build();
-        requestCreate(createParams);
+        InboxVersion inboxVersion = requestAttach(attachParams).get(0);
 
         now = Duration.ofMillis(now).plusSeconds(5).toMillis();
         BatchDetachRequest.Params detachParams = BatchDetachRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(inboxVersion)
             .setExpirySeconds(1)
             .setNow(now)
             .build();
         BatchDetachReply.Code code = requestDetach(detachParams).get(0);
         assertSame(code, BatchDetachReply.Code.OK);
-
-        BatchGetRequest.Params getParams = BatchGetRequest.Params.newBuilder()
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setNow(now)
-            .build();
-        InboxVersion inboxVersion = requestGet(getParams).get(0).getVersion(0);
-        assertEquals(inboxVersion.getVersion(), 1);
-        assertEquals(inboxVersion.getExpirySeconds(), 1);
-
-        getParams = BatchGetRequest.Params.newBuilder()
-            .setTenantId(tenantId)
-            .setInboxId(inboxId)
-            .setNow(now + Duration.ofSeconds(12).toMillis())
-            .build();
-        assertEquals(requestGet(getParams).get(0).getVersionCount(), 0);
-
-        verify(eventCollector).report(argThat(e -> e.type() == EventType.MQTT_SESSION_START));
     }
 
     @Test(groups = "integration")
-    public void detachAndDiscardLWT() {
-        long now = 0;
+    public void detachLatest() {
+        long now = HLC.INST.getPhysical();
         String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
         LWT lwt = LWT.newBuilder().setTopic("lastWill").build();
-        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setExpirySeconds(5)
@@ -445,34 +199,25 @@ public class InboxAdminTest extends InboxStoreTest {
             .setClient(client)
             .setNow(now)
             .build();
-        requestCreate(createParams);
-
-        now = Duration.ofSeconds(5).toMillis();
+        requestAttach(attachParams);
         BatchDetachRequest.Params detachParams = BatchDetachRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
             .setExpirySeconds(1)
-            .setDiscardLWT(true)
-            .setNow(now)
+            .setNow(Duration.ofMillis(now).plusSeconds(5).toMillis())
             .build();
         BatchDetachReply.Code code = requestDetach(detachParams).get(0);
         assertSame(code, BatchDetachReply.Code.OK);
-
-        verify(eventCollector).report(argThat(e -> e.type() == EventType.MQTT_SESSION_START));
     }
 
     @Test(groups = "integration")
     public void deleteNoInbox() {
         String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
-        long incarnation = System.nanoTime();
         BatchDeleteRequest.Params deleteParams = BatchDeleteRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(InboxVersion.newBuilder().build())
             .build();
         BatchDeleteReply.Result result = requestDelete(deleteParams).get(0);
         assertEquals(result.getCode(), BatchDeleteReply.Code.NO_INBOX);
@@ -485,20 +230,19 @@ public class InboxAdminTest extends InboxStoreTest {
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setExpirySeconds(5)
             .setClient(client)
             .setNow(now)
             .build();
-        requestCreate(createParams);
+        InboxVersion inboxVersion = requestAttach(attachParams).get(0);
 
         BatchDeleteRequest.Params deleteParams = BatchDeleteRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(1)
+            .setVersion(inboxVersion.toBuilder().setMod(inboxVersion.getMod() + 1).build())
             .build();
         BatchDeleteReply.Result result = requestDelete(deleteParams).get(0);
         assertEquals(result.getCode(), BatchDeleteReply.Code.CONFLICT);
@@ -511,37 +255,30 @@ public class InboxAdminTest extends InboxStoreTest {
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        LWT lwt = LWT.newBuilder().setTopic("lastWill").build();
-        BatchCreateRequest.Params createParams = BatchCreateRequest.Params.newBuilder()
+        BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
             .setExpirySeconds(5)
-            .setLwt(lwt)
             .setClient(client)
             .setNow(now)
             .build();
-        requestCreate(createParams);
-        // TODO: make some sub and verify the return values
-        verify(eventCollector).report(argThat(e -> e.type() == EventType.MQTT_SESSION_START));
-
+        InboxVersion inboxVersion = requestAttach(attachParams).get(0);
         reset(eventCollector);
         BatchDeleteRequest.Params deleteParams = BatchDeleteRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
-            .setIncarnation(incarnation)
-            .setVersion(0)
+            .setVersion(inboxVersion)
             .build();
         BatchDeleteReply.Result result = requestDelete(deleteParams).get(0);
-
-        verify(eventCollector).report(argThat(e -> e.type() == EventType.MQTT_SESSION_STOP));
-
         assertEquals(result.getCode(), BatchDeleteReply.Code.OK);
 
-        BatchGetRequest.Params getParams = BatchGetRequest.Params.newBuilder()
+        BatchExistRequest.Params getParams = BatchExistRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setNow(now)
             .build();
-        assertEquals(requestGet(getParams).get(0).getVersionCount(), 0);
+        assertFalse(requestExist(getParams).get(0));
+        verify(eventCollector, timeout(4000).times(1))
+            .report(argThat(e -> e.type() == EventType.MQTT_SESSION_STOP));
     }
 }

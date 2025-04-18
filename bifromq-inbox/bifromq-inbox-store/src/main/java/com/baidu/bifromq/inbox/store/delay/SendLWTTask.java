@@ -18,6 +18,7 @@ import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.rpc.proto.SendLWTReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendLWTRequest;
+import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 
@@ -43,8 +44,10 @@ public class SendLWTTask extends RetryableDelayedTask<SendLWTReply> {
             .setReqId(System.nanoTime())
             .setTenantId(key.tenantId())
             .setInboxId(key.instance().inboxId())
-            .setIncarnation(key.instance().incarnation())
-            .setVersion(version)
+            .setVersion(InboxVersion.newBuilder()
+                .setIncarnation(key.instance().incarnation())
+                .setMod(mod)
+                .build())
             .setNow(HLC.INST.getPhysical())
             .build());
     }
@@ -57,7 +60,7 @@ public class SendLWTTask extends RetryableDelayedTask<SendLWTReply> {
 
     @Override
     protected RetryableDelayedTask<SendLWTReply> createRetryTask(Duration newDelay) {
-        return new SendLWTTask(newDelay, version, inboxClient);
+        return new SendLWTTask(newDelay, mod, inboxClient);
     }
 
     @Override
