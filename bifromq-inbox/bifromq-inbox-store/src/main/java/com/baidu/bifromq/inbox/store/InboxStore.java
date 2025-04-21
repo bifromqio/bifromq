@@ -155,9 +155,6 @@ class InboxStore implements IInboxStore {
     public void close() {
         if (status.compareAndSet(Status.STARTED, Status.STOPPING)) {
             log.info("Stopping InboxStore");
-//            if (gcJob != null && !gcJob.isDone()) {
-//                gcJob.cancel(true);
-//            }
             jobRunner.awaitDone().toCompletableFuture().join();
             balanceController.stop();
             storeServer.stop();

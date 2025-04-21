@@ -49,6 +49,7 @@ public class SubStatsTest extends InboxStoreTest {
             .setInboxId(inboxId)
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build();
         requestSub(subParams);
@@ -81,6 +82,7 @@ public class SubStatsTest extends InboxStoreTest {
             .setInboxId(inboxId)
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build();
         requestSub(subParams);
@@ -114,6 +116,7 @@ public class SubStatsTest extends InboxStoreTest {
             .setInboxId(inboxId)
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build();
         requestSub(subParams);
@@ -155,6 +158,7 @@ public class SubStatsTest extends InboxStoreTest {
             .setInboxId(inboxId)
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build();
         requestSub(subParams);
@@ -198,6 +202,7 @@ public class SubStatsTest extends InboxStoreTest {
             .setInboxId(inboxId)
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build();
         requestSub(subParams);

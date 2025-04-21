@@ -86,6 +86,7 @@ public class InboxInsertTest extends InboxServiceTest {
                 .setOption(TopicFilterOption.newBuilder()
                     .setQos(QoS.AT_LEAST_ONCE)
                     .build())
+                .setMaxTopicFilters(100)
                 .setNow(now)
                 .build())
             .join();
@@ -157,7 +158,9 @@ public class InboxInsertTest extends InboxServiceTest {
             .setInboxId(inboxId)
             .setVersion(attachReply.getVersion())
             .setTopicFilter("topic")
-            .setOption(TopicFilterOption.newBuilder().setQos(QoS.AT_LEAST_ONCE).build()).setNow(now).build()).join();
+            .setOption(TopicFilterOption.newBuilder().setQos(QoS.AT_LEAST_ONCE).build())
+            .setMaxTopicFilters(100)
+            .setNow(now).build()).join();
 
         CompletableFuture<DeliveryReply> writeFuture1 = writer.deliver(req1);
         CompletableFuture<DeliveryReply> writeFuture2 = writer.deliver(req2);

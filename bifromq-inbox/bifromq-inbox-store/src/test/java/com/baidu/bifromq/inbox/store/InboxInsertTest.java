@@ -103,6 +103,7 @@ public class InboxInsertTest extends InboxStoreTest {
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setIncarnation(1L).setQos(qos).build())
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build());
 
@@ -173,6 +174,7 @@ public class InboxInsertTest extends InboxStoreTest {
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setIncarnation(1L).setQos(qos).build())
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build());
         TopicMessagePack.PublisherPack msg1 = message(qos, "hello");
@@ -247,6 +249,7 @@ public class InboxInsertTest extends InboxStoreTest {
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setQos(qos).build())
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build());
 
@@ -365,6 +368,7 @@ public class InboxInsertTest extends InboxStoreTest {
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setQos(qos).build())
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build());
         TopicMessagePack.PublisherPack msg1 = message(qos, "hello");
@@ -479,6 +483,7 @@ public class InboxInsertTest extends InboxStoreTest {
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setQos(qos).build())
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build());
 
@@ -564,6 +569,7 @@ public class InboxInsertTest extends InboxStoreTest {
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setQos(qos).build())
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build());
 
@@ -691,6 +697,7 @@ public class InboxInsertTest extends InboxStoreTest {
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setQos(qos).build())
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build());
 
@@ -803,6 +810,7 @@ public class InboxInsertTest extends InboxStoreTest {
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setQos(QoS.EXACTLY_ONCE).build())
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build());
         InboxInsertResult insertResult = requestInsert(InboxSubMessagePack.newBuilder()

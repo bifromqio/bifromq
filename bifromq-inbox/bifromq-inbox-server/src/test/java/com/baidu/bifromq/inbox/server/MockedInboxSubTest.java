@@ -78,6 +78,7 @@ public class MockedInboxSubTest extends MockedInboxService {
             .setOption(TopicFilterOption.newBuilder().setQos(QoS.AT_LEAST_ONCE).build())
             .setVersion(InboxVersion.newBuilder().setMod(version).setIncarnation(incarnation).build())
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build(), streamObserver);
 
@@ -117,6 +118,7 @@ public class MockedInboxSubTest extends MockedInboxService {
                 .build())
             .setVersion(InboxVersion.newBuilder().setMod(version).setIncarnation(incarnation).build())
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build(), streamObserver);
     }
@@ -154,6 +156,7 @@ public class MockedInboxSubTest extends MockedInboxService {
                 .build())
             .setVersion(InboxVersion.newBuilder().setMod(version).setIncarnation(incarnation).build())
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build(), streamObserver);
     }
@@ -187,6 +190,7 @@ public class MockedInboxSubTest extends MockedInboxService {
             .setOption(TopicFilterOption.newBuilder().setQos(QoS.AT_LEAST_ONCE).build())
             .setVersion(InboxVersion.newBuilder().setMod(version).setIncarnation(incarnation).build())
             .setTopicFilter(sharedSubTopicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build(), streamObserver);
 
@@ -258,6 +262,7 @@ public class MockedInboxSubTest extends MockedInboxService {
             .setOption(TopicFilterOption.newBuilder().setQos(QoS.AT_LEAST_ONCE).build())
             .setVersion(InboxVersion.newBuilder().setMod(version).setIncarnation(incarnation).build())
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build(), streamObserver);
 

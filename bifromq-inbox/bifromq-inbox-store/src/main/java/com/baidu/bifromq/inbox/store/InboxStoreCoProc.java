@@ -104,7 +104,6 @@ import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.MsgReta
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.MsgRetainedError;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.retainhandling.RetainMsgCleared;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
@@ -852,7 +851,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 replyBuilder.addCode(BatchSubReply.Code.CONFLICT);
                 continue;
             }
-            int maxTopicFilters = settingProvider.provide(Setting.MaxTopicFiltersPerInbox, params.getTenantId());
+            int maxTopicFilters = params.getMaxTopicFilters();
             InboxMetadata metadata = metadataOpt.get();
             InboxMetadata.Builder metadataBuilder = metadataOpt.get().toBuilder();
             if (metadata.getTopicFiltersCount() < maxTopicFilters) {

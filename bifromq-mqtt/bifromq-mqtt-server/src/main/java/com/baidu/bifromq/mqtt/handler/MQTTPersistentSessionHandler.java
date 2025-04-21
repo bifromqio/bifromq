@@ -244,6 +244,7 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                 .setInboxId(userSessionId)
                 .setVersion(inboxVersion)
                 .setTopicFilter(topicFilter)
+                .setMaxTopicFilters(settings.maxTopicFiltersPerInbox)
                 .setOption(option)
                 .setNow(HLC.INST.getPhysical())
                 .build())

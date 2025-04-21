@@ -58,6 +58,7 @@ class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
                 .setInboxId(request.getInboxId())
                 .setVersion(request.getVersion())
                 .setTopicFilter(request.getTopicFilter())
+                .setMaxTopicFilters(request.getMaxTopicFilters())
                 .setOption(request.getOption())
                 .setNow(request.getNow());
             reqBuilder.addParams(paramsBuilder.build());

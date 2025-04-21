@@ -35,7 +35,6 @@ import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
-import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.plugin.subbroker.CheckReply;
 import com.baidu.bifromq.plugin.subbroker.CheckRequest;
 import com.baidu.bifromq.type.ClientInfo;
@@ -64,6 +63,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setOption(TopicFilterOption.newBuilder()
                 .setIncarnation(1L)
                 .build())
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build()).join();
         assertEquals(subReply2.getReqId(), reqId);
@@ -161,6 +161,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setVersion(attachReply.getVersion())
             .setTopicFilter(topicFilter)
             .setOption(TopicFilterOption.newBuilder().setQos(QoS.AT_LEAST_ONCE).build())
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build()).join();
         assertEquals(subReply2.getReqId(), reqId);
@@ -208,6 +209,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setInboxId(inboxId)
             .setVersion(attachReply.getVersion())
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build()).join();
         assertEquals(subReply2.getReqId(), reqId);
@@ -221,6 +223,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setInboxId(inboxId)
             .setVersion(attachReply.getVersion())
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build()).join();
         assertEquals(subReply2.getReqId(), reqId);
@@ -251,7 +254,6 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setNow(now)
             .build()).join();
 
-        when(settingProvider.provide(Setting.MaxTopicFiltersPerInbox, tenantId)).thenReturn(1);
         when(distClient.addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong()))
             .thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         SubReply subReply2 = inboxClient.sub(SubRequest.newBuilder()
@@ -260,6 +262,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setInboxId(inboxId)
             .setVersion(attachReply.getVersion())
             .setTopicFilter("/a/b/c")
+            .setMaxTopicFilters(1)
             .setNow(now)
             .build()).join();
         assertEquals(subReply2.getReqId(), reqId);
@@ -346,6 +349,7 @@ public class InboxSubRPCTest extends InboxServiceTest {
             .setInboxId(inboxId)
             .setVersion(attachReply.getVersion())
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build()).join();
         assertEquals(subReply2.getReqId(), reqId);

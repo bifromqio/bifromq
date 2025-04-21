@@ -38,7 +38,6 @@ import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
-import com.baidu.bifromq.plugin.settingprovider.Setting;
 import com.baidu.bifromq.plugin.subbroker.CheckReply;
 import com.baidu.bifromq.plugin.subbroker.CheckRequest;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
@@ -141,6 +140,7 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
             .setInboxId(inboxId)
             .setVersion(attachReply.getVersion())
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now).build()).join();
         assertEquals(subReply2.getReqId(), reqId);
         assertEquals(subReply2.getCode(), SubReply.Code.OK);
@@ -225,7 +225,6 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
                 .setNow(now).build())
             .join();
 
-        when(settingProvider.provide(Setting.MaxTopicFiltersPerInbox, tenantId)).thenReturn(1);
         when(distClient.addRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
             anyLong())).thenReturn(CompletableFuture.completedFuture(MatchResult.OK));
         when(distClient.removeRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(),
@@ -238,6 +237,7 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
             .setInboxId(inboxId)
             .setVersion(attachReply.getVersion())
             .setTopicFilter("/a/b/c")
+            .setMaxTopicFilters(1)
             .setNow(now)
             .build()).join();
         assertEquals(subReply.getReqId(), reqId);
@@ -249,6 +249,7 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
             .setInboxId(inboxId)
             .setVersion(attachReply.getVersion())
             .setTopicFilter("/a/b")
+            .setMaxTopicFilters(1)
             .setNow(now)
             .build()).join();
         assertEquals(subReply.getReqId(), reqId);
@@ -271,6 +272,7 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
             .setInboxId(inboxId)
             .setVersion(attachReply.getVersion())
             .setTopicFilter("/a/b")
+            .setMaxTopicFilters(1)
             .setNow(now)
             .build()).join();
         assertEquals(subReply.getReqId(), reqId);
@@ -309,6 +311,7 @@ public class InboxUnsubRPCTest extends InboxServiceTest {
             .setInboxId(inboxId)
             .setVersion(attachReply.getVersion())
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build()).join();
         assertEquals(subReply2.getReqId(), reqId);

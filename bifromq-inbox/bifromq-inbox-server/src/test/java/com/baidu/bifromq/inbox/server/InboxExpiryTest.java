@@ -234,6 +234,7 @@ public class InboxExpiryTest extends InboxServiceTest {
             .setOption(TopicFilterOption.newBuilder()
                 .setIncarnation(1L)
                 .build())
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build()).join();
         inboxClient.detach(DetachRequest.newBuilder()

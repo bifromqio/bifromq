@@ -120,7 +120,8 @@ message BatchSubRequest{
     InboxVersion version = 3;
     string topicFilter = 5;
     TopicFilterOption option = 6;
-    uint64 now = 7;
+    uint32  maxTopicFilters = 7;
+    uint64 now = 8;
   }
   repeated Params params = 1;
 }

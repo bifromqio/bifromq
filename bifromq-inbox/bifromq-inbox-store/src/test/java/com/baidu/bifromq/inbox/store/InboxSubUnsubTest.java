@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.inbox.store;
 
-import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicFiltersPerInbox;
-import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
@@ -41,6 +39,7 @@ public class InboxSubUnsubTest extends InboxStoreTest {
             .setInboxId(inboxId)
             .setVersion(InboxVersion.newBuilder().build())
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build();
         BatchSubReply.Code code = requestSub(subParams).get(0);
@@ -69,6 +68,7 @@ public class InboxSubUnsubTest extends InboxStoreTest {
             .setInboxId(inboxId)
             .setVersion(inboxVersion.toBuilder().setMod(inboxVersion.getMod() + 1).build())
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build();
         BatchSubReply.Code code = requestSub(subParams).get(0);
@@ -92,12 +92,12 @@ public class InboxSubUnsubTest extends InboxStoreTest {
             .build();
         InboxVersion inboxVersion = requestAttach(attachParams).get(0);
 
-        when(settingProvider.provide(MaxTopicFiltersPerInbox, tenantId)).thenReturn(10);
         BatchSubRequest.Params subParams = BatchSubRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(10)
             .setNow(now)
             .build();
         BatchSubReply.Code code = requestSub(subParams).get(0);
@@ -108,6 +108,7 @@ public class InboxSubUnsubTest extends InboxStoreTest {
             .setInboxId(inboxId)
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build();
         code = requestSub(subParams).get(0);
@@ -136,6 +137,7 @@ public class InboxSubUnsubTest extends InboxStoreTest {
             .setInboxId(inboxId)
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build();
         BatchSubReply.Code code = requestSub(subParams).get(0);
@@ -242,12 +244,12 @@ public class InboxSubUnsubTest extends InboxStoreTest {
             .build();
         InboxVersion inboxVersion = requestAttach(attachParams).get(0);
 
-        when(settingProvider.provide(MaxTopicFiltersPerInbox, tenantId)).thenReturn(10);
         BatchSubRequest.Params subParams = BatchSubRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(10)
             .setNow(now)
             .build();
         requestSub(subParams);
@@ -281,12 +283,12 @@ public class InboxSubUnsubTest extends InboxStoreTest {
             .build();
         InboxVersion inboxVersion = requestAttach(attachParams).get(0);
 
-        when(settingProvider.provide(MaxTopicFiltersPerInbox, tenantId)).thenReturn(1);
         BatchSubRequest.Params subParams = BatchSubRequest.Params.newBuilder()
             .setTenantId(tenantId)
             .setInboxId(inboxId)
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter)
+            .setMaxTopicFilters(1)
             .setNow(now)
             .build();
         requestSub(subParams);
@@ -296,6 +298,7 @@ public class InboxSubUnsubTest extends InboxStoreTest {
             .setInboxId(inboxId)
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter1)
+            .setMaxTopicFilters(1)
             .setNow(now)
             .build();
         BatchSubReply.Code code = requestSub(subParams).get(0);
@@ -316,6 +319,7 @@ public class InboxSubUnsubTest extends InboxStoreTest {
             .setInboxId(inboxId)
             .setVersion(inboxVersion)
             .setTopicFilter(topicFilter1)
+            .setMaxTopicFilters(100)
             .setNow(now)
             .build();
         code = requestSub(subParams).get(0);
