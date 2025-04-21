@@ -109,6 +109,7 @@ import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sessiondict.client.ISessionRegistration;
 import com.baidu.bifromq.sessiondict.rpc.proto.ServerRedirection;
+import com.baidu.bifromq.sysprops.props.ClientRedirectCheckIntervalSeconds;
 import com.baidu.bifromq.sysprops.props.SanityCheckMqttUtf8String;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MQTTClientInfoConstants;
@@ -158,6 +159,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public abstract class MQTTSessionHandler extends MQTTMessageHandler implements IMQTTSession {
     protected static final boolean SANITY_CHECK = SanityCheckMqttUtf8String.INSTANCE.get();
+    private static final int REDIRECT_CHECK_INTERVAL_SECONDS = ClientRedirectCheckIntervalSeconds.INSTANCE.get();
     protected final TenantSettings settings;
     protected final String userSessionId;
     protected final int keepAliveTimeSeconds;
@@ -1421,18 +1423,19 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     }
 
     private void scheduleRedirectCheck() {
-        long delay = ThreadLocalRandom.current().nextInt(60000);
-        redirectTask = ctx.executor().schedule(this::checkRedirect, delay, TimeUnit.MILLISECONDS);
+        long delay = ThreadLocalRandom.current().nextInt(REDIRECT_CHECK_INTERVAL_SECONDS);
+        redirectTask = ctx.executor()
+            .scheduleAtFixedRate(this::checkRedirect, delay, REDIRECT_CHECK_INTERVAL_SECONDS, TimeUnit.SECONDS);
     }
 
     private void checkRedirect() {
         Optional<Redirection> redirection = sessionCtx.clientBalancer.needRedirect(clientInfo);
-        if (redirection.isPresent()) {
-            handleProtocolResponse(helper().onRedirect(redirection.get().permanentMove(),
-                redirection.get().serverReference().orElse(null)));
-        } else {
-            scheduleRedirectCheck();
-        }
+        redirection.ifPresent(value -> {
+            if (redirectTask != null) {
+                redirectTask.cancel(true);
+            }
+            handleProtocolResponse(helper().onRedirect(value.permanentMove(), value.serverReference().orElse(null)));
+        });
     }
 
     protected final void discardLWT() {
