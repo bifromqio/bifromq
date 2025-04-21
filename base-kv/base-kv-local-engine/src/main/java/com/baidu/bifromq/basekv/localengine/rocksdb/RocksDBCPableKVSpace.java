@@ -130,21 +130,12 @@ public class RocksDBCPableKVSpace
         super.doLoad();
     }
 
-    protected IRocksDBKVSpaceCheckpoint doCheckpoint() {
+    private IRocksDBKVSpaceCheckpoint doCheckpoint() {
         String cpId = genCheckpointId();
         File cpDir = Paths.get(cpRootDir.getAbsolutePath(), cpId).toFile();
         try {
             logger.debug("KVSpace[{}] checkpoint start: checkpointId={}", id, cpId);
-            // flush before checkpointing
             db.put(cfHandle, LATEST_CP_KEY, cpId.getBytes());
-            logger.debug("KVSpace[{}] flush start", id);
-            try (FlushOptions flushOptions = new FlushOptions().setWaitForFlush(true)) {
-                db.flush(flushOptions, cfHandle);
-                logger.debug("KVSpace[{}] flush complete", id);
-            } catch (Throwable e) {
-                logger.error("KVSpace[{}] flush error", id, e);
-                throw new KVEngineException("KVSpace flush error", e);
-            }
             checkpoint.createCheckpoint(cpDir.toString());
             latestCheckpointId.set(cpId);
             return new RocksDBKVSpaceCheckpoint(id, cpId, cpDir, this::isLatest, opMeters, logger);
@@ -154,7 +145,7 @@ public class RocksDBCPableKVSpace
     }
 
     @SneakyThrows
-    protected IRocksDBKVSpaceCheckpoint doLoadLatestCheckpoint() {
+    private IRocksDBKVSpaceCheckpoint doLoadLatestCheckpoint() {
         byte[] cpIdBytes = db.get(cfHandle, LATEST_CP_KEY);
         if (cpIdBytes != null) {
             try {
