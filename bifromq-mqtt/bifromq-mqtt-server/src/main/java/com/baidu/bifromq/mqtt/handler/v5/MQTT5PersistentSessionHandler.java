@@ -42,7 +42,7 @@ public final class MQTT5PersistentSessionHandler extends MQTTPersistentSessionHa
                                          int sessionExpirySeconds,
                                          ClientInfo clientInfo,
                                          InboxVersion inboxVersion,
-                                         @Nullable LWT willMessage,
+                                         @Nullable LWT noDelayLWT,
                                          ChannelHandlerContext ctx) {
         super(settings,
             tenantMeter,
@@ -52,7 +52,7 @@ public final class MQTT5PersistentSessionHandler extends MQTTPersistentSessionHa
             sessionExpirySeconds,
             clientInfo,
             inboxVersion,
-            willMessage,
+            noDelayLWT,
             ctx);
         this.helper = new MQTT5ProtocolHelper(connMsg, settings, clientInfo);
         this.reAuthenticator = IReAuthenticator.create(connMsg,

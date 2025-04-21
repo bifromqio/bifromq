@@ -131,7 +131,7 @@ public class MQTT3PersistentSessionHandlerTest extends BaseSessionHandlerTest {
                     .userSessionId(userSessionId(clientInfo))
                     .keepAliveTimeSeconds(120)
                     .clientInfo(clientInfo)
-                    .willMessage(null)
+                    .noDelayLWT(null)
                     .ctx(ctx)
                     .build());
                 ctx.pipeline().remove(this);

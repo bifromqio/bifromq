@@ -734,7 +734,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
                                                                int keepAliveSeconds,
                                                                int sessionExpiryInterval,
                                                                InboxVersion inboxVersion,
-                                                               @Nullable LWT willMessage,
+                                                               @Nullable LWT noDelayLWT,
                                                                ClientInfo clientInfo,
                                                                ChannelHandlerContext ctx) {
         return MQTT5PersistentSessionHandler.builder()
@@ -747,7 +747,7 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
             .inboxVersion(inboxVersion)
             .keepAliveTimeSeconds(keepAliveSeconds)
             .sessionExpirySeconds(sessionExpiryInterval)
-            .willMessage(willMessage)
+            .noDelayLWT(noDelayLWT)
             .ctx(ctx)
             .build();
     }

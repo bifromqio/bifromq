@@ -107,9 +107,9 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
                                            int sessionExpirySeconds,
                                            ClientInfo clientInfo,
                                            InboxVersion inboxVersion,
-                                           @Nullable LWT willMessage,
+                                           @Nullable LWT noDelayLWT,
                                            ChannelHandlerContext ctx) {
-        super(settings, tenantMeter, oomCondition, userSessionId, keepAliveTimeSeconds, clientInfo, willMessage, ctx);
+        super(settings, tenantMeter, oomCondition, userSessionId, keepAliveTimeSeconds, clientInfo, noDelayLWT, ctx);
         this.inboxVersion = inboxVersion;
         this.inboxClient = sessionCtx.inboxClient;
         this.sessionExpirySeconds = sessionExpirySeconds;

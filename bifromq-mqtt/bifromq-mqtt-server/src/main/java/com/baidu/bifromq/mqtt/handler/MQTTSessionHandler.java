@@ -179,7 +179,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     private final LinkedHashMap<Integer, ConfirmingMessage> unconfirmedPacketIds = new LinkedHashMap<>();
     private final TreeSet<ConfirmingMessage> resendQueue;
     private final CompletableFuture<Void> onInitialized = new CompletableFuture<>();
-    private LWT willMessage;
+    private LWT noDelayLWT;
     private boolean isGoAway;
     private ScheduledFuture<?> idleTimeoutTask;
     private ScheduledFuture<?> redirectTask;
@@ -194,7 +194,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                                  String userSessionId,
                                  int keepAliveTimeSeconds,
                                  ClientInfo clientInfo,
-                                 @Nullable LWT willMessage,
+                                 @Nullable LWT noDelayLWT,
                                  ChannelHandlerContext ctx) {
         this.sizer = clientInfo.getMetadataOrDefault(MQTT_PROTOCOL_VER_KEY, "").equals(MQTT_PROTOCOL_VER_5_VALUE)
             ? IMQTTMessageSizer.mqtt5() : IMQTTMessageSizer.mqtt3();
@@ -204,7 +204,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         this.userSessionId = userSessionId;
         this.keepAliveTimeSeconds = keepAliveTimeSeconds;
         this.clientInfo = clientInfo;
-        this.willMessage = willMessage;
+        this.noDelayLWT = noDelayLWT;
         this.tenantMeter = tenantMeter;
         this.throttler = new MPSThrottler(settings.maxMsgPerSec);
         this.idleTimeoutNanos = Duration.ofMillis(keepAliveTimeSeconds * 1500L).toNanos(); // x1.5
@@ -221,8 +221,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         int s = 144; // base size from JOL
         s += userSessionId.length();
         s += clientInfo.getSerializedSize();
-        if (willMessage != null) {
-            s += willMessage.getSerializedSize();
+        if (noDelayLWT != null) {
+            s += noDelayLWT.getSerializedSize();
         }
         return s;
     }
@@ -332,7 +332,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     }
 
     protected final LWT willMessage() {
-        return willMessage;
+        return noDelayLWT;
     }
 
     protected final <T> CompletableFuture<T> addFgTask(CompletableFuture<T> taskFuture) {
@@ -393,8 +393,8 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         if (resendTask != null) {
             resendTask.cancel(true);
         }
-        if (willMessage != null) {
-            addBgTask(pubWillMessage(willMessage));
+        if (noDelayLWT != null) {
+            addBgTask(pubWillMessage(noDelayLWT));
         }
         Sets.newHashSet(fgTasks).forEach(t -> t.cancel(true));
         sessionCtx.localSessionRegistry.remove(channelId(), this);
@@ -1436,7 +1436,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
     }
 
     protected final void discardLWT() {
-        willMessage = null;
+        noDelayLWT = null;
     }
 
     protected final void resumeChannelRead() {

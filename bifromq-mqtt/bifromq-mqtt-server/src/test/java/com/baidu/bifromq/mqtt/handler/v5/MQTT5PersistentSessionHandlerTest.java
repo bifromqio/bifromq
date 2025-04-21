@@ -131,7 +131,7 @@ public class MQTT5PersistentSessionHandlerTest extends BaseSessionHandlerTest {
                     .keepAliveTimeSeconds(120)
                     .sessionExpirySeconds(120)
                     .clientInfo(clientInfo)
-                    .willMessage(null)
+                    .noDelayLWT(null)
                     .ctx(ctx)
                     .build());
                 ctx.pipeline().remove(this);

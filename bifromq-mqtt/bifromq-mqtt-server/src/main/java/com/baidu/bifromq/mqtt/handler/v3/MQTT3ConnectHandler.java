@@ -423,7 +423,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
                                                                      int keepAliveSeconds,
                                                                      int sessionExpiryInterval,
                                                                      InboxVersion inboxVersion,
-                                                                     @Nullable LWT willMessage,
+                                                                     @Nullable LWT noDelayLWT,
                                                                      ClientInfo clientInfo,
                                                                      ChannelHandlerContext ctx) {
         return MQTT3PersistentSessionHandler.builder()
@@ -435,7 +435,7 @@ public class MQTT3ConnectHandler extends MQTTConnectHandler {
             .sessionExpirySeconds(sessionExpiryInterval)
             .clientInfo(clientInfo)
             .inboxVersion(inboxVersion)
-            .willMessage(willMessage)
+            .noDelayLWT(noDelayLWT)
             .ctx(ctx)
             .build();
     }

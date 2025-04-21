@@ -214,8 +214,8 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                         onInboxCallRetry(clientInfo, "Inbox service call needs retry"));
                                                     case BACK_PRESSURE_REJECTED ->
                                                         handleGoAway(onInboxCallBusy(clientInfo, "Inbox service busy"));
-                                                    default ->
-                                                        handleGoAway(onInboxCallError(clientInfo, "Inbox service error"));
+                                                    default -> handleGoAway(
+                                                        onInboxCallError(clientInfo, "Inbox service error"));
                                                 }
                                             }, ctx.executor());
                                     }
@@ -316,9 +316,8 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                 willMessage,
                                                 okOrGoAway.successInfo,
                                                 ctx);
-                                            case BACK_PRESSURE_REJECTED ->
-                                                handleGoAway(
-                                                    onInboxCallBusy(clientInfo, "Inbox service call[exist] busy"));
+                                            case BACK_PRESSURE_REJECTED -> handleGoAway(
+                                                onInboxCallBusy(clientInfo, "Inbox service call[exist] busy"));
                                             case TRY_LATER -> handleGoAway(
                                                 onInboxCallRetry(clientInfo, "Inbox service call[exist] needs retry"));
                                             case ERROR -> handleGoAway(
@@ -467,7 +466,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                                                         int keepAliveSeconds,
                                                                         int sessionExpiryInterval,
                                                                         InboxVersion inboxInstance,
-                                                                        @Nullable LWT willMessage,
+                                                                        @Nullable LWT noDelayWillMessage,
                                                                         ClientInfo clientInfo,
                                                                         ChannelHandlerContext ctx);
 
@@ -561,7 +560,8 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
             keepAliveSeconds,
             sessionExpiryInterval,
             inboxVersion,
-            willMessage,
+            // the delayed willMessage will only be triggered by inbox service
+            willMessage != null && willMessage.getDelaySeconds() > 0 ? null : willMessage,
             clientInfo,
             ctx);
         assert sessionHandler instanceof IMQTTPersistentSession;
