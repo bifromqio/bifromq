@@ -18,10 +18,8 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
-import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.DBOptions;
 import org.rocksdb.DBOptionsInterface;
-import org.rocksdb.PrepopulateBlobCache;
 
 @Accessors(chain = true, fluent = true)
 @Getter
@@ -35,16 +33,5 @@ public final class RocksDBCPableKVEngineConfigurator
     protected void configDBOptions(DBOptionsInterface<DBOptions> targetOption) {
         super.configDBOptions(targetOption);
         targetOption.setRecycleLogFileNum(0);
-    }
-
-    @Override
-    public ColumnFamilyOptions cfOptions(String name) {
-        ColumnFamilyOptions cfOptions = super.cfOptions(name);
-        cfOptions.setEnableBlobFiles(true);
-        cfOptions.setMinBlobSize(2048); // 2kb
-        cfOptions.enableBlobGarbageCollection();
-        cfOptions.setEnableBlobFiles(true);
-        cfOptions.setPrepopulateBlobCache(PrepopulateBlobCache.PREPOPULATE_BLOB_FLUSH_ONLY);
-        return cfOptions;
     }
 }

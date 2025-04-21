@@ -19,7 +19,10 @@ import static java.lang.Math.max;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.localengine.IKVEngineConfigurator;
 import lombok.Builder;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
@@ -35,10 +38,14 @@ import org.rocksdb.IndexType;
 import org.rocksdb.LRUCache;
 import org.rocksdb.MutableColumnFamilyOptionsInterface;
 import org.rocksdb.MutableDBOptionsInterface;
+import org.rocksdb.PrepopulateBlobCache;
 import org.rocksdb.RateLimiter;
 import org.rocksdb.util.SizeUnit;
 
 @NoArgsConstructor
+@Getter
+@Setter
+@Accessors(chain = true, fluent = true)
 @SuperBuilder(toBuilder = true)
 public abstract class RocksDBKVEngineConfigurator<T extends RocksDBKVEngineConfigurator<T>>
     implements IKVEngineConfigurator {
@@ -51,6 +58,30 @@ public abstract class RocksDBKVEngineConfigurator<T extends RocksDBKVEngineConfi
     private int compactMinTombstoneRanges = 10000;
     @Builder.Default
     private double compactTombstoneKeysRatio = 0.3;
+    @Builder.Default
+    private long blockCacheSize = 32 * SizeUnit.MB;
+    @Builder.Default
+    private long writeBufferSize = 128 * SizeUnit.MB;
+    @Builder.Default
+    private int maxWriteBufferNumber = 6;
+    @Builder.Default
+    private int minWriteBufferNumberToMerge = 2;
+    @Builder.Default
+    private long minBlobSize = 2 * SizeUnit.KB;
+    @Builder.Default
+    private int increaseParallelism = max(EnvProvider.INSTANCE.availableProcessors() / 4, 2);
+    @Builder.Default
+    private int maxBackgroundJobs = max(EnvProvider.INSTANCE.availableProcessors() / 4, 2);
+    @Builder.Default
+    private int level0FileNumCompactionTrigger = 8;
+    @Builder.Default
+    private int level0SlowdownWritesTrigger = 20;
+    @Builder.Default
+    private int level0StopWritesTrigger = 24;
+    @Builder.Default
+    private long maxBytesForLevelBase = 512 * SizeUnit.MB;
+    @Builder.Default
+    private long targetFileSizeBase = 64 * SizeUnit.MB;
 
     public DBOptions dbOptions() {
         DBOptions targetOption = new DBOptions();
@@ -69,7 +100,8 @@ public abstract class RocksDBKVEngineConfigurator<T extends RocksDBKVEngineConfi
     }
 
     protected void configDBOptions(DBOptionsInterface<DBOptions> targetOption) {
-        targetOption.setEnv(Env.getDefault())
+        targetOption
+            .setEnv(Env.getDefault())
             .setCreateIfMissing(true)
             .setCreateMissingColumnFamilies(true)
             .setAvoidUnnecessaryBlockingIO(true)
@@ -81,6 +113,8 @@ public abstract class RocksDBKVEngineConfigurator<T extends RocksDBKVEngineConfi
             // wal file settings
             .setWalSizeLimitMB(0)
             .setWalTtlSeconds(0)
+            .setEnablePipelinedWrite(true)
+            .setTwoWriteQueues(false)
             .setRateLimiter(autoRelease(new RateLimiter(512 * SizeUnit.MB,
                 RateLimiter.DEFAULT_REFILL_PERIOD_MICROS,
                 RateLimiter.DEFAULT_FAIRNESS,
@@ -90,8 +124,8 @@ public abstract class RocksDBKVEngineConfigurator<T extends RocksDBKVEngineConfi
     protected void configDBOptions(MutableDBOptionsInterface<DBOptions> targetOption) {
         targetOption
             .setMaxOpenFiles(256)
-            .setIncreaseParallelism(max(EnvProvider.INSTANCE.availableProcessors() / 4, 2))
-            .setMaxBackgroundJobs(max(EnvProvider.INSTANCE.availableProcessors() / 4, 2));
+            .setIncreaseParallelism(increaseParallelism)
+            .setMaxBackgroundJobs(maxBackgroundJobs);
     }
 
     protected void configCFOptions(String name, ColumnFamilyOptionsInterface<ColumnFamilyOptions> targetOption) {
@@ -115,25 +149,27 @@ public abstract class RocksDBKVEngineConfigurator<T extends RocksDBKVEngineConfi
                     .setDataBlockHashTableUtilRatio(0.75)
                     // End of partitioned index filters settings.
                     .setBlockSize(4 * SizeUnit.KB)//
-                    .setBlockCache(autoRelease(new LRUCache(32 * SizeUnit.MB, 8), targetOption)))
+                    .setBlockCache(autoRelease(new LRUCache(blockCacheSize, 8), targetOption)))
             // https://github.com/facebook/rocksdb/pull/5744
             .setForceConsistencyChecks(true)
-            .setCompactionStyle(CompactionStyle.LEVEL);
+            .setCompactionStyle(CompactionStyle.LEVEL)
+            .setPrepopulateBlobCache(PrepopulateBlobCache.PREPOPULATE_BLOB_FLUSH_ONLY);
     }
 
     protected void configCFOptions(String name, MutableColumnFamilyOptionsInterface<ColumnFamilyOptions> targetOption) {
         targetOption
-            .setCompressionType(CompressionType.NO_COMPRESSION)
+            .setCompressionType(CompressionType.LZ4_COMPRESSION)
+            .setBottommostCompressionType(CompressionType.ZSTD_COMPRESSION)
             // Flushing options:
             // write_buffer_size sets the size of a single mem_table. Once mem_table exceeds
             // this size, it is marked immutable and a new one is created.
-            .setWriteBufferSize(16 * SizeUnit.MB)
+            .setWriteBufferSize(writeBufferSize)
             // Flushing options:
             // max_write_buffer_number sets the maximum number of mem_tables, both active
             // and immutable.  If the active mem_table fills up and the total number of
             // mem_tables is larger than max_write_buffer_number we stall further writes.
             // This may happen if the flush process is slower than the write rate.
-            .setMaxWriteBufferNumber(4)
+            .setMaxWriteBufferNumber(maxWriteBufferNumber)
             // Flushing options:
             // min_write_buffer_number_to_merge is the minimum number of mem_tables to be
             // merged before flushing to storage. For example, if this option is set to 2,
@@ -143,22 +179,20 @@ public abstract class RocksDBKVEngineConfigurator<T extends RocksDBKVEngineConfi
             // a single key. However, every Get() must traverse all immutable mem_tables
             // linearly to check if the key is there. Setting this option too high may hurt
             // read performance.
-            .setMinWriteBufferNumberToMerge(2)
+            .setMinWriteBufferNumberToMerge(minWriteBufferNumberToMerge)
             // Level Style Compaction:
             // level0_file_num_compaction_trigger -- Once level 0 reaches this number of
             // files, L0->L1 compaction is triggered. We can therefore estimate level 0
             // size in stable state as
             // write_buffer_size * min_write_buffer_number_to_merge * level0_file_num_compaction_trigger.
-            .setLevel0FileNumCompactionTrigger(4)
+            .setLevel0FileNumCompactionTrigger(level0FileNumCompactionTrigger)
             // Level Style Compaction:
             // max_bytes_for_level_base and max_bytes_for_level_multiplier
             //  -- max_bytes_for_level_base is total size of level 1. As mentioned, we
             // recommend that this be around the size of level 0. Each subsequent level
             // is max_bytes_for_level_multiplier larger than previous one. The default
             // is 10 and we do not recommend changing that.
-            .setMaxBytesForLevelBase(targetOption.writeBufferSize() *
-                ((ColumnFamilyOptions) targetOption).minWriteBufferNumberToMerge() *
-                targetOption.level0FileNumCompactionTrigger())
+            .setMaxBytesForLevelBase(maxBytesForLevelBase)
             // Level Style Compaction:
             // target_file_size_base and target_file_size_multiplier
             //  -- Files in level 1 will have target_file_size_base bytes. Each next
@@ -168,7 +202,7 @@ public abstract class RocksDBKVEngineConfigurator<T extends RocksDBKVEngineConfi
             // number of database files, which is generally a good thing. We recommend setting
             // target_file_size_base to be max_bytes_for_level_base / 10, so that there are
             // 10 files in level 1.
-            .setTargetFileSizeBase(targetOption.maxBytesForLevelBase() / 10)
+            .setTargetFileSizeBase(targetFileSizeBase)
             // If prefix_extractor is set and memtable_prefix_bloom_size_ratio is not 0,
             // create prefix bloom for memtable with the size of
             // write_buffer_size * memtable_prefix_bloom_size_ratio.
@@ -177,9 +211,14 @@ public abstract class RocksDBKVEngineConfigurator<T extends RocksDBKVEngineConfi
             // Soft limit on number of level-0 files. We start slowing down writes at this
             // point. A value 0 means that no writing slow down will be triggered by number
             // of files in level-0.
-            .setLevel0SlowdownWritesTrigger(80)
+            .setLevel0SlowdownWritesTrigger(level0SlowdownWritesTrigger)
             // Maximum number of level-0 files.  We stop writes at this point.
-            .setLevel0StopWritesTrigger(100);
+            .setLevel0StopWritesTrigger(level0StopWritesTrigger)
+            .setLevelCompactionDynamicLevelBytes(false)
+            // enable blob files
+            .setEnableBlobFiles(true)
+            .setMinBlobSize(minBlobSize())
+            .enableBlobGarbageCollection();
     }
 
     public String dbRootDir() {

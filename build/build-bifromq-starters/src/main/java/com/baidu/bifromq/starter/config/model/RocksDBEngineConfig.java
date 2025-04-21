@@ -13,9 +13,13 @@
 
 package com.baidu.bifromq.starter.config.model;
 
+import static java.lang.Math.max;
+
+import com.baidu.bifromq.baseenv.EnvProvider;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Accessors;
+import org.rocksdb.util.SizeUnit;
 
 @Getter
 @Setter
@@ -28,4 +32,16 @@ public class RocksDBEngineConfig extends StorageEngineConfig {
     private double compactTombstoneRatio = 0.3; // 30%
     private boolean asyncWALFlush = true; // only work for wal engine
     private boolean fsyncWAL = false; // only work for wal engine
+    private long blockCacheSize = 32 * SizeUnit.MB;
+    private long writeBufferSize = 128 * SizeUnit.MB;
+    private int maxWriteBufferNumber = 6;
+    private int minWriteBufferNumberToMerge = 2;
+    private long minBlobSize = 2 * SizeUnit.KB;
+    private int increaseParallelism = max(EnvProvider.INSTANCE.availableProcessors(), 2);
+    private int maxBackgroundJobs = max(EnvProvider.INSTANCE.availableProcessors(), 2);
+    private int level0FileNumCompactionTrigger = 8;
+    private int level0SlowdownWritesTrigger = 20;
+    private int level0StopWritesTrigger = 24;
+    private long maxBytesForLevelBase = writeBufferSize * minWriteBufferNumberToMerge * level0FileNumCompactionTrigger;
+    private long targetFileSizeBase = maxBytesForLevelBase / 10;
 }

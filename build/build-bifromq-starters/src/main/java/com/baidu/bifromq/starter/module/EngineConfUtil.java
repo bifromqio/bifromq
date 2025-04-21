@@ -54,6 +54,19 @@ public class EngineConfUtil {
                 .compactMinTombstoneKeys(rocksDBConfig.getCompactMinTombstoneKeys())
                 .compactMinTombstoneRanges(rocksDBConfig.getCompactMinTombstoneRanges())
                 .compactTombstoneKeysRatio(rocksDBConfig.getCompactTombstoneRatio())
+
+                .blockCacheSize(rocksDBConfig.getBlockCacheSize())
+                .writeBufferSize(rocksDBConfig.getWriteBufferSize())
+                .maxWriteBufferNumber(rocksDBConfig.getMaxWriteBufferNumber())
+                .minWriteBufferNumberToMerge(rocksDBConfig.getMinWriteBufferNumberToMerge())
+                .minBlobSize(rocksDBConfig.getMinBlobSize())
+                .increaseParallelism(rocksDBConfig.getIncreaseParallelism())
+                .maxBackgroundJobs(rocksDBConfig.getMaxBackgroundJobs())
+                .level0FileNumCompactionTrigger(rocksDBConfig.getLevel0FileNumCompactionTrigger())
+                .level0SlowdownWritesTrigger(rocksDBConfig.getLevel0SlowdownWritesTrigger())
+                .level0StopWritesTrigger(rocksDBConfig.getLevel0StopWritesTrigger())
+                .maxBytesForLevelBase(rocksDBConfig.getMaxBytesForLevelBase())
+                .targetFileSizeBase(rocksDBConfig.getTargetFileSizeBase())
                 .build();
         }
     }
@@ -80,6 +93,19 @@ public class EngineConfUtil {
                 .compactTombstoneKeysRatio(rocksDBConfig.getCompactTombstoneRatio())
                 .asyncWALFlush(rocksDBConfig.isAsyncWALFlush())
                 .fsyncWAL(rocksDBConfig.isFsyncWAL())
+
+                .blockCacheSize(rocksDBConfig.getBlockCacheSize())
+                .writeBufferSize(rocksDBConfig.getWriteBufferSize())
+                .maxWriteBufferNumber(rocksDBConfig.getMaxWriteBufferNumber())
+                .minWriteBufferNumberToMerge(rocksDBConfig.getMinWriteBufferNumberToMerge())
+                .minBlobSize(rocksDBConfig.getMinBlobSize())
+                .increaseParallelism(rocksDBConfig.getIncreaseParallelism())
+                .maxBackgroundJobs(rocksDBConfig.getMaxBackgroundJobs())
+                .level0FileNumCompactionTrigger(rocksDBConfig.getLevel0FileNumCompactionTrigger())
+                .level0SlowdownWritesTrigger(rocksDBConfig.getLevel0SlowdownWritesTrigger())
+                .level0StopWritesTrigger(rocksDBConfig.getLevel0StopWritesTrigger())
+                .maxBytesForLevelBase(rocksDBConfig.getMaxBytesForLevelBase())
+                .targetFileSizeBase(rocksDBConfig.getTargetFileSizeBase())
                 .build();
         }
     }

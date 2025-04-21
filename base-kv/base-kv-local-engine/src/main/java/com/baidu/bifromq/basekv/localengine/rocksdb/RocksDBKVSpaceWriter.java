@@ -171,6 +171,7 @@ class RocksDBKVSpaceWriter<E extends RocksDBKVEngine<E, T, C>, T extends
     public void done() {
         opMeters.batchWriteCallTimer.record(() -> {
             try {
+                opMeters.writeBatchSizeSummary.record(helper.count());
                 helper.done();
                 writeStatsRecorder.stop();
             } catch (RocksDBException e) {

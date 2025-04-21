@@ -18,7 +18,8 @@ import io.micrometer.core.instrument.Meter;
 public enum GeneralKVSpaceMetric implements IKVSpaceMetric {
     CheckpointNumGauge("basekv.le.active.checkpoints", Meter.Type.GAUGE),
     CallTimer("basekv.le.call.time", Meter.Type.TIMER),
-    ReadBytesDistribution("basekv.le.read.bytes", Meter.Type.DISTRIBUTION_SUMMARY);
+    ReadBytesDistribution("basekv.le.read.bytes", Meter.Type.DISTRIBUTION_SUMMARY),
+    WriteBatchSizeDistribution("basekv.le.batch.size", Meter.Type.DISTRIBUTION_SUMMARY);
 
     private final String metricName;
     private final Meter.Type meterType;

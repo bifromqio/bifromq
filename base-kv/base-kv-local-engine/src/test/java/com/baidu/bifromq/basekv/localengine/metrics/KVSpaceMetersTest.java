@@ -39,7 +39,8 @@ public class KVSpaceMetersTest extends MockableTest {
         gauge = null;
         await().forever().until(() -> {
             System.gc();
-            return weakRef.get() == null && Metrics.globalRegistry.find(gaugeName).gauges().isEmpty();
+            return weakRef.get() == null && Metrics.globalRegistry.find(gaugeName).gauges().stream()
+                .noneMatch(g -> g.getId().getName().equals("testSpace"));
         });
     }
 

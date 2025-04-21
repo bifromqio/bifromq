@@ -35,6 +35,7 @@ public class KVSpaceOpMeters {
     public final Timer iterRefreshTimer;
     public final Timer batchWriteCallTimer;
     public final DistributionSummary readBytesSummary;
+    public final DistributionSummary writeBatchSizeSummary;
 
     public KVSpaceOpMeters(String id, Tags tags) {
         metadataCallTimer = getTimer(id, GeneralKVSpaceMetric.CallTimer, tags.and("op", "metadata"));
@@ -51,6 +52,7 @@ public class KVSpaceOpMeters {
         iterRefreshTimer = getTimer(id, GeneralKVSpaceMetric.CallTimer, tags.and("op", "refresh"));
         batchWriteCallTimer = getTimer(id, GeneralKVSpaceMetric.CallTimer, tags.and("op", "bwrite"));
         readBytesSummary = getSummary(id, GeneralKVSpaceMetric.ReadBytesDistribution, tags);
+        writeBatchSizeSummary = getSummary(id, GeneralKVSpaceMetric.WriteBatchSizeDistribution, tags);
     }
 
     public void close() {
@@ -68,5 +70,6 @@ public class KVSpaceOpMeters {
         iterRefreshTimer.close();
         batchWriteCallTimer.close();
         readBytesSummary.close();
+        writeBatchSizeSummary.close();
     }
 }

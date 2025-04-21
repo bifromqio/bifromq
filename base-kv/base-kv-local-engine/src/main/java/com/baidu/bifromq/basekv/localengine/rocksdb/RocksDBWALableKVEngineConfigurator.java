@@ -19,9 +19,7 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import lombok.experimental.SuperBuilder;
-import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.DBOptions;
-import org.rocksdb.PrepopulateBlobCache;
 
 @Accessors(chain = true, fluent = true)
 @Getter
@@ -40,16 +38,5 @@ public final class RocksDBWALableKVEngineConfigurator
         DBOptions options = super.dbOptions();
         options.setManualWalFlush(asyncWALFlush);
         return options;
-    }
-
-    @Override
-    public ColumnFamilyOptions cfOptions(String name) {
-        ColumnFamilyOptions cfOptions = super.cfOptions(name);
-        cfOptions.setEnableBlobFiles(true);
-        cfOptions.setMinBlobSize(2048); // 2kb
-        cfOptions.enableBlobGarbageCollection();
-        cfOptions.setEnableBlobFiles(true);
-        cfOptions.setPrepopulateBlobCache(PrepopulateBlobCache.PREPOPULATE_BLOB_FLUSH_ONLY);
-        return cfOptions;
     }
 }
