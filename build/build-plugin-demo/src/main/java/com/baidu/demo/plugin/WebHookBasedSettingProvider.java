@@ -60,7 +60,7 @@ class WebHookBasedSettingProvider implements ISettingProvider {
                     return null;
                 }
             })
-            .thenApply(r -> setting.isValid(r) ? r : null)
+            .thenApply(r -> setting.isValid(r, tenantId) ? r : null)
             .exceptionally(e -> {
                 System.out.println("Failed to call webhook: " + e.getMessage());
                 return null;

@@ -31,6 +31,7 @@ import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxTopicLevels;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaxUserPayloadBytes;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MaximumQoS;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MinKeepAliveSeconds;
+import static com.baidu.bifromq.plugin.settingprovider.Setting.MinSessionExpirySeconds;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.MsgPubPerSec;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.OutBoundBandWidth;
 import static com.baidu.bifromq.plugin.settingprovider.Setting.PayloadFormatValidationEnabled;
@@ -61,6 +62,7 @@ public class TenantSettings {
     public final QoS maxQoS;
     public final int minKeepAliveSeconds;
     public final int maxSEI;
+    public final int minSEI;
     public final int maxTopicLevelLength;
     public final int maxTopicLevels;
     public final int maxTopicLength;
@@ -93,6 +95,7 @@ public class TenantSettings {
         maxQoS = QoS.forNumber(provider.provide(MaximumQoS, tenantId));
         minKeepAliveSeconds = provider.provide(MinKeepAliveSeconds, tenantId);
         maxSEI = provider.provide(MaxSessionExpirySeconds, tenantId);
+        minSEI = provider.provide(MinSessionExpirySeconds, tenantId);
         maxTopicLevelLength = provider.provide(MaxTopicLevelLength, tenantId);
         maxTopicLevels = provider.provide(MaxTopicLevels, tenantId);
         maxTopicLength = provider.provide(MaxTopicLength, tenantId);

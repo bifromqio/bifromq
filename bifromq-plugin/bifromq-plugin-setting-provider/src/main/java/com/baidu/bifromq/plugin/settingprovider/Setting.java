@@ -13,9 +13,13 @@
 
 package com.baidu.bifromq.plugin.settingprovider;
 
+import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * The tenant-level settings of BifroMQ.
+ */
 @Slf4j
 public enum Setting {
     MQTT3Enabled(Boolean.class, val -> true, true), MQTT4Enabled(Boolean.class, val -> true, true),
@@ -43,25 +47,38 @@ public enum Setting {
     MaxTopicFiltersPerSub(Integer.class, val -> (int) val > 0 && (int) val <= 100, 10),
     MaxSessionExpirySeconds(Integer.class, val -> (int) val > 0 && Integer.compareUnsigned((int) val, 0xFFFFFFFF) <= 0,
         24 * 60 * 60),
+    MinSessionExpirySeconds(Integer.class, (val, tenantId) -> {
+        int maxSEI;
+        if (tenantId == null) {
+            maxSEI = Setting.MaxSessionExpirySeconds.initialValue();
+        } else {
+            maxSEI = Setting.MaxSessionExpirySeconds.current(tenantId);
+        }
+        return (int) val > 0 && Integer.compareUnsigned((int) val, maxSEI) <= 0;
+    }, 60),
     MinKeepAliveSeconds(Integer.class, val -> (int) val > 0 && (int) val < 65535, 60),
     SessionInboxSize(Integer.class, val -> (int) val > 0 && (int) val <= 65535, 1000),
     QoS0DropOldest(Boolean.class, val -> true, false),
     RetainMessageMatchLimit(Integer.class, val -> (int) val >= 0, 10);
 
     public final Class<?> valueType;
-    private final Predicate<Object> validator;
+    private final BiPredicate<Object, String> validator;
     private final Object defVal;
     private volatile ISettingProvider settingProvider;
 
     Setting(Class<?> valueType, Predicate<Object> validator, Object defValue) {
+        this(valueType, (val, tenantId) -> validator.test(val), defValue);
+    }
+
+    Setting(Class<?> valueType, BiPredicate<Object, String> validator, Object defValue) {
         this.valueType = valueType;
         this.validator = validator;
         this.defVal = resolve(defValue);
-        assert isValid(defVal);
+        assert isValid(defVal, null);
     }
 
     /**
-     * The current effective setting's value for given tenant
+     * The current effective setting's value for given tenant.
      *
      * @param tenantId the id of the calling tenant
      * @return The effective value of the setting for the client
@@ -70,18 +87,18 @@ public enum Setting {
         return settingProvider == null ? initialValue() : settingProvider.provide(this, tenantId);
     }
 
-
     /**
-     * Validate if provided value is a valid for the setting
+     * Validate if provided value is a valid for the setting.
      *
      * @param val the setting value to be verified
+     * @param tenantId the id of the calling tenant
      * @return true if the value is valid
      */
-    public <R> boolean isValid(R val) {
+    public <R> boolean isValid(R val, String tenantId) {
         if (!valueType.isInstance(val)) {
             return false;
         }
-        return this.validator.test(val);
+        return this.validator.test(val, tenantId);
     }
 
     @SuppressWarnings("unchecked")
@@ -92,7 +109,6 @@ public enum Setting {
     void setProvider(ISettingProvider provider) {
         this.settingProvider = provider;
     }
-
 
     Object resolve(Object initial) {
         String override = System.getProperty(name());

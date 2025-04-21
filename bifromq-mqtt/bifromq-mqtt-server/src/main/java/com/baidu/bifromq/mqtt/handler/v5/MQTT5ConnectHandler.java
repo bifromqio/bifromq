@@ -654,12 +654,24 @@ public class MQTT5ConnectHandler extends MQTTConnectHandler {
 
     @Override
     protected int getSessionExpiryInterval(MqttConnectMessage message, TenantSettings settings) {
-        Optional<Integer> requestSEI = Optional.ofNullable((MqttProperties.IntegerProperty) message.variableHeader()
+        if (settings.forceTransient) {
+            return 0;
+        }
+        int requestSEI = Optional.ofNullable((MqttProperties.IntegerProperty) message.variableHeader()
                 .properties()
                 .getProperty(SESSION_EXPIRY_INTERVAL.value()))
-            .map(MqttProperties.MqttProperty::value);
-        int assignedSEI = settings.forceTransient ? 0 : requestSEI.orElse(0);
-        return Integer.compareUnsigned(assignedSEI, settings.maxSEI) < 0 ? assignedSEI : settings.maxSEI;
+            .map(MqttProperties.MqttProperty::value)
+            .orElse(0);
+        if (requestSEI == 0) {
+            return 0;
+        }
+        if (Integer.compareUnsigned(requestSEI, settings.minSEI) < 0) {
+            return settings.minSEI;
+        }
+        if (Integer.compareUnsigned(requestSEI, settings.maxSEI) > 0) {
+            return settings.maxSEI;
+        }
+        return requestSEI;
     }
 
     @Override

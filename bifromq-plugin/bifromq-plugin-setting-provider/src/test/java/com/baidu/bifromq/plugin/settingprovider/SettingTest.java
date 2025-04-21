@@ -15,6 +15,7 @@ package com.baidu.bifromq.plugin.settingprovider;
 
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
 import lombok.SneakyThrows;
@@ -47,8 +48,16 @@ public class SettingTest {
     @Test
     public void enumInitialValue() {
         for (Setting setting : Setting.values()) {
-            assertTrue(setting.isValid(setting.current(tenantId)));
+            assertTrue(setting.isValid(setting.current(tenantId), tenantId));
         }
+    }
+
+    @Test
+    public void semanticValidation() {
+        Setting.MaxSessionExpirySeconds.setProvider(provider);
+        when(provider.provide(Setting.MaxSessionExpirySeconds, tenantId)).thenReturn(200);
+        assertFalse(Setting.MinSessionExpirySeconds.isValid(201, tenantId));
+        assertTrue(Setting.MinSessionExpirySeconds.isValid(201, null));
     }
 
     @Test
