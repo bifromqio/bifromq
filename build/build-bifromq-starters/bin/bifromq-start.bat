@@ -127,8 +127,7 @@ if "" == "%JVM_GC_OPTS%" (
                         '-XX:+HeapDumpOnOutOfMemoryError' ^
                         '-XX:HeapDumpPath="%LOG_DIR%"' ^
                         '-Xlog:async' ^
-                        '-Xlog:gc:file="%LOG_DIR%\gc.log:time,tid,tags:filecount=5,filesize=50m"' ^
-                        '-XX:+HeapDumpOnOutOfMemoryError'
+                        '-Xlog:gc:file="%LOG_DIR%\gc.log:time,tid,tags:filecount=5,filesize=50m"'
 )
 
 rem Memory options
