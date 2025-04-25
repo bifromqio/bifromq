@@ -18,40 +18,24 @@ import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toNormalRouteKey
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toReceiverUrl;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
-import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.dist.rpc.proto.MatchReply;
 import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.baidu.bifromq.sysprops.props.ControlPlaneBurstLatencyMillis;
-import com.baidu.bifromq.sysprops.props.ControlPlaneTolerableLatencyMillis;
+import com.baidu.bifromq.sysprops.props.ControlPlaneMaxBurstLatencyMillis;
 import com.baidu.bifromq.type.RouteMatcher;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class MatchCallScheduler extends MutationCallScheduler<MatchRequest, MatchReply>
+public class MatchCallScheduler extends MutationCallScheduler<MatchRequest, MatchReply, BatchMatchCall>
     implements IMatchCallScheduler {
 
-    private final ISettingProvider settingProvider;
-
     public MatchCallScheduler(IBaseKVStoreClient distWorkerClient, ISettingProvider settingProvider) {
-        super("dist_server_sub_batcher",
-            distWorkerClient,
-            Duration.ofMillis(ControlPlaneTolerableLatencyMillis.INSTANCE.get()),
-            Duration.ofMillis(ControlPlaneBurstLatencyMillis.INSTANCE.get()));
-        this.settingProvider = settingProvider;
-    }
-
-    @Override
-    protected Batcher<MatchRequest, MatchReply, MutationCallBatcherKey> newBatcher(String name,
-                                                                                   long tolerableLatencyNanos,
-                                                                                   long burstLatencyNanos,
-                                                                                   MutationCallBatcherKey batcherKey) {
-        return new MatchCallBatcher(name, tolerableLatencyNanos, burstLatencyNanos,
-            batcherKey, storeClient, settingProvider);
+        super((pipeline, batcherKey) -> new BatchMatchCall(pipeline, settingProvider, batcherKey),
+            Duration.ofMillis(ControlPlaneMaxBurstLatencyMillis.INSTANCE.get()).toNanos(),
+            distWorkerClient);
     }
 
     protected ByteString rangeKey(MatchRequest call) {

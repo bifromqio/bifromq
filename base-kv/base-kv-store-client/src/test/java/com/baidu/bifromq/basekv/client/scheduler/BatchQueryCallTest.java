@@ -16,8 +16,6 @@ package com.baidu.bifromq.basekv.client.scheduler;
 import static com.baidu.bifromq.basekv.client.scheduler.Fixtures.setting;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
@@ -77,9 +75,7 @@ public class BatchQueryCallTest {
         when(queryPipeline1.query(any()))
             .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeROReply.newBuilder().build(), executor));
 
-        TestQueryCallScheduler scheduler =
-            new TestQueryCallScheduler("test_call_scheduler", storeClient, Duration.ofMillis(100),
-                Duration.ofMillis(1000), Duration.ofMinutes(5), true);
+        TestQueryCallScheduler scheduler = new TestQueryCallScheduler(storeClient, Duration.ofMinutes(5), true);
         List<Integer> reqList = new ArrayList<>();
         List<Integer> respList = new CopyOnWriteArrayList<>();
         List<CompletableFuture<Void>> futures = new ArrayList<>();
@@ -105,9 +101,7 @@ public class BatchQueryCallTest {
             .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeROReply.newBuilder().build(), executor1));
         when(queryPipeline2.query(any()))
             .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeROReply.newBuilder().build(), executor2));
-        TestQueryCallScheduler scheduler =
-            new TestQueryCallScheduler("test_call_scheduler", storeClient, Duration.ofMillis(100),
-                Duration.ofMillis(1000), Duration.ofMinutes(5), true);
+        TestQueryCallScheduler scheduler = new TestQueryCallScheduler(storeClient, Duration.ofMinutes(5), true);
         List<Integer> reqList1 = new ArrayList<>();
         List<Integer> reqList2 = new ArrayList<>();
         List<Integer> respList1 = new CopyOnWriteArrayList<>();
@@ -137,30 +131,5 @@ public class BatchQueryCallTest {
         assertEquals(reqList2, respList2);
         executor1.shutdown();
         executor2.shutdown();
-    }
-
-    @Test
-    public void pipelineExpiry() {
-        ExecutorService executor = Executors.newSingleThreadScheduledExecutor();
-
-        when(storeClient.latestEffectiveRouter()).thenReturn(new TreeMap<>(BoundaryUtil::compare) {{
-            put(FULL_BOUNDARY, setting(id, "V1", 0));
-        }});
-
-        when(storeClient.createQueryPipeline("V1")).thenReturn(queryPipeline1);
-        when(queryPipeline1.query(any()))
-            .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeROReply.newBuilder().build(), executor));
-
-        TestQueryCallScheduler scheduler =
-            new TestQueryCallScheduler("test_call_scheduler", storeClient, Duration.ofMillis(100),
-                Duration.ofMillis(1000), Duration.ofMillis(100), false);
-        List<CompletableFuture<ByteString>> futures = new ArrayList<>();
-        for (int i = 0; i < 1000; i++) {
-            int req = ThreadLocalRandom.current().nextInt();
-            futures.add(scheduler.schedule(ByteString.copyFromUtf8(Integer.toString(req))));
-        }
-        CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
-        verify(queryPipeline1, timeout(Long.MAX_VALUE).times(1)).close();
-        executor.shutdown();
     }
 }

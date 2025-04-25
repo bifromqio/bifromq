@@ -16,55 +16,23 @@ package com.baidu.bifromq.retain.server.scheduler;
 import static com.baidu.bifromq.retain.store.schema.KVSchemaUtil.retainMessageKey;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
-import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
-import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainRequest;
-import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
-import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
+import com.baidu.bifromq.sysprops.props.DataPlaneMaxBurstLatencyMillis;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 
-public class DeleteCallScheduler extends MutationCallScheduler<RetainRequest, RetainReply>
+public class DeleteCallScheduler extends MutationCallScheduler<RetainRequest, RetainReply, BatchRetainCall>
     implements IRetainCallScheduler {
-    private final IBaseKVStoreClient retainStoreClient;
 
     public DeleteCallScheduler(IBaseKVStoreClient retainStoreClient) {
-        super("retain_server_delete_batcher", retainStoreClient,
-            Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
-            Duration.ofMillis(DataPlaneBurstLatencyMillis.INSTANCE.get()));
-        this.retainStoreClient = retainStoreClient;
+        super(BatchRetainCall::new, Duration.ofMillis(DataPlaneMaxBurstLatencyMillis.INSTANCE.get()).toNanos(),
+            retainStoreClient);
     }
 
     @Override
     protected ByteString rangeKey(RetainRequest request) {
         return retainMessageKey(request.getPublisher().getTenantId(), request.getTopic());
-    }
-
-    @Override
-    protected Batcher<RetainRequest, RetainReply, MutationCallBatcherKey> newBatcher(String name,
-                                                                                     long tolerableLatencyNanos,
-                                                                                     long burstLatencyNanos,
-                                                                                     MutationCallBatcherKey batchKey) {
-        return new DeleteCallBatcher(batchKey, name, tolerableLatencyNanos, burstLatencyNanos, retainStoreClient);
-    }
-
-    private static class DeleteCallBatcher extends MutationCallBatcher<RetainRequest, RetainReply> {
-
-        protected DeleteCallBatcher(MutationCallBatcherKey batchKey,
-                                    String name,
-                                    long tolerableLatencyNanos,
-                                    long burstLatencyNanos,
-                                    IBaseKVStoreClient retainStoreClient) {
-            super(name, tolerableLatencyNanos, burstLatencyNanos, batchKey, retainStoreClient);
-        }
-
-        @Override
-        protected IBatchCall<RetainRequest, RetainReply, MutationCallBatcherKey> newBatch() {
-            return new BatchRetainCall(storeClient, batcherKey);
-        }
     }
 }

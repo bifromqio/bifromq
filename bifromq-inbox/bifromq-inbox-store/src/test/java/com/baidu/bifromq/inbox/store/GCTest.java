@@ -23,7 +23,7 @@ import static org.testng.Assert.assertEquals;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
-import com.baidu.bifromq.sessiondict.client.type.ExistResult;
+import com.baidu.bifromq.sessiondict.client.type.OnlineCheckResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MQTTClientInfoConstants;
 import java.util.concurrent.CompletableFuture;
@@ -43,7 +43,7 @@ public class GCTest extends InboxStoreTest {
             .putMetadata(MQTTClientInfoConstants.MQTT_USER_ID_KEY, "userId")
             .putMetadata(MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY, "clientId")
             .build();
-        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(ExistResult.NOT_EXISTS));
+        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(OnlineCheckResult.NOT_EXISTS));
         BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
@@ -73,7 +73,7 @@ public class GCTest extends InboxStoreTest {
             .putMetadata(MQTTClientInfoConstants.MQTT_USER_ID_KEY, "userId")
             .putMetadata(MQTTClientInfoConstants.MQTT_CLIENT_ID_KEY, "clientId")
             .build();
-        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(ExistResult.NOT_EXISTS));
+        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(OnlineCheckResult.NOT_EXISTS));
         BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)

@@ -16,54 +16,25 @@ package com.baidu.bifromq.inbox.server.scheduler;
 import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.inboxStartKeyPrefix;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
-import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
-import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.AttachReply;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
-import com.baidu.bifromq.sysprops.props.ControlPlaneBurstLatencyMillis;
-import com.baidu.bifromq.sysprops.props.ControlPlaneTolerableLatencyMillis;
+import com.baidu.bifromq.sysprops.props.ControlPlaneMaxBurstLatencyMillis;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxAttachScheduler extends MutationCallScheduler<AttachRequest, AttachReply>
+public class InboxAttachScheduler extends MutationCallScheduler<AttachRequest, AttachReply, BatchAttachCall>
     implements IInboxAttachScheduler {
 
     public InboxAttachScheduler(IBaseKVStoreClient inboxStoreClient) {
-        super("inbox_server_attach", inboxStoreClient,
-            Duration.ofMillis(ControlPlaneTolerableLatencyMillis.INSTANCE.get()),
-            Duration.ofMillis(ControlPlaneBurstLatencyMillis.INSTANCE.get()));
-    }
-
-    @Override
-    protected Batcher<AttachRequest, AttachReply, MutationCallBatcherKey> newBatcher(String name,
-                                                                                     long tolerableLatencyNanos,
-                                                                                     long burstLatencyNanos,
-                                                                                     MutationCallBatcherKey range) {
-        return new InboxAttachBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, storeClient);
+        super(BatchAttachCall::new, Duration.ofMillis(ControlPlaneMaxBurstLatencyMillis.INSTANCE.get()).toNanos(),
+            inboxStoreClient);
     }
 
     @Override
     protected ByteString rangeKey(AttachRequest request) {
         return inboxStartKeyPrefix(request.getClient().getTenantId(), request.getInboxId());
-    }
-
-    private static class InboxAttachBatcher extends MutationCallBatcher<AttachRequest, AttachReply> {
-        private InboxAttachBatcher(String name,
-                                   long expectLatencyNanos,
-                                   long maxTolerableLatencyNanos,
-                                   MutationCallBatcherKey range,
-                                   IBaseKVStoreClient inboxStoreClient) {
-            super(name, expectLatencyNanos, maxTolerableLatencyNanos, range, inboxStoreClient);
-        }
-
-        @Override
-        protected IBatchCall<AttachRequest, AttachReply, MutationCallBatcherKey> newBatch() {
-            return new BatchAttachCall(storeClient, batcherKey);
-        }
     }
 }

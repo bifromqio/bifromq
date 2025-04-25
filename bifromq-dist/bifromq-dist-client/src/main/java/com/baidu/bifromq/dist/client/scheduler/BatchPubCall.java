@@ -14,6 +14,7 @@
 package com.baidu.bifromq.dist.client.scheduler;
 
 import com.baidu.bifromq.baserpc.client.IRPCClient;
+import com.baidu.bifromq.basescheduler.AsyncRetry;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.basescheduler.exception.NeedRetryException;
@@ -28,13 +29,15 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 
-class BatchPubCall implements IBatchCall<PubCall, PubResult, PubCallBatcherKey> {
+class BatchPubCall implements IBatchCall<PubRequest, PubResult, PubCallBatcherKey> {
     private final IRPCClient.IRequestPipeline<DistRequest, DistReply> ppln;
-    private final Queue<ICallTask<PubCall, PubResult, PubCallBatcherKey>> tasks = new ArrayDeque<>(64);
+    private final Queue<ICallTask<PubRequest, PubResult, PubCallBatcherKey>> tasks = new ArrayDeque<>(64);
+    private final long retryTimeoutNanos;
     private Map<ClientInfo, Map<String, PublisherMessagePack.TopicPack.Builder>> clientMsgPack = new HashMap<>(128);
 
-    BatchPubCall(IRPCClient.IRequestPipeline<DistRequest, DistReply> ppln) {
+    BatchPubCall(IRPCClient.IRequestPipeline<DistRequest, DistReply> ppln, long retryTimeoutNanos) {
         this.ppln = ppln;
+        this.retryTimeoutNanos = retryTimeoutNanos;
     }
 
     @Override
@@ -44,7 +47,7 @@ class BatchPubCall implements IBatchCall<PubCall, PubResult, PubCallBatcherKey> 
     }
 
     @Override
-    public void add(ICallTask<PubCall, PubResult, PubCallBatcherKey> callTask) {
+    public void add(ICallTask<PubRequest, PubResult, PubCallBatcherKey> callTask) {
         tasks.add(callTask);
         clientMsgPack.computeIfAbsent(callTask.call().publisher, k -> new HashMap<>())
             .computeIfAbsent(callTask.call().topic,
@@ -62,8 +65,13 @@ class BatchPubCall implements IBatchCall<PubCall, PubResult, PubCallBatcherKey> 
             }
             requestBuilder.addMessages(senderMsgPackBuilder.build());
         });
+        DistRequest request = requestBuilder.build();
+        return AsyncRetry.exec(() -> execute(request), retryTimeoutNanos);
+    }
+
+    private CompletableFuture<Void> execute(DistRequest request) {
         CompletableFuture<Void> onDone = new CompletableFuture<>();
-        execute(requestBuilder.build(), onDone);
+        execute(request, onDone);
         return onDone;
     }
 
@@ -71,7 +79,7 @@ class BatchPubCall implements IBatchCall<PubCall, PubResult, PubCallBatcherKey> 
         ppln.invoke(request)
             .whenComplete((reply, e) -> {
                 if (e != null) {
-                    ICallTask<PubCall, PubResult, PubCallBatcherKey> task;
+                    ICallTask<PubRequest, PubResult, PubCallBatcherKey> task;
                     while ((task = tasks.poll()) != null) {
                         task.resultPromise().complete(PubResult.ERROR);
                     }
@@ -86,7 +94,7 @@ class BatchPubCall implements IBatchCall<PubCall, PubResult, PubCallBatcherKey> 
                                 fanoutResultMap.put(pubMsgPack.getPublisher(), result.getTopicMap());
                             }
 
-                            ICallTask<PubCall, PubResult, PubCallBatcherKey> task;
+                            ICallTask<PubRequest, PubResult, PubCallBatcherKey> task;
                             while ((task = tasks.poll()) != null) {
                                 Integer fanOut = fanoutResultMap.get(task.call().publisher).get(task.call().topic);
                                 task.resultPromise().complete(fanOut > 0 ? PubResult.OK : PubResult.NO_MATCH);
@@ -94,7 +102,7 @@ class BatchPubCall implements IBatchCall<PubCall, PubResult, PubCallBatcherKey> 
                             onDone.complete(null);
                         }
                         case BACK_PRESSURE_REJECTED -> {
-                            ICallTask<PubCall, PubResult, PubCallBatcherKey> task;
+                            ICallTask<PubRequest, PubResult, PubCallBatcherKey> task;
                             while ((task = tasks.poll()) != null) {
                                 task.resultPromise().complete(PubResult.BACK_PRESSURE_REJECTED);
                             }
@@ -103,7 +111,7 @@ class BatchPubCall implements IBatchCall<PubCall, PubResult, PubCallBatcherKey> 
                         case TRY_LATER -> onDone.completeExceptionally(new NeedRetryException("Retry later"));
                         default -> {
                             assert reply.getCode() == DistReply.Code.ERROR;
-                            ICallTask<PubCall, PubResult, PubCallBatcherKey> task;
+                            ICallTask<PubRequest, PubResult, PubCallBatcherKey> task;
                             while ((task = tasks.poll()) != null) {
                                 task.resultPromise().complete(PubResult.ERROR);
                             }

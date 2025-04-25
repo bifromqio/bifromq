@@ -45,13 +45,14 @@ import com.baidu.bifromq.inbox.rpc.proto.SubReply;
 import com.baidu.bifromq.inbox.rpc.proto.SubRequest;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
+import com.baidu.bifromq.inbox.server.scheduler.CheckMatchInfo;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxAttachScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxCheckSubScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxCommitScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxDeleteScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxDetachScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.IInboxExistScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxFetchScheduler;
-import com.baidu.bifromq.inbox.server.scheduler.IInboxGetScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxInsertScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxSendLWTScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxSubScheduler;
@@ -74,7 +75,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     private final IDistClient distClient;
     private final InboxFetcherRegistry registry = new InboxFetcherRegistry();
     private final IInboxFetchScheduler fetchScheduler;
-    private final IInboxGetScheduler getScheduler;
+    private final IInboxExistScheduler getScheduler;
     private final IInboxSendLWTScheduler sendLWTScheduler;
     private final IInboxCheckSubScheduler checkSubScheduler;
     private final IInboxInsertScheduler insertScheduler;
@@ -89,7 +90,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     @Builder
     InboxService(IInboxClient inboxClient,
                  IDistClient distClient,
-                 IInboxGetScheduler getScheduler,
+                 IInboxExistScheduler getScheduler,
                  IInboxSendLWTScheduler sendLWTScheduler,
                  IInboxCheckSubScheduler checkSubScheduler,
                  IInboxFetchScheduler fetchScheduler,
@@ -325,8 +326,7 @@ class InboxService extends InboxServiceGrpc.InboxServiceImplBase {
     public void checkSubscriptions(CheckRequest request, StreamObserver<CheckReply> responseObserver) {
         response(tenantId -> {
             List<CompletableFuture<CheckReply.Code>> futures = request.getMatchInfoList().stream()
-                .map(matchInfo -> checkSubScheduler.schedule(
-                        new IInboxCheckSubScheduler.CheckMatchInfo(request.getTenantId(), matchInfo))
+                .map(matchInfo -> checkSubScheduler.schedule(new CheckMatchInfo(request.getTenantId(), matchInfo))
                     .exceptionally(e -> {
                         if (e instanceof BatcherUnavailableException
                             || e.getCause() instanceof BatcherUnavailableException) {

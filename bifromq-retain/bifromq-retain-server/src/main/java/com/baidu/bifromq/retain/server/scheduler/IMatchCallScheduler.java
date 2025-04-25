@@ -15,5 +15,5 @@ package com.baidu.bifromq.retain.server.scheduler;
 
 import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
 
-public interface IMatchCallScheduler extends IBatchCallScheduler<MatchCall, MatchCallResult> {
+public interface IMatchCallScheduler extends IBatchCallScheduler<MatchRetainedRequest, MatchRetainedResult> {
 }

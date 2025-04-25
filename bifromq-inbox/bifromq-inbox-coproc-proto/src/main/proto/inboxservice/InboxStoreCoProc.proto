@@ -184,7 +184,7 @@ message SubMessagePack{
   commontype.TopicMessagePack messages = 2;
 }
 
-message InboxSubMessagePack{
+message InsertRequest{
   string tenantId = 1;
   string inboxId = 2;
   uint64 incarnation = 3;
@@ -192,25 +192,25 @@ message InboxSubMessagePack{
 }
 
 message BatchInsertRequest{
-  repeated InboxSubMessagePack inboxSubMsgPack = 1;
+  repeated InsertRequest request = 1;
 }
 
-message InboxInsertResult{
+message InsertResult{
   enum Code{
     OK = 0;
     NO_INBOX = 1;
   }
-  message PackInsertResult{
+  message SubStatus{
     string topicFilter = 1;
     uint64 incarnation = 2;
     bool rejected = 3;
   }
   Code code = 1;
-  repeated PackInsertResult result = 2; // same order as messagePack
+  repeated SubStatus result = 2;
 }
 
 message BatchInsertReply{
-  repeated InboxInsertResult result = 2; // same order as inboxSubMsgPack when code is OK
+  repeated InsertResult result = 2; // same order as requests when code is OK
 }
 
 message BatchCommitRequest{

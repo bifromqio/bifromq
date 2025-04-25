@@ -15,10 +15,10 @@ package com.baidu.bifromq.sessiondict.client;
 
 import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.sessiondict.SessionRegisterKeyUtil;
-import com.baidu.bifromq.sessiondict.client.scheduler.ISessionExistScheduler;
-import com.baidu.bifromq.sessiondict.client.scheduler.SessionExistScheduler;
-import com.baidu.bifromq.sessiondict.client.type.ExistResult;
-import com.baidu.bifromq.sessiondict.client.type.TenantClientId;
+import com.baidu.bifromq.sessiondict.client.scheduler.IOnlineCheckScheduler;
+import com.baidu.bifromq.sessiondict.client.scheduler.OnlineCheckScheduler;
+import com.baidu.bifromq.sessiondict.client.type.OnlineCheckRequest;
+import com.baidu.bifromq.sessiondict.client.type.OnlineCheckResult;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillAllReply;
@@ -47,12 +47,12 @@ import lombok.extern.slf4j.Slf4j;
 final class SessionDictClient implements ISessionDictClient {
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final IRPCClient rpcClient;
-    private final ISessionExistScheduler sessionExistScheduler;
+    private final IOnlineCheckScheduler sessionExistScheduler;
     private final LoadingCache<ManagerCacheKey, SessionRegister> tenantSessionRegisterManagers;
 
     SessionDictClient(IRPCClient rpcClient) {
         this.rpcClient = rpcClient;
-        sessionExistScheduler = new SessionExistScheduler(rpcClient);
+        sessionExistScheduler = new OnlineCheckScheduler(rpcClient);
         tenantSessionRegisterManagers = Caffeine.newBuilder()
             .weakValues()
             .executor(MoreExecutors.directExecutor())
@@ -153,7 +153,7 @@ final class SessionDictClient implements ISessionDictClient {
     }
 
     @Override
-    public CompletableFuture<ExistResult> exist(TenantClientId clientId) {
+    public CompletableFuture<OnlineCheckResult> exist(OnlineCheckRequest clientId) {
         return sessionExistScheduler.schedule(clientId);
     }
 

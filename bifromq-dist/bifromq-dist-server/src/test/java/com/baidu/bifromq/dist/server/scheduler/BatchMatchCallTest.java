@@ -20,7 +20,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.IMutationPipeline;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
@@ -45,16 +45,16 @@ import org.testng.annotations.Test;
 public class BatchMatchCallTest {
 
     private KVRangeId rangeId;
-    private IBaseKVStoreClient storeClient;
+    private IMutationPipeline pipeline;
     private ISettingProvider settingProvider;
     private BatchMatchCall batchMatchCall;
 
     @BeforeMethod
     void setUp() {
         rangeId = KVRangeId.newBuilder().setId(1).build();
-        storeClient = mock(IBaseKVStoreClient.class);
+        pipeline = mock(IMutationPipeline.class);
         settingProvider = mock(ISettingProvider.class);
-        batchMatchCall = new BatchMatchCall(storeClient, settingProvider,
+        batchMatchCall = new BatchMatchCall(pipeline, settingProvider,
             new MutationCallBatcherKey(rangeId, "leaderStoreId", 1L));
     }
 

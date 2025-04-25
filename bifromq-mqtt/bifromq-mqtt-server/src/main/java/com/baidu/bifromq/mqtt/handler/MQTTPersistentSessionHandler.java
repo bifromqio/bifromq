@@ -54,7 +54,7 @@ import com.baidu.bifromq.plugin.eventcollector.OutOfTenantResource;
 import com.baidu.bifromq.plugin.eventcollector.mqttbroker.clientdisconnect.ByClient;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
-import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
+import com.baidu.bifromq.sysprops.props.DataPlaneMaxBurstLatencyMillis;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
@@ -86,10 +86,10 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
     private final NavigableMap<Long, SubMessage> stagingBuffer = new TreeMap<>();
     private final IInboxClient inboxClient;
     private final Cache<String, AtomicReference<Long>> qoS0TimestampsByMQTTPublisher = Caffeine.newBuilder()
-        .expireAfterAccess(2 * DataPlaneBurstLatencyMillis.INSTANCE.get(), TimeUnit.MILLISECONDS)
+        .expireAfterAccess(2 * DataPlaneMaxBurstLatencyMillis.INSTANCE.get(), TimeUnit.MILLISECONDS)
         .build();
     private final Cache<String, AtomicReference<Long>> qoS12TimestampsByMQTTPublisher = Caffeine.newBuilder()
-        .expireAfterAccess(2 * DataPlaneBurstLatencyMillis.INSTANCE.get(), TimeUnit.MILLISECONDS)
+        .expireAfterAccess(2 * DataPlaneMaxBurstLatencyMillis.INSTANCE.get(), TimeUnit.MILLISECONDS)
         .build();
     private boolean qos0Confirming = false;
     private boolean inboxConfirming = false;
@@ -213,11 +213,11 @@ public abstract class MQTTPersistentSessionHandler extends MQTTSessionHandler im
         state = State.DETACH;
         addBgTask(AsyncRetry.exec(() -> inboxClient.detach(request),
             (reply, t) -> {
-                if (t != null) {
-                    return true;
+                if (reply != null) {
+                    return reply.getCode() == DetachReply.Code.TRY_LATER;
                 }
-                return reply.getCode() != DetachReply.Code.TRY_LATER;
-            }, 1000, 5000));
+                return false;
+            }, sessionCtx.retryTimeoutNanos / 5, sessionCtx.retryTimeoutNanos));
     }
 
     @Override

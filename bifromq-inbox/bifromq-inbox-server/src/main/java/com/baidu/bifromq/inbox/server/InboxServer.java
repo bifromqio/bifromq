@@ -20,8 +20,8 @@ import com.baidu.bifromq.inbox.server.scheduler.InboxCheckSubScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxCommitScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxDeleteScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxDetachScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.InboxExistScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxFetchScheduler;
-import com.baidu.bifromq.inbox.server.scheduler.InboxGetScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxInsertScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxSendLWTScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.InboxSubScheduler;
@@ -45,7 +45,7 @@ class InboxServer implements IInboxServer {
         this.inboxService = InboxService.builder()
             .inboxClient(builder.inboxClient)
             .distClient(builder.distClient)
-            .getScheduler(new InboxGetScheduler(builder.inboxStoreClient))
+            .getScheduler(new InboxExistScheduler(builder.inboxStoreClient))
             .sendLWTScheduler(new InboxSendLWTScheduler(builder.inboxStoreClient))
             .checkSubScheduler(new InboxCheckSubScheduler(builder.inboxStoreClient))
             .fetchScheduler(new InboxFetchScheduler(builder.inboxStoreClient))

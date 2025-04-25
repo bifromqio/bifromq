@@ -19,29 +19,25 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.google.protobuf.ByteString;
-import java.time.Duration;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * The abstract class for base-kv mutation call scheduler.
+ *
+ * @param <ReqT> the type of the request
+ * @param <RespT> the type of the response
+ * @param <BatchCallT> the type of the batch call
+ */
 @Slf4j
-public abstract class MutationCallScheduler<ReqT, RespT>
+public abstract class MutationCallScheduler<ReqT, RespT, BatchCallT extends BatchMutationCall<ReqT, RespT>>
     extends BatchCallScheduler<ReqT, RespT, MutationCallBatcherKey> {
     protected final IBaseKVStoreClient storeClient;
 
-    public MutationCallScheduler(String name,
-                                 IBaseKVStoreClient storeClient,
-                                 Duration tolerableLatency,
-                                 Duration burstLatency) {
-        super(name, tolerableLatency, burstLatency);
-        this.storeClient = storeClient;
-    }
-
-    public MutationCallScheduler(String name,
-                                 IBaseKVStoreClient storeClient,
-                                 Duration tolerableLatency,
-                                 Duration burstLatency,
-                                 Duration batcherExpiry) {
-        super(name, tolerableLatency, burstLatency, batcherExpiry);
+    public MutationCallScheduler(IBatchMutationCallBuilder<ReqT, RespT, BatchCallT> batchCallBuilder,
+                                 long maxBurstLatency,
+                                 IBaseKVStoreClient storeClient) {
+        super(new BatchMutationCallBuilderFactory<>(storeClient, batchCallBuilder), maxBurstLatency);
         this.storeClient = storeClient;
     }
 

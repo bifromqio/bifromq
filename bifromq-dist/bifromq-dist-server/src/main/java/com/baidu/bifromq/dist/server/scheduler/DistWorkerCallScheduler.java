@@ -15,10 +15,6 @@ package com.baidu.bifromq.dist.server.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
-import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
-import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
-import java.time.Duration;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 
@@ -27,31 +23,20 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class DistWorkerCallScheduler
-    extends BatchCallScheduler<DistServerCall, DistServerCallResult, DistServerCallBatcherKey>
+    extends BatchCallScheduler<TenantPubRequest, DistServerCallResult, DistServerCallBatcherKey>
     implements IDistWorkerCallScheduler {
-
-    private final IBaseKVStoreClient distWorkerClient;
 
     /**
      * Constructor of DistWorkerCallScheduler.
      *
-     * @param distWorkerClient the dist worker client
+     * @param distWorkerClient  the dist worker client
      */
     public DistWorkerCallScheduler(IBaseKVStoreClient distWorkerClient) {
-        super("dist_server_dist_batcher",
-            Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
-            Duration.ofMillis(DataPlaneBurstLatencyMillis.INSTANCE.get()));
-        this.distWorkerClient = distWorkerClient;
+        super((name, batcherKey) -> () -> new BatchDistServerCall(distWorkerClient, batcherKey), Long.MAX_VALUE);
     }
 
     @Override
-    protected Batcher<DistServerCall, DistServerCallResult, DistServerCallBatcherKey> newBatcher(
-        String name, long tolerableLatencyNanos, long burstLatencyNanos, DistServerCallBatcherKey batchKey) {
-        return new DistServerCallBatcher(batchKey, name, tolerableLatencyNanos, burstLatencyNanos, distWorkerClient);
-    }
-
-    @Override
-    protected Optional<DistServerCallBatcherKey> find(DistServerCall request) {
+    protected Optional<DistServerCallBatcherKey> find(TenantPubRequest request) {
         return Optional.of(new DistServerCallBatcherKey(request.tenantId(), request.callQueueIdx()));
     }
 }

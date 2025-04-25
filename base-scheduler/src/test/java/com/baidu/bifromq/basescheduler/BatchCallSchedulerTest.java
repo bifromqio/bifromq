@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.basescheduler;
 
+import static org.testng.Assert.assertEquals;
+
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -25,7 +27,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -48,7 +49,7 @@ public class BatchCallSchedulerTest {
     @Test
     public void batchCall() {
         TestBatchCallScheduler scheduler =
-            new TestBatchCallScheduler(1, Duration.ofNanos(100), Duration.ofMillis(1), Duration.ofMillis(1));
+            new TestBatchCallScheduler(1, Duration.ofNanos(100), Duration.ofSeconds(10));
         AtomicInteger count = new AtomicInteger(1000);
         CountDownLatch latch = new CountDownLatch(count.get());
         executor.submit(() -> {
@@ -85,7 +86,7 @@ public class BatchCallSchedulerTest {
             log.info("Waiting for  {}", respFutures.size());
             CompletableFuture.allOf(respFutures.toArray(CompletableFuture[]::new)).join();
         } catch (Throwable e) {
-            Assert.assertEquals(BackPressureException.class, e.getCause().getClass());
+            assertEquals(e.getCause().getClass(), BackPressureException.class);
         }
     }
 }

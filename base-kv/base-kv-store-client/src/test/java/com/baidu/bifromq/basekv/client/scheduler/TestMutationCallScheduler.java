@@ -14,42 +14,16 @@
 package com.baidu.bifromq.basekv.client.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basescheduler.Batcher;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 
-public class TestMutationCallScheduler extends MutationCallScheduler<ByteString, ByteString> {
-    public TestMutationCallScheduler(String name,
-                                     IBaseKVStoreClient storeClient,
-                                     Duration tolerableLatency,
-                                     Duration burstLatency) {
-        super(name, storeClient, tolerableLatency, burstLatency);
-    }
-
-    public TestMutationCallScheduler(String name,
-                                     IBaseKVStoreClient storeClient,
-                                     Duration tolerableLatency,
-                                     Duration burstLatency,
-                                     Duration batcherExpiry) {
-        super(name, storeClient, tolerableLatency, burstLatency, batcherExpiry);
+public class TestMutationCallScheduler extends MutationCallScheduler<ByteString, ByteString, TestBatchMutationCall> {
+    public TestMutationCallScheduler(IBaseKVStoreClient storeClient, Duration burstLatency) {
+        super(TestBatchMutationCall::new, burstLatency.toNanos(), storeClient);
     }
 
     @Override
     protected ByteString rangeKey(ByteString call) {
         return call;
-    }
-
-    @Override
-    protected Batcher<ByteString, ByteString, MutationCallBatcherKey> newBatcher(String name,
-                                                                                 long tolerableLatencyNanos,
-                                                                                 long burstLatencyNanos,
-                                                                                 MutationCallBatcherKey mutationCallBatcherKey) {
-        return new TestMutationCallBatcher(
-            name,
-            tolerableLatencyNanos,
-            burstLatencyNanos,
-            mutationCallBatcherKey,
-            storeClient
-        );
     }
 }

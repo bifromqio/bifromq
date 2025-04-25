@@ -14,25 +14,28 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.scheduler.BatchQueryCall;
+import com.baidu.bifromq.basekv.client.scheduler.IBatchQueryCallBuilder;
 import com.baidu.bifromq.basekv.client.scheduler.QueryCallScheduler;
-import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
-import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
+import com.baidu.bifromq.sysprops.props.DataPlaneMaxBurstLatencyMillis;
 import com.google.common.base.Preconditions;
 import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
 
-public abstract class InboxReadScheduler<Req, Resp> extends QueryCallScheduler<Req, Resp> {
+public abstract class InboxReadScheduler<ReqT, RespT, InboxBatchQueryT extends BatchQueryCall<ReqT, RespT>>
+    extends QueryCallScheduler<ReqT, RespT, InboxBatchQueryT> {
     protected final int queuesPerRange;
 
-    public InboxReadScheduler(int queuesPerRange, IBaseKVStoreClient inboxStoreClient, String name) {
-        super(name, inboxStoreClient, Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
-            Duration.ofSeconds(DataPlaneBurstLatencyMillis.INSTANCE.get()));
+    public InboxReadScheduler(IBatchQueryCallBuilder<ReqT, RespT, InboxBatchQueryT> batchQueryCallBuilder,
+                              int queuesPerRange, IBaseKVStoreClient inboxStoreClient) {
+        super(batchQueryCallBuilder, Duration.ofSeconds(DataPlaneMaxBurstLatencyMillis.INSTANCE.get()).toNanos(),
+            inboxStoreClient);
         Preconditions.checkArgument(queuesPerRange > 0, "Queues per range must be positive");
         this.queuesPerRange = queuesPerRange;
     }
 
     @Override
-    protected int selectQueue(Req request) {
+    protected int selectQueue(ReqT request) {
         return ThreadLocalRandom.current().nextInt(0, queuesPerRange);
     }
 }

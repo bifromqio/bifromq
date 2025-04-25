@@ -47,7 +47,6 @@ class DeliveryPipeline implements IDeliverer {
                 .build())
             .thenApply(WriteReply::getReply)
             .exceptionally(e -> {
-                log.debug("Failed to deliver request: {}", request, e);
                 if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
                     DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder().setCode(DeliveryReply.Code.OK);
                     Set<MatchInfo> allMatchInfos = new HashSet<>();
@@ -65,6 +64,7 @@ class DeliveryPipeline implements IDeliverer {
                     }
                     return replyBuilder.build();
                 }
+                log.debug("Failed to deliver request: {}", request, e);
                 return DeliveryReply.newBuilder().setCode(DeliveryReply.Code.ERROR).build();
             });
     }

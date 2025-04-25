@@ -21,7 +21,6 @@ import com.baidu.bifromq.basekv.store.api.IKVRangeSplitHinter;
 import com.baidu.bifromq.basekv.store.range.hinter.MutationKVLoadBasedSplitHinter;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
-import com.baidu.bifromq.deliverer.MessageDeliverer;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.worker.cache.ISubscriptionCache;
 import com.baidu.bifromq.dist.worker.cache.SubscriptionCache;
@@ -32,6 +31,7 @@ import com.baidu.bifromq.sysprops.props.DistFanOutParallelism;
 import com.baidu.bifromq.sysprops.props.DistMatchParallelism;
 import com.baidu.bifromq.sysprops.props.DistWorkerFanOutSplitThreshold;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.time.Duration;
@@ -40,6 +40,7 @@ import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinWorkerThread;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -58,11 +59,12 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
                                    IEventCollector eventCollector,
                                    IResourceThrottler resourceThrottler,
                                    ISubBrokerManager subBrokerManager,
+                                   IMessageDeliverer messageDeliverer,
                                    Duration loadEstimateWindow) {
         this.eventCollector = eventCollector;
         this.resourceThrottler = resourceThrottler;
         this.loadEstWindow = loadEstimateWindow;
-        deliverer = new MessageDeliverer(subBrokerManager, distClient);
+        this.deliverer = messageDeliverer;
         subscriptionChecker = new SubscriptionCleaner(subBrokerManager, distClient);
 
         matchExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
@@ -103,7 +105,6 @@ public class DistWorkerCoProcFactory implements IKVRangeCoProcFactory {
     }
 
     public void close() {
-        deliverer.close();
-        matchExecutor.shutdown();
+        MoreExecutors.shutdownAndAwaitTermination(matchExecutor, 5, TimeUnit.SECONDS);
     }
 }

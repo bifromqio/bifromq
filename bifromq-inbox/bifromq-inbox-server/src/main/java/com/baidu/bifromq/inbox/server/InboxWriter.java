@@ -17,20 +17,25 @@ import static com.baidu.bifromq.plugin.subbroker.TypeUtil.toResult;
 
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
+import com.baidu.bifromq.basescheduler.AsyncRetry;
+import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.basescheduler.exception.BatcherUnavailableException;
+import com.baidu.bifromq.basescheduler.exception.RetryTimeoutException;
 import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxInsertScheduler;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
-import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
+import com.baidu.bifromq.inbox.storage.proto.InsertRequest;
+import com.baidu.bifromq.inbox.storage.proto.InsertResult;
 import com.baidu.bifromq.inbox.storage.proto.SubMessagePack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryPack;
 import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
+import com.baidu.bifromq.sysprops.props.DataPlaneMaxBurstLatencyMillis;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.TopicMessagePack;
 import com.baidu.bifromq.util.TopicUtil;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -41,9 +46,11 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class InboxWriter implements InboxWriterPipeline.ISendRequestHandler {
     private final IInboxInsertScheduler insertScheduler;
+    private final long retryTimeoutNanos;
 
     InboxWriter(IInboxInsertScheduler insertScheduler) {
         this.insertScheduler = insertScheduler;
+        this.retryTimeoutNanos = Duration.ofMillis(DataPlaneMaxBurstLatencyMillis.INSTANCE.get()).toNanos();
     }
 
     @Override
@@ -69,22 +76,41 @@ class InboxWriter implements InboxWriterPipeline.ISendRequestHandler {
                 }
             }
         }
-        List<CompletableFuture<InboxInsertResult>> replyFutures = subMsgPacksByInbox
+        List<CompletableFuture<InsertResult>> replyFutures = subMsgPacksByInbox
             .entrySet()
             .stream()
-            .map(entry -> insertScheduler.schedule(InboxSubMessagePack.newBuilder()
-                .setTenantId(entry.getKey().tenantId())
-                .setInboxId(entry.getKey().instance().inboxId())
-                .setIncarnation(entry.getKey().instance().incarnation())
-                .addAllMessagePack(entry.getValue()).build())).toList();
+            .map(entry -> {
+                InsertRequest insertRequest = InsertRequest.newBuilder()
+                    .setTenantId(entry.getKey().tenantId())
+                    .setInboxId(entry.getKey().instance().inboxId())
+                    .setIncarnation(entry.getKey().instance().incarnation())
+                    .addAllMessagePack(entry.getValue()).build();
+                return AsyncRetry.exec(() -> insertScheduler.schedule(insertRequest), (v, e) -> {
+                    if (e == null) {
+                        return false;
+                    }
+                    return e instanceof BatcherUnavailableException
+                        || e.getCause() instanceof BatcherUnavailableException
+                        || e instanceof TryLaterException || e.getCause() instanceof TryLaterException
+                        || e instanceof BadVersionException || e.getCause() instanceof BadVersionException;
+                }, retryTimeoutNanos / 5, retryTimeoutNanos);
+            }).toList();
         return CompletableFuture.allOf(replyFutures.toArray(new CompletableFuture[0]))
             .handle((v, e) -> {
                 if (e != null) {
-                    if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException
-                        || e instanceof TryLaterException || e.getCause() instanceof TryLaterException
-                        || e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+                    if (e instanceof RetryTimeoutException || e.getCause() instanceof RetryTimeoutException) {
                         return SendReply.newBuilder().setReqId(request.getReqId())
-                            .setReply(DeliveryReply.newBuilder().setCode(DeliveryReply.Code.TRY_LATER).build()).build();
+                            .setReply(DeliveryReply.newBuilder()
+                                .setCode(DeliveryReply.Code.BACK_PRESSURE_REJECTED)
+                                .build())
+                            .build();
+                    }
+                    if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                        return SendReply.newBuilder().setReqId(request.getReqId())
+                            .setReply(DeliveryReply.newBuilder()
+                                .setCode(DeliveryReply.Code.BACK_PRESSURE_REJECTED)
+                                .build())
+                            .build();
                     }
                     log.debug("Failed to insert", e);
                     return SendReply.newBuilder().setReqId(request.getReqId())
@@ -96,7 +122,7 @@ class InboxWriter implements InboxWriterPipeline.ISendRequestHandler {
                 int i = 0;
                 for (TenantInboxInstance tenantInboxInstance : subMsgPacksByInbox.keySet()) {
                     String receiverId = tenantInboxInstance.receiverId();
-                    InboxInsertResult result = replyFutures.get(i++).join();
+                    InsertResult result = replyFutures.get(i++).join();
                     Map<MatchInfo, DeliveryResult.Code> matchResultMap =
                         tenantMatchResultMap.computeIfAbsent(tenantInboxInstance.tenantId(), k -> new HashMap<>());
                     switch (result.getCode()) {
@@ -123,4 +149,5 @@ class InboxWriter implements InboxWriterPipeline.ISendRequestHandler {
                         .build()).build();
             });
     }
+
 }

@@ -33,7 +33,7 @@ import com.baidu.bifromq.inbox.storage.proto.BatchExistRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
-import com.baidu.bifromq.sessiondict.client.type.ExistResult;
+import com.baidu.bifromq.sessiondict.client.type.OnlineCheckResult;
 import com.baidu.bifromq.type.ClientInfo;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -42,7 +42,7 @@ import org.testng.annotations.Test;
 public class InboxAdminTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void attachToCreate() {
-        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(ExistResult.EXISTS));
+        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(OnlineCheckResult.EXISTS));
 
         long now = HLC.INST.getPhysical();
         String tenantId = "tenantId-" + System.nanoTime();
@@ -65,7 +65,7 @@ public class InboxAdminTest extends InboxStoreTest {
 
     @Test(groups = "integration")
     public void attachToExisting() {
-        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(ExistResult.EXISTS));
+        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(OnlineCheckResult.EXISTS));
         long now = HLC.INST.getPhysical();
         String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
@@ -89,7 +89,7 @@ public class InboxAdminTest extends InboxStoreTest {
 
     @Test(groups = "integration")
     public void attachToCreatePhantomInbox() {
-        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(ExistResult.EXISTS));
+        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(OnlineCheckResult.EXISTS));
         long now = HLC.INST.getPhysical();
         String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();

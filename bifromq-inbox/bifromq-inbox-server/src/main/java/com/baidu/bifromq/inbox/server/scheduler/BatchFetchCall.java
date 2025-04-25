@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.IQueryPipeline;
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchQueryCall;
@@ -28,25 +28,25 @@ import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import java.util.Iterator;
 import java.util.Queue;
 
-class BatchFetchCall extends BatchQueryCall<IInboxFetchScheduler.InboxFetch, Fetched> {
-    protected BatchFetchCall(IBaseKVStoreClient storeClient, QueryCallBatcherKey batcherKey) {
-        super(storeClient, true, batcherKey);
+class BatchFetchCall extends BatchQueryCall<FetchRequest, Fetched> {
+    protected BatchFetchCall(IQueryPipeline pipeline, QueryCallBatcherKey batcherKey) {
+        super(pipeline, batcherKey);
     }
 
     @Override
-    protected ROCoProcInput makeBatch(Iterator<IInboxFetchScheduler.InboxFetch> reqIterator) {
+    protected ROCoProcInput makeBatch(Iterator<FetchRequest> reqIterator) {
         BatchFetchRequest.Builder reqBuilder = BatchFetchRequest.newBuilder();
         reqIterator.forEachRemaining(request -> {
             BatchFetchRequest.Params.Builder paramsBuilder = BatchFetchRequest.Params.newBuilder()
-                .setTenantId(request.tenantId)
-                .setInboxId(request.inboxId)
-                .setIncarnation(request.incarnation)
-                .setMaxFetch(request.params.getMaxFetch());
-            if (request.params.hasQos0StartAfter()) {
-                paramsBuilder.setQos0StartAfter(request.params.getQos0StartAfter());
+                .setTenantId(request.tenantId())
+                .setInboxId(request.inboxId())
+                .setIncarnation(request.incarnation())
+                .setMaxFetch(request.params().getMaxFetch());
+            if (request.params().hasQos0StartAfter()) {
+                paramsBuilder.setQos0StartAfter(request.params().getQos0StartAfter());
             }
-            if (request.params.hasSendBufferStartAfter()) {
-                paramsBuilder.setSendBufferStartAfter(request.params.getSendBufferStartAfter());
+            if (request.params().hasSendBufferStartAfter()) {
+                paramsBuilder.setSendBufferStartAfter(request.params().getSendBufferStartAfter());
             }
             reqBuilder.addParams(paramsBuilder.build());
         });
@@ -62,9 +62,9 @@ class BatchFetchCall extends BatchQueryCall<IInboxFetchScheduler.InboxFetch, Fet
 
     @Override
     protected void handleOutput(
-        Queue<ICallTask<IInboxFetchScheduler.InboxFetch, Fetched, QueryCallBatcherKey>> batchedTasks,
+        Queue<ICallTask<FetchRequest, Fetched, QueryCallBatcherKey>> batchedTasks,
         ROCoProcOutput output) {
-        ICallTask<IInboxFetchScheduler.InboxFetch, Fetched, QueryCallBatcherKey> task;
+        ICallTask<FetchRequest, Fetched, QueryCallBatcherKey> task;
         int i = 0;
         while ((task = batchedTasks.poll()) != null) {
             task.resultPromise().complete(output.getInboxService().getBatchFetch().getResult(i++));
@@ -72,8 +72,7 @@ class BatchFetchCall extends BatchQueryCall<IInboxFetchScheduler.InboxFetch, Fet
     }
 
     @Override
-    protected void handleException(ICallTask<IInboxFetchScheduler.InboxFetch, Fetched, QueryCallBatcherKey> callTask,
-                                   Throwable e) {
+    protected void handleException(ICallTask<FetchRequest, Fetched, QueryCallBatcherKey> callTask, Throwable e) {
         if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
             callTask.resultPromise().complete(Fetched.newBuilder()
                 .setResult(Fetched.Result.TRY_LATER)

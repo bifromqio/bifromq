@@ -14,8 +14,6 @@
 package com.baidu.bifromq.deliverer;
 
 import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
-import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 
-public interface IMessageDeliverer extends IBatchCallScheduler<DeliveryCall, DeliveryResult.Code> {
-
+public interface IMessageDeliverer extends IBatchCallScheduler<DeliveryCall, DeliveryCallResult> {
 }

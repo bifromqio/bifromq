@@ -22,8 +22,8 @@ import static org.testng.Assert.assertEquals;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxInsertScheduler;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
-import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
+import com.baidu.bifromq.inbox.storage.proto.InsertRequest;
+import com.baidu.bifromq.inbox.storage.proto.InsertResult;
 import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.plugin.subbroker.DeliveryResults;
@@ -55,7 +55,7 @@ public class InboxWriterTest {
 
     @Test
     public void insertScheduleErr() {
-        when(insertScheduler.schedule(any(InboxSubMessagePack.class)))
+        when(insertScheduler.schedule(any(InsertRequest.class)))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("err")));
         SendRequest request = sendRequest();
         SendReply sendReply = new InboxWriter(insertScheduler).handle(request).join();
@@ -64,9 +64,9 @@ public class InboxWriterTest {
 
     @Test
     public void insertScheduleNoInbox() {
-        when(insertScheduler.schedule(any(InboxSubMessagePack.class))).thenReturn(
-            CompletableFuture.completedFuture(InboxInsertResult.newBuilder()
-                .setCode(InboxInsertResult.Code.NO_INBOX)
+        when(insertScheduler.schedule(any(InsertRequest.class))).thenReturn(
+            CompletableFuture.completedFuture(InsertResult.newBuilder()
+                .setCode(InsertResult.Code.NO_INBOX)
                 .build()));
         SendRequest request = sendRequest();
         SendReply sendReply = new InboxWriter(insertScheduler).handle(request).join();
@@ -75,15 +75,15 @@ public class InboxWriterTest {
 
     @Test
     public void insertScheduleRejected() {
-        when(insertScheduler.schedule(any(InboxSubMessagePack.class)))
+        when(insertScheduler.schedule(any(InsertRequest.class)))
             .thenReturn(CompletableFuture.completedFuture(
-                InboxInsertResult.newBuilder()
-                    .addResult(InboxInsertResult.PackInsertResult.newBuilder()
+                InsertResult.newBuilder()
+                    .addResult(InsertResult.SubStatus.newBuilder()
                         .setRejected(true)
                         .setIncarnation(1L)
                         .setTopicFilter("/foo/+")
                         .build())
-                    .setCode(InboxInsertResult.Code.OK)
+                    .setCode(InsertResult.Code.OK)
                     .build()));
         SendRequest request = sendRequest();
         SendReply sendReply = new InboxWriter(insertScheduler).handle(request).join();
@@ -92,10 +92,10 @@ public class InboxWriterTest {
 
     @Test
     public void insertScheduleOk() {
-        when(insertScheduler.schedule(any(InboxSubMessagePack.class)))
-            .thenReturn(CompletableFuture.completedFuture(InboxInsertResult.newBuilder()
-                .setCode(InboxInsertResult.Code.OK)
-                .addResult(InboxInsertResult.PackInsertResult.newBuilder()
+        when(insertScheduler.schedule(any(InsertRequest.class)))
+            .thenReturn(CompletableFuture.completedFuture(InsertResult.newBuilder()
+                .setCode(InsertResult.Code.OK)
+                .addResult(InsertResult.SubStatus.newBuilder()
                     .setRejected(false)
                     .setTopicFilter("/foo/+")
                     .setIncarnation(1L)

@@ -14,6 +14,8 @@
 package com.baidu.bifromq.inbox.store;
 
 import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertNotSame;
 
 import com.baidu.bifromq.basehlc.HLC;
@@ -21,13 +23,17 @@ import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
+import com.baidu.bifromq.sessiondict.client.type.OnlineCheckResult;
 import com.baidu.bifromq.type.ClientInfo;
 import io.micrometer.core.instrument.Gauge;
+import java.util.concurrent.CompletableFuture;
 import org.testng.annotations.Test;
 
 public class LoadSubStatsTest extends InboxStoreTest {
+
     @Test(groups = "integration")
     public void collectAfterRestart() {
+        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(OnlineCheckResult.EXISTS));
         long now = HLC.INST.getPhysical();
         String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();

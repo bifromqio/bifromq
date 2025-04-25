@@ -22,7 +22,6 @@ import com.baidu.bifromq.deliverer.TopicMessagePackHolder;
 import com.baidu.bifromq.dist.worker.schema.NormalMatching;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverError;
-import com.baidu.bifromq.plugin.eventcollector.distservice.DeliverNoInbox;
 import com.baidu.bifromq.plugin.eventcollector.distservice.Delivered;
 import com.baidu.bifromq.type.MatchInfo;
 import io.micrometer.core.instrument.Metrics;
@@ -87,30 +86,24 @@ public class DeliverExecutor {
         String delivererKey = matched.delivererKey();
         MatchInfo sub = matched.matchInfo();
         DeliveryCall request = new DeliveryCall(matched.tenantId(), sub, subBrokerId, delivererKey, msgPackHolder);
-        deliverer.schedule(request).whenComplete((result, e) -> {
-            if (e != null) {
-                log.debug("Failed to deliver", e);
-                eventCollector.report(getLocal(DeliverError.class)
-                    .brokerId(subBrokerId)
-                    .delivererKey(delivererKey)
-                    .subInfo(sub)
-                    .messages(msgPackHolder.messagePack));
-            } else {
+        deliverer.schedule(request)
+            .thenAccept(result -> {
                 switch (result) {
                     case OK -> eventCollector.report(getLocal(Delivered.class)
                         .brokerId(subBrokerId)
                         .delivererKey(delivererKey)
                         .subInfo(sub)
                         .messages(msgPackHolder.messagePack));
-                    case NO_SUB, NO_RECEIVER -> eventCollector.report(getLocal(DeliverNoInbox.class)
-                        .brokerId(subBrokerId)
-                        .delivererKey(delivererKey)
-                        .subInfo(sub)
-                        .messages(msgPackHolder.messagePack));
+                    case NO_SUB, NO_RECEIVER, BACK_PRESSURE_REJECTED, ERROR ->
+                        eventCollector.report(getLocal(DeliverError.class)
+                            .reason(result.name())
+                            .brokerId(subBrokerId)
+                            .delivererKey(delivererKey)
+                            .subInfo(sub)
+                            .messages(msgPackHolder.messagePack));
                     default -> log.error("Unknown delivery result: {}", result);
                 }
-            }
-        });
+            });
     }
 
     private record SendTask(NormalMatching route, TopicMessagePackHolder msgPackHolder) {

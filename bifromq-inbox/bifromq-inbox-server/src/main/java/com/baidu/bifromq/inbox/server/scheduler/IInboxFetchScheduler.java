@@ -14,18 +14,7 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
-import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
-import lombok.AllArgsConstructor;
 
-public interface IInboxFetchScheduler extends IBatchCallScheduler<IInboxFetchScheduler.InboxFetch, Fetched> {
-
-
-    @AllArgsConstructor
-    class InboxFetch {
-        public final String tenantId;
-        public final String inboxId;
-        public final long incarnation;
-        public final BatchFetchRequest.Params params;
-    }
+public interface IInboxFetchScheduler extends IBatchCallScheduler<FetchRequest, Fetched> {
 }

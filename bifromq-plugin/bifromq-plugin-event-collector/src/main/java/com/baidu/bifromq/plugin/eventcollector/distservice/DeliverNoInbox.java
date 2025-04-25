@@ -26,6 +26,7 @@ import lombok.experimental.Accessors;
 @Setter
 @Accessors(fluent = true, chain = true)
 @ToString(callSuper = true)
+@Deprecated(since = "4.0.0", forRemoval = true)
 public final class DeliverNoInbox extends Event<DeliverNoInbox> {
     private int brokerId;
     private String delivererKey;

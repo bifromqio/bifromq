@@ -14,7 +14,7 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.IQueryPipeline;
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchQueryCall;
@@ -33,13 +33,13 @@ import java.util.Queue;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class BatchCheckSubCall extends BatchQueryCall<IInboxCheckSubScheduler.CheckMatchInfo, CheckReply.Code> {
-    protected BatchCheckSubCall(IBaseKVStoreClient storeClient, QueryCallBatcherKey batcherKey) {
-        super(storeClient, true, batcherKey);
+class BatchCheckSubCall extends BatchQueryCall<CheckMatchInfo, CheckReply.Code> {
+    protected BatchCheckSubCall(IQueryPipeline pipeline, QueryCallBatcherKey batcherKey) {
+        super(pipeline, batcherKey);
     }
 
     @Override
-    protected ROCoProcInput makeBatch(Iterator<IInboxCheckSubScheduler.CheckMatchInfo> reqIterator) {
+    protected ROCoProcInput makeBatch(Iterator<CheckMatchInfo> reqIterator) {
         BatchCheckSubRequest.Builder reqBuilder = BatchCheckSubRequest.newBuilder().setNow(HLC.INST.getPhysical());
         reqIterator.forEachRemaining(request -> {
             TenantInboxInstance tenantInboxInstance = TenantInboxInstance.from(request.tenantId(), request.matchInfo());
@@ -58,9 +58,9 @@ class BatchCheckSubCall extends BatchQueryCall<IInboxCheckSubScheduler.CheckMatc
 
     @Override
     protected void handleOutput(
-        Queue<ICallTask<IInboxCheckSubScheduler.CheckMatchInfo, CheckReply.Code, QueryCallBatcherKey>> batchedTasks,
+        Queue<ICallTask<CheckMatchInfo, CheckReply.Code, QueryCallBatcherKey>> batchedTasks,
         ROCoProcOutput output) {
-        ICallTask<IInboxCheckSubScheduler.CheckMatchInfo, CheckReply.Code, QueryCallBatcherKey> task;
+        ICallTask<CheckMatchInfo, CheckReply.Code, QueryCallBatcherKey> task;
         assert batchedTasks.size() == output.getInboxService().getBatchCheckSub().getCodeCount();
         int i = 0;
         while ((task = batchedTasks.poll()) != null) {
@@ -75,8 +75,8 @@ class BatchCheckSubCall extends BatchQueryCall<IInboxCheckSubScheduler.CheckMatc
     }
 
     @Override
-    protected void handleException(
-        ICallTask<IInboxCheckSubScheduler.CheckMatchInfo, CheckReply.Code, QueryCallBatcherKey> callTask, Throwable e) {
+    protected void handleException(ICallTask<CheckMatchInfo, CheckReply.Code, QueryCallBatcherKey> callTask,
+                                   Throwable e) {
         if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
             callTask.resultPromise().complete(CheckReply.Code.TRY_LATER);
             return;

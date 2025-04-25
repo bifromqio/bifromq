@@ -16,9 +16,10 @@ package com.baidu.bifromq.dist.client;
 import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.basescheduler.exception.RetryTimeoutException;
-import com.baidu.bifromq.dist.client.scheduler.DistServerCallScheduler;
-import com.baidu.bifromq.dist.client.scheduler.IDistServerCallScheduler;
-import com.baidu.bifromq.dist.client.scheduler.PubCall;
+import com.baidu.bifromq.dist.client.scheduler.BatchPubCallBuilderFactory;
+import com.baidu.bifromq.dist.client.scheduler.PubCallScheduler;
+import com.baidu.bifromq.dist.client.scheduler.IPubCallScheduler;
+import com.baidu.bifromq.dist.client.scheduler.PubRequest;
 import com.baidu.bifromq.dist.rpc.proto.DistServiceGrpc;
 import com.baidu.bifromq.dist.rpc.proto.MatchRequest;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
@@ -32,13 +33,13 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 final class DistClient implements IDistClient {
-    private final IDistServerCallScheduler reqScheduler;
+    private final IPubCallScheduler reqScheduler;
     private final IRPCClient rpcClient;
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     DistClient(IRPCClient rpcClient) {
         this.rpcClient = rpcClient;
-        reqScheduler = new DistServerCallScheduler(rpcClient);
+        reqScheduler = new PubCallScheduler(new BatchPubCallBuilderFactory(rpcClient));
     }
 
     @Override
@@ -48,7 +49,7 @@ final class DistClient implements IDistClient {
 
     @Override
     public CompletableFuture<PubResult> pub(long reqId, String topic, Message message, ClientInfo publisher) {
-        return reqScheduler.schedule(new PubCall(publisher, topic, message))
+        return reqScheduler.schedule(new PubRequest(publisher, topic, message))
             .exceptionally(e -> {
                 if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
                     return PubResult.BACK_PRESSURE_REJECTED;

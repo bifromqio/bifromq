@@ -19,6 +19,9 @@ import com.baidu.bifromq.basekv.balance.KVStoreBalanceController;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
 import com.baidu.bifromq.baserpc.client.IConnectable;
+import com.baidu.bifromq.deliverer.BatchDeliveryCallBuilderFactory;
+import com.baidu.bifromq.deliverer.IMessageDeliverer;
+import com.baidu.bifromq.deliverer.MessageDeliverer;
 import com.baidu.bifromq.dist.worker.spi.IDistWorkerBalancerFactory;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
@@ -41,6 +44,7 @@ class DistWorker implements IDistWorker {
     private final ExecutorService rpcExecutor;
     private final IBaseKVStoreClient distWorkerClient;
     private final IBaseKVStoreServer distWorkerServer;
+    private final IMessageDeliverer messageDeliverer;
     private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
     private final KVStoreBalanceController storeBalanceController;
     private final List<IDistWorkerBalancerFactory> effectiveBalancerFactories = new LinkedList<>();
@@ -51,11 +55,14 @@ class DistWorker implements IDistWorker {
 
     public DistWorker(DistWorkerBuilder builder) {
         this.clusterId = builder.clusterId;
+        this.messageDeliverer = new MessageDeliverer(
+            new BatchDeliveryCallBuilderFactory(builder.distClient, builder.subBrokerManager));
         coProcFactory = new DistWorkerCoProcFactory(
             builder.distClient,
             builder.eventCollector,
             builder.resourceThrottler,
             builder.subBrokerManager,
+            this.messageDeliverer,
             builder.loadEstimateWindow);
         Map<String, IDistWorkerBalancerFactory> loadedFactories = BaseHookLoader.load(IDistWorkerBalancerFactory.class);
         for (String factoryName : builder.balancerFactoryConfig.keySet()) {
@@ -148,6 +155,8 @@ class DistWorker implements IDistWorker {
             log.debug("Stopping CoProcFactory");
             coProcFactory.close();
             effectiveBalancerFactories.forEach(IDistWorkerBalancerFactory::close);
+            log.debug("Closing message deliverer");
+            messageDeliverer.close();
             MoreExecutors.shutdownAndAwaitTermination(rpcExecutor, 5, TimeUnit.SECONDS);
             if (jobExecutorOwner) {
                 log.debug("Shutting down job executor");

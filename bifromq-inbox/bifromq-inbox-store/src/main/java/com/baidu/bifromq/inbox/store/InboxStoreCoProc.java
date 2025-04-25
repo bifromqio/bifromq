@@ -77,7 +77,6 @@ import com.baidu.bifromq.inbox.storage.proto.ExpireTenantRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.GCReply;
 import com.baidu.bifromq.inbox.storage.proto.GCRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessage;
 import com.baidu.bifromq.inbox.storage.proto.InboxMessageList;
 import com.baidu.bifromq.inbox.storage.proto.InboxMetadata;
@@ -85,8 +84,9 @@ import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
-import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
+import com.baidu.bifromq.inbox.storage.proto.InsertRequest;
+import com.baidu.bifromq.inbox.storage.proto.InsertResult;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.SubMessagePack;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
@@ -107,8 +107,8 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
-import com.baidu.bifromq.sessiondict.client.type.ExistResult;
-import com.baidu.bifromq.sessiondict.client.type.TenantClientId;
+import com.baidu.bifromq.sessiondict.client.type.OnlineCheckRequest;
+import com.baidu.bifromq.sessiondict.client.type.OnlineCheckResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.Message;
 import com.baidu.bifromq.type.QoS;
@@ -948,17 +948,17 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
         Map<String, Set<InboxMetadata>> toBeCached = new HashMap<>();
         Map<ClientInfo, Map<QoS, Integer>> dropCountMap = new HashMap<>();
         Map<ClientInfo, Boolean> dropOldestMap = new HashMap<>();
-        for (InboxSubMessagePack params : request.getInboxSubMsgPackList()) {
+        for (InsertRequest params : request.getRequestList()) {
             Optional<InboxMetadata> metadataOpt = tenantStates.get(params.getTenantId(), params.getInboxId(),
                 params.getIncarnation());
             if (metadataOpt.isEmpty()) {
-                replyBuilder.addResult(InboxInsertResult.newBuilder().setCode(InboxInsertResult.Code.NO_INBOX).build());
+                replyBuilder.addResult(InsertResult.newBuilder().setCode(InsertResult.Code.NO_INBOX).build());
                 continue;
             }
             InboxMetadata metadata = metadataOpt.get();
             List<SubMessage> qos0MsgList = new ArrayList<>();
             List<SubMessage> bufferMsgList = new ArrayList<>();
-            Set<InboxInsertResult.PackInsertResult> insertResults = new HashSet<>();
+            Set<InsertResult.SubStatus> insertResults = new HashSet<>();
             for (SubMessagePack messagePack : params.getMessagePackList()) {
                 Map<String, Long> matchedTopicFilters = messagePack.getMatchedTopicFiltersMap();
                 Map<String, TopicFilterOption> qos0TopicFilters = new HashMap<>();
@@ -970,7 +970,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                     TopicFilterOption tfOption = metadata.getTopicFiltersMap().get(matchedTopicFilter);
                     if (tfOption == null) {
                         insertResults.add(
-                            InboxInsertResult.PackInsertResult.newBuilder().setTopicFilter(matchedTopicFilter)
+                            InsertResult.SubStatus.newBuilder().setTopicFilter(matchedTopicFilter)
                                 .setIncarnation(matchedIncarnation).setRejected(true).build());
                     } else {
                         if (tfOption.getIncarnation() > matchedIncarnation) {
@@ -986,7 +986,7 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                                 // never happens
                             }
                         }
-                        insertResults.add(InboxInsertResult.PackInsertResult.newBuilder()
+                        insertResults.add(InsertResult.SubStatus.newBuilder()
                             .setTopicFilter(matchedTopicFilter)
                             .setIncarnation(matchedIncarnation)
                             .setRejected(false)
@@ -1042,8 +1042,8 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                 return v + count;
             }));
 
-            replyBuilder.addResult(InboxInsertResult.newBuilder()
-                .setCode(InboxInsertResult.Code.OK)
+            replyBuilder.addResult(InsertResult.newBuilder()
+                .setCode(InsertResult.Code.OK)
                 .addAllResult(insertResults)
                 .build());
 
@@ -1331,12 +1331,12 @@ final class InboxStoreCoProc implements IKVRangeCoProc {
                         CompletableFuture.completedFuture(new ExpireCheckResult(latestInboxMetadata, false)));
                 } else {
                     // check online status
-                    TenantClientId clientId = new TenantClientId(tenantId,
+                    OnlineCheckRequest clientId = new OnlineCheckRequest(tenantId,
                         latestInboxMetadata.getClient().getMetadataMap().get(MQTT_USER_ID_KEY),
                         latestInboxMetadata.getClient().getMetadataMap().get(MQTT_CLIENT_ID_KEY));
                     onlineCheckFutures.add(sessionDictClient.exist(clientId)
                         .thenApply((v) -> {
-                            if (v == ExistResult.NOT_EXISTS) {
+                            if (v == OnlineCheckResult.NOT_EXISTS) {
                                 return new ExpireCheckResult(latestInboxMetadata, true);
                             } else {
                                 return new ExpireCheckResult(latestInboxMetadata, false);

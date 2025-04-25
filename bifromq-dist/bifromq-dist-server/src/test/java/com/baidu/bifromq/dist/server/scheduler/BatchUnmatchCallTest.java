@@ -19,7 +19,7 @@ import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
-import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.IMutationPipeline;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
@@ -41,14 +41,14 @@ import org.testng.annotations.Test;
 public class BatchUnmatchCallTest {
 
     private KVRangeId rangeId;
-    private IBaseKVStoreClient storeClient;
+    private IMutationPipeline pipeline;
     private BatchUnmatchCall batchUnmatchCall;
 
     @BeforeMethod
     void setUp() {
         rangeId = KVRangeId.newBuilder().setId(1).build();
-        storeClient = mock(IBaseKVStoreClient.class);
-        batchUnmatchCall = new BatchUnmatchCall(storeClient, new MutationCallBatcherKey(rangeId, "leaderStoreId", 1L));
+        pipeline = mock(IMutationPipeline.class);
+        batchUnmatchCall = new BatchUnmatchCall(pipeline, new MutationCallBatcherKey(rangeId, "leaderStoreId", 1L));
     }
 
     @Test

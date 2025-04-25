@@ -47,7 +47,7 @@ import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStart;
 import com.baidu.bifromq.plugin.eventcollector.session.MQTTSessionStop;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
-import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
+import com.baidu.bifromq.sysprops.props.DataPlaneMaxBurstLatencyMillis;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
 import com.baidu.bifromq.type.Message;
@@ -88,7 +88,7 @@ public abstract class MQTTTransientSessionHandler extends MQTTSessionHandler imp
         // we simply use 2 times of the burst latency as the expiration time
         // which is a rough estimation of stabilizing time of internal resource scheduling
         // during which the internal retry mechanism takes effect.
-        .expireAfterAccess(2 * DataPlaneBurstLatencyMillis.INSTANCE.get(), TimeUnit.MILLISECONDS)
+        .expireAfterAccess(2 * DataPlaneMaxBurstLatencyMillis.INSTANCE.get(), TimeUnit.MILLISECONDS)
         .build();
     private long nextSendSeq = 0;
     private long msgSeqNo = 0;

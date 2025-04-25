@@ -15,7 +15,7 @@ package com.baidu.bifromq.inbox.server.scheduler;
 
 import static java.util.Collections.emptySet;
 
-import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.IMutationPipeline;
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
@@ -36,8 +36,8 @@ import java.util.Queue;
 import java.util.Set;
 
 class BatchCommitCall extends BatchMutationCall<CommitRequest, CommitReply> {
-    protected BatchCommitCall(IBaseKVStoreClient storeClient, MutationCallBatcherKey batcherKey) {
-        super(storeClient, batcherKey);
+    protected BatchCommitCall(IMutationPipeline pipeline, MutationCallBatcherKey batcherKey) {
+        super(pipeline, batcherKey);
     }
 
     @Override

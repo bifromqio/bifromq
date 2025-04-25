@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.IQueryPipeline;
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchQueryCall;
@@ -32,8 +32,8 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class BatchExistCall extends BatchQueryCall<ExistRequest, ExistReply> {
-    protected BatchExistCall(IBaseKVStoreClient storeClient, QueryCallBatcherKey batcherKey) {
-        super(storeClient, true, batcherKey);
+    protected BatchExistCall(IQueryPipeline pipeline, QueryCallBatcherKey batcherKey) {
+        super(pipeline, batcherKey);
     }
 
     @Override

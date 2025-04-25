@@ -14,8 +14,8 @@
 package com.baidu.bifromq.sessiondict.client;
 
 import com.baidu.bifromq.baserpc.client.IConnectable;
-import com.baidu.bifromq.sessiondict.client.type.ExistResult;
-import com.baidu.bifromq.sessiondict.client.type.TenantClientId;
+import com.baidu.bifromq.sessiondict.client.type.OnlineCheckRequest;
+import com.baidu.bifromq.sessiondict.client.type.OnlineCheckResult;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.GetRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.KillAllReply;
@@ -48,7 +48,7 @@ public interface ISessionDictClient extends IConnectable, AutoCloseable {
 
     CompletableFuture<GetReply> get(GetRequest request);
 
-    CompletableFuture<ExistResult> exist(TenantClientId tenantClientId);
+    CompletableFuture<OnlineCheckResult> exist(OnlineCheckRequest onlineCheckRequest);
 
     CompletableFuture<SubReply> sub(SubRequest request);
 

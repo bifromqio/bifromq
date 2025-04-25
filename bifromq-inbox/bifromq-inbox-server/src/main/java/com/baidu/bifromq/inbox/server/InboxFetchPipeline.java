@@ -21,7 +21,7 @@ import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.basescheduler.exception.BatcherUnavailableException;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetchHint;
 import com.baidu.bifromq.inbox.rpc.proto.InboxFetched;
-import com.baidu.bifromq.inbox.server.scheduler.IInboxFetchScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.FetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchFetchRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import io.grpc.stub.StreamObserver;
@@ -153,15 +153,14 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
             String inboxId = fetchState.inboxId;
             long incarnation = fetchState.incarnation;
             log.trace("Fetching inbox: tenantId={}, inboxId={}", tenantId, inboxId);
-            IInboxFetchScheduler.InboxFetch inboxFetch =
-                new IInboxFetchScheduler.InboxFetch(tenantId, inboxId, incarnation,
-                    BatchFetchRequest.Params.newBuilder()
-                        .setMaxFetch(fetchState.downStreamCapacity.get())
-                        .setQos0StartAfter(fetchState.lastFetchQoS0Seq.get())
-                        .setSendBufferStartAfter(fetchState.lastFetchSendBufferSeq.get())
-                        .build());
+            FetchRequest request = new FetchRequest(tenantId, inboxId, incarnation,
+                BatchFetchRequest.Params.newBuilder()
+                    .setMaxFetch(fetchState.downStreamCapacity.get())
+                    .setQos0StartAfter(fetchState.lastFetchQoS0Seq.get())
+                    .setSendBufferStartAfter(fetchState.lastFetchSendBufferSeq.get())
+                    .build());
             long fetchTS = System.nanoTime();
-            fetcher.fetch(inboxFetch).whenComplete((fetched, e) -> {
+            fetcher.fetch(request).whenComplete((fetched, e) -> {
                 if (closed) {
                     return;
                 }
@@ -230,7 +229,7 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
                                 fetchState.lastFetchSendBufferSeq.set(
                                     fetched.getSendBufferMsg(fetched.getSendBufferMsgCount() - 1).getSeq());
                             }
-                            fetchState.hasMore.set(fetchedCount >= inboxFetch.params.getMaxFetch()
+                            fetchState.hasMore.set(fetchedCount >= request.params().getMaxFetch()
                                 || fetchState.signalFetchTS.get() > fetchTS);
                         } else {
                             fetchState.hasMore.set(fetchState.signalFetchTS.get() > fetchTS);
@@ -255,7 +254,7 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
     }
 
     interface Fetcher {
-        CompletableFuture<Fetched> fetch(IInboxFetchScheduler.InboxFetch fetch);
+        CompletableFuture<Fetched> fetch(FetchRequest request);
     }
 
     private record InboxId(String inboxId, long incarnation) {

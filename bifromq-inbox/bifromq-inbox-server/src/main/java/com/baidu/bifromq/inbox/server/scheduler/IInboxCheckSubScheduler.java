@@ -15,10 +15,6 @@ package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
 import com.baidu.bifromq.plugin.subbroker.CheckReply;
-import com.baidu.bifromq.type.MatchInfo;
 
-public interface IInboxCheckSubScheduler
-    extends IBatchCallScheduler<IInboxCheckSubScheduler.CheckMatchInfo, CheckReply.Code> {
-    record CheckMatchInfo(String tenantId, MatchInfo matchInfo) {
-    }
+public interface IInboxCheckSubScheduler extends IBatchCallScheduler<CheckMatchInfo, CheckReply.Code> {
 }

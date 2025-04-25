@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.dist.server.scheduler;
 
-import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.IMutationPipeline;
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
@@ -39,8 +39,8 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchReply> {
-    BatchUnmatchCall(IBaseKVStoreClient distWorkerClient, MutationCallBatcherKey batcherKey) {
-        super(distWorkerClient, batcherKey);
+    BatchUnmatchCall(IMutationPipeline pipeline, MutationCallBatcherKey batcherKey) {
+        super(pipeline, batcherKey);
     }
 
     @Override

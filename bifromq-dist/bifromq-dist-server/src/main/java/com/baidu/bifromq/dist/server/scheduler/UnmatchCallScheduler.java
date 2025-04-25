@@ -18,35 +18,22 @@ import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toNormalRouteKey
 import static com.baidu.bifromq.dist.worker.schema.KVSchemaUtil.toReceiverUrl;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
-import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchReply;
 import com.baidu.bifromq.dist.rpc.proto.UnmatchRequest;
-import com.baidu.bifromq.sysprops.props.ControlPlaneBurstLatencyMillis;
-import com.baidu.bifromq.sysprops.props.ControlPlaneTolerableLatencyMillis;
+import com.baidu.bifromq.sysprops.props.ControlPlaneMaxBurstLatencyMillis;
 import com.baidu.bifromq.type.RouteMatcher;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class UnmatchCallScheduler extends MutationCallScheduler<UnmatchRequest, UnmatchReply>
+public class UnmatchCallScheduler extends MutationCallScheduler<UnmatchRequest, UnmatchReply, BatchUnmatchCall>
     implements IUnmatchCallScheduler {
 
     public UnmatchCallScheduler(IBaseKVStoreClient distWorkerClient) {
-        super("dist_server_unsub_batcher",
-            distWorkerClient,
-            Duration.ofMillis(ControlPlaneTolerableLatencyMillis.INSTANCE.get()),
-            Duration.ofMillis(ControlPlaneBurstLatencyMillis.INSTANCE.get()));
-    }
-
-    @Override
-    protected Batcher<UnmatchRequest, UnmatchReply, MutationCallBatcherKey> newBatcher(String name,
-                                                                                       long tolerableLatencyNanos,
-                                                                                       long burstLatencyNanos,
-                                                                                       MutationCallBatcherKey range) {
-        return new UnmatchCallBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, storeClient);
+        super(BatchUnmatchCall::new, Duration.ofMillis(ControlPlaneMaxBurstLatencyMillis.INSTANCE.get()).toNanos(),
+            distWorkerClient);
     }
 
     protected ByteString rangeKey(UnmatchRequest call) {

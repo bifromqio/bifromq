@@ -52,11 +52,11 @@ import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class BatchMatchCall implements IBatchCall<MatchCall, MatchCallResult, MatchCallBatcherKey> {
+class BatchMatchCall implements IBatchCall<MatchRetainedRequest, MatchRetainedResult, MatchCallBatcherKey> {
     private final MatchCallBatcherKey batcherKey;
     private final IBaseKVStoreClient retainStoreClient;
     private final ISettingProvider settingProvider;
-    private final Queue<ICallTask<MatchCall, MatchCallResult, MatchCallBatcherKey>> tasks = new ArrayDeque<>(128);
+    private final Queue<ICallTask<MatchRetainedRequest, MatchRetainedResult, MatchCallBatcherKey>> tasks = new ArrayDeque<>(128);
     private Set<String> nonWildcardTopicFilters = new HashSet<>(128);
     private Set<String> wildcardTopicFilters = new HashSet<>(128);
 
@@ -69,7 +69,7 @@ class BatchMatchCall implements IBatchCall<MatchCall, MatchCallResult, MatchCall
     }
 
     @Override
-    public void add(ICallTask<MatchCall, MatchCallResult, MatchCallBatcherKey> task) {
+    public void add(ICallTask<MatchRetainedRequest, MatchRetainedResult, MatchCallBatcherKey> task) {
         tasks.add(task);
         if (isWildcardTopicFilter(task.call().topicFilter())) {
             wildcardTopicFilters.add(task.call().topicFilter());
@@ -106,20 +106,20 @@ class BatchMatchCall implements IBatchCall<MatchCall, MatchCallResult, MatchCall
 
         return CompletableFuture.allOf(parallelMatchFutures, wildcardMatchFuture)
             .handle((v, e) -> {
-                ICallTask<MatchCall, MatchCallResult, MatchCallBatcherKey> task;
+                ICallTask<MatchRetainedRequest, MatchRetainedResult, MatchCallBatcherKey> task;
                 if (e != null) {
                     if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException
                         || e instanceof TryLaterException || e.getCause() instanceof TryLaterException
                         || e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
                         while ((task = tasks.poll()) != null) {
                             task.resultPromise()
-                                .complete(new MatchCallResult(MatchReply.Result.TRY_LATER, Collections.emptyList()));
+                                .complete(new MatchRetainedResult(MatchReply.Result.TRY_LATER, Collections.emptyList()));
                         }
                         return null;
                     }
                     while ((task = tasks.poll()) != null) {
                         task.resultPromise()
-                            .complete(new MatchCallResult(MatchReply.Result.ERROR, Collections.emptyList()));
+                            .complete(new MatchRetainedResult(MatchReply.Result.ERROR, Collections.emptyList()));
                     }
                 } else {
                     // aggregate result from each reply
@@ -128,7 +128,7 @@ class BatchMatchCall implements IBatchCall<MatchCall, MatchCallResult, MatchCall
                     aggregatedResults.putAll(wildcardMatchFuture.join());
                     while ((task = tasks.poll()) != null) {
                         MatchResult matchResult = aggregatedResults.get(task.call().topicFilter());
-                        task.resultPromise().complete(new MatchCallResult(OK, matchResult.getMessagesList()));
+                        task.resultPromise().complete(new MatchRetainedResult(OK, matchResult.getMessagesList()));
                     }
                 }
                 return null;

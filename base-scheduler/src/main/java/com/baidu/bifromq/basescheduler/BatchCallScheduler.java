@@ -15,27 +15,35 @@ package com.baidu.bifromq.basescheduler;
 
 import com.baidu.bifromq.basescheduler.exception.AbortException;
 import com.baidu.bifromq.basescheduler.exception.BatcherUnavailableException;
+import com.baidu.bifromq.basescheduler.spi.ICallScheduler;
+import com.baidu.bifromq.basescheduler.spi.ICapacityEstimator;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalListener;
 import com.github.benmanes.caffeine.cache.Scheduler;
-import com.google.common.base.Preconditions;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
+import java.lang.reflect.ParameterizedType;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.LongAdder;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * The abstract class for batch call scheduler.
+ *
+ * @param <CallT> the type of the request to be fulfilled in batch
+ * @param <CallResultT> the type of the response expected
+ * @param <BatcherKeyT> the type of the key to identify the batch
+ */
 @Slf4j
 public abstract class BatchCallScheduler<CallT, CallResultT, BatcherKeyT>
     implements IBatchCallScheduler<CallT, CallResultT> {
     private static final int BATCHER_EXPIRY_SECONDS = 600;
     private final ICallScheduler<CallT> callScheduler;
-    private final long tolerableLatencyNanos;
-    private final long burstLatencyNanos;
+    private final ICapacityEstimator capacityEstimator;
     private final LoadingCache<BatcherKeyT, Batcher<CallT, CallResultT, BatcherKeyT>> batchers;
     private final LongAdder runningCalls = new LongAdder();
     private final Gauge runningCallsGauge;
@@ -43,47 +51,22 @@ public abstract class BatchCallScheduler<CallT, CallResultT, BatcherKeyT>
     private final Counter callSchedCounter;
     private final Counter callSubmitCounter;
 
-    public BatchCallScheduler(String name, Duration tolerableLatency, Duration burstLatency) {
-        this(name, new ICallScheduler<>() {
-        }, tolerableLatency, burstLatency, Duration.ofSeconds(BATCHER_EXPIRY_SECONDS));
-    }
-
-    public BatchCallScheduler(String name, Duration tolerableLatency, Duration burstLatency, Duration batcherExpiry) {
-        this(name, new ICallScheduler<>() {
-        }, tolerableLatency, burstLatency, batcherExpiry);
-    }
-
-    public BatchCallScheduler(String name,
-                              ICallScheduler<CallT> reqScheduler,
-                              Duration tolerableLatency,
-                              Duration burstLatency) {
-        this(name, reqScheduler, tolerableLatency, burstLatency, Duration.ofSeconds(BATCHER_EXPIRY_SECONDS));
-    }
-
-    public BatchCallScheduler(String name,
-                              ICallScheduler<CallT> reqScheduler,
-                              Duration tolerableLatency,
-                              Duration burstLatency,
-                              Duration batcherExpiry) {
-        Preconditions.checkArgument(!tolerableLatency.isNegative() && !tolerableLatency.isZero(),
-            "latency must be positive");
-        Preconditions.checkArgument(!burstLatency.isNegative() && !burstLatency.isZero(),
-            "latency must be positive");
-        Preconditions.checkArgument(tolerableLatency.compareTo(burstLatency) <= 0,
-            "tolerant latency must be shorter than burst latency");
-        this.callScheduler = reqScheduler;
-        this.tolerableLatencyNanos = tolerableLatency.toNanos();
-        this.burstLatencyNanos = burstLatency.toNanos();
+    protected BatchCallScheduler(IBatchCallBuilderFactory<CallT, CallResultT, BatcherKeyT> batchCallFactory,
+                                 long maxBurstLatency) {
+        String name = getName();
+        this.callScheduler = CallSchedulerFactory.INSTANCE.create(name);
+        this.capacityEstimator = CapacityEstimatorFactory.INSTANCE.create(name);
         batchers = Caffeine.newBuilder()
             .scheduler(Scheduler.systemScheduler())
-            .expireAfterAccess(batcherExpiry)
+            .expireAfterAccess(Duration.ofSeconds(BATCHER_EXPIRY_SECONDS))
             .evictionListener((RemovalListener<BatcherKeyT, Batcher<CallT, CallResultT, BatcherKeyT>>)
                 (key, value, removalCause) -> {
                     if (value != null) {
                         value.close();
                     }
                 })
-            .build(k -> newBatcher(name, this.tolerableLatencyNanos, burstLatencyNanos, k).init());
+            .build(k ->
+                new Batcher<>(name, batchCallFactory.newBuilder(name, k), maxBurstLatency, capacityEstimator));
         runningCallsGauge = Gauge.builder("batcher.call.running.gauge", runningCalls::sum)
             .tags("name", name)
             .register(Metrics.globalRegistry);
@@ -97,11 +80,6 @@ public abstract class BatchCallScheduler<CallT, CallResultT, BatcherKeyT>
             .tags("name", name)
             .register(Metrics.globalRegistry);
     }
-
-    protected abstract Batcher<CallT, CallResultT, BatcherKeyT> newBatcher(String name,
-                                                                           long tolerableLatencyNanos,
-                                                                           long burstLatencyNanos,
-                                                                           BatcherKeyT key);
 
     protected abstract Optional<BatcherKeyT> find(CallT call);
 
@@ -132,9 +110,21 @@ public abstract class BatchCallScheduler<CallT, CallResultT, BatcherKeyT>
     public void close() {
         batchers.asMap().forEach((k, v) -> v.close());
         batchers.invalidateAll();
+        callScheduler.close();
+        capacityEstimator.close();
         Metrics.globalRegistry.remove(runningCallsGauge);
         Metrics.globalRegistry.remove(batcherNumGauge);
         Metrics.globalRegistry.remove(callSubmitCounter);
         Metrics.globalRegistry.remove(callSchedCounter);
+    }
+
+    private String getName() {
+        String typeName = ((ParameterizedType) getClass().getGenericSuperclass())
+            .getActualTypeArguments()[0]
+            .getTypeName();
+        if (typeName.lastIndexOf(".") > 0) {
+            typeName = typeName.substring(typeName.lastIndexOf(".") + 1);
+        }
+        return "scheduler[" + typeName + "]";
     }
 }

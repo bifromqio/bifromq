@@ -13,70 +13,69 @@
 
 package com.baidu.bifromq.basescheduler;
 
-import static com.baidu.bifromq.basescheduler.AsyncRetry.exec;
-
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
-import com.baidu.bifromq.basescheduler.exception.NeedRetryException;
-import com.baidu.bifromq.basescheduler.exception.RetryTimeoutException;
+import com.baidu.bifromq.basescheduler.spi.ICapacityEstimator;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
-import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public abstract class Batcher<CallT, CallResultT, BatcherKeyT> {
-    protected final String name;
-    protected final BatcherKeyT batcherKey;
+final class Batcher<CallT, CallResultT, BatcherKeyT> {
+    private final IBatchCallBuilder<CallT, CallResultT, BatcherKeyT> batchCallBuilder;
     private final Queue<IBatchCall<CallT, CallResultT, BatcherKeyT>> batchPool;
     private final Queue<ICallTask<CallT, CallResultT, BatcherKeyT>> callTaskBuffers = new ConcurrentLinkedQueue<>();
+    private final AtomicReference<State> state = new AtomicReference<>(State.RUNNING);
     private final AtomicBoolean triggering = new AtomicBoolean();
-    private final MovingAverage avgLatencyNanos;
-    private final long tolerableLatencyNanos;
-    private final long burstLatencyNanos;
     private final AtomicInteger pipelineDepth = new AtomicInteger();
-    private final AtomicLong maxPipelineDepth;
+    private final ICapacityEstimator capacityEstimator;
+    private final long maxBurstLatency;
+    private final EMALong emaQueueingTime;
+    private final Gauge maxPipelineDepthGauge;
+    private final Gauge pipelineDepthGauge;
     private final Counter dropCounter;
-    private final Gauge batchSaturationGauge;
     private final Timer batchCallTimer;
     private final Timer batchExecTimer;
     private final Timer batchBuildTimer;
     private final DistributionSummary batchSizeSummary;
     private final DistributionSummary queueingTimeSummary;
-    private final double alphaIncrease = 0.2;
-    private final double alphaDecrease = 0.05;
-    private final AtomicInteger emaMaxBatchSize = new AtomicInteger();
-    private volatile int maxBatchSize = Integer.MAX_VALUE;
+    // Future to signal shutdown completion
+    private final CompletableFuture<Void> shutdownFuture = new CompletableFuture<>();
+    // hold a ref to all running batch calls for debugging
+    private final Set<CompletableFuture<Void>> runningBatchCalls = ConcurrentHashMap.newKeySet();
 
-    protected Batcher(BatcherKeyT batcherKey, String name, long tolerableLatencyNanos, long burstLatencyNanos) {
-        this(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos, 1);
-    }
-
-    protected Batcher(BatcherKeyT batcherKey, String name, long tolerableLatencyNanos, long burstLatencyNanos,
-                      int pipelineDepth) {
-        this.name = name;
-        this.batcherKey = batcherKey;
-        this.tolerableLatencyNanos = tolerableLatencyNanos;
-        this.burstLatencyNanos = burstLatencyNanos;
-        this.maxPipelineDepth = new AtomicLong(pipelineDepth);
-        avgLatencyNanos = new MovingAverage(100, Duration.ofSeconds(1));
-        this.batchPool = new ArrayDeque<>(pipelineDepth);
+    Batcher(String name,
+            IBatchCallBuilder<CallT, CallResultT, BatcherKeyT> batchCallBuilder,
+            long maxBurstLatency,
+            ICapacityEstimator capacityEstimator) {
+        this.batchCallBuilder = batchCallBuilder;
+        this.capacityEstimator = capacityEstimator;
+        this.maxBurstLatency = maxBurstLatency;
+        this.batchPool = new ArrayDeque<>();
+        this.emaQueueingTime = new EMALong(System::nanoTime, 0.1, 0.9, maxBurstLatency);
         Tags tags = Tags.of("name", name, "key", Integer.toUnsignedString(System.identityHashCode(this)));
+        maxPipelineDepthGauge = Gauge.builder("batcher.pipeline.max", capacityEstimator::maxPipelineDepth)
+            .tags(tags)
+            .register(Metrics.globalRegistry);
+        pipelineDepthGauge = Gauge.builder("batcher.pipeline.depth", pipelineDepth::get)
+            .tags(tags)
+            .register(Metrics.globalRegistry);
         dropCounter = Counter.builder("batcher.call.drop.count").tags(tags).register(Metrics.globalRegistry);
-        batchSaturationGauge =
-            Gauge.builder("batcher.saturation", () -> maxBatchSize).tags(tags).register(Metrics.globalRegistry);
         batchCallTimer = Timer.builder("batcher.call.time").tags(tags).register(Metrics.globalRegistry);
         batchExecTimer = Timer.builder("batcher.exec.time").tags(tags).register(Metrics.globalRegistry);
         batchBuildTimer = Timer.builder("batcher.build.time").tags(tags).register(Metrics.globalRegistry);
@@ -86,15 +85,12 @@ public abstract class Batcher<CallT, CallResultT, BatcherKeyT> {
             DistributionSummary.builder("batcher.queueing.time").tags(tags).register(Metrics.globalRegistry);
     }
 
-    Batcher<CallT, CallResultT, BatcherKeyT> init() {
-        for (int i = 0; i < maxPipelineDepth.get(); i++) {
-            batchPool.offer(newBatch());
+    public CompletableFuture<CallResultT> submit(BatcherKeyT batcherKey, CallT request) {
+        if (state.get() != State.RUNNING) {
+            return CompletableFuture.failedFuture(
+                new RejectedExecutionException("Batcher has been shut down"));
         }
-        return this;
-    }
-
-    public final CompletableFuture<CallResultT> submit(BatcherKeyT batcherKey, CallT request) {
-        if (avgLatencyNanos.estimate() < burstLatencyNanos) {
+        if (emaQueueingTime.get() < maxBurstLatency) {
             ICallTask<CallT, CallResultT, BatcherKeyT> callTask = new CallTask<>(batcherKey, request);
             boolean offered = callTaskBuffers.offer(callTask);
             assert offered;
@@ -106,33 +102,46 @@ public abstract class Batcher<CallT, CallResultT, BatcherKeyT> {
         }
     }
 
-    public void close() {
-        IBatchCall<CallT, CallResultT, BatcherKeyT> batchCall;
-        while ((batchCall = batchPool.poll()) != null) {
-            batchCall.destroy();
+    public CompletableFuture<Void> close() {
+        if (state.compareAndSet(State.RUNNING, State.SHUTTING_DOWN)) {
+            checkShutdownCompletion();
         }
+        return shutdownFuture;
+    }
+
+    private void checkShutdownCompletion() {
+        // If no tasks pending and no pipeline in-flight, complete
+        if (callTaskBuffers.isEmpty() && pipelineDepth.get() == 0) {
+            cleanupMetrics();
+            state.set(State.TERMINATED);
+            shutdownFuture.complete(null);
+        }
+    }
+
+    private void cleanupMetrics() {
+        Metrics.globalRegistry.remove(maxPipelineDepthGauge);
+        Metrics.globalRegistry.remove(pipelineDepthGauge);
         Metrics.globalRegistry.remove(dropCounter);
-        Metrics.globalRegistry.remove(batchSaturationGauge);
         Metrics.globalRegistry.remove(batchCallTimer);
         Metrics.globalRegistry.remove(batchExecTimer);
         Metrics.globalRegistry.remove(batchBuildTimer);
         Metrics.globalRegistry.remove(batchSizeSummary);
         Metrics.globalRegistry.remove(queueingTimeSummary);
+        IBatchCall<CallT, CallResultT, BatcherKeyT> batchCall;
+        while ((batchCall = batchPool.poll()) != null) {
+            batchCall.destroy();
+        }
     }
-
-    protected abstract IBatchCall<CallT, CallResultT, BatcherKeyT> newBatch();
 
     private void trigger() {
         if (triggering.compareAndSet(false, true)) {
             try {
-                if (!callTaskBuffers.isEmpty() && pipelineDepth.get() < maxPipelineDepth.get()) {
+                if (!callTaskBuffers.isEmpty() && pipelineDepth.get() < capacityEstimator.maxPipelineDepth()) {
                     batchAndEmit();
                 }
-            } catch (Throwable e) {
-                log.error("Unexpected exception", e);
             } finally {
                 triggering.set(false);
-                if (!callTaskBuffers.isEmpty() && pipelineDepth.get() < maxPipelineDepth.get()) {
+                if (!callTaskBuffers.isEmpty() && pipelineDepth.get() < capacityEstimator.maxPipelineDepth()) {
                     trigger();
                 }
             }
@@ -142,82 +151,77 @@ public abstract class Batcher<CallT, CallResultT, BatcherKeyT> {
     private void batchAndEmit() {
         pipelineDepth.incrementAndGet();
         long buildStart = System.nanoTime();
-        IBatchCall<CallT, CallResultT, BatcherKeyT> batchCall = batchPool.poll();
-        assert batchCall != null;
+        IBatchCall<CallT, CallResultT, BatcherKeyT> batchCall = borrowBatchCall();
+
         int batchSize = 0;
+        int maxBatchSize = capacityEstimator.maxBatchSize();
         LinkedList<ICallTask<CallT, CallResultT, BatcherKeyT>> batchedTasks = new LinkedList<>();
         ICallTask<CallT, CallResultT, BatcherKeyT> callTask;
         while (batchSize < maxBatchSize && (callTask = callTaskBuffers.poll()) != null) {
-            queueingTimeSummary.record(System.nanoTime() - callTask.ts());
+            long queueingTime = System.nanoTime() - callTask.ts();
+            queueingTimeSummary.record(queueingTime);
+            emaQueueingTime.update(queueingTime);
             batchCall.add(callTask);
             batchedTasks.add(callTask);
             batchSize++;
         }
         batchSizeSummary.record(batchSize);
-        long begin = System.nanoTime();
-        batchBuildTimer.record(begin - buildStart, TimeUnit.NANOSECONDS);
-        AtomicLong execStart = new AtomicLong();
-        AtomicInteger execCounter = new AtomicInteger();
-        final int finalBatchSize = batchSize;
-        exec(() -> {
-            execCounter.incrementAndGet();
-            execStart.set(System.nanoTime());
-            return batchCall.execute();
-        }, (v, t) -> {
-            if (t != null) {
-                return !(t instanceof NeedRetryException || t.getCause() instanceof NeedRetryException);
-            }
-            return true;
-        }, tolerableLatencyNanos >> 1, burstLatencyNanos << 1)
-            .whenComplete((v, e) -> {
+        long execBegin = System.nanoTime();
+        batchBuildTimer.record(execBegin - buildStart, TimeUnit.NANOSECONDS);
+        try {
+            int finalBatchSize = batchSize;
+            CompletableFuture<Void> future = batchCall.execute();
+            runningBatchCalls.add(future);
+            future.whenComplete((v, e) -> {
+                runningBatchCalls.remove(future);
                 long execEnd = System.nanoTime();
                 if (e != null) {
-                    if (e instanceof RetryTimeoutException || e.getCause() instanceof RetryTimeoutException) {
-                        log.debug("Batchcall timeout", e);
-                    } else {
-                        log.error("Unexpected exception during handling batchcall result", e);
-                    }
                     batchedTasks.forEach(t -> t.resultPromise().completeExceptionally(e));
-                    // reset max batch size
-                    maxBatchSize = 1;
                 } else {
-                    long thisLatency = execEnd - execStart.get();
-                    if (thisLatency > 0) {
-                        updateMaxBatchSize(finalBatchSize, thisLatency);
-                    }
-                    batchExecTimer.record(thisLatency, TimeUnit.NANOSECONDS);
-                    if (execCounter.get() > 1) {
-                        // do not observe retry latency
-                        batchedTasks.forEach(t -> {
-                            long callLatency = execEnd - t.ts();
-                            batchCallTimer.record(callLatency, TimeUnit.NANOSECONDS);
-                        });
-                    } else {
-                        batchedTasks.forEach(t -> {
-                            long callLatency = execEnd - t.ts();
-                            avgLatencyNanos.observe(callLatency);
-                            batchCallTimer.record(callLatency, TimeUnit.NANOSECONDS);
-                        });
-                    }
+                    long batchCallLatency = execEnd - execBegin;
+                    capacityEstimator.record(finalBatchSize, batchCallLatency);
+                    batchExecTimer.record(batchCallLatency, TimeUnit.NANOSECONDS);
+                    batchedTasks.forEach(t -> {
+                        long callLatency = execEnd - t.ts();
+                        batchCallTimer.record(callLatency, TimeUnit.NANOSECONDS);
+                    });
                 }
-                batchCall.reset();
-                batchPool.offer(batchCall);
+                returnBatchCall(batchCall);
                 pipelineDepth.getAndDecrement();
+                // After each completion, check for shutdown
+                if (state.get() == State.SHUTTING_DOWN) {
+                    checkShutdownCompletion();
+                }
                 if (!callTaskBuffers.isEmpty()) {
                     trigger();
                 }
             });
+        } catch (Throwable e) {
+            log.error("Batch call failed unexpectedly", e);
+            batchedTasks.forEach(t -> t.resultPromise().completeExceptionally(e));
+            returnBatchCall(batchCall);
+            pipelineDepth.getAndDecrement();
+            if (state.get() == State.SHUTTING_DOWN) {
+                checkShutdownCompletion();
+            }
+            if (!callTaskBuffers.isEmpty()) {
+                trigger();
+            }
+        }
     }
 
-    private void updateMaxBatchSize(int batchSize, long latency) {
-        int calculatedMaxBatchSize = latency == tolerableLatencyNanos ? batchSize :
-            Math.max(1, (int) (batchSize * tolerableLatencyNanos * 1.0 / latency));
-        maxBatchSize = Math.max(1, emaMaxBatchSize.updateAndGet(old -> {
-            if (old == 0) {
-                return calculatedMaxBatchSize;
-            }
-            double alpha = calculatedMaxBatchSize > old ? alphaIncrease : alphaDecrease;
-            return (int) (alpha * calculatedMaxBatchSize + (1 - alpha) * old);
-        }));
+    private IBatchCall<CallT, CallResultT, BatcherKeyT> borrowBatchCall() {
+        IBatchCall<CallT, CallResultT, BatcherKeyT> batchCall = batchPool.poll();
+        if (batchCall == null) {
+            batchCall = batchCallBuilder.newBatchCall();
+        }
+        return batchCall;
     }
+
+    private void returnBatchCall(IBatchCall<CallT, CallResultT, BatcherKeyT> batchCall) {
+        batchCall.reset();
+        batchPool.offer(batchCall);
+    }
+
+    private enum State { RUNNING, SHUTTING_DOWN, TERMINATED }
 }

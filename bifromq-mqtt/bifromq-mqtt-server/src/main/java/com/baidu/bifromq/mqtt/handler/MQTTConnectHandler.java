@@ -231,11 +231,11 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                             .setInboxId(userSessionId)
                                             .build()),
                                         (reply, t) -> {
-                                            if (t != null) {
-                                                return true;
+                                            if (reply != null) {
+                                                return reply.getCode() == ExistReply.Code.TRY_LATER;
                                             }
-                                            return reply.getCode() != ExistReply.Code.TRY_LATER;
-                                        }, 1000, 5000)
+                                            return false;
+                                        }, sessionCtx.retryTimeoutNanos / 5, sessionCtx.retryTimeoutNanos)
                                     .exceptionally(e -> {
                                         if (e instanceof RetryTimeoutException
                                             || e.getCause() instanceof RetryTimeoutException) {

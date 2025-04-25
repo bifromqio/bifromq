@@ -31,6 +31,7 @@ public final class DeliverError extends Event<DeliverError> {
     private String delivererKey;
     private MatchInfo subInfo;
     private TopicMessagePack messages;
+    private String reason;
 
     @Override
     public EventType type() {

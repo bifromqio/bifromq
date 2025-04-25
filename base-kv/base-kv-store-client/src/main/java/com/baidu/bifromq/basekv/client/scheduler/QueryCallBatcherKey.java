@@ -24,4 +24,5 @@ public class QueryCallBatcherKey {
     public final String storeId;
     public final int queueId;
     public final long ver;
+    public final boolean linearizable;
 }

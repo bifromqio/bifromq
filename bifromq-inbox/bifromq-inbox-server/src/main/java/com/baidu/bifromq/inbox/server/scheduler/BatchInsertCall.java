@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.inbox.server.scheduler;
 
-import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.IMutationPipeline;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
@@ -22,28 +22,28 @@ import com.baidu.bifromq.basescheduler.ICallTask;
 import com.baidu.bifromq.inbox.record.InboxInstance;
 import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.storage.proto.BatchInsertRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
-import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
+import com.baidu.bifromq.inbox.storage.proto.InsertRequest;
+import com.baidu.bifromq.inbox.storage.proto.InsertResult;
 import java.util.HashSet;
 import java.util.Queue;
 import java.util.Set;
 
-class BatchInsertCall extends BatchMutationCall<InboxSubMessagePack, InboxInsertResult> {
-    protected BatchInsertCall(IBaseKVStoreClient storeClient, MutationCallBatcherKey batcherKey) {
-        super(storeClient, batcherKey);
+class BatchInsertCall extends BatchMutationCall<InsertRequest, InsertResult> {
+    protected BatchInsertCall(IMutationPipeline pipeline, MutationCallBatcherKey batcherKey) {
+        super(pipeline, batcherKey);
     }
 
     @Override
-    protected MutationCallTaskBatch<InboxSubMessagePack, InboxInsertResult> newBatch(long ver) {
+    protected MutationCallTaskBatch<InsertRequest, InsertResult> newBatch(long ver) {
         return new BatchInsertCallTask(ver);
     }
 
     @Override
     protected RWCoProcInput makeBatch(
-        Iterable<ICallTask<InboxSubMessagePack, InboxInsertResult, MutationCallBatcherKey>> callTasks) {
+        Iterable<ICallTask<InsertRequest, InsertResult, MutationCallBatcherKey>> callTasks) {
         BatchInsertRequest.Builder reqBuilder = BatchInsertRequest.newBuilder();
-        callTasks.forEach(call -> reqBuilder.addInboxSubMsgPack(call.call()));
+        callTasks.forEach(call -> reqBuilder.addRequest(call.call()));
         long reqId = System.nanoTime();
         return RWCoProcInput.newBuilder()
             .setInboxService(InboxServiceRWCoProcInput.newBuilder()
@@ -55,10 +55,10 @@ class BatchInsertCall extends BatchMutationCall<InboxSubMessagePack, InboxInsert
 
     @Override
     protected void handleOutput(
-        Queue<ICallTask<InboxSubMessagePack, InboxInsertResult, MutationCallBatcherKey>> batchedTasks,
+        Queue<ICallTask<InsertRequest, InsertResult, MutationCallBatcherKey>> batchedTasks,
         RWCoProcOutput output) {
         assert batchedTasks.size() == output.getInboxService().getBatchInsert().getResultCount();
-        ICallTask<InboxSubMessagePack, InboxInsertResult, MutationCallBatcherKey> task;
+        ICallTask<InsertRequest, InsertResult, MutationCallBatcherKey> task;
         int i = 0;
         while ((task = batchedTasks.poll()) != null) {
             task.resultPromise().complete(output.getInboxService().getBatchInsert().getResult(i++));
@@ -66,12 +66,12 @@ class BatchInsertCall extends BatchMutationCall<InboxSubMessagePack, InboxInsert
     }
 
     @Override
-    protected void handleException(ICallTask<InboxSubMessagePack, InboxInsertResult, MutationCallBatcherKey> callTask,
+    protected void handleException(ICallTask<InsertRequest, InsertResult, MutationCallBatcherKey> callTask,
                                    Throwable e) {
         callTask.resultPromise().completeExceptionally(e);
     }
 
-    private static class BatchInsertCallTask extends MutationCallTaskBatch<InboxSubMessagePack, InboxInsertResult> {
+    private static class BatchInsertCallTask extends MutationCallTaskBatch<InsertRequest, InsertResult> {
         private final Set<TenantInboxInstance> inboxes = new HashSet<>();
 
         private BatchInsertCallTask(long ver) {
@@ -79,7 +79,7 @@ class BatchInsertCall extends BatchMutationCall<InboxSubMessagePack, InboxInsert
         }
 
         @Override
-        protected void add(ICallTask<InboxSubMessagePack, InboxInsertResult, MutationCallBatcherKey> callTask) {
+        protected void add(ICallTask<InsertRequest, InsertResult, MutationCallBatcherKey> callTask) {
             super.add(callTask);
             inboxes.add(new TenantInboxInstance(
                 callTask.call().getTenantId(),
@@ -89,7 +89,7 @@ class BatchInsertCall extends BatchMutationCall<InboxSubMessagePack, InboxInsert
 
         @Override
         protected boolean isBatchable(
-            ICallTask<InboxSubMessagePack, InboxInsertResult, MutationCallBatcherKey> callTask) {
+            ICallTask<InsertRequest, InsertResult, MutationCallBatcherKey> callTask) {
             return !inboxes.contains(new TenantInboxInstance(callTask.call().getTenantId(),
                 new InboxInstance(callTask.call().getInboxId(), callTask.call().getIncarnation()))
             );

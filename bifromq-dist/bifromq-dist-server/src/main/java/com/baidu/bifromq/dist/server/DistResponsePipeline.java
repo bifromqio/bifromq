@@ -22,7 +22,7 @@ import com.baidu.bifromq.baserpc.server.ResponsePipeline;
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
-import com.baidu.bifromq.dist.server.scheduler.DistServerCall;
+import com.baidu.bifromq.dist.server.scheduler.TenantPubRequest;
 import com.baidu.bifromq.dist.server.scheduler.DistServerCallResult;
 import com.baidu.bifromq.dist.server.scheduler.IDistWorkerCallScheduler;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
@@ -59,7 +59,7 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
 
     @Override
     protected CompletableFuture<DistReply> handleRequest(String tenantId, DistRequest request) {
-        return distCallScheduler.schedule(new DistServerCall(tenantId, request.getMessagesList(), callQueueIdx))
+        return distCallScheduler.schedule(new TenantPubRequest(tenantId, request.getMessagesList(), callQueueIdx))
             .handle((result, e) -> {
                 DistReply.Builder replyBuilder = DistReply.newBuilder().setReqId(request.getReqId());
                 if (e != null) {

@@ -17,7 +17,6 @@ import static com.baidu.bifromq.basekv.client.scheduler.Fixtures.setting;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atMost;
-import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
@@ -80,9 +79,7 @@ public class BatchMutationCallTest {
             .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeRWReply.newBuilder().build(),
                 CompletableFuture.delayedExecutor(1000, TimeUnit.MILLISECONDS)));
 
-        TestMutationCallScheduler scheduler =
-            new TestMutationCallScheduler("test_call_scheduler", storeClient, Duration.ofMillis(100),
-                Duration.ofMillis(1000), Duration.ofMinutes(5));
+        TestMutationCallScheduler scheduler = new TestMutationCallScheduler(storeClient, Duration.ofMillis(1000));
         List<Integer> reqList = new ArrayList<>();
         List<Integer> respList = new CopyOnWriteArrayList<>();
         List<CompletableFuture<Void>> futures = new ArrayList<>();
@@ -112,9 +109,7 @@ public class BatchMutationCallTest {
         when(mutationPipeline2.execute(any()))
             .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeRWReply.newBuilder().build()));
 
-        TestMutationCallScheduler scheduler =
-            new TestMutationCallScheduler("test_call_scheduler", storeClient, Duration.ofMillis(100),
-                Duration.ofMillis(1000), Duration.ofMinutes(5));
+        TestMutationCallScheduler scheduler = new TestMutationCallScheduler(storeClient, Duration.ofMillis(1000));
         List<Integer> reqList = new ArrayList<>();
         List<Integer> respList = new CopyOnWriteArrayList<>();
         List<CompletableFuture<Void>> futures = new ArrayList<>();
@@ -136,27 +131,5 @@ public class BatchMutationCallTest {
         CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
         // the resp order preserved
         assertEquals(reqList, respList);
-    }
-
-    @Test
-    public void pipelineExpiry() {
-        when(storeClient.latestEffectiveRouter()).thenReturn(new TreeMap<>(BoundaryUtil::compare) {{
-            put(FULL_BOUNDARY, setting(id, "V1", 0));
-        }});
-
-        when(storeClient.createMutationPipeline("V1")).thenReturn(mutationPipeline1);
-        when(mutationPipeline1.execute(any()))
-            .thenReturn(CompletableFuture.supplyAsync(() -> KVRangeRWReply.newBuilder().build()));
-
-        TestMutationCallScheduler scheduler =
-            new TestMutationCallScheduler("test_call_scheduler", storeClient, Duration.ofMillis(100),
-                Duration.ofMillis(1000), Duration.ofMillis(100));
-        List<CompletableFuture<ByteString>> futures = new ArrayList<>();
-        for (int i = 0; i < 1000; i++) {
-            int req = ThreadLocalRandom.current().nextInt();
-            futures.add(scheduler.schedule(ByteString.copyFromUtf8(Integer.toString(req))));
-        }
-        CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
-        verify(mutationPipeline1, timeout(Long.MAX_VALUE).times(1)).close();
     }
 }

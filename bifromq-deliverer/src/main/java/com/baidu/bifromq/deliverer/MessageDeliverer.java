@@ -14,45 +14,39 @@
 package com.baidu.bifromq.deliverer;
 
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
-import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.dist.client.IDistClient;
-import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
-import com.baidu.bifromq.plugin.subbroker.ISubBrokerManager;
-import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
-import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
+import com.baidu.bifromq.basescheduler.exception.BackPressureException;
+import com.baidu.bifromq.basescheduler.exception.RetryTimeoutException;
+import com.baidu.bifromq.sysprops.props.DataPlaneMaxBurstLatencyMillis;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryResult.Code, DelivererKey>
+public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryCallResult, DelivererKey>
     implements IMessageDeliverer {
-    private final IDistClient distClient;
-    private final ISubBrokerManager subBrokerManager;
 
-    public MessageDeliverer(ISubBrokerManager subBrokerManager, IDistClient distClient) {
-        super("dist_worker_deliver_batcher", Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
-            Duration.ofMillis(DataPlaneBurstLatencyMillis.INSTANCE.get()));
-        this.distClient = distClient;
-        this.subBrokerManager = subBrokerManager;
+    public MessageDeliverer(BatchDeliveryCallBuilderFactory batchDeliveryCallBuilderFactory) {
+        super(batchDeliveryCallBuilderFactory,
+            Duration.ofMillis(DataPlaneMaxBurstLatencyMillis.INSTANCE.get()).toNanos());
     }
 
     @Override
-    protected Batcher<DeliveryCall, DeliveryResult.Code, DelivererKey> newBatcher(String name,
-                                                                                  long tolerableLatencyNanos,
-                                                                                  long burstLatencyNanos,
-                                                                                  DelivererKey delivererKey) {
-        return new DeliveryCallBatcher(distClient,
-            subBrokerManager,
-            delivererKey,
-            name,
-            tolerableLatencyNanos,
-            burstLatencyNanos);
+    public CompletableFuture<DeliveryCallResult> schedule(DeliveryCall request) {
+        return super.schedule(request).exceptionally(e -> {
+            if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                return DeliveryCallResult.BACK_PRESSURE_REJECTED;
+            }
+            if (e instanceof RetryTimeoutException || e.getCause() instanceof RetryTimeoutException) {
+                return DeliveryCallResult.BACK_PRESSURE_REJECTED;
+            }
+            log.error("Failed to schedule delivery call", e);
+            return DeliveryCallResult.ERROR;
+        });
     }
 
     @Override
     protected Optional<DelivererKey> find(DeliveryCall request) {
         return Optional.of(request.delivererKey);
     }
-
 }

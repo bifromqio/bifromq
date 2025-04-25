@@ -32,7 +32,7 @@ public class AsyncRetryTest {
         String expected = "success";
         Supplier<CompletableFuture<String>> taskSupplier = () -> CompletableFuture.completedFuture(expected);
         CompletableFuture<String> resultFuture =
-            AsyncRetry.exec(taskSupplier, (result, e) -> result.equals("success"), 100, 1000);
+            AsyncRetry.exec(taskSupplier, (result, e) -> !result.equals("success"), 100, 1000);
         String result = resultFuture.get();
         assertEquals(result, expected);
     }
@@ -54,7 +54,7 @@ public class AsyncRetryTest {
         });
 
         CompletableFuture<String> resultFuture =
-            AsyncRetry.exec(taskSupplier, (result, e) -> result.equals("success"), 100, 1000);
+            AsyncRetry.exec(taskSupplier, (result, e) -> !result.equals("success"), 100, 1000);
         String result = resultFuture.get();
         assertEquals(result, "success");
         assertTrue(counter.get() >= 3);
@@ -69,7 +69,7 @@ public class AsyncRetryTest {
         });
 
         CompletableFuture<String> resultFuture =
-            AsyncRetry.exec(taskSupplier, (result, e) -> result.equals("success"), 100, 250);
+            AsyncRetry.exec(taskSupplier, (result, e) -> !result.equals("success"), 100, 250);
 
         try {
             resultFuture.get();

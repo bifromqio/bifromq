@@ -61,11 +61,11 @@ import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class BatchDistServerCall implements IBatchCall<DistServerCall, DistServerCallResult, DistServerCallBatcherKey> {
+class BatchDistServerCall implements IBatchCall<TenantPubRequest, DistServerCallResult, DistServerCallBatcherKey> {
     private final IBaseKVStoreClient distWorkerClient;
     private final DistServerCallBatcherKey batcherKey;
     private final String orderKey;
-    private final Queue<ICallTask<DistServerCall, DistServerCallResult, DistServerCallBatcherKey>> tasks =
+    private final Queue<ICallTask<TenantPubRequest, DistServerCallResult, DistServerCallBatcherKey>> tasks =
         new ArrayDeque<>();
     private Map<String, Map<ClientInfo, Iterable<Message>>> batch = new HashMap<>(128);
 
@@ -76,7 +76,7 @@ class BatchDistServerCall implements IBatchCall<DistServerCall, DistServerCallRe
     }
 
     @Override
-    public void add(ICallTask<DistServerCall, DistServerCallResult, DistServerCallBatcherKey> callTask) {
+    public void add(ICallTask<TenantPubRequest, DistServerCallResult, DistServerCallBatcherKey> callTask) {
         tasks.add(callTask);
         callTask.call().publisherMessagePacks().forEach(publisherMsgPack -> publisherMsgPack.getMessagePackList()
             .forEach(topicMsgs -> batch.computeIfAbsent(topicMsgs.getTopic(), k -> new HashMap<>())
@@ -100,7 +100,7 @@ class BatchDistServerCall implements IBatchCall<DistServerCall, DistServerCallRe
         Collection<KVRangeSetting> candidates = rangeLookup();
         if (candidates.isEmpty()) {
             // no candidate range
-            ICallTask<DistServerCall, DistServerCallResult, DistServerCallBatcherKey> task;
+            ICallTask<TenantPubRequest, DistServerCallResult, DistServerCallBatcherKey> task;
             while ((task = tasks.poll()) != null) {
                 Map<String, Integer> fanOutResult = new HashMap<>();
                 task.call().publisherMessagePacks().forEach(clientMessagePack -> clientMessagePack.getMessagePackList()
@@ -173,7 +173,7 @@ class BatchDistServerCall implements IBatchCall<DistServerCall, DistServerCallRe
                     default -> hasError = true;
                 }
             }
-            ICallTask<DistServerCall, DistServerCallResult, DistServerCallBatcherKey> task;
+            ICallTask<TenantPubRequest, DistServerCallResult, DistServerCallBatcherKey> task;
             if (needRetry && !hasError) {
                 while ((task = tasks.poll()) != null) {
                     task.resultPromise()

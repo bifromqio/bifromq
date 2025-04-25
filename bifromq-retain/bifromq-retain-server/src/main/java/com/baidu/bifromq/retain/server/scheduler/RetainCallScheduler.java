@@ -16,57 +16,25 @@ package com.baidu.bifromq.retain.server.scheduler;
 import static com.baidu.bifromq.retain.store.schema.KVSchemaUtil.retainMessageKey;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
-import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
-import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainRequest;
-import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
-import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
+import com.baidu.bifromq.sysprops.props.DataPlaneMaxBurstLatencyMillis;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class RetainCallScheduler extends MutationCallScheduler<RetainRequest, RetainReply>
+public class RetainCallScheduler extends MutationCallScheduler<RetainRequest, RetainReply, BatchRetainCall>
     implements IRetainCallScheduler {
-    private final IBaseKVStoreClient retainStoreClient;
 
     public RetainCallScheduler(IBaseKVStoreClient retainStoreClient) {
-        super("retain_server_retain_batcher", retainStoreClient,
-            Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
-            Duration.ofMillis(DataPlaneBurstLatencyMillis.INSTANCE.get()));
-        this.retainStoreClient = retainStoreClient;
-    }
-
-    @Override
-    protected Batcher<RetainRequest, RetainReply, MutationCallBatcherKey> newBatcher(String name,
-                                                                                     long tolerableLatencyNanos,
-                                                                                     long burstLatencyNanos,
-                                                                                     MutationCallBatcherKey batchKey) {
-        return new RetainCallBatcher(batchKey, name, tolerableLatencyNanos, burstLatencyNanos, retainStoreClient);
+        super(BatchRetainCall::new, Duration.ofMillis(DataPlaneMaxBurstLatencyMillis.INSTANCE.get()).toNanos(),
+            retainStoreClient);
     }
 
     @Override
     protected ByteString rangeKey(RetainRequest request) {
         return retainMessageKey(request.getPublisher().getTenantId(), request.getTopic());
-    }
-
-    private static class RetainCallBatcher extends MutationCallBatcher<RetainRequest, RetainReply> {
-
-        protected RetainCallBatcher(MutationCallBatcherKey batchKey,
-                                    String name,
-                                    long tolerableLatencyNanos,
-                                    long burstLatencyNanos,
-                                    IBaseKVStoreClient retainStoreClient) {
-            super(name, tolerableLatencyNanos, burstLatencyNanos, batchKey, retainStoreClient);
-        }
-
-        @Override
-        protected IBatchCall<RetainRequest, RetainReply, MutationCallBatcherKey> newBatch() {
-            return new BatchRetainCall(storeClient, batcherKey);
-        }
     }
 }

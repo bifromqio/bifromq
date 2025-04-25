@@ -24,7 +24,7 @@ import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
-import com.baidu.bifromq.sessiondict.client.type.ExistResult;
+import com.baidu.bifromq.sessiondict.client.type.OnlineCheckResult;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MQTTClientInfoConstants;
 import java.util.concurrent.CompletableFuture;
@@ -34,6 +34,7 @@ import org.testng.annotations.Test;
 public class LoadExistingTest extends InboxStoreTest {
     @Test(groups = "integration")
     public void gcJobAfterRestart() {
+        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(OnlineCheckResult.EXISTS));
         long now = System.currentTimeMillis();
         String tenantId = "tenantId-" + System.nanoTime();
         String inboxId = "inboxId-" + System.nanoTime();
@@ -53,7 +54,7 @@ public class LoadExistingTest extends InboxStoreTest {
 
         restartStoreServer();
         await().until(() -> BoundaryUtil.isValidSplitSet(storeClient.latestEffectiveRouter().keySet()));
-        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(ExistResult.NOT_EXISTS));
+        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(OnlineCheckResult.NOT_EXISTS));
         ArgumentCaptor<DeleteRequest> deleteCaptor = ArgumentCaptor.forClass(DeleteRequest.class);
         verify(inboxClient, timeout(10000)).delete(deleteCaptor.capture());
         DeleteRequest request = deleteCaptor.getValue();

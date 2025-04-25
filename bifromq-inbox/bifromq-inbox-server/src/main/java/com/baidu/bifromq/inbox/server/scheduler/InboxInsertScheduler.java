@@ -16,53 +16,21 @@ package com.baidu.bifromq.inbox.server.scheduler;
 import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.inboxStartKeyPrefix;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
-import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
-import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.IBatchCall;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
-import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
-import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
-import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
+import com.baidu.bifromq.inbox.storage.proto.InsertRequest;
+import com.baidu.bifromq.inbox.storage.proto.InsertResult;
 import com.google.protobuf.ByteString;
-import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxInsertScheduler extends MutationCallScheduler<InboxSubMessagePack, InboxInsertResult>
+public class InboxInsertScheduler extends MutationCallScheduler<InsertRequest, InsertResult, BatchInsertCall>
     implements IInboxInsertScheduler {
     public InboxInsertScheduler(IBaseKVStoreClient inboxStoreClient) {
-        super("inbox_server_insert", inboxStoreClient,
-            Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
-            Duration.ofMillis(DataPlaneBurstLatencyMillis.INSTANCE.get()));
+        super(BatchInsertCall::new, Long.MAX_VALUE, inboxStoreClient);
     }
 
     @Override
-    protected Batcher<InboxSubMessagePack, InboxInsertResult, MutationCallBatcherKey> newBatcher(String name,
-                                                                                                 long tolerableLatencyNanos,
-                                                                                                 long burstLatencyNanos,
-                                                                                                 MutationCallBatcherKey batcherKey) {
-        return new InboxInsertBatcher(name, tolerableLatencyNanos, burstLatencyNanos, batcherKey, storeClient);
-    }
-
-    @Override
-    protected ByteString rangeKey(InboxSubMessagePack request) {
+    protected ByteString rangeKey(InsertRequest request) {
         return inboxStartKeyPrefix(request.getTenantId(), request.getInboxId());
-    }
-
-    private static class InboxInsertBatcher extends MutationCallBatcher<InboxSubMessagePack, InboxInsertResult> {
-        InboxInsertBatcher(String name,
-                           long tolerableLatencyNanos,
-                           long burstLatencyNanos,
-                           MutationCallBatcherKey batchKey,
-                           IBaseKVStoreClient inboxStoreClient) {
-            super(name, tolerableLatencyNanos, burstLatencyNanos, batchKey, inboxStoreClient);
-        }
-
-        @Override
-        protected IBatchCall<InboxSubMessagePack, InboxInsertResult, MutationCallBatcherKey> newBatch() {
-            return new BatchInsertCall(storeClient, batcherKey);
-        }
     }
 }

@@ -19,29 +19,25 @@ import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.google.protobuf.ByteString;
-import java.time.Duration;
 import java.util.Optional;
 
-public abstract class QueryCallScheduler<ReqT, RespT> extends BatchCallScheduler<ReqT, RespT, QueryCallBatcherKey> {
+/**
+ * The abstract class for base-kv query call scheduler.
+ *
+ * @param <ReqT> the type of the request
+ * @param <RespT> the type of the response
+ * @param <BatchCallT> the type of the batch call
+ */
+public abstract class QueryCallScheduler<ReqT, RespT, BatchCallT extends BatchQueryCall<ReqT, RespT>>
+    extends BatchCallScheduler<ReqT, RespT, QueryCallBatcherKey> {
     protected final IBaseKVStoreClient storeClient;
 
-    public QueryCallScheduler(String name,
-                              IBaseKVStoreClient storeClient,
-                              Duration tolerableLatency,
-                              Duration burstLatency) {
-        super(name, tolerableLatency, burstLatency);
+    public QueryCallScheduler(IBatchQueryCallBuilder<ReqT, RespT, BatchCallT> batchCallBuilder,
+                              long maxBurstLatency,
+                              IBaseKVStoreClient storeClient) {
+        super(new BatchQueryCallBuilderFactory<>(storeClient, batchCallBuilder), maxBurstLatency);
         this.storeClient = storeClient;
     }
-
-    public QueryCallScheduler(String name,
-                              IBaseKVStoreClient storeClient,
-                              Duration tolerableLatency,
-                              Duration burstLatency,
-                              Duration batcherExpiry) {
-        super(name, tolerableLatency, burstLatency, batcherExpiry);
-        this.storeClient = storeClient;
-    }
-
 
     protected String selectStore(KVRangeSetting setting, ReqT request) {
         return setting.leader;
@@ -49,13 +45,14 @@ public abstract class QueryCallScheduler<ReqT, RespT> extends BatchCallScheduler
 
     protected abstract int selectQueue(ReqT request);
 
+    protected abstract boolean isLinearizable(ReqT request);
+
     protected abstract ByteString rangeKey(ReqT request);
 
     @Override
     protected final Optional<QueryCallBatcherKey> find(ReqT req) {
-        return findByKey(rangeKey(req), storeClient.latestEffectiveRouter()).map(
-            range -> new QueryCallBatcherKey(range.id, selectStore(range, req), selectQueue(req), range.ver));
+        return findByKey(rangeKey(req), storeClient.latestEffectiveRouter())
+            .map(range -> new QueryCallBatcherKey(range.id, selectStore(range, req),
+                selectQueue(req), range.ver, isLinearizable(req)));
     }
-
-
 }

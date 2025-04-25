@@ -14,6 +14,7 @@
 package com.baidu.bifromq.retain.server;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.deliverer.BatchDeliveryCallBuilderFactory;
 import com.baidu.bifromq.deliverer.MessageDeliverer;
 import com.baidu.bifromq.retain.RPCBluePrint;
 import com.baidu.bifromq.retain.server.scheduler.DeleteCallScheduler;
@@ -34,11 +35,10 @@ class RetainServer implements IRetainServer {
     private final RetainService retainService;
     private final ExecutorService rpcExecutor;
 
-
     RetainServer(RetainServerBuilder builder) {
         this.retainService = new RetainService(
             new RetainStoreGCProcessor(builder.retainStoreClient, null),
-            new MessageDeliverer(builder.subBrokerManager, builder.distClient),
+            new MessageDeliverer(new BatchDeliveryCallBuilderFactory(builder.distClient, builder.subBrokerManager)),
             new MatchCallScheduler(builder.retainStoreClient, builder.settingProvider),
             new RetainCallScheduler(builder.retainStoreClient),
             new DeleteCallScheduler(builder.retainStoreClient));

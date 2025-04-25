@@ -14,29 +14,16 @@
 package com.baidu.bifromq.basekv.client.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basescheduler.Batcher;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 
-public class TestQueryCallScheduler extends QueryCallScheduler<ByteString, ByteString> {
+public class TestQueryCallScheduler extends QueryCallScheduler<ByteString, ByteString, TestBatchQueryCall> {
     private final boolean linearizable;
 
-    public TestQueryCallScheduler(String name,
-                                  IBaseKVStoreClient storeClient,
-                                  Duration tolerableLatency,
+    public TestQueryCallScheduler(IBaseKVStoreClient storeClient,
                                   Duration burstLatency,
                                   boolean linearizable) {
-        super(name, storeClient, tolerableLatency, burstLatency);
-        this.linearizable = linearizable;
-    }
-
-    public TestQueryCallScheduler(String name,
-                                  IBaseKVStoreClient storeClient,
-                                  Duration tolerableLatency,
-                                  Duration burstLatency,
-                                  Duration batcherExpiry,
-                                  boolean linearizable) {
-        super(name, storeClient, tolerableLatency, burstLatency, batcherExpiry);
+        super(TestBatchQueryCall::new, burstLatency.toNanos(), storeClient);
         this.linearizable = linearizable;
     }
 
@@ -46,22 +33,12 @@ public class TestQueryCallScheduler extends QueryCallScheduler<ByteString, ByteS
     }
 
     @Override
-    protected ByteString rangeKey(ByteString call) {
-        return call;
+    protected boolean isLinearizable(ByteString request) {
+        return linearizable;
     }
 
     @Override
-    protected Batcher<ByteString, ByteString, QueryCallBatcherKey> newBatcher(String name,
-                                                                              long tolerableLatencyNanos,
-                                                                              long burstLatencyNanos,
-                                                                              QueryCallBatcherKey batcherKey) {
-        return new TestQueryCallBatcher(
-            name,
-            tolerableLatencyNanos,
-            burstLatencyNanos,
-            batcherKey,
-            storeClient,
-            linearizable
-        );
+    protected ByteString rangeKey(ByteString call) {
+        return call;
     }
 }

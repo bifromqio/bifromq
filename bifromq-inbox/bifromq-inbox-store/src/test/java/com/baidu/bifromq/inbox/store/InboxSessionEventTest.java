@@ -27,7 +27,7 @@ import com.baidu.bifromq.inbox.storage.proto.BatchDetachReply;
 import com.baidu.bifromq.inbox.storage.proto.BatchDetachRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.plugin.eventcollector.EventType;
-import com.baidu.bifromq.sessiondict.client.type.ExistResult;
+import com.baidu.bifromq.sessiondict.client.type.OnlineCheckResult;
 import com.baidu.bifromq.type.ClientInfo;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -41,7 +41,7 @@ public class InboxSessionEventTest extends InboxStoreTest {
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(ExistResult.EXISTS));
+        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(OnlineCheckResult.EXISTS));
         BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
@@ -60,7 +60,7 @@ public class InboxSessionEventTest extends InboxStoreTest {
         String inboxId = "inboxId-" + System.nanoTime();
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
-        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(ExistResult.EXISTS));
+        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(OnlineCheckResult.EXISTS));
         BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)
@@ -92,7 +92,7 @@ public class InboxSessionEventTest extends InboxStoreTest {
         long incarnation = System.nanoTime();
         ClientInfo client = ClientInfo.newBuilder().setTenantId(tenantId).build();
 
-        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(ExistResult.EXISTS));
+        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(OnlineCheckResult.EXISTS));
         BatchAttachRequest.Params attachParams = BatchAttachRequest.Params.newBuilder()
             .setInboxId(inboxId)
             .setIncarnation(incarnation)

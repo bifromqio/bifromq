@@ -27,9 +27,11 @@ import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
+import com.baidu.bifromq.sysprops.props.ControlPlaneMaxBurstLatencyMillis;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
 import com.google.common.base.Ticker;
 import io.netty.channel.ChannelHandlerContext;
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.Builder;
@@ -37,6 +39,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public final class MQTTSessionContext {
+    public final long retryTimeoutNanos = Duration.ofMillis(ControlPlaneMaxBurstLatencyMillis.INSTANCE.get()).toNanos();
     public final ILocalSessionRegistry localSessionRegistry;
     public final ILocalDistService localDistService;
     public final IEventCollector eventCollector;

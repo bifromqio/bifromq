@@ -28,8 +28,8 @@ import com.baidu.bifromq.inbox.server.scheduler.IInboxCheckSubScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxCommitScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxDeleteScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxDetachScheduler;
+import com.baidu.bifromq.inbox.server.scheduler.IInboxExistScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxFetchScheduler;
-import com.baidu.bifromq.inbox.server.scheduler.IInboxGetScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxInsertScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxSubScheduler;
 import com.baidu.bifromq.inbox.server.scheduler.IInboxUnsubScheduler;
@@ -64,7 +64,7 @@ public abstract class MockedInboxService {
     @Mock
     protected IInboxFetchScheduler fetchScheduler;
     @Mock
-    protected IInboxGetScheduler getScheduler;
+    protected IInboxExistScheduler getScheduler;
     @Mock
     protected IInboxCheckSubScheduler checkSubScheduler;
     @Mock

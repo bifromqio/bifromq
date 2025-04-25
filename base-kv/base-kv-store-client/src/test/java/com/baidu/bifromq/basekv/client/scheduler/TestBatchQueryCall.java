@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.client.scheduler;
 
-import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.IQueryPipeline;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basescheduler.ICallTask;
@@ -22,8 +22,8 @@ import java.util.Iterator;
 import java.util.Queue;
 
 public class TestBatchQueryCall extends BatchQueryCall<ByteString, ByteString> {
-    protected TestBatchQueryCall(IBaseKVStoreClient storeClient, boolean linearizable, QueryCallBatcherKey batcherKey) {
-        super(storeClient, linearizable, batcherKey);
+    protected TestBatchQueryCall(IQueryPipeline pipeline, QueryCallBatcherKey batcherKey) {
+        super(pipeline, batcherKey);
     }
 
     @Override

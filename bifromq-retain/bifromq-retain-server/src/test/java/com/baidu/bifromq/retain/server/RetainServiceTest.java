@@ -25,15 +25,15 @@ import com.baidu.bifromq.baserpc.RPCContext;
 import com.baidu.bifromq.baserpc.metrics.IRPCMeter;
 import com.baidu.bifromq.baserpc.metrics.RPCMetric;
 import com.baidu.bifromq.deliverer.DeliveryCall;
+import com.baidu.bifromq.deliverer.DeliveryCallResult;
 import com.baidu.bifromq.deliverer.IMessageDeliverer;
-import com.baidu.bifromq.plugin.subbroker.DeliveryResult;
 import com.baidu.bifromq.retain.rpc.proto.MatchReply;
 import com.baidu.bifromq.retain.rpc.proto.MatchRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainReply;
 import com.baidu.bifromq.retain.rpc.proto.RetainRequest;
 import com.baidu.bifromq.retain.server.scheduler.IMatchCallScheduler;
 import com.baidu.bifromq.retain.server.scheduler.IRetainCallScheduler;
-import com.baidu.bifromq.retain.server.scheduler.MatchCallResult;
+import com.baidu.bifromq.retain.server.scheduler.MatchRetainedResult;
 import com.baidu.bifromq.retain.store.gc.IRetainStoreGCProcessor;
 import com.baidu.bifromq.type.ClientInfo;
 import com.baidu.bifromq.type.MatchInfo;
@@ -139,7 +139,7 @@ public class RetainServiceTest {
     @Test
     public void testMatchNothing() {
         when(matchCallScheduler.schedule(any())).thenReturn(
-            CompletableFuture.completedFuture(new MatchCallResult(MatchReply.Result.OK, Collections.emptyList())));
+            CompletableFuture.completedFuture(new MatchRetainedResult(MatchReply.Result.OK, Collections.emptyList())));
         long reqId = 1;
         service.match(MatchRequest.newBuilder().setReqId(reqId).build(), matchResponseObserver);
         verify(matchResponseObserver).onNext(
@@ -154,8 +154,8 @@ public class RetainServiceTest {
         TopicMessage retainMsg2 = TopicMessage.newBuilder().setTopic("topic2").setMessage(Message.newBuilder().build())
             .setPublisher(ClientInfo.newBuilder().build()).build();
         when(matchCallScheduler.schedule(any())).thenReturn(CompletableFuture.completedFuture(
-            new MatchCallResult(MatchReply.Result.OK, List.of(retainMsg1, retainMsg2))));
-        when(messageDeliverer.schedule(any())).thenReturn(CompletableFuture.completedFuture(DeliveryResult.Code.OK));
+            new MatchRetainedResult(MatchReply.Result.OK, List.of(retainMsg1, retainMsg2))));
+        when(messageDeliverer.schedule(any())).thenReturn(CompletableFuture.completedFuture(DeliveryCallResult.OK));
         MatchRequest matchRequest = MatchRequest.newBuilder().setReqId(1).setTenantId("tenant")
             .setMatchInfo(MatchInfo.newBuilder().setMatcher(TopicUtil.from("#")).setReceiverId("inbox").build())
             .setDelivererKey("delivererKey").setBrokerId(1).build();
@@ -185,9 +185,8 @@ public class RetainServiceTest {
         TopicMessage retainMsg2 = TopicMessage.newBuilder().setTopic("topic2").setMessage(Message.newBuilder().build())
             .setPublisher(ClientInfo.newBuilder().build()).build();
         when(matchCallScheduler.schedule(any())).thenReturn(CompletableFuture.completedFuture(
-            new MatchCallResult(MatchReply.Result.OK, List.of(retainMsg1, retainMsg2))));
-        when(messageDeliverer.schedule(any())).thenReturn(
-            CompletableFuture.completedFuture(DeliveryResult.Code.NO_SUB));
+            new MatchRetainedResult(MatchReply.Result.OK, List.of(retainMsg1, retainMsg2))));
+        when(messageDeliverer.schedule(any())).thenReturn(CompletableFuture.completedFuture(DeliveryCallResult.NO_SUB));
         MatchRequest matchRequest = MatchRequest.newBuilder().setReqId(1).setTenantId("tenant")
             .setMatchInfo(MatchInfo.newBuilder().setMatcher(TopicUtil.from("#")).setReceiverId("inbox").build())
             .setDelivererKey("delivererKey").setBrokerId(1).build();
@@ -204,7 +203,7 @@ public class RetainServiceTest {
         TopicMessage retainMsg2 = TopicMessage.newBuilder().setTopic("topic2").setMessage(Message.newBuilder().build())
             .setPublisher(ClientInfo.newBuilder().build()).build();
         when(matchCallScheduler.schedule(any())).thenReturn(CompletableFuture.completedFuture(
-            new MatchCallResult(MatchReply.Result.OK, List.of(retainMsg1, retainMsg2))));
+            new MatchRetainedResult(MatchReply.Result.OK, List.of(retainMsg1, retainMsg2))));
         when(messageDeliverer.schedule(any())).thenReturn(CompletableFuture.failedFuture(new RuntimeException()));
         MatchRequest matchRequest = MatchRequest.newBuilder().setReqId(1).setTenantId("tenant")
             .setMatchInfo(MatchInfo.newBuilder().setMatcher(TopicUtil.from("#")).setReceiverId("inbox").build())
@@ -218,7 +217,7 @@ public class RetainServiceTest {
     @Test
     public void testMatchRetainWithErrorCode() {
         when(matchCallScheduler.schedule(any())).thenReturn(
-            CompletableFuture.completedFuture(new MatchCallResult(MatchReply.Result.ERROR, Collections.emptyList())));
+            CompletableFuture.completedFuture(new MatchRetainedResult(MatchReply.Result.ERROR, Collections.emptyList())));
         long reqId = 1;
         service.match(MatchRequest.newBuilder().setReqId(reqId).build(), matchResponseObserver);
         verify(matchResponseObserver).onNext(

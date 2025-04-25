@@ -71,13 +71,13 @@ import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.Fetched;
 import com.baidu.bifromq.inbox.storage.proto.GCReply;
 import com.baidu.bifromq.inbox.storage.proto.GCRequest;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceROCoProcOutput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcInput;
 import com.baidu.bifromq.inbox.storage.proto.InboxServiceRWCoProcOutput;
-import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
+import com.baidu.bifromq.inbox.storage.proto.InsertRequest;
+import com.baidu.bifromq.inbox.storage.proto.InsertResult;
 import com.baidu.bifromq.inbox.storage.proto.Replica;
 import com.baidu.bifromq.metrics.TenantMetric;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
@@ -428,18 +428,18 @@ abstract class InboxStoreTest {
         return output.getBatchUnsub().getResultList();
     }
 
-    protected List<InboxInsertResult> requestInsert(InboxSubMessagePack... inboxSubMessagePack) {
-        assert inboxSubMessagePack.length > 0;
+    protected List<InsertResult> requestInsert(InsertRequest... insertRequest) {
+        assert insertRequest.length > 0;
         long reqId = ThreadLocalRandom.current().nextInt();
         ByteString routeKey =
-            inboxStartKeyPrefix(inboxSubMessagePack[0].getTenantId(), inboxSubMessagePack[0].getInboxId());
+            inboxStartKeyPrefix(insertRequest[0].getTenantId(), insertRequest[0].getInboxId());
         InboxServiceRWCoProcInput input = MessageUtil.buildInsertRequest(reqId, BatchInsertRequest.newBuilder()
-            .addAllInboxSubMsgPack(List.of(inboxSubMessagePack))
+            .addAllRequest(List.of(insertRequest))
             .build());
         InboxServiceRWCoProcOutput output = mutate(routeKey, input);
         assertTrue(output.hasBatchInsert());
         assertEquals(output.getReqId(), reqId);
-        assertEquals(inboxSubMessagePack.length, output.getBatchInsert().getResultCount());
+        assertEquals(insertRequest.length, output.getBatchInsert().getResultCount());
         return output.getBatchInsert().getResultList();
     }
 

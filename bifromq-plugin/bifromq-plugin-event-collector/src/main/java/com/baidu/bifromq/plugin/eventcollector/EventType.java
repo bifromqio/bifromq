@@ -92,7 +92,7 @@ public enum EventType {
     DISTED,
     DIST_ERROR,
     DELIVER_ERROR,
-    DELIVER_NO_INBOX,
+    DELIVER_NO_INBOX, // deprecated
     DELIVERED,
     MATCHED,
     MATCH_ERROR,

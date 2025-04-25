@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.retain.server.scheduler;
 
-import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.IMutationPipeline;
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
 import com.baidu.bifromq.basekv.client.scheduler.BatchMutationCall;
@@ -35,8 +35,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class BatchRetainCall extends BatchMutationCall<RetainRequest, RetainReply> {
 
-    protected BatchRetainCall(IBaseKVStoreClient retainStoreClient, MutationCallBatcherKey batcherKey) {
-        super(retainStoreClient, batcherKey);
+    protected BatchRetainCall(IMutationPipeline pipeline, MutationCallBatcherKey batcherKey) {
+        super(pipeline, batcherKey);
     }
 
     @Override

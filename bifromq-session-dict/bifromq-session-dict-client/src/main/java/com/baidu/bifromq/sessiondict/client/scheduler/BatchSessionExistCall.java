@@ -16,25 +16,24 @@ package com.baidu.bifromq.sessiondict.client.scheduler;
 import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.basescheduler.ICallTask;
-import com.baidu.bifromq.sessiondict.client.type.ExistResult;
-import com.baidu.bifromq.sessiondict.client.type.TenantClientId;
+import com.baidu.bifromq.sessiondict.client.type.OnlineCheckRequest;
+import com.baidu.bifromq.sessiondict.client.type.OnlineCheckResult;
 import com.baidu.bifromq.sessiondict.rpc.proto.ExistReply;
-import com.baidu.bifromq.sessiondict.rpc.proto.ExistRequest;
 import java.util.LinkedList;
 import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class BatchSessionExistCall implements IBatchCall<TenantClientId, ExistResult, String> {
-    private final IRPCClient.IRequestPipeline<ExistRequest, ExistReply> ppln;
-    private final LinkedList<ICallTask<TenantClientId, ExistResult, String>> batchedTasks = new LinkedList<>();
+class BatchSessionExistCall implements IBatchCall<OnlineCheckRequest, OnlineCheckResult, String> {
+    private final IRPCClient.IRequestPipeline<com.baidu.bifromq.sessiondict.rpc.proto.ExistRequest, ExistReply> ppln;
+    private final LinkedList<ICallTask<OnlineCheckRequest, OnlineCheckResult, String>> batchedTasks = new LinkedList<>();
 
-    public BatchSessionExistCall(IRPCClient.IRequestPipeline<ExistRequest, ExistReply> ppln) {
+    public BatchSessionExistCall(IRPCClient.IRequestPipeline<com.baidu.bifromq.sessiondict.rpc.proto.ExistRequest, ExistReply> ppln) {
         this.ppln = ppln;
     }
 
     @Override
-    public void add(ICallTask<TenantClientId, ExistResult, String> task) {
+    public void add(ICallTask<OnlineCheckRequest, OnlineCheckResult, String> task) {
         batchedTasks.add(task);
     }
 
@@ -45,9 +44,9 @@ class BatchSessionExistCall implements IBatchCall<TenantClientId, ExistResult, S
 
     @Override
     public CompletableFuture<Void> execute() {
-        ExistRequest.Builder reqBuilder = ExistRequest.newBuilder().setReqId(System.nanoTime());
+        com.baidu.bifromq.sessiondict.rpc.proto.ExistRequest.Builder reqBuilder = com.baidu.bifromq.sessiondict.rpc.proto.ExistRequest.newBuilder().setReqId(System.nanoTime());
         batchedTasks.forEach(task ->
-            reqBuilder.addClient(ExistRequest.Client.newBuilder()
+            reqBuilder.addClient(com.baidu.bifromq.sessiondict.rpc.proto.ExistRequest.Client.newBuilder()
                 .setUserId(task.call().userId())
                 .setClientId(task.call().clientId())
                 .build()));
@@ -55,25 +54,25 @@ class BatchSessionExistCall implements IBatchCall<TenantClientId, ExistResult, S
             .handle((reply, e) -> {
                 if (e != null) {
                     log.debug("Session exist call failed", e);
-                    ICallTask<TenantClientId, ExistResult, String> task;
+                    ICallTask<OnlineCheckRequest, OnlineCheckResult, String> task;
                     while ((task = batchedTasks.poll()) != null) {
-                        task.resultPromise().complete(ExistResult.ERROR);
+                        task.resultPromise().complete(OnlineCheckResult.ERROR);
                     }
                 } else {
                     switch (reply.getCode()) {
                         case OK -> {
-                            ICallTask<TenantClientId, ExistResult, String> task;
+                            ICallTask<OnlineCheckRequest, OnlineCheckResult, String> task;
                             assert reply.getExistCount() == batchedTasks.size();
                             int i = 0;
                             while ((task = batchedTasks.poll()) != null) {
                                 task.resultPromise().complete(reply.getExist(i++)
-                                    ? ExistResult.EXISTS : ExistResult.NOT_EXISTS);
+                                    ? OnlineCheckResult.EXISTS : OnlineCheckResult.NOT_EXISTS);
                             }
                         }
                         default -> {
-                            ICallTask<TenantClientId, ExistResult, String> task;
+                            ICallTask<OnlineCheckRequest, OnlineCheckResult, String> task;
                             while ((task = batchedTasks.poll()) != null) {
-                                task.resultPromise().complete(ExistResult.ERROR);
+                                task.resultPromise().complete(OnlineCheckResult.ERROR);
                             }
                         }
                     }

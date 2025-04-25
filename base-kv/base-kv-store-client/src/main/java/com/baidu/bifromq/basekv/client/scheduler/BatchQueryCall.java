@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.client.scheduler;
 
-import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.IQueryPipeline;
 import com.baidu.bifromq.basekv.client.exception.BadRequestException;
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
@@ -39,13 +38,9 @@ public abstract class BatchQueryCall<ReqT, RespT> implements IBatchCall<ReqT, Re
     private final IQueryPipeline storePipeline;
     private final Deque<BatchQueryCall.BatchCallTask<ReqT, RespT>> batchCallTasks = new ArrayDeque<>();
 
-    protected BatchQueryCall(IBaseKVStoreClient storeClient, boolean linearizable, QueryCallBatcherKey batcherKey) {
+    protected BatchQueryCall(IQueryPipeline pipeline, QueryCallBatcherKey batcherKey) {
+        this.storePipeline = pipeline;
         this.batcherKey = batcherKey;
-        if (linearizable) {
-            storePipeline = storeClient.createLinearizedQueryPipeline(batcherKey.storeId);
-        } else {
-            storePipeline = storeClient.createQueryPipeline(batcherKey.storeId);
-        }
     }
 
     @Override
@@ -77,11 +72,6 @@ public abstract class BatchQueryCall<ReqT, RespT> implements IBatchCall<ReqT, Re
     @Override
     public CompletableFuture<Void> execute() {
         return fireBatchCall(1);
-    }
-
-    @Override
-    public void destroy() {
-        storePipeline.close();
     }
 
     private CompletableFuture<Void> fireBatchCall(int recursionDepth) {

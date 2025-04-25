@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.client.scheduler;
 
-import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
+import com.baidu.bifromq.basekv.client.IMutationPipeline;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basescheduler.ICallTask;
@@ -25,9 +25,8 @@ import java.util.Queue;
 import java.util.Set;
 
 public class TestBatchMutationCall extends BatchMutationCall<ByteString, ByteString> {
-    protected TestBatchMutationCall(IBaseKVStoreClient storeClient,
-                                    MutationCallBatcherKey batcherKey) {
-        super(storeClient, batcherKey);
+    protected TestBatchMutationCall(IMutationPipeline pipeline, MutationCallBatcherKey batcherKey) {
+        super(pipeline, batcherKey);
     }
 
     @Override

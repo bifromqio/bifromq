@@ -14,8 +14,8 @@
 package com.baidu.bifromq.inbox.server.scheduler;
 
 import com.baidu.bifromq.basescheduler.IBatchCallScheduler;
-import com.baidu.bifromq.inbox.storage.proto.InboxInsertResult;
-import com.baidu.bifromq.inbox.storage.proto.InboxSubMessagePack;
+import com.baidu.bifromq.inbox.storage.proto.InsertRequest;
+import com.baidu.bifromq.inbox.storage.proto.InsertResult;
 
-public interface IInboxInsertScheduler extends IBatchCallScheduler<InboxSubMessagePack, InboxInsertResult> {
+public interface IInboxInsertScheduler extends IBatchCallScheduler<InsertRequest, InsertResult> {
 }

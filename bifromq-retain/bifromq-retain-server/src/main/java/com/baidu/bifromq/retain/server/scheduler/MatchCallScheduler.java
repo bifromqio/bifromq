@@ -15,37 +15,22 @@ package com.baidu.bifromq.retain.server.scheduler;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
-import com.baidu.bifromq.basescheduler.Batcher;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
-import com.baidu.bifromq.sysprops.props.DataPlaneBurstLatencyMillis;
-import com.baidu.bifromq.sysprops.props.DataPlaneTolerableLatencyMillis;
+import com.baidu.bifromq.sysprops.props.DataPlaneMaxBurstLatencyMillis;
 import java.time.Duration;
 import java.util.Optional;
 
-public class MatchCallScheduler extends BatchCallScheduler<MatchCall, MatchCallResult, MatchCallBatcherKey>
+public class MatchCallScheduler
+    extends BatchCallScheduler<MatchRetainedRequest, MatchRetainedResult, MatchCallBatcherKey>
     implements IMatchCallScheduler {
-    private final IBaseKVStoreClient retainStoreClient;
-    private final ISettingProvider settingProvider;
 
     public MatchCallScheduler(IBaseKVStoreClient retainStoreClient, ISettingProvider settingProvider) {
-        super("retain_server_match_batcher",
-            Duration.ofMillis(DataPlaneTolerableLatencyMillis.INSTANCE.get()),
-            Duration.ofSeconds(DataPlaneBurstLatencyMillis.INSTANCE.get()));
-        this.retainStoreClient = retainStoreClient;
-        this.settingProvider = settingProvider;
+        super((name, batcherKey) -> () -> new BatchMatchCall(batcherKey, retainStoreClient, settingProvider),
+            Duration.ofSeconds(DataPlaneMaxBurstLatencyMillis.INSTANCE.get()).toNanos());
     }
 
     @Override
-    protected Batcher<MatchCall, MatchCallResult, MatchCallBatcherKey> newBatcher(String name,
-                                                                                  long tolerableLatencyNanos,
-                                                                                  long burstLatencyNanos,
-                                                                                  MatchCallBatcherKey key) {
-        return new MatchCallBatcher(key, name, tolerableLatencyNanos, burstLatencyNanos,
-            retainStoreClient, settingProvider);
-    }
-
-    @Override
-    protected Optional<MatchCallBatcherKey> find(MatchCall call) {
+    protected Optional<MatchCallBatcherKey> find(MatchRetainedRequest call) {
         // TODO: implement multi batcher for tenant
         return Optional.of(new MatchCallBatcherKey(call.tenantId(), 0));
     }

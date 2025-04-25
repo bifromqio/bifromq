@@ -16,10 +16,6 @@ package com.baidu.bifromq.inbox.server.scheduler;
 import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.inboxStartKeyPrefix;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcher;
-import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
-import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.SendLWTReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendLWTRequest;
 import com.baidu.bifromq.sysprops.props.InboxCheckQueuesPerRange;
@@ -27,37 +23,19 @@ import com.google.protobuf.ByteString;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxSendLWTScheduler extends InboxReadScheduler<SendLWTRequest, SendLWTReply>
+public class InboxSendLWTScheduler extends InboxReadScheduler<SendLWTRequest, SendLWTReply, BatchSendLWTCall>
     implements IInboxSendLWTScheduler {
     public InboxSendLWTScheduler(IBaseKVStoreClient inboxStoreClient) {
-        super(InboxCheckQueuesPerRange.INSTANCE.get(), inboxStoreClient, "inbox_server_check");
+        super(BatchSendLWTCall::new, InboxCheckQueuesPerRange.INSTANCE.get(), inboxStoreClient);
     }
 
     @Override
-    protected Batcher<SendLWTRequest, SendLWTReply, QueryCallBatcherKey> newBatcher(String name,
-                                                                                    long tolerableLatencyNanos,
-                                                                                    long burstLatencyNanos,
-                                                                                    QueryCallBatcherKey batcherKey) {
-        return new InboxSendLWTBatcher(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos, storeClient);
+    protected boolean isLinearizable(SendLWTRequest request) {
+        return true;
     }
 
     @Override
     protected ByteString rangeKey(SendLWTRequest request) {
         return inboxStartKeyPrefix(request.getTenantId(), request.getInboxId());
-    }
-
-    private static class InboxSendLWTBatcher extends QueryCallBatcher<SendLWTRequest, SendLWTReply> {
-        InboxSendLWTBatcher(QueryCallBatcherKey batcherKey,
-                            String name,
-                            long tolerableLatencyNanos,
-                            long burstLatencyNanos,
-                            IBaseKVStoreClient storeClient) {
-            super(name, tolerableLatencyNanos, burstLatencyNanos, batcherKey, storeClient);
-        }
-
-        @Override
-        protected IBatchCall<SendLWTRequest, SendLWTReply, QueryCallBatcherKey> newBatch() {
-            return new BatchSendLWTCall(storeClient, batcherKey);
-        }
     }
 }

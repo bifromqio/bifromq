@@ -13,6 +13,11 @@
 
 package com.baidu.bifromq.deliverer;
 
+import static com.baidu.bifromq.deliverer.DeliveryCallResult.BACK_PRESSURE_REJECTED;
+import static com.baidu.bifromq.deliverer.DeliveryCallResult.ERROR;
+import static com.baidu.bifromq.deliverer.DeliveryCallResult.NO_RECEIVER;
+import static com.baidu.bifromq.deliverer.DeliveryCallResult.NO_SUB;
+import static com.baidu.bifromq.deliverer.DeliveryCallResult.OK;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -20,7 +25,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.plugin.subbroker.DeliveryReply;
@@ -59,12 +63,12 @@ public class DeliverySchedulerTest {
         when(subBrokerManager.get(0)).thenReturn(subBroker);
         when(subBroker.open(anyString())).thenReturn(groupWriter);
         when(subBroker.id()).thenReturn(0);
-        testDeliverer = new MessageDeliverer(subBrokerManager, distClient);
+        testDeliverer = new MessageDeliverer(new BatchDeliveryCallBuilderFactory(distClient, subBrokerManager));
     }
 
     @SneakyThrows
     @AfterMethod
-    public void teardown() {
+    public void tearDown() {
         closeable.close();
     }
 
@@ -85,8 +89,8 @@ public class DeliverySchedulerTest {
                         .build())
                     .build())
                 .build()));
-        DeliveryResult.Code result = testDeliverer.schedule(request).join();
-        assertEquals(result, DeliveryResult.Code.OK);
+        DeliveryCallResult result = testDeliverer.schedule(request).join();
+        assertEquals(result, OK);
     }
 
     @Test
@@ -97,8 +101,8 @@ public class DeliverySchedulerTest {
                 TopicMessagePackHolder.hold(TopicMessagePack.newBuilder().build()));
         when(groupWriter.deliver(any())).thenReturn(
             CompletableFuture.completedFuture(DeliveryReply.newBuilder().build()));
-        DeliveryResult.Code result = testDeliverer.schedule(request).join();
-        assertEquals(result, DeliveryResult.Code.OK);
+        DeliveryCallResult result = testDeliverer.schedule(request).join();
+        assertEquals(result, OK);
     }
 
     @Test
@@ -121,8 +125,8 @@ public class DeliverySchedulerTest {
                         .build())
                     .build())
                 .build()));
-        DeliveryResult.Code result = testDeliverer.schedule(request).join();
-        assertEquals(result, DeliveryResult.Code.NO_SUB);
+        DeliveryCallResult result = testDeliverer.schedule(request).join();
+        assertEquals(result, NO_SUB);
         verify(distClient).removeRoute(anyLong(),
             eq(tenantId), eq(matchInfo.getMatcher()), eq(matchInfo.getReceiverId()),
             eq("group1"), eq(0), eq(matchInfo.getIncarnation()));
@@ -148,15 +152,31 @@ public class DeliverySchedulerTest {
                         .build())
                     .build())
                 .build()));
-        DeliveryResult.Code result = testDeliverer.schedule(request).join();
-        assertEquals(result, DeliveryResult.Code.NO_RECEIVER);
+        DeliveryCallResult result = testDeliverer.schedule(request).join();
+        assertEquals(result, NO_RECEIVER);
         verify(distClient).removeRoute(anyLong(),
             eq(tenantId), eq(matchInfo.getMatcher()), eq(matchInfo.getReceiverId()),
             eq("group1"), eq(0), eq(matchInfo.getIncarnation()));
     }
 
+    @Test
+    public void writeBackPressureRejected() {
+        MatchInfo matchInfo = MatchInfo.newBuilder()
+            .setMatcher(TopicUtil.from("topic"))
+            .setReceiverId("receiverInfo")
+            .setIncarnation(1)
+            .build();
+        DeliveryCall request = new DeliveryCall(tenantId, matchInfo, 0, "group1",
+            TopicMessagePackHolder.hold(TopicMessagePack.newBuilder().build()));
+        when(groupWriter.deliver(any())).thenReturn(
+            CompletableFuture.completedFuture(DeliveryReply.newBuilder()
+                .setCode(DeliveryReply.Code.BACK_PRESSURE_REJECTED)
+                .build()));
+        DeliveryCallResult result = testDeliverer.schedule(request).join();
+        assertEquals(result, BACK_PRESSURE_REJECTED);
+    }
 
-    @Test(expectedExceptions = RuntimeException.class)
+    @Test
     public void writeFail() {
         MatchInfo matchInfo = MatchInfo.newBuilder().build();
         DeliveryCall request =
@@ -164,7 +184,7 @@ public class DeliverySchedulerTest {
                 TopicMessagePackHolder.hold(TopicMessagePack.newBuilder().build()));
         when(groupWriter.deliver(any())).thenReturn(
             CompletableFuture.failedFuture(new RuntimeException("Mock Exception")));
-        testDeliverer.schedule(request).join();
-        fail();
+        DeliveryCallResult result = testDeliverer.schedule(request).join();
+        assertEquals(result, ERROR);
     }
 }

@@ -16,53 +16,24 @@ package com.baidu.bifromq.inbox.server.scheduler;
 import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.inboxStartKeyPrefix;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
-import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
-import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubReply;
 import com.baidu.bifromq.inbox.rpc.proto.UnsubRequest;
-import com.baidu.bifromq.sysprops.props.ControlPlaneBurstLatencyMillis;
-import com.baidu.bifromq.sysprops.props.ControlPlaneTolerableLatencyMillis;
+import com.baidu.bifromq.sysprops.props.ControlPlaneMaxBurstLatencyMillis;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxUnSubScheduler extends MutationCallScheduler<UnsubRequest, UnsubReply>
+public class InboxUnSubScheduler extends MutationCallScheduler<UnsubRequest, UnsubReply, BatchUnsubCall>
     implements IInboxUnsubScheduler {
     public InboxUnSubScheduler(IBaseKVStoreClient inboxStoreClient) {
-        super("inbox_server_unsub", inboxStoreClient,
-            Duration.ofMillis(ControlPlaneTolerableLatencyMillis.INSTANCE.get()),
-            Duration.ofMillis(ControlPlaneBurstLatencyMillis.INSTANCE.get()));
-    }
-
-    @Override
-    protected Batcher<UnsubRequest, UnsubReply, MutationCallBatcherKey> newBatcher(String name,
-                                                                                   long tolerableLatencyNanos,
-                                                                                   long burstLatencyNanos,
-                                                                                   MutationCallBatcherKey batchKey) {
-        return new InboxUnSubBatcher(name, tolerableLatencyNanos, burstLatencyNanos, batchKey, storeClient);
+        super(BatchUnsubCall::new, Duration.ofMillis(ControlPlaneMaxBurstLatencyMillis.INSTANCE.get()).toNanos(),
+            inboxStoreClient);
     }
 
     @Override
     protected ByteString rangeKey(UnsubRequest request) {
         return inboxStartKeyPrefix(request.getTenantId(), request.getInboxId());
-    }
-
-    private static class InboxUnSubBatcher extends MutationCallBatcher<UnsubRequest, UnsubReply> {
-        InboxUnSubBatcher(String name,
-                          long tolerableLatencyNanos,
-                          long burstLatencyNanos,
-                          MutationCallBatcherKey batchKey,
-                          IBaseKVStoreClient inboxStoreClient) {
-            super(name, tolerableLatencyNanos, burstLatencyNanos, batchKey, inboxStoreClient);
-        }
-
-        @Override
-        protected IBatchCall<UnsubRequest, UnsubReply, MutationCallBatcherKey> newBatch() {
-            return new BatchUnsubCall(storeClient, batcherKey);
-        }
     }
 }

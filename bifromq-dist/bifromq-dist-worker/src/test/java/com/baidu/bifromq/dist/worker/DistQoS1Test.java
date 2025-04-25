@@ -146,7 +146,7 @@ public class DistQoS1Test extends DistWorkerTest {
         verify(distClient, timeout(200).atLeastOnce())
             .removeRoute(anyLong(), anyString(), any(), anyString(), anyString(), anyInt(), anyLong());
 
-        verify(eventCollector, timeout(200).atLeastOnce()).report(argThat(e -> e.type() == EventType.DELIVER_NO_INBOX));
+        verify(eventCollector, timeout(200).atLeastOnce()).report(argThat(e -> e.type() == EventType.DELIVER_ERROR));
 
         unmatch(tenantA, "$share/group//a/b/c", MqttBroker, "inbox1", "server1");
     }

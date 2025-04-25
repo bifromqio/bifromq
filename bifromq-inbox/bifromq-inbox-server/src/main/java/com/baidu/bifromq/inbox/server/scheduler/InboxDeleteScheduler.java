@@ -16,55 +16,25 @@ package com.baidu.bifromq.inbox.server.scheduler;
 import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.inboxStartKeyPrefix;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcher;
-import com.baidu.bifromq.basekv.client.scheduler.MutationCallBatcherKey;
 import com.baidu.bifromq.basekv.client.scheduler.MutationCallScheduler;
-import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteReply;
 import com.baidu.bifromq.inbox.rpc.proto.DeleteRequest;
-import com.baidu.bifromq.sysprops.props.ControlPlaneBurstLatencyMillis;
-import com.baidu.bifromq.sysprops.props.ControlPlaneTolerableLatencyMillis;
+import com.baidu.bifromq.sysprops.props.ControlPlaneMaxBurstLatencyMillis;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class InboxDeleteScheduler extends MutationCallScheduler<DeleteRequest, DeleteReply>
+public class InboxDeleteScheduler extends MutationCallScheduler<DeleteRequest, DeleteReply, BatchDeleteCall>
     implements IInboxDeleteScheduler {
 
     public InboxDeleteScheduler(IBaseKVStoreClient inboxStoreClient) {
-        super("inbox_server_delete", inboxStoreClient,
-            Duration.ofMillis(ControlPlaneTolerableLatencyMillis.INSTANCE.get()),
-            Duration.ofMillis(ControlPlaneBurstLatencyMillis.INSTANCE.get()));
-    }
-
-    @Override
-    protected Batcher<DeleteRequest, DeleteReply, MutationCallBatcherKey> newBatcher(
-        String name,
-        long tolerableLatencyNanos,
-        long burstLatencyNanos,
-        MutationCallBatcherKey range) {
-        return new InboxDeleteBatcher(name, tolerableLatencyNanos, burstLatencyNanos, range, storeClient);
+        super(BatchDeleteCall::new, Duration.ofMillis(ControlPlaneMaxBurstLatencyMillis.INSTANCE.get()).toNanos(),
+            inboxStoreClient);
     }
 
     @Override
     protected ByteString rangeKey(DeleteRequest request) {
         return inboxStartKeyPrefix(request.getTenantId(), request.getInboxId());
-    }
-
-    private static class InboxDeleteBatcher extends MutationCallBatcher<DeleteRequest, DeleteReply> {
-        private InboxDeleteBatcher(String name,
-                                   long expectLatencyNanos,
-                                   long maxTolerableLatencyNanos,
-                                   MutationCallBatcherKey range,
-                                   IBaseKVStoreClient inboxStoreClient) {
-            super(name, expectLatencyNanos, maxTolerableLatencyNanos, range, inboxStoreClient);
-        }
-
-        @Override
-        protected IBatchCall<DeleteRequest, DeleteReply, MutationCallBatcherKey> newBatch() {
-            return new BatchDeleteCall(storeClient, batcherKey);
-        }
     }
 }

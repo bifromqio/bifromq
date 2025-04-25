@@ -16,47 +16,23 @@ package com.baidu.bifromq.inbox.server.scheduler;
 import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.inboxStartKeyPrefix;
 
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
-import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcher;
-import com.baidu.bifromq.basekv.client.scheduler.QueryCallBatcherKey;
-import com.baidu.bifromq.basescheduler.Batcher;
-import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.plugin.subbroker.CheckReply;
 import com.baidu.bifromq.sysprops.props.InboxCheckQueuesPerRange;
 import com.google.protobuf.ByteString;
 
-public class InboxCheckSubScheduler
-    extends InboxReadScheduler<IInboxCheckSubScheduler.CheckMatchInfo, CheckReply.Code>
+public class InboxCheckSubScheduler extends InboxReadScheduler<CheckMatchInfo, CheckReply.Code, BatchCheckSubCall>
     implements IInboxCheckSubScheduler {
     public InboxCheckSubScheduler(IBaseKVStoreClient inboxStoreClient) {
-        super(InboxCheckQueuesPerRange.INSTANCE.get(), inboxStoreClient, "inbox_server_checksub");
+        super(BatchCheckSubCall::new, InboxCheckQueuesPerRange.INSTANCE.get(), inboxStoreClient);
+    }
+
+    @Override
+    protected boolean isLinearizable(CheckMatchInfo request) {
+        return true;
     }
 
     @Override
     protected ByteString rangeKey(CheckMatchInfo request) {
         return inboxStartKeyPrefix(request.tenantId(), request.matchInfo().getReceiverId());
-    }
-
-    @Override
-    protected Batcher<CheckMatchInfo, CheckReply.Code, QueryCallBatcherKey> newBatcher(String name,
-                                                                                       long tolerableLatencyNanos,
-                                                                                       long burstLatencyNanos,
-                                                                                       QueryCallBatcherKey batcherKey) {
-        return new InboxCheckMatchInfoBatcher(batcherKey, name, tolerableLatencyNanos, burstLatencyNanos, storeClient);
-    }
-
-    private static class InboxCheckMatchInfoBatcher
-        extends QueryCallBatcher<IInboxCheckSubScheduler.CheckMatchInfo, CheckReply.Code> {
-        InboxCheckMatchInfoBatcher(QueryCallBatcherKey batcherKey,
-                                   String name,
-                                   long tolerableLatencyNanos,
-                                   long burstLatencyNanos,
-                                   IBaseKVStoreClient storeClient) {
-            super(name, tolerableLatencyNanos, burstLatencyNanos, batcherKey, storeClient);
-        }
-
-        @Override
-        protected IBatchCall<IInboxCheckSubScheduler.CheckMatchInfo, CheckReply.Code, QueryCallBatcherKey> newBatch() {
-            return new BatchCheckSubCall(storeClient, batcherKey);
-        }
     }
 }
