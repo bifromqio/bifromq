@@ -66,6 +66,10 @@ class KVRangeWALSubscription implements IKVRangeWALSubscription {
                 applyRunner.add(restore(task))
                     .handle((snap, e) -> fetchRunner.add(() -> {
                         if (e != null) {
+                            log.error(
+                                "Failed to install snapshot: range={}, ver={}, state={}, checkpoint={}, lastAppliedIndex={}",
+                                KVRangeIdUtil.toString(snap.getId()), snap.getVer(), snap.getState(),
+                                snap.getCheckpointId(), snap.getLastAppliedIndex());
                             return;
                         }
                         log.debug(

@@ -44,22 +44,6 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 
 abstract class RaftNodeState implements IRaftNodeState {
-    public interface OnSnapshotInstalled {
-        CompletableFuture<Void> done(ByteString requested, ByteString installed, Throwable ex);
-    }
-
-    /**
-     * The future of Uncommitted propose request.
-     */
-    protected static class ProposeTask {
-        final long term;
-        final CompletableFuture<Long> future;
-
-        ProposeTask(long term, CompletableFuture<Long> future) {
-            this.term = term;
-            this.future = future;
-        }
-    }
 
     protected final String id;
     protected final RaftConfig config;
@@ -73,7 +57,6 @@ abstract class RaftNodeState implements IRaftNodeState {
     protected final int maxUncommittedProposals;
     protected final String[] tags;
     protected volatile long commitIndex;
-
     public RaftNodeState(
         long currentTerm,
         long commitIndex,
@@ -225,7 +208,6 @@ abstract class RaftNodeState implements IRaftNodeState {
         return config.getElectionTimeoutTick() +
             ThreadLocalRandom.current().nextInt(1, config.getElectionTimeoutTick() + 1);
     }
-
 
     protected void submitRaftMessages(Map<String, List<RaftMessage>> messages) {
         Map<String, List<RaftMessage>> sendMessages = messages.entrySet().stream()
@@ -383,6 +365,23 @@ abstract class RaftNodeState implements IRaftNodeState {
                 message.getMessageTypeCase(), message.getTerm(), fromPeer);
 
             // ignore other messages other than the leader issues
+        }
+    }
+
+    interface OnSnapshotInstalled {
+        CompletableFuture<Void> done(ByteString requested, ByteString installed, Throwable ex);
+    }
+
+    /**
+     * The future of Uncommitted propose request.
+     */
+    protected static class ProposeTask {
+        final long term;
+        final CompletableFuture<Long> future;
+
+        ProposeTask(long term, CompletableFuture<Long> future) {
+            this.term = term;
+            this.future = future;
         }
     }
 }

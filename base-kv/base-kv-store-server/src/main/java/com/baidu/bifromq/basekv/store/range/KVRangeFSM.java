@@ -71,6 +71,7 @@ import com.baidu.bifromq.basekv.proto.State;
 import com.baidu.bifromq.basekv.proto.TransferLeadership;
 import com.baidu.bifromq.basekv.proto.WALRaftMessages;
 import com.baidu.bifromq.basekv.raft.exception.LeaderTransferException;
+import com.baidu.bifromq.basekv.raft.exception.SnapshotException;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.RaftMessage;
@@ -123,7 +124,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.StampedLock;
 import java.util.function.Supplier;
@@ -162,6 +165,8 @@ public class KVRangeFSM implements IKVRangeFSM {
     private final CompletableFuture<Void> closeSignal = new CompletableFuture<>();
     private final CompletableFuture<Void> quitSignal = new CompletableFuture<>();
     private final CompletableFuture<Void> destroyedSignal = new CompletableFuture<>();
+    private final AtomicLong lastShrinkCheckAt = new AtomicLong();
+    private final AtomicBoolean shrinkingWAL = new AtomicBoolean();
     private final KVRangeMetricManager metricManager;
     private final List<IKVRangeSplitHinter> splitHinters;
     private final StampedLock resetLock = new StampedLock();
@@ -311,7 +316,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 // make sure latest snapshot exists
                 if (!kvRange.hasCheckpoint(wal.latestSnapshot())) {
                     log.debug("Latest snapshot not available, do compaction: \n{}", wal.latestSnapshot());
-                    compactWAL(false);
+                    compactWAL();
                 }
             }
         });
@@ -325,7 +330,7 @@ public class KVRangeFSM implements IKVRangeFSM {
         wal.tick();
         statsCollector.tick();
         dumpSessions.values().forEach(KVRangeDumpSession::tick);
-        compactWAL(true);
+        shrinkWAL();
         checkZombieState();
         estimateSplitHint();
     }
@@ -537,6 +542,10 @@ public class KVRangeFSM implements IKVRangeFSM {
             return CompletableFuture.failedFuture(
                 new KVRangeException.InternalException("Range not open:" + KVRangeIdUtil.toString(id)));
         }
+        if (command.getVer() != kvRange.version()) {
+            return CompletableFuture.failedFuture(new KVRangeException.BadVersion("Version Mismatch"));
+        }
+
         CompletableFuture<T> onDone = new CompletableFuture<>();
 
         // add to writeRequests must happen before proposing
@@ -825,7 +834,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                         session.cancel();
                         dumpSessions.remove(sessionId, session);
                     });
-                    compactWALFuture = compactWAL(false);
+                    compactWALFuture = compactWAL();
                 }
                 compactWALFuture.whenCompleteAsync((v, e) -> {
                     if (e != null) {
@@ -1446,27 +1455,39 @@ public class KVRangeFSM implements IKVRangeFSM {
                                             String leader,
                                             IKVRangeWALSubscriber.IAfterRestoredCallback onInstalled) {
         if (isNotOpening()) {
-            onInstalled.call(null,
+            return onInstalled.call(null,
                 new KVRangeException.InternalException("Range not open:" + KVRangeIdUtil.toString(id)));
         }
-        return mgmtTaskRunner.add(() -> {
+        return mgmtTaskRunner.addFirst(() -> {
             if (isNotOpening()) {
                 return CompletableFuture.completedFuture(null);
             }
             return restorer.restoreFrom(leader, snapshot)
-                .exceptionallyCompose(e -> {
-                    log.debug("Restored from snapshot error: \n{}", snapshot, e);
-                    return onInstalled.call(null, e);
+                .handle((result, ex) -> {
+                    if (ex != null) {
+                        log.warn("Restored from snapshot error: \n{}", snapshot, ex);
+                        return onInstalled.call(null, ex);
+                    } else {
+                        return onInstalled.call(kvRange.checkpoint(), null);
+                    }
                 })
-                .thenAccept(v -> {
-                    linearizer.afterLogApplied(snapshot.getLastAppliedIndex());
-                    // reset the co-proc
-                    factSubject.onNext(reset(snapshot.getBoundary()));
-                    // finish all pending tasks
-                    cmdFutures.keySet().forEach(taskId -> finishCommandWithError(taskId,
-                        new KVRangeException.TryLater("Restored from snapshot, try again")));
-                })
-                .thenCompose(v -> onInstalled.call(kvRange.checkpoint(), null));
+                .thenCompose(f -> f)
+                .whenCompleteAsync((v, e) -> {
+                    if (e != null) {
+                        if (e instanceof SnapshotException || e.getCause() instanceof SnapshotException) {
+                            log.error("Failed to apply snapshot to WAL \n{}", snapshot, e);
+                            // WAL and FSM are inconsistent, need to quit and recreate again
+                            quitSignal.complete(null);
+                        }
+                    } else {
+                        linearizer.afterLogApplied(snapshot.getLastAppliedIndex());
+                        // reset the co-proc
+                        factSubject.onNext(reset(snapshot.getBoundary()));
+                        // finish all pending tasks
+                        cmdFutures.keySet().forEach(taskId -> finishCommandWithError(taskId,
+                            new KVRangeException.TryLater("Restored from snapshot, try again")));
+                    }
+                }, fsmExecutor);
         });
     }
 
@@ -1474,35 +1495,58 @@ public class KVRangeFSM implements IKVRangeFSM {
         splitHintsSubject.onNext(splitHinters.stream().map(IKVRangeSplitHinter::estimate).toList());
     }
 
-    private CompletableFuture<Void> compactWAL(boolean checkWALSize) {
+    private void shrinkWAL() {
         if (isNotOpening()) {
-            return CompletableFuture.completedFuture(null);
+            return;
         }
-        return mgmtTaskRunner.add(() -> {
-            if (isNotOpening() || kvRange.state().getType() == ConfigChanging) {
-                // don't let compaction interferes with config changing process
-                return CompletableFuture.completedFuture(null);
+        if (shrinkingWAL.compareAndSet(false, true)) {
+            long now = System.nanoTime();
+            if (now - lastShrinkCheckAt.get() < Duration.ofSeconds(opts.getShrinkWALCheckIntervalSec()).toNanos()) {
+                shrinkingWAL.set(false);
+                return;
             }
-            KVRangeSnapshot latestSnapshot = wal.latestSnapshot();
-            if (checkWALSize) {
-                long lastAppliedIndex = kvRange.lastAppliedIndex();
-                if (lastAppliedIndex - latestSnapshot.getLastAppliedIndex() < opts.getCompactWALThreshold()) {
+            lastShrinkCheckAt.set(now);
+            if (kvRange.lastAppliedIndex() - wal.latestSnapshot().getLastAppliedIndex()
+                < opts.getCompactWALThreshold()) {
+                shrinkingWAL.set(false);
+                return;
+            }
+            mgmtTaskRunner.add(() -> {
+                if (isNotOpening() || kvRange.state().getType() == ConfigChanging) {
+                    // don't let compaction interferes with config changing process
+                    shrinkingWAL.set(false);
                     return CompletableFuture.completedFuture(null);
                 }
-            }
-            if (!dumpSessions.isEmpty()) {
-                return CompletableFuture.completedFuture(null);
-            }
-            return metricManager.recordCompact(() -> {
-                KVRangeSnapshot snapshot = kvRange.checkpoint();
-                log.debug("Compact wal using snapshot:\n{}", snapshot);
-                return wal.compact(snapshot)
-                    .whenComplete((v, e) -> {
-                        if (e != null) {
-                            log.error("Failed to compact WAL due to {}: \n{}", e.getMessage(), snapshot);
-                        }
-                    });
+                KVRangeSnapshot latestSnapshot = wal.latestSnapshot();
+                long lastAppliedIndex = kvRange.lastAppliedIndex();
+                if (lastAppliedIndex - latestSnapshot.getLastAppliedIndex() < opts.getCompactWALThreshold()) {
+                    shrinkingWAL.set(false);
+                    return CompletableFuture.completedFuture(null);
+                }
+                if (!dumpSessions.isEmpty() || !restorer.awaitDone().isDone()) {
+                    shrinkingWAL.set(false);
+                    return CompletableFuture.completedFuture(null);
+                }
+                log.debug("Shrink wal: lastAppliedIndex={}, latestSnapshot={}", lastAppliedIndex, latestSnapshot);
+                return doCompactWAL().whenComplete((v, e) -> shrinkingWAL.set(false));
             });
+        }
+    }
+
+    private CompletableFuture<Void> compactWAL() {
+        return mgmtTaskRunner.add(this::doCompactWAL);
+    }
+
+    private CompletableFuture<Void> doCompactWAL() {
+        return metricManager.recordCompact(() -> {
+            KVRangeSnapshot snapshot = kvRange.checkpoint();
+            log.debug("Compact wal using snapshot:\n{}", snapshot);
+            return wal.compact(snapshot)
+                .whenComplete((v, e) -> {
+                    if (e != null) {
+                        log.error("Failed to compact WAL due to {}: \n{}", e.getMessage(), snapshot);
+                    }
+                });
         });
     }
 
@@ -1567,17 +1611,22 @@ public class KVRangeFSM implements IKVRangeFSM {
     private void handleSnapshotSyncRequest(String follower, SnapshotSyncRequest request) {
         log.info("Dumping snapshot: session={}: follower={}\n{}",
             request.getSessionId(), follower, request.getSnapshot());
-        KVRangeDumpSession session = new KVRangeDumpSession(follower, request, kvRange, messenger, fsmExecutor,
+        KVRangeDumpSession session = new KVRangeDumpSession(follower, request, kvRange, messenger,
             Duration.ofSeconds(opts.getSnapshotSyncIdleTimeoutSec()),
             opts.getSnapshotSyncBytesPerSec(), metricManager::reportDump, tags);
         dumpSessions.put(session.id(), session);
         session.awaitDone().whenComplete((result, e) -> {
-            log.info("Snapshot dumped: session={}, follower={}", session.id(), follower);
-            dumpSessions.remove(session.id(), session);
-            if (result == KVRangeDumpSession.Result.NoCheckpoint) {
-                log.info("No checkpoint found, compact WAL now");
-                compactWAL(false);
+            switch (result) {
+                case OK -> log.info("Snapshot dumped: session={}, follower={}", session.id(), follower);
+                case Canceled -> log.info("Snapshot dump canceled: session={}, follower={}", session.id(), follower);
+                case NoCheckpoint -> {
+                    log.info("No checkpoint found, compact WAL now");
+                    compactWAL();
+                }
+                case Abort -> log.info("Snapshot dump aborted: session={}, follower={}", session.id(), follower);
+                case Error -> log.warn("Snapshot dump failed: session={}, follower={}", session.id(), follower);
             }
+            dumpSessions.remove(session.id(), session);
         });
     }
 

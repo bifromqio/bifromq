@@ -104,6 +104,10 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
     private <ReqT, ResultT> CompletableFuture<ResultT> submit(long ver,
                                                               QueryFunction<ReqT, ResultT> queryFn,
                                                               boolean linearized) {
+        if (ver != kvRange.version()) {
+            return CompletableFuture.failedFuture(
+                new KVRangeException.BadVersion("Version Mismatch: expect=" + kvRange.version() + ", actual=" + ver));
+        }
         CompletableFuture<ResultT> onDone = new CompletableFuture<>();
         runningQueries.add(onDone);
         Runnable queryTask = () -> {

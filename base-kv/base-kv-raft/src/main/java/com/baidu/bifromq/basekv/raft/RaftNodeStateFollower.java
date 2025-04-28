@@ -20,6 +20,7 @@ import com.baidu.bifromq.basekv.raft.exception.DropProposalException;
 import com.baidu.bifromq.basekv.raft.exception.LeaderTransferException;
 import com.baidu.bifromq.basekv.raft.exception.ReadIndexException;
 import com.baidu.bifromq.basekv.raft.exception.RecoveryException;
+import com.baidu.bifromq.basekv.raft.exception.SnapshotException;
 import com.baidu.bifromq.basekv.raft.proto.AppendEntries;
 import com.baidu.bifromq.basekv.raft.proto.AppendEntriesReply;
 import com.baidu.bifromq.basekv.raft.proto.InstallSnapshot;
@@ -46,12 +47,6 @@ import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 
 class RaftNodeStateFollower extends RaftNodeState {
-    private static class StabilizingTask {
-        int pendingReplyCount = 0;
-        long readIndex = -1;
-        boolean committed = false;
-    }
-
     private final TreeMap<Long, StabilizingTask> stabilizingIndexes = new TreeMap<>(Long::compareTo);
     private final LinkedHashMap<Long, Set<Integer>> tickToReadRequestsMap;
     private final Map<Integer, CompletableFuture<Long>> idToReadRequestMap;
@@ -384,12 +379,20 @@ class RaftNodeStateFollower extends RaftNodeState {
     @Override
     void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex, CompletableFuture<Void> onDone) {
         if (currentISSRequest == null) {
+            log.debug("Snapshot installation request not found");
+            onDone.completeExceptionally(new SnapshotException("No snapshot installation request"));
             return;
         }
         InstallSnapshot iss = currentISSRequest;
         Snapshot snapshot = iss.getSnapshot();
         if (snapshot.getData() != requested) {
-            log.debug("Skip reply for obsolete snapshot installation");
+            if (ex != null) {
+                log.debug("Obsolete snapshot install failed", ex);
+                onDone.completeExceptionally(ex);
+            } else {
+                log.debug("Obsolete snapshot installation");
+                onDone.completeExceptionally(new SnapshotException("Obsolete snapshot installed by FSM"));
+            }
             return;
         }
         currentISSRequest = null;
@@ -409,7 +412,7 @@ class RaftNodeStateFollower extends RaftNodeState {
             submitRaftMessages(iss.getLeaderId(), reply);
             onDone.completeExceptionally(ex);
         } else {
-            log.debug("Snapshot[index:{},term:{}] accepted by FSM", snapshot.getIndex(), snapshot.getTerm());
+            log.info("Snapshot[index:{},term:{}] accepted by FSM", snapshot.getIndex(), snapshot.getTerm());
             try {
                 // replace fsm snapshot data with the installed one
                 snapshot = snapshot.toBuilder().setData(installed).build();
@@ -710,5 +713,11 @@ class RaftNodeStateFollower extends RaftNodeState {
             Snapshot snapshot = stateStorage.latestSnapshot();
             return snapshot.getIndex() == index && snapshot.getTerm() == term;
         }
+    }
+
+    private static class StabilizingTask {
+        int pendingReplyCount = 0;
+        long readIndex = -1;
+        boolean committed = false;
     }
 }

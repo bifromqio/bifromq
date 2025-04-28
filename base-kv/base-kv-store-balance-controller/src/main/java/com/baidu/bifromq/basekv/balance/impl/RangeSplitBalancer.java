@@ -13,6 +13,11 @@
 
 package com.baidu.bifromq.basekv.balance.impl;
 
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compareEndKeys;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compareStartKey;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.endKey;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.startKey;
+
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeStoreDescriptor;
@@ -136,14 +141,20 @@ public class RangeSplitBalancer extends RuleBasedPlacementBalancer {
                     && ioDensity > maxIODensityPerRange
                     && storeDescriptor.getRangesList().size() < maxRangesPerStore
                     && splitHint.hasSplitKey()) {
-                    expectedRangeLayout.put(boundary
-                        .toBuilder()
-                        .setEndKey(splitHint.getSplitKey())
-                        .build(), clusterConfig);
-                    expectedRangeLayout.put(boundary
-                        .toBuilder()
-                        .setStartKey(splitHint.getSplitKey())
-                        .build(), clusterConfig);
+                    if (compareStartKey(startKey(boundary), splitHint.getSplitKey()) < 0
+                        && compareEndKeys(splitHint.getSplitKey(), endKey(boundary)) < 0) {
+                        expectedRangeLayout.put(boundary
+                            .toBuilder()
+                            .setEndKey(splitHint.getSplitKey())
+                            .build(), clusterConfig);
+                        expectedRangeLayout.put(boundary
+                            .toBuilder()
+                            .setStartKey(splitHint.getSplitKey())
+                            .build(), clusterConfig);
+                    } else {
+                        log.warn("Invalid split key in hint: {}, range: {}", splitHint.getSplitKey(), boundary);
+                        expectedRangeLayout.put(boundary, rangeDescriptor.getConfig());
+                    }
                 } else {
                     expectedRangeLayout.put(boundary, rangeDescriptor.getConfig());
                 }

@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
+import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.proto.KVPair;
 import com.baidu.bifromq.basekv.proto.KVRangeMessage;
 import com.baidu.bifromq.basekv.proto.SaveSnapshotDataReply;
@@ -21,29 +22,27 @@ import com.baidu.bifromq.basekv.proto.SnapshotSyncRequest;
 import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.util.concurrent.RateLimiter;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import io.reactivex.rxjava3.disposables.Disposable;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedTransferQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 
 class KVRangeDumpSession {
-    enum Result {
-        OK, NoCheckpoint, Canceled, Abort, Error
-    }
-
     private final Logger log;
-
-    interface DumpBytesRecorder {
-        void record(int bytes);
-    }
-
     private final String follower;
     private final SnapshotSyncRequest request;
     private final IKVRangeMessenger messenger;
+    private final ExecutorService executor;
     private final AsyncRunner runner;
     private final AtomicInteger reqId = new AtomicInteger();
     private final AtomicBoolean canceled = new AtomicBoolean();
@@ -59,7 +58,6 @@ class KVRangeDumpSession {
                        SnapshotSyncRequest request,
                        IKVRange accessor,
                        IKVRangeMessenger messenger,
-                       Executor executor,
                        Duration maxIdleDuration,
                        long bandwidth,
                        DumpBytesRecorder recorder,
@@ -67,6 +65,11 @@ class KVRangeDumpSession {
         this.follower = follower;
         this.request = request;
         this.messenger = messenger;
+        this.executor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+            new ThreadPoolExecutor(1, 1,
+                0L, TimeUnit.MILLISECONDS, new LinkedTransferQueue<>(),
+                EnvProvider.INSTANCE.newThreadFactory("basekv-snapshot-dumper")),
+            "mutator", "basekv.range", Tags.of(tags));
         this.runner = new AsyncRunner("basekv.runner.sessiondump", executor);
         this.maxIdleDuration = maxIdleDuration;
         this.recorder = recorder;
@@ -124,7 +127,7 @@ class KVRangeDumpSession {
     }
 
     void tick() {
-        if (lastReplyTS == 0) {
+        if (lastReplyTS == 0 || canceled.get()) {
             return;
         }
         long elapseNanos = Duration.ofNanos(System.nanoTime() - lastReplyTS).toNanos();
@@ -147,7 +150,7 @@ class KVRangeDumpSession {
     }
 
     CompletableFuture<Result> awaitDone() {
-        return doneSignal;
+        return doneSignal.whenComplete((v, e) -> executor.shutdown());
     }
 
     private void handleReply(SaveSnapshotDataReply reply) {
@@ -229,5 +232,13 @@ class KVRangeDumpSession {
                 doneSignal.complete(Result.Error);
             }
         });
+    }
+
+    enum Result {
+        OK, NoCheckpoint, Canceled, Abort, Error
+    }
+
+    interface DumpBytesRecorder {
+        void record(int bytes);
     }
 }

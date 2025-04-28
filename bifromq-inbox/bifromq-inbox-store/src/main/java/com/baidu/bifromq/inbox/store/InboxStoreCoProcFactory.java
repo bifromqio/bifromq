@@ -13,9 +13,14 @@
 
 package com.baidu.bifromq.inbox.store;
 
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compareEndKeys;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.compareStartKey;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.endKey;
+import static com.baidu.bifromq.basekv.utils.BoundaryUtil.startKey;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
 import static com.baidu.bifromq.inbox.store.schema.KVSchemaUtil.parseInboxBucketPrefix;
 
+import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.store.api.IKVRangeCoProc;
@@ -30,6 +35,7 @@ import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
 import com.baidu.bifromq.retain.client.IRetainClient;
 import com.baidu.bifromq.sessiondict.client.ISessionDictClient;
 import com.bifromq.plugin.resourcethrottler.IResourceThrottler;
+import com.google.protobuf.ByteString;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
@@ -75,8 +81,17 @@ public class InboxStoreCoProcFactory implements IKVRangeCoProcFactory {
     public List<IKVRangeSplitHinter> createHinters(String clusterId, String storeId, KVRangeId id,
                                                    Supplier<IKVCloseableReader> rangeReaderProvider) {
         // load-based hinter only split range around up to the inbox bucket boundary
-        return Collections.singletonList(new MutationKVLoadBasedSplitHinter(loadEstWindow, key ->
-            Optional.ofNullable(upperBound(parseInboxBucketPrefix(key))),
+        return Collections.singletonList(new MutationKVLoadBasedSplitHinter(loadEstWindow, key -> {
+            ByteString splitKey = upperBound(parseInboxBucketPrefix(key));
+            if (splitKey != null) {
+                Boundary boundary = rangeReaderProvider.get().boundary();
+                if (compareStartKey(startKey(boundary), splitKey) < 0
+                    && compareEndKeys(splitKey, endKey(boundary)) < 0) {
+                    return Optional.of(splitKey);
+                }
+            }
+            return Optional.empty();
+        },
             "clusterId", clusterId, "storeId", storeId, "rangeId",
             KVRangeIdUtil.toString(id)));
     }

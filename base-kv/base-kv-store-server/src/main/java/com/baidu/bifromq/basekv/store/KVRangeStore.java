@@ -555,24 +555,35 @@ public class KVRangeStore implements IKVRangeStore {
     }
 
     private void quitKVRange(IKVRangeFSM range) {
-        mgmtTaskRunner.add(() -> {
+        if (status.get() != Status.STARTED) {
+            return;
+        }
+        CompletableFuture<Optional<RangeFSMHolder.PinnedRange>> afterDestroyed = mgmtTaskRunner.add(() -> {
             if (status.get() != Status.STARTED) {
-                return CompletableFuture.completedFuture(null);
+                return CompletableFuture.failedFuture(new KVRangeStoreException("Not started"));
             }
             RangeFSMHolder holder = kvRangeMap.remove(range.id());
             assert holder.fsm == range;
             long ver = range.ver();
+            log.debug("Destroy kvrange: rangeId={}", KVRangeIdUtil.toString(range.id()));
             return range.destroy()
-                .thenCompose(v -> {
+                .thenApply(v -> {
                     if (holder.pinned != null && holder.pinned.ver > ver) {
-                        RangeFSMHolder.PinnedRange pinnedRange = holder.pinned;
+                        return Optional.of(holder.pinned);
+                    }
+                    return Optional.empty();
+                });
+        });
+        afterDestroyed.thenCompose(pinned ->
+                mgmtTaskRunner.add(() -> {
+                    if (pinned.isPresent()) {
+                        RangeFSMHolder.PinnedRange pinnedRange = pinned.get();
                         log.debug("Recreate range after destroy: rangeId={}", KVRangeIdUtil.toString(range.id()));
                         return ensureRange(range.id(), pinnedRange.walSnapshot, pinnedRange.fsmSnapshot);
                     }
                     return CompletableFuture.completedFuture(null);
-                })
-                .thenAccept(v -> updateDescriptorList());
-        });
+                }))
+            .thenAccept(v -> updateDescriptorList());
     }
 
     private IKVRangeFSM loadKVRangeFSM(KVRangeId rangeId, IKVRange range, IKVRangeWALStore walStore) {

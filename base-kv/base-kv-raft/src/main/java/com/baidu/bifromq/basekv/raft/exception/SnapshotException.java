@@ -13,12 +13,12 @@
 
 package com.baidu.bifromq.basekv.raft.exception;
 
-public class InternalError extends Error {
-    public InternalError(String message) {
+public class SnapshotException extends RuntimeException {
+    public SnapshotException(String message) {
         super(message);
     }
 
-    public InternalError(Throwable e) {
+    public SnapshotException(Throwable e) {
         super(e);
     }
 }

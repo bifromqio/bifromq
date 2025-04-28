@@ -67,7 +67,7 @@ class KVRangeRestorer {
         RestoreSession prevSession = currentSession.getAndSet(session);
         if (!prevSession.snapshot.equals(rangeSnapshot) && !prevSession.doneFuture.isDone()) {
             // cancel previous restore session
-            log.debug("Cancel previous restore session: session={} \n{}", prevSession.id, prevSession.snapshot);
+            log.info("Cancel previous restore session: session={} \n{}", prevSession.id, prevSession.snapshot);
             prevSession.doneFuture.cancel(true);
         }
         CompletableFuture<Void> onDone = session.doneFuture;

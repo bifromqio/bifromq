@@ -60,7 +60,6 @@ public class KVRangeQueryRunnerTest extends MockableTest {
 
         CompletableFuture<ROCoProcOutput> queryFuture = runner.queryCoProc(0, ROCoProcInput.newBuilder()
             .setRaw(ByteString.copyFromUtf8("key")).build(), false);
-        verify(accessor).returnDataReader(kvReader);
         try {
             queryFuture.join();
             fail();
