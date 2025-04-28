@@ -53,7 +53,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -62,7 +63,8 @@ import lombok.extern.slf4j.Slf4j;
 class BaseKVClusterMetadataManager implements IBaseKVClusterMetadataManager {
     private static final Scheduler SHARED_SCHEDULER = Schedulers.from(
         ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            Executors.newSingleThreadExecutor(EnvProvider.INSTANCE.newThreadFactory("basekv-metadata-manager", true)),
+            new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(), EnvProvider.INSTANCE.newThreadFactory("basekv-metadata-manager", true)),
             "basekv-metadata-manager"));
     private final ICRDTService crdtService;
     private final IORMap loadRulesORMap;

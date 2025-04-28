@@ -15,7 +15,6 @@ package com.baidu.bifromq.basecluster;
 
 import static com.baidu.bifromq.basecluster.memberlist.CRDTUtil.AGENT_HOST_MAP_URI;
 import static com.google.common.base.Preconditions.checkArgument;
-import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 
 import com.baidu.bifromq.basecluster.agent.proto.AgentEndpoint;
 import com.baidu.bifromq.basecluster.fd.FailureDetector;
@@ -52,6 +51,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 
@@ -71,6 +71,7 @@ final class AgentHost implements IAgentHost {
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final IHostAddressResolver hostAddressResolver;
     private final String[] tags;
+
     AgentHost(ITransport transport, IHostAddressResolver resolver, AgentHostOptions options) {
         checkArgument(!Strings.isNullOrEmpty(options.addr()) && !"0.0.0.0".equals(options.addr()),
             "Invalid bind address");
@@ -83,7 +84,7 @@ final class AgentHost implements IAgentHost {
             .retransmitMultiplier(options.retransmitMultiplier())
             .spreadPeriod(options.gossipPeriod());
         hostScheduler = Schedulers.from(ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            newSingleThreadScheduledExecutor(EnvProvider.INSTANCE.newThreadFactory("agent-host-scheduler", true)),
+            new ScheduledThreadPoolExecutor(1, EnvProvider.INSTANCE.newThreadFactory("agent-host-scheduler", true)),
             "agent-host-scheduler"));
         this.store = ICRDTStore.newInstance(options.crdtStoreOptions());
         this.messenger = Messenger.builder()

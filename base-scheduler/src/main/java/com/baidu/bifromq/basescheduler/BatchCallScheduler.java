@@ -108,7 +108,8 @@ public abstract class BatchCallScheduler<CallT, CallResultT, BatcherKeyT>
 
     @Override
     public void close() {
-        batchers.asMap().forEach((k, v) -> v.close());
+        CompletableFuture.allOf(
+            batchers.asMap().values().stream().map(Batcher::close).toArray(CompletableFuture[]::new)).join();
         batchers.invalidateAll();
         callScheduler.close();
         capacityEstimator.close();

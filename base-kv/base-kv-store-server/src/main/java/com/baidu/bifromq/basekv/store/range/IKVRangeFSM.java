@@ -39,7 +39,7 @@ public interface IKVRangeFSM {
 
     Observable<KVRangeDescriptor> describe();
 
-    void open(IKVRangeMessenger messenger);
+    CompletableFuture<Void> open(IKVRangeMessenger messenger);
 
     void tick();
 

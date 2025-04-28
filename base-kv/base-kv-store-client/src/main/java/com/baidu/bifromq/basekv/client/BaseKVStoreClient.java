@@ -83,15 +83,17 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.IntStream;
 import org.slf4j.Logger;
 
 final class BaseKVStoreClient implements IBaseKVStoreClient {
     private static final Scheduler SHARE_CLIENT_SCHEDULER = Schedulers.from(
-        ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            Executors.newSingleThreadExecutor(EnvProvider.INSTANCE.newThreadFactory("basekv-client-scheduler", true)),
+        ExecutorServiceMetrics.monitor(Metrics.globalRegistry, new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(), EnvProvider.INSTANCE.newThreadFactory("basekv-client-scheduler", true)),
             "basekv-client-scheduler"));
     private final Logger log;
     private final String clusterId;

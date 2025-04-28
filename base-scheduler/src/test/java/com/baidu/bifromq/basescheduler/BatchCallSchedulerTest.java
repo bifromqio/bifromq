@@ -55,9 +55,7 @@ public class BatchCallSchedulerTest {
         executor.submit(() -> {
             int i;
             while ((i = count.decrementAndGet()) >= 0) {
-                int req = i;
                 scheduler.schedule(i).whenComplete((v, e) -> {
-                    log.info("{}: {}", req, e == null);
                     latch.countDown();
                 });
             }

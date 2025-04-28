@@ -14,6 +14,8 @@
 package com.baidu.bifromq.inbox.store;
 
 import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.inbox.storage.proto.BatchAttachRequest;
@@ -22,11 +24,22 @@ import com.baidu.bifromq.inbox.storage.proto.BatchSubRequest;
 import com.baidu.bifromq.inbox.storage.proto.BatchUnsubRequest;
 import com.baidu.bifromq.inbox.storage.proto.InboxVersion;
 import com.baidu.bifromq.metrics.TenantMetric;
+import com.baidu.bifromq.sessiondict.client.type.OnlineCheckResult;
 import com.baidu.bifromq.type.ClientInfo;
 import io.micrometer.core.instrument.Gauge;
+import java.lang.reflect.Method;
+import java.util.concurrent.CompletableFuture;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class SubStatsTest extends InboxStoreTest {
+    @BeforeMethod(alwaysRun = true)
+    @Override
+    public void beforeCastStart(Method method) {
+        super.beforeCastStart(method);
+        when(sessionDictClient.exist(any())).thenReturn(CompletableFuture.completedFuture(OnlineCheckResult.EXISTS));
+    }
+
     @Test(groups = "integration")
     public void collectAfterSub() {
         long now = HLC.INST.getPhysical();

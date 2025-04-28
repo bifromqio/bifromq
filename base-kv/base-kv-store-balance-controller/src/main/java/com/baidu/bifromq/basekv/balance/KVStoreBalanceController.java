@@ -59,6 +59,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -87,6 +88,7 @@ public class KVStoreBalanceController {
     private MetricManager metricsManager;
     private volatile Map<String, Struct> loadRulesByBalancer;
     private volatile Set<KVRangeStoreDescriptor> landscape;
+    private volatile ScheduledFuture<?> task;
 
     /**
      * Create a new KVStoreBalanceController.
@@ -165,6 +167,16 @@ public class KVStoreBalanceController {
      */
     public void stop() {
         if (state.compareAndSet(State.Started, State.Closed)) {
+            if (task != null) {
+                task.cancel(true);
+                if (!task.isDone()) {
+                    try {
+                        task.get(5, TimeUnit.SECONDS);
+                    } catch (Throwable e) {
+                        // ignore
+                    }
+                }
+            }
             metadataManager.setLoadRulesProposalHandler(null);
             disposables.dispose();
             balancers.values().forEach(sbs -> sbs.balancer.close());
@@ -198,7 +210,7 @@ public class KVStoreBalanceController {
     private void trigger() {
         if (state.get() == State.Started && scheduling.compareAndSet(false, true)) {
             long jitter = ThreadLocalRandom.current().nextLong(0, retryDelay.toMillis());
-            executor.schedule(this::updateAndBalance, jitter, TimeUnit.MILLISECONDS);
+            task = executor.schedule(this::updateAndBalance, jitter, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -234,7 +246,7 @@ public class KVStoreBalanceController {
     }
 
     private void scheduleRetry(Map<String, Struct> loadRules, Set<KVRangeStoreDescriptor> landscape, Duration delay) {
-        executor.schedule(() -> {
+        task = executor.schedule(() -> {
             if (loadRules != this.loadRulesByBalancer || landscape != this.landscape) {
                 // retry is preemptive
                 return;

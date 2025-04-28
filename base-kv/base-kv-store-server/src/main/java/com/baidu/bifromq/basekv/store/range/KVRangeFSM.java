@@ -242,11 +242,11 @@ public class KVRangeFSM implements IKVRangeFSM {
     }
 
     @Override
-    public void open(IKVRangeMessenger messenger) {
+    public CompletableFuture<Void> open(IKVRangeMessenger messenger) {
         if (lifecycle.get() != Init) {
-            return;
+            return CompletableFuture.completedFuture(null);
         }
-        mgmtTaskRunner.add(() -> {
+        return mgmtTaskRunner.add(() -> {
             if (lifecycle.compareAndSet(Init, Lifecycle.Opening)) {
                 this.messenger = messenger;
                 factSubject.onNext(reset(kvRange.boundary()));
@@ -364,6 +364,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                             .toArray(CompletableFuture<?>[]::new))
                         .thenCompose(v -> restorer.awaitDone())
                         .thenCompose(v -> statsCollector.stop())
+                        .thenCompose(v -> mgmtTaskRunner.awaitDone())
                         .thenCompose(v -> wal.close())
                         .thenCompose(v -> {
                             kvRange.close();
@@ -1474,6 +1475,9 @@ public class KVRangeFSM implements IKVRangeFSM {
     }
 
     private CompletableFuture<Void> compactWAL(boolean checkWALSize) {
+        if (isNotOpening()) {
+            return CompletableFuture.completedFuture(null);
+        }
         return mgmtTaskRunner.add(() -> {
             if (isNotOpening() || kvRange.state().getType() == ConfigChanging) {
                 // don't let compaction interferes with config changing process

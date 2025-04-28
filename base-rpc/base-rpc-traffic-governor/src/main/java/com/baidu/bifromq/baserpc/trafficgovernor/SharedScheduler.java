@@ -13,17 +13,18 @@
 
 package com.baidu.bifromq.baserpc.trafficgovernor;
 
-import static java.util.concurrent.Executors.newSingleThreadExecutor;
-
 import com.baidu.bifromq.baseenv.EnvProvider;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.schedulers.Schedulers;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 class SharedScheduler {
     static final Scheduler RPC_SHARED_SCHEDULER = Schedulers.from(
-        ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            newSingleThreadExecutor(EnvProvider.INSTANCE.newThreadFactory("rpc-shared-scheduler", true)),
+        ExecutorServiceMetrics.monitor(Metrics.globalRegistry, new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(), EnvProvider.INSTANCE.newThreadFactory("rpc-shared-scheduler", true)),
             "rpc-shared-scheduler"));
 }

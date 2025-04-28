@@ -39,19 +39,15 @@ import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 class RPCServer implements IRPCServer {
-    private enum State {
-        INIT, STARTING, STARTED, STOPPING, STOPPED, FATAL_FAILURE
-    }
-
     private final AtomicReference<State>
         state = new AtomicReference<>(State.INIT);
-
     private final IRPCServiceTrafficService trafficService;
     private final String id;
     private final Map<String, RPCServerBuilder.ServiceDefinition> serviceDefinitions;
@@ -60,7 +56,6 @@ class RPCServer implements IRPCServer {
     private final EventLoopGroup workerEventLoopGroup;
     private final Server inProcServer;
     private final Server interProcServer;
-
     RPCServer(RPCServerBuilder builder) {
         Preconditions.checkArgument(!Strings.isNullOrEmpty(builder.host) && !"0.0.0.0".equals(builder.host),
             "Invalid host");
@@ -176,7 +171,18 @@ class RPCServer implements IRPCServer {
 
     @SneakyThrows
     private void shutdownInternalServer(Server server) {
+        // Start graceful shutdown
+        server.shutdown();
+        try {
+            server.awaitTermination(30, TimeUnit.SECONDS);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
         server.shutdownNow();
         server.awaitTermination();
+    }
+
+    private enum State {
+        INIT, STARTING, STARTED, STOPPING, STOPPED, FATAL_FAILURE
     }
 }

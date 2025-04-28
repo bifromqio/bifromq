@@ -25,9 +25,9 @@ import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -63,7 +63,7 @@ public class DelayTaskRunner<KeyT extends Comparable<KeyT>> implements IDelayTas
             Comparator.comparingLong((SortKey<KeyT> sk) -> sk.deadlineTS).thenComparing(sk -> sk.key, comparator));
         this.rateLimiter = RateLimiter.create(rateLimit);
         executor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            Executors.newSingleThreadScheduledExecutor(EnvProvider.INSTANCE.newThreadFactory("delay-task-runner")),
+            new ScheduledThreadPoolExecutor(1, EnvProvider.INSTANCE.newThreadFactory("delay-task-runner")),
             "delay-task-runner");
     }
 
