@@ -22,4 +22,5 @@ public class KVRangeKeys {
     public static final ByteString METADATA_RANGE_BOUND_BYTES = unsafeWrap(new byte[] {0x01});
     public static final ByteString METADATA_LAST_APPLIED_INDEX_BYTES = unsafeWrap(new byte[] {0x02});
     public static final ByteString METADATA_STATE_BYTES = unsafeWrap(new byte[] {0x03});
+    public static final ByteString METADATA_CLUSTER_CONFIG_BYTES = unsafeWrap(new byte[] {0x04});
 }

@@ -22,6 +22,7 @@ import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.proto.State;
+import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import io.reactivex.rxjava3.core.Maybe;
 import java.util.concurrent.TimeUnit;
@@ -41,12 +42,14 @@ public class KVRangeMetadataTest extends AbstractKVRangeTest {
 
     @Test
     public void initExistingRange() {
+        ClusterConfig initConfig = ClusterConfig.newBuilder().addVoters("storeA").build();
         KVRangeSnapshot snapshot = KVRangeSnapshot.newBuilder()
             .setId(KVRangeIdUtil.generate())
             .setVer(0)
             .setLastAppliedIndex(0)
             .setState(State.newBuilder().setType(State.StateType.Normal).build())
             .setBoundary(FULL_BOUNDARY)
+            .setClusterConfig(initConfig)
             .build();
         ICPableKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
         IKVRange accessor = new KVRange(snapshot.getId(), keyRange).toReseter(snapshot).done();
@@ -55,6 +58,7 @@ public class KVRangeMetadataTest extends AbstractKVRangeTest {
         assertEquals(accessor.boundary(), snapshot.getBoundary());
         assertEquals(accessor.lastAppliedIndex(), snapshot.getLastAppliedIndex());
         assertEquals(accessor.state(), snapshot.getState());
+        assertEquals(accessor.clusterConfig(), snapshot.getClusterConfig());
     }
 
     @Test

@@ -26,6 +26,7 @@ import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.proto.State;
+import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.store.api.IKVIterator;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
@@ -48,16 +49,19 @@ public class KVRangeTest extends AbstractKVRangeTest {
         assertEquals(accessor.version(), -1);
         assertEquals(accessor.lastAppliedIndex(), -1);
         assertEquals(accessor.state().getType(), State.StateType.NoUse);
+        assertEquals(accessor.clusterConfig(), ClusterConfig.getDefaultInstance());
     }
 
     @Test
     public void initWithSnapshot() {
+        ClusterConfig initConfig = ClusterConfig.newBuilder().addVoters("storeA").build();
         KVRangeSnapshot snapshot = KVRangeSnapshot.newBuilder()
             .setId(KVRangeIdUtil.generate())
             .setVer(0)
             .setLastAppliedIndex(0)
             .setState(State.newBuilder().setType(State.StateType.Normal).build())
             .setBoundary(FULL_BOUNDARY)
+            .setClusterConfig(initConfig)
             .build();
         ICPableKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
         IKVRange accessor = new KVRange(snapshot.getId(), keyRange, snapshot);
@@ -73,16 +77,19 @@ public class KVRangeTest extends AbstractKVRangeTest {
         assertEquals(accessor.boundary(), snapshot.getBoundary());
         assertEquals(accessor.lastAppliedIndex(), snapshot.getLastAppliedIndex());
         assertEquals(accessor.state(), snapshot.getState());
+        assertEquals(accessor.clusterConfig(), snapshot.getClusterConfig());
     }
 
     @Test
     public void metadata() {
+        ClusterConfig initConfig = ClusterConfig.newBuilder().addVoters("storeA").build();
         KVRangeSnapshot snapshot = KVRangeSnapshot.newBuilder()
             .setId(KVRangeIdUtil.generate())
             .setVer(0)
             .setLastAppliedIndex(0)
             .setState(State.newBuilder().setType(State.StateType.Normal).build())
             .setBoundary(FULL_BOUNDARY)
+            .setClusterConfig(initConfig)
             .build();
         ICPableKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
         IKVRange accessor = new KVRange(snapshot.getId(), keyRange, snapshot);
@@ -90,6 +97,7 @@ public class KVRangeTest extends AbstractKVRangeTest {
         assertEquals(metadata.ver(), snapshot.getVer());
         assertEquals(metadata.boundary(), snapshot.getBoundary());
         assertEquals(metadata.state(), snapshot.getState());
+        assertEquals(metadata.clusterConfig(), snapshot.getClusterConfig());
         accessor.toWriter().resetVer(2).done();
         metadata = accessor.metadata().blockingFirst();
         assertEquals(metadata.ver(), 2);
@@ -97,12 +105,14 @@ public class KVRangeTest extends AbstractKVRangeTest {
 
     @Test
     public void checkpoint() {
+        ClusterConfig initConfig = ClusterConfig.newBuilder().addVoters("storeA").build();
         KVRangeSnapshot snapshot = KVRangeSnapshot.newBuilder()
             .setId(KVRangeIdUtil.generate())
             .setVer(0)
             .setLastAppliedIndex(0)
             .setState(State.newBuilder().setType(State.StateType.Normal).build())
             .setBoundary(FULL_BOUNDARY)
+            .setClusterConfig(initConfig)
             .build();
         ICPableKVSpace keyRange = kvEngine.createIfMissing(KVRangeIdUtil.toString(snapshot.getId()));
         IKVRange accessor = new KVRange(snapshot.getId(), keyRange, snapshot);
@@ -116,6 +126,7 @@ public class KVRangeTest extends AbstractKVRangeTest {
         assertEquals(snap.getLastAppliedIndex(), snapshot.getLastAppliedIndex());
         assertEquals(snap.getState(), snapshot.getState());
         assertEquals(snap.getBoundary(), snapshot.getBoundary());
+        assertEquals(snap.getClusterConfig(), snapshot.getClusterConfig());
 
         IKVRangeReader rangeCP = accessor.open(snap);
         assertEquals(snap.getId(), rangeCP.id());
@@ -123,6 +134,7 @@ public class KVRangeTest extends AbstractKVRangeTest {
         assertEquals(snap.getLastAppliedIndex(), rangeCP.lastAppliedIndex());
         assertEquals(snap.getState(), rangeCP.state());
         assertEquals(snap.getBoundary(), rangeCP.boundary());
+        assertEquals(snap.getClusterConfig(), rangeCP.clusterConfig());
     }
 
     @Test

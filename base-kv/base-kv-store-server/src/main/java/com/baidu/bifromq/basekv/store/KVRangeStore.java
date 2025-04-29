@@ -270,17 +270,19 @@ public class KVRangeStore implements IKVRangeStore {
                 log.debug("Destroy staled WALStore: rangeId={}", KVRangeIdUtil.toString(rangeId));
                 walStorageEngine.get(rangeId).destroy();
             }
+            ClusterConfig initConfig = ClusterConfig.newBuilder()
+                .addVoters(id())
+                .build();
             KVRangeSnapshot rangeSnapshot = KVRangeSnapshot.newBuilder()
                 .setId(rangeId)
                 .setVer(0)
                 .setLastAppliedIndex(5)
                 .setState(State.newBuilder().setType(Normal).build())
                 .setBoundary(boundary)
+                .setClusterConfig(initConfig)
                 .build();
             Snapshot snapshot = Snapshot.newBuilder()
-                .setClusterConfig(ClusterConfig.newBuilder()
-                    .addVoters(id())
-                    .build())
+                .setClusterConfig(initConfig)
                 .setTerm(0)
                 .setIndex(5)
                 .setData(rangeSnapshot.toByteString())

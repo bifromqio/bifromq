@@ -15,6 +15,7 @@ package com.baidu.bifromq.basekv.store.range;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.State;
+import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.store.api.IKVRangeMetadata;
 
 public interface IKVRangeMetadataUpdatable<T extends IKVRangeMetadataUpdatable<T>> extends IKVRangeMetadata {
@@ -27,4 +28,6 @@ public interface IKVRangeMetadataUpdatable<T extends IKVRangeMetadataUpdatable<T
     T boundary(Boundary boundary);
 
     T state(State state);
+
+    T clusterConfig(ClusterConfig clusterConfig);
 }

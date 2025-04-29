@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
+import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_CLUSTER_CONFIG_BYTES;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_LAST_APPLIED_INDEX_BYTES;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_RANGE_BOUND_BYTES;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_STATE_BYTES;
@@ -24,6 +25,7 @@ import com.baidu.bifromq.basekv.localengine.IKVSpaceMetadataUpdatable;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.State;
+import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.store.util.KVUtil;
 
 abstract class AbstractKVRangeMetadataUpdatable<T extends AbstractKVRangeMetadataUpdatable<T>>
@@ -60,6 +62,12 @@ abstract class AbstractKVRangeMetadataUpdatable<T extends AbstractKVRangeMetadat
     @Override
     public final T state(State state) {
         keyRangeWriter().metadata(METADATA_STATE_BYTES, state.toByteString());
+        return thisT();
+    }
+
+    @Override
+    public final T clusterConfig(ClusterConfig clusterConfig) {
+        keyRangeWriter().metadata(METADATA_CLUSTER_CONFIG_BYTES, clusterConfig.toByteString());
         return thisT();
     }
 

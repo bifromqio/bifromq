@@ -18,8 +18,6 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.raft.IRaftNode;
 import com.baidu.bifromq.basekv.raft.event.ElectionEvent;
-import com.baidu.bifromq.basekv.raft.event.SnapshotRestoredEvent;
-import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.RaftMessage;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
@@ -37,30 +35,6 @@ import java.util.concurrent.Executor;
 import java.util.function.Predicate;
 
 public interface IKVRangeWAL {
-    class RestoreSnapshotTask {
-        public final KVRangeSnapshot snapshot;
-        public final String leader;
-        private final IRaftNode.IAfterInstalledCallback callback;
-
-        public RestoreSnapshotTask(ByteString snapshotData,
-                                   String leader,
-                                   IRaftNode.IAfterInstalledCallback callback) {
-            this.leader = leader;
-            this.callback = callback;
-            KVRangeSnapshot ss = null;
-            try {
-                ss = KVRangeSnapshot.parseFrom(snapshotData);
-            } catch (InvalidProtocolBufferException e) {
-                this.callback.call(null, e);
-            }
-            snapshot = ss;
-        }
-
-        public CompletableFuture<Void> afterRestored(KVRangeSnapshot snapshot, Throwable ex) {
-            return callback.call(snapshot == null ? null : snapshot.toByteString(), ex);
-        }
-    }
-
     String storeId();
 
     KVRangeId rangeId();
@@ -75,8 +49,6 @@ public interface IKVRangeWAL {
 
     Observable<ElectionEvent> election();
 
-    ClusterConfig clusterConfig();
-
     KVRangeSnapshot latestSnapshot();
 
     CompletableFuture<Long> propose(KVRangeCommand command);
@@ -88,8 +60,6 @@ public interface IKVRangeWAL {
     CompletableFuture<LogEntry> once(long lastFetchedIndex, Predicate<LogEntry> condition, Executor executor);
 
     Observable<Long> commitIndex();
-
-    Observable<SnapshotRestoredEvent> snapshotRestoreEvent();
 
     CompletableFuture<Iterator<LogEntry>> retrieveCommitted(long fromIndex, long maxSize);
 
@@ -120,4 +90,28 @@ public interface IKVRangeWAL {
     CompletableFuture<Void> close();
 
     CompletableFuture<Void> destroy();
+
+    class RestoreSnapshotTask {
+        public final KVRangeSnapshot snapshot;
+        public final String leader;
+        private final IRaftNode.IAfterInstalledCallback callback;
+
+        public RestoreSnapshotTask(ByteString snapshotData,
+                                   String leader,
+                                   IRaftNode.IAfterInstalledCallback callback) {
+            this.leader = leader;
+            this.callback = callback;
+            KVRangeSnapshot ss = null;
+            try {
+                ss = KVRangeSnapshot.parseFrom(snapshotData);
+            } catch (InvalidProtocolBufferException e) {
+                this.callback.call(null, e);
+            }
+            snapshot = ss;
+        }
+
+        public CompletableFuture<Void> afterRestored(KVRangeSnapshot snapshot, Throwable ex) {
+            return callback.call(snapshot == null ? null : snapshot.toByteString(), ex);
+        }
+    }
 }

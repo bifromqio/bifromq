@@ -29,7 +29,6 @@ import com.baidu.bifromq.basekv.raft.event.RaftEvent;
 import com.baidu.bifromq.basekv.raft.event.SnapshotRestoredEvent;
 import com.baidu.bifromq.basekv.raft.event.StatusChangedEvent;
 import com.baidu.bifromq.basekv.raft.event.SyncStateChangedEvent;
-import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.RaftMessage;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
@@ -129,11 +128,6 @@ public class KVRangeWAL implements IKVRangeWAL, IRaftNode.ISnapshotInstaller {
     }
 
     @Override
-    public ClusterConfig clusterConfig() {
-        return raftNode.latestClusterConfig();
-    }
-
-    @Override
     public Observable<Map<String, RaftNodeSyncState>> replicationStatus() {
         return syncStatePublisher.distinctUntilChanged();
     }
@@ -182,11 +176,6 @@ public class KVRangeWAL implements IKVRangeWAL, IRaftNode.ISnapshotInstaller {
     @Override
     public Observable<Long> commitIndex() {
         return commitIndexSubject;
-    }
-
-    @Override
-    public Observable<SnapshotRestoredEvent> snapshotRestoreEvent() {
-        return snapRestoreEventPublisher;
     }
 
     @Override

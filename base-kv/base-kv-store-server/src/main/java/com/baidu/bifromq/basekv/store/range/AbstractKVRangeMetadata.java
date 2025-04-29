@@ -19,6 +19,7 @@ import com.baidu.bifromq.basekv.localengine.IKVSpaceMetadata;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.State;
+import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.store.api.IKVRangeMetadata;
 import com.baidu.bifromq.basekv.store.util.KVUtil;
 import com.google.protobuf.ByteString;
@@ -56,6 +57,14 @@ abstract class AbstractKVRangeMetadata implements IKVRangeMetadata {
     @Override
     public final long lastAppliedIndex() {
         return keyRangeMetadata.metadata(METADATA_LAST_APPLIED_INDEX_BYTES).map(KVUtil::toLong).orElse(-1L);
+    }
+
+    @SneakyThrows
+    protected ClusterConfig clusterConfig(ByteString clusterConfigBytes) {
+        if (clusterConfigBytes != null) {
+            return ClusterConfig.parseFrom(clusterConfigBytes);
+        }
+        return ClusterConfig.getDefaultInstance();
     }
 
     @SneakyThrows

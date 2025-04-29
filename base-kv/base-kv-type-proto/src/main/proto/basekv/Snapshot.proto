@@ -1,5 +1,6 @@
 syntax = "proto3";
 import "basekv/Type.proto";
+import "basekv/raft/ClusterConfig.proto";
 
 package basekv;
 
@@ -31,6 +32,7 @@ message KVRangeSnapshot{
   uint64 lastAppliedIndex = 4;
   basekv.Boundary boundary = 5;
   State state = 6;
+  raft.ClusterConfig clusterConfig = 7;
 }
 
 

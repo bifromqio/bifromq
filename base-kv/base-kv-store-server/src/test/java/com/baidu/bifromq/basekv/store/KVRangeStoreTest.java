@@ -496,6 +496,7 @@ public class KVRangeStoreTest extends MockableTest {
                             .setLastAppliedIndex(0)
                             .setState(State.newBuilder().setType(Normal).build())
                             .setBoundary(NULL_BOUNDARY)
+                            .setClusterConfig(ClusterConfig.getDefaultInstance())
                             .build().toByteString())
                         .build())
                     .build())

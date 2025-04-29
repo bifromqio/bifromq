@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
+import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_CLUSTER_CONFIG_BYTES;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_RANGE_BOUND_BYTES;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_STATE_BYTES;
 import static com.baidu.bifromq.basekv.store.range.KVRangeKeys.METADATA_VER_BYTES;
@@ -23,6 +24,7 @@ import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.proto.State;
+import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
@@ -44,13 +46,17 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
         super(id, kvSpace);
         this.kvSpace = kvSpace;
         metaSubject = BehaviorSubject.createDefault(
-            new IKVRange.KVRangeMeta(-1L, State.newBuilder().setType(State.StateType.NoUse).build(), NULL_BOUNDARY));
+            new IKVRange.KVRangeMeta(-1L,
+                State.newBuilder().setType(State.StateType.NoUse).build(),
+                NULL_BOUNDARY,
+                ClusterConfig.getDefaultInstance()));
         kvSpace.metadata()
             .map(metadataMap -> {
                 long version = version(metadataMap.get(METADATA_VER_BYTES));
                 State state = state(metadataMap.get(METADATA_STATE_BYTES));
                 Boundary boundary = boundary(metadataMap.get(METADATA_RANGE_BOUND_BYTES));
-                return new IKVRange.KVRangeMeta(version, state, boundary);
+                ClusterConfig clusterConfig = clusterConfig(metadataMap.get(METADATA_CLUSTER_CONFIG_BYTES));
+                return new IKVRange.KVRangeMeta(version, state, boundary, clusterConfig);
             })
             .subscribe(metaSubject);
     }
@@ -76,6 +82,11 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
     }
 
     @Override
+    public ClusterConfig clusterConfig() {
+        return metaSubject.getValue().clusterConfig();
+    }
+
+    @Override
     public Observable<KVRangeMeta> metadata() {
         return metaSubject;
     }
@@ -90,7 +101,8 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
             .setCheckpointId(checkpointId)
             .setLastAppliedIndex(kvRangeCheckpoint.lastAppliedIndex())
             .setState(kvRangeCheckpoint.state())
-            .setBoundary(kvRangeCheckpoint.boundary());
+            .setBoundary(kvRangeCheckpoint.boundary())
+            .setClusterConfig(kvRangeCheckpoint.clusterConfig());
         return builder.build();
     }
 
@@ -143,6 +155,7 @@ public class KVRange extends AbstractKVRangeMetadata implements IKVRange {
             .lastAppliedIndex(snapshot.getLastAppliedIndex())
             .state(snapshot.getState())
             .boundary(snapshot.getBoundary())
+            .clusterConfig(snapshot.getClusterConfig())
             .kvWriter();
         kvWriter.clear(boundary());
         return new IKVReseter() {

@@ -16,6 +16,7 @@ package com.baidu.bifromq.basekv.store.api;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.State;
+import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 
 public interface IKVRangeMetadata {
     KVRangeId id();
@@ -27,6 +28,8 @@ public interface IKVRangeMetadata {
     long lastAppliedIndex();
 
     Boundary boundary();
+
+    ClusterConfig clusterConfig();
 
     long size();
 

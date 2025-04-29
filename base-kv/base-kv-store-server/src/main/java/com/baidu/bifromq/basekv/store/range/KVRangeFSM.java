@@ -155,7 +155,6 @@ public class KVRangeFSM implements IKVRangeFSM {
     private final Map<String, CompletableFuture<?>> cmdFutures = new ConcurrentHashMap<>();
     private final Map<String, KVRangeDumpSession> dumpSessions = Maps.newConcurrentMap();
     private final AtomicInteger taskSeqNo = new AtomicInteger();
-    private final Subject<ClusterConfig> clusterConfigSubject = BehaviorSubject.<ClusterConfig>create().toSerialized();
     private final Subject<KVRangeDescriptor> descriptorSubject = BehaviorSubject.create();
     private final Subject<List<SplitHint>> splitHintsSubject = BehaviorSubject.<List<SplitHint>>create().toSerialized();
     private final Subject<Any> factSubject = BehaviorSubject.create();
@@ -271,21 +270,17 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 .build());
                         }
                     }));
-                disposables.add(wal.snapshotRestoreEvent()
-                    .subscribe(e -> clusterConfigSubject.onNext(e.snapshot.getClusterConfig())));
                 disposables.add(descriptorSubject.subscribe(metricManager::report));
                 disposables.add(Observable.combineLatest(
                         kvRange.metadata().distinctUntilChanged(),
                         wal.state().distinctUntilChanged(),
                         wal.replicationStatus().distinctUntilChanged(),
-                        clusterConfigSubject.distinctUntilChanged(),
                         statsCollector.collect().distinctUntilChanged(),
                         splitHintsSubject.distinctUntilChanged(),
                         factSubject.distinctUntilChanged(),
                         (meta,
                          role,
                          syncStats,
-                         clusterConfig,
                          rangeStats,
                          splitHints,
                          fact) -> {
@@ -296,7 +291,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 .setBoundary(meta.boundary())
                                 .setRole(role)
                                 .setState(meta.state().getType())
-                                .setConfig(clusterConfig)
+                                .setConfig(meta.clusterConfig())
                                 .putAllSyncState(syncStats)
                                 .putAllStatistics(rangeStats)
                                 .addAllHints(splitHints)
@@ -308,7 +303,6 @@ public class KVRangeFSM implements IKVRangeFSM {
                     .subscribe(descriptorSubject::onNext));
                 disposables.add(messenger.receive().subscribe(this::handleMessage));
                 disposables.add(descriptorSubject.subscribe(this::detectZombieState));
-                clusterConfigSubject.onNext(wal.clusterConfig());
                 lifecycle.set(Open);
                 metricManager.reportLastAppliedIndex(kvRange.lastAppliedIndex());
                 log.info("Open range: appliedIndex={}, state={}, ver={}",
@@ -351,15 +345,12 @@ public class KVRangeFSM implements IKVRangeFSM {
             case Open -> {
                 if (lifecycle.compareAndSet(Open, Lifecycle.Closing)) {
                     log.info("Closing range");
-                    clusterConfigSubject.onComplete();
                     descriptorSubject.onComplete();
                     disposables.dispose();
                     walSubscription.stop();
                     queryRunner.close();
                     splitHinters.forEach(IKVRangeSplitHinter::close);
                     coProc.close();
-                    cmdFutures.values()
-                        .forEach(f -> f.completeExceptionally(new KVRangeException.TryLater("Range closed")));
                     CompletableFuture.allOf(dumpSessions.values()
                             .stream()
                             .map(dumpSession -> {
@@ -377,6 +368,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                             return awaitShutdown(fsmExecutor);
                         })
                         .whenComplete((v, e) -> {
+                            cmdFutures.values()
+                                .forEach(f -> f.completeExceptionally(new KVRangeException.TryLater("Range closed")));
                             log.info("Range closed");
                             lifecycle.set(Closed);
                             closeSignal.complete(null);
@@ -634,8 +627,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                     long version = kvRange.version();
                     State state = kvRange.state();
                     Boundary boundary = kvRange.boundary();
-                    applyCommand(version, state, boundary, entry.getTerm(), entry.getIndex(), command, recordableReader,
-                        rangeWriter)
+                    ClusterConfig clusterConfig = kvRange.clusterConfig();
+                    applyCommand(version, state, boundary, clusterConfig,
+                        entry.getTerm(), entry.getIndex(), command, recordableReader, rangeWriter)
                         .whenComplete((callback, e) -> {
                             if (onDone.isCancelled()) {
                                 rangeWriter.abort();
@@ -680,9 +674,10 @@ public class KVRangeFSM implements IKVRangeFSM {
         State state = rangeWriter.state();
         log.info("Apply new config[term={}, index={}]: state={}, leader={}\n{}",
             term, index, state, wal.isLeader(), config);
+        rangeWriter.clusterConfig(config);
         if (config.getNextVotersCount() != 0 || config.getNextLearnersCount() != 0) {
             // skip joint-config
-            onDone.complete(() -> clusterConfigSubject.onNext(config));
+            onDone.complete(() -> {});
             return onDone;
         }
         Set<String> members = newHashSet();
@@ -703,7 +698,6 @@ public class KVRangeFSM implements IKVRangeFSM {
                             .setTaskId(taskId)
                             .build());
                         onDone.complete(() -> {
-                            clusterConfigSubject.onNext(config);
                             quitSignal.complete(null);
                             finishCommand(taskId);
                         });
@@ -713,7 +707,6 @@ public class KVRangeFSM implements IKVRangeFSM {
                             .setTaskId(taskId)
                             .build());
                         onDone.complete(() -> {
-                            clusterConfigSubject.onNext(config);
                             finishCommand(taskId);
                         });
                     }
@@ -726,7 +719,6 @@ public class KVRangeFSM implements IKVRangeFSM {
                             .setTaskId(taskId)
                             .build());
                         onDone.complete(() -> {
-                            clusterConfigSubject.onNext(config);
                             quitSignal.complete(null);
                             finishCommand(taskId);
                         });
@@ -735,10 +727,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                             .setType(Normal)
                             .setTaskId(taskId)
                             .build());
-                        onDone.complete(() -> {
-                            clusterConfigSubject.onNext(config);
-                            finishCommand(taskId);
-                        });
+                        onDone.complete(() -> finishCommand(taskId));
                     }
                 }
             }
@@ -758,7 +747,6 @@ public class KVRangeFSM implements IKVRangeFSM {
                 }
                 rangeWriter.bumpVer(false);
                 onDone.complete(() -> {
-                    clusterConfigSubject.onNext(config);
                     finishCommand(taskId);
                     if (remove) {
                         quitSignal.complete(null);
@@ -783,14 +771,13 @@ public class KVRangeFSM implements IKVRangeFSM {
                         .setTaskId(taskId)
                         .build());
                     onDone.complete(() -> {
-                        clusterConfigSubject.onNext(config);
                         finishCommand(taskId);
                     });
                 }
             }
             default ->
                 // skip internal config change triggered by leadership change
-                onDone.complete(() -> clusterConfigSubject.onNext(config));
+                onDone.complete(() -> {});
         }
         return onDone;
     }
@@ -798,6 +785,7 @@ public class KVRangeFSM implements IKVRangeFSM {
     private CompletableFuture<Runnable> applyCommand(long ver,
                                                      State state,
                                                      Boundary boundary,
+                                                     ClusterConfig clusterConfig,
                                                      long logTerm,
                                                      long logIndex,
                                                      KVRangeCommand command,
@@ -844,18 +832,17 @@ public class KVRangeFSM implements IKVRangeFSM {
                         // abort log apply and retry
                         onDone.completeExceptionally(e);
                     } else {
-                        ClusterConfig curConfig = wal.clusterConfig();
-                        boolean toBePurged = isGracefulQuit(curConfig, newConfig);
+                        boolean toBePurged = isGracefulQuit(clusterConfig, newConfig);
                         // notify new voters and learners host store to ensure the range exist
                         Set<String> newHostingStoreIds = difference(
                             difference(
                                 union(newHashSet(newConfig.getVotersList()), newHashSet(newConfig.getLearnersList())),
-                                union(newHashSet(curConfig.getVotersList()), newHashSet(curConfig.getLearnersList()))
+                                union(newHashSet(clusterConfig.getVotersList()), newHashSet(clusterConfig.getLearnersList()))
                             ),
                             singleton(hostStoreId)
                         );
                         Set<String> nextVoters = toBePurged
-                            ? newHashSet(curConfig.getVotersList()) : newHashSet(newConfig.getVotersList());
+                            ? newHashSet(clusterConfig.getVotersList()) : newHashSet(newConfig.getVotersList());
                         Set<String> nextLearners = toBePurged
                             ? emptySet() : newHashSet(newConfig.getLearnersList());
                         List<CompletableFuture<?>> onceFutures = newHostingStoreIds.stream()
@@ -895,6 +882,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                             }, fsmExecutor);
                         newHostingStoreIds.forEach(storeId -> {
                             log.debug("Send EnsureRequest: taskId={}, targetStoreId={}", taskId, storeId);
+                            ClusterConfig ensuredClusterConfig = ClusterConfig.getDefaultInstance();
                             messenger.send(KVRangeMessage.newBuilder()
                                 .setRangeId(id)
                                 .setHostStoreId(storeId)
@@ -904,7 +892,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                     .setInitSnapshot(Snapshot.newBuilder()
                                         .setTerm(0)
                                         .setIndex(0)
-                                        .setClusterConfig(ClusterConfig.getDefaultInstance()) // empty voter set
+                                        .setClusterConfig(ensuredClusterConfig) // empty voter set
                                         .setData(KVRangeSnapshot.newBuilder()
                                             .setVer(ver)
                                             .setId(id)
@@ -912,6 +900,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                             .setLastAppliedIndex(0)
                                             .setBoundary(boundary)
                                             .setState(state)
+                                            .setClusterConfig(ensuredClusterConfig)
                                             .build().toByteString())
                                         .build())
                                     .build())
@@ -1012,6 +1001,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                         // no checkpoint specified
                         .setLastAppliedIndex(5)
                         .setBoundary(rightBoundary)
+                        .setClusterConfig(clusterConfig)
                         .setState(State.newBuilder()
                             .setType(Normal)
                             .setTaskId(taskId)
@@ -1021,9 +1011,10 @@ public class KVRangeFSM implements IKVRangeFSM {
                     // migrate data to right-hand keyspace which created implicitly
                     rangeWriter.migrateTo(request.getNewId(), rightBoundary)
                         .resetVer(rhsSS.getVer())
-                        .boundary(rightBoundary)
+                        .boundary(rhsSS.getBoundary())
                         .lastAppliedIndex(rhsSS.getLastAppliedIndex())
                         .state(rhsSS.getState())
+                        .clusterConfig(rhsSS.getClusterConfig())
                         .done();
                     onDone.complete(() -> {
                         try {
@@ -1057,7 +1048,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 .setInitSnapshot(Snapshot.newBuilder()
                                     .setTerm(0)
                                     .setIndex(rhsSS.getLastAppliedIndex())
-                                    .setClusterConfig(wal.clusterConfig())
+                                    .setClusterConfig(rhsSS.getClusterConfig())
                                     .setData(rhsSS.toByteString())
                                     .build())
                                 .build()).build());
@@ -1099,8 +1090,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                             onceFuture.cancel(true);
                             onDone.completeExceptionally(e);
                         } else {
-                            ClusterConfig config = wal.clusterConfig();
-                            Map<String, Boolean> waitingList = config.getVotersList().stream()
+                            Map<String, Boolean> waitingList = clusterConfig.getVotersList().stream()
                                 .collect(Collectors.toMap(voter -> voter, voter -> false));
                             rangeWriter.state(State.newBuilder()
                                 .setType(PreparedMerging)
@@ -1121,7 +1111,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                         .setId(id)
                         .setVer(VerUtil.bump(ver, false))
                         .setBoundary(boundary)
-                        .setConfig(wal.clusterConfig())
+                        .setConfig(clusterConfig)
                         .build())
                     .build());
             }
@@ -1151,7 +1141,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 }
                 // here is the formal mergeable condition check
                 if (state.getType() != Normal
-                    || !isCompatible(request.getConfig(), wal.clusterConfig())
+                    || !isCompatible(request.getConfig(), clusterConfig)
                     || !canCombine(request.getBoundary(), boundary)) {
                     if (!taskId.equals(state.getTaskId())) {
                         log.debug("Cancel the loser merger[{}]",

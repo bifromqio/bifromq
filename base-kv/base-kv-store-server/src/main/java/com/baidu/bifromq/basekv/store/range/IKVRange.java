@@ -16,6 +16,7 @@ package com.baidu.bifromq.basekv.store.range;
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.proto.State;
+import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.store.api.IKVCloseableReader;
 import com.baidu.bifromq.basekv.store.api.IKVRangeReader;
 import com.baidu.bifromq.basekv.store.api.IKVReader;
@@ -87,6 +88,6 @@ public interface IKVRange extends IKVRangeReader {
      * @param state    the state
      * @param boundary the boundary
      */
-    record KVRangeMeta(long ver, State state, Boundary boundary) {
+    record KVRangeMeta(long ver, State state, Boundary boundary, ClusterConfig clusterConfig) {
     }
 }
