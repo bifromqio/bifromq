@@ -174,7 +174,7 @@ class RPCServer implements IRPCServer {
         // Start graceful shutdown
         server.shutdown();
         try {
-            server.awaitTermination(30, TimeUnit.SECONDS);
+            server.awaitTermination(5, TimeUnit.SECONDS);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
         }
