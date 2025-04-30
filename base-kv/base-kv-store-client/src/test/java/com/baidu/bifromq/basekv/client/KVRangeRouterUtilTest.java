@@ -79,7 +79,6 @@ public class KVRangeRouterUtilTest {
             .build();
         KVRangeSetting rangeSetting3 = new KVRangeSetting("testCluster", "V1", range3);
 
-
         KVRangeDescriptor range4 = KVRangeDescriptor.newBuilder()
             .setId(KVRangeId.newBuilder().setId(4).build())
             .setRole(RaftNodeStatus.Leader)
@@ -94,7 +93,6 @@ public class KVRangeRouterUtilTest {
         router.put(range2.getBoundary(), rangeSetting2);
         router.put(range3.getBoundary(), rangeSetting3);
         router.put(range4.getBoundary(), rangeSetting4);
-
 
         // Test find by key within the first range
         Optional<KVRangeSetting> result1 = findByKey(ByteString.copyFromUtf8("a"), router);
@@ -132,7 +130,6 @@ public class KVRangeRouterUtilTest {
             .build();
         KVRangeSetting rangeSetting1 = new KVRangeSetting("testCluster", "V1", range1);
 
-
         KVRangeDescriptor range2 = KVRangeDescriptor.newBuilder()
             .setId(KVRangeId.newBuilder().setId(2).build())
             .setRole(RaftNodeStatus.Leader)
@@ -142,7 +139,6 @@ public class KVRangeRouterUtilTest {
                 .build()) // ["b", "c")
             .build();
         KVRangeSetting rangeSetting2 = new KVRangeSetting("testCluster", "V1", range2);
-
 
         KVRangeDescriptor range3 = KVRangeDescriptor.newBuilder()
             .setId(KVRangeId.newBuilder().setId(3).build())
@@ -168,7 +164,6 @@ public class KVRangeRouterUtilTest {
         router.put(range2.getBoundary(), rangeSetting2);
         router.put(range3.getBoundary(), rangeSetting3);
         router.put(range4.getBoundary(), rangeSetting4);
-
 
         Collection<KVRangeSetting> result0 = findByBoundary(
             Boundary.newBuilder().setEndKey(ByteString.copyFromUtf8("a")).build(), router); // (null, "a")

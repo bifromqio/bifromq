@@ -1,4 +1,6 @@
 syntax = "proto3";
+
+import "basekv/Descriptor.proto";
 import "basekv/Type.proto";
 import "basekv/Command.proto";
 import "basekv/CoProc.proto";
@@ -72,6 +74,7 @@ message TransferLeadershipRequest{
 message TransferLeadershipReply{
   uint64 reqId = 1;
   ReplyCode code = 2;
+  optional KVRangeDescriptor latest = 3;
 }
 
 message ChangeReplicaConfigRequest{
@@ -85,6 +88,7 @@ message ChangeReplicaConfigRequest{
 message ChangeReplicaConfigReply{
   uint64 reqId = 1;
   ReplyCode code = 2;
+  optional KVRangeDescriptor latest = 3;
 }
 
 message KVRangeSplitRequest{
@@ -97,6 +101,7 @@ message KVRangeSplitRequest{
 message KVRangeSplitReply{
   uint64 reqId = 1;
   ReplyCode code = 2;
+  optional KVRangeDescriptor latest = 3;
 }
 
 message KVRangeMergeRequest{
@@ -109,6 +114,7 @@ message KVRangeMergeRequest{
 message KVRangeMergeReply{
   uint64 reqId = 1;
   ReplyCode code = 2;
+  optional KVRangeDescriptor latest = 3;
 }
 
 message KVRangeRWRequest{
@@ -130,6 +136,7 @@ message KVRangeRWReply{
     bytes putResult = 4;
     basekv.RWCoProcOutput rwCoProcResult = 5;
   }
+  optional KVRangeDescriptor latest = 6;
 }
 
 message KVRangeRORequest{
@@ -155,4 +162,5 @@ message KVRangeROReply{
     NullableValue getResult = 4;
     basekv.ROCoProcOutput roCoProcResult = 5;
   }
+  optional KVRangeDescriptor latest = 6;
 }

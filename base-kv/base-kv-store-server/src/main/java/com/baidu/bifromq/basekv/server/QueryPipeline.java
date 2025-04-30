@@ -73,11 +73,14 @@ class QueryPipeline extends ResponsePipeline<KVRangeRORequest, KVRangeROReply> {
                 }
                 task.queryFn.apply(request)
                     .exceptionally(unwrap(e -> {
-                        if (e instanceof KVRangeException.BadVersion) {
-                            return KVRangeROReply.newBuilder()
+                        if (e instanceof KVRangeException.BadVersion badVersion) {
+                            KVRangeROReply.Builder replyBuilder = KVRangeROReply.newBuilder()
                                 .setReqId(request.getReqId())
-                                .setCode(ReplyCode.BadVersion)
-                                .build();
+                                .setCode(ReplyCode.BadVersion);
+                            if (badVersion.latest != null) {
+                                replyBuilder.setLatest(badVersion.latest);
+                            }
+                            return replyBuilder.build();
                         }
                         if (e instanceof KVRangeStoreException.KVRangeNotFoundException
                             || e instanceof KVRangeException.TryLater) {

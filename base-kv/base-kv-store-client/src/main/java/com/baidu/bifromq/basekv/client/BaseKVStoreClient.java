@@ -15,6 +15,7 @@ package com.baidu.bifromq.basekv.client;
 
 import static com.baidu.bifromq.basekv.RPCBluePrint.toScopedFullMethodName;
 import static com.baidu.bifromq.basekv.RPCServerMetadataUtil.RPC_METADATA_STORE_ID;
+import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getBootstrapMethod;
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getChangeReplicaConfigMethod;
 import static com.baidu.bifromq.basekv.store.proto.BaseKVStoreServiceGrpc.getExecuteMethod;
@@ -74,6 +75,7 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
 import io.reactivex.rxjava3.subjects.Subject;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -87,6 +89,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
 import org.slf4j.Logger;
 
@@ -112,12 +115,13 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     private final MethodDescriptor<KVRangeRWRequest, KVRangeRWReply> executeMethod;
     private final MethodDescriptor<KVRangeRORequest, KVRangeROReply> linearizedQueryMethod;
     private final MethodDescriptor<KVRangeRORequest, KVRangeROReply> queryMethod;
-    private final Subject<Map<String, String>> storeToServerSubject = BehaviorSubject.createDefault(Maps.newHashMap());
-    private final BehaviorSubject<NavigableMap<Boundary, KVRangeSetting>> effectiveRouterSubject = BehaviorSubject
-        .createDefault(new TreeMap<>(BoundaryUtil::compare));
+    private final Subject<Map<String, String>> storeToServerSubject = BehaviorSubject.createDefault(emptyMap());
     private final Observable<ClusterInfo> clusterInfoObservable;
     // key: storeId
     private final Map<String, List<IQueryPipeline>> lnrQueryPplns = Maps.newHashMap();
+    private final AtomicReference<NavigableMap<Boundary, KVRangeSetting>> effectiveRouter =
+        new AtomicReference<>(new TreeMap<>(BoundaryUtil::compare));
+
     // key: serverId, val: storeId
     private volatile Map<String, String> serverToStoreMap = Maps.newHashMap();
     // key: storeId, value serverId
@@ -175,13 +179,6 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                 return complete;
             });
         disposables.add(clusterInfoObservable.subscribe(this::refresh));
-        disposables.add(effectiveRouter().subscribe(router -> {
-            if (!router.isEmpty()) {
-                synchronized (this) {
-                    this.notifyAll();
-                }
-            }
-        }));
     }
 
     @Override
@@ -200,13 +197,8 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
     }
 
     @Override
-    public Observable<NavigableMap<Boundary, KVRangeSetting>> effectiveRouter() {
-        return effectiveRouterSubject.distinctUntilChanged();
-    }
-
-    @Override
     public NavigableMap<Boundary, KVRangeSetting> latestEffectiveRouter() {
-        return effectiveRouterSubject.getValue();
+        return effectiveRouter.get();
     }
 
     @Override
@@ -244,6 +236,12 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                     .setReqId(request.getReqId())
                     .setCode(ReplyCode.InternalError)
                     .build();
+            })
+            .thenApply(v -> {
+                if (v.hasLatest()) {
+                    patchRouter(storeId, v.getLatest());
+                }
+                return v;
             });
     }
 
@@ -262,6 +260,12 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                     .setReqId(request.getReqId())
                     .setCode(ReplyCode.InternalError)
                     .build();
+            })
+            .thenApply(v -> {
+                if (v.hasLatest()) {
+                    patchRouter(storeId, v.getLatest());
+                }
+                return v;
             });
     }
 
@@ -279,6 +283,12 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                     .setReqId(request.getReqId())
                     .setCode(ReplyCode.InternalError)
                     .build();
+            })
+            .thenApply(v -> {
+                if (v.hasLatest()) {
+                    patchRouter(storeId, v.getLatest());
+                }
+                return v;
             });
     }
 
@@ -296,6 +306,12 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                     .setReqId(request.getReqId())
                     .setCode(ReplyCode.InternalError)
                     .build();
+            })
+            .thenApply(v -> {
+                if (v.hasLatest()) {
+                    patchRouter(storeId, v.getLatest());
+                }
+                return v;
             });
     }
 
@@ -374,17 +390,17 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                     };
                 }
                 return rpcClient.createRequestPipeline("", serverIdOpt.get(), null, emptyMap(), executeMethod);
-            }), log);
-    }
-
-    @Override
-    public IQueryPipeline createQueryPipeline(String storeId) {
-        return createQueryPipeline(storeId, false);
+            }), latest -> patchRouter(storeId, latest), log);
     }
 
     @Override
     public IQueryPipeline createLinearizedQueryPipeline(String storeId) {
         return createQueryPipeline(storeId, true);
+    }
+
+    @Override
+    public IQueryPipeline createQueryPipeline(String storeId) {
+        return createQueryPipeline(storeId, false);
     }
 
     private IQueryPipeline createQueryPipeline(String storeId, boolean linearized) {
@@ -418,7 +434,7 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
                 } else {
                     return rpcClient.createRequestPipeline("", serverIdOpt.get(), null, emptyMap(), queryMethod);
                 }
-            }), log);
+            }), latest -> patchRouter(storeId, latest), log);
     }
 
     @Override
@@ -462,9 +478,12 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
             router.put(entry.getKey(), new KVRangeSetting(clusterId, entry.getValue().ownerStoreDescriptor().getId(),
                 entry.getValue().descriptor()));
         }
-        NavigableMap<Boundary, KVRangeSetting> last = effectiveRouterSubject.getValue();
-        effectiveRouterSubject.onNext(router);
-        return !router.equals(last);
+        NavigableMap<Boundary, KVRangeSetting> last = effectiveRouter.get();
+        if (!router.equals(last)) {
+            effectiveRouter.set(router);
+            return true;
+        }
+        return false;
     }
 
     private boolean refreshStoreRoute(ClusterInfo clusterInfo) {
@@ -478,6 +497,24 @@ final class BaseKVStoreClient implements IBaseKVStoreClient {
         storeToServerMap = newStoreToServerMap;
         storeToServerSubject.onNext(newStoreToServerMap);
         return true;
+    }
+
+    private void patchRouter(String leaderStoreId, KVRangeDescriptor latest) {
+        NavigableMap<Boundary, KVRangeSetting> router = effectiveRouter.get();
+        KVRangeSetting setting = new KVRangeSetting(clusterId, leaderStoreId, latest);
+        Collection<KVRangeSetting> overlaps = findByBoundary(setting.boundary, router);
+        log.debug("Patching router: clusterId={}, leaderStoreId={}, latest={}, overlaps={}",
+            clusterId, leaderStoreId, latest, overlaps);
+        if (overlaps.stream().allMatch(s -> s.ver < latest.getVer())) {
+            NavigableMap<Boundary, KVRangeSetting> patched = new TreeMap<>(BoundaryUtil::compare);
+            for (KVRangeSetting s : router.values()) {
+                if (!overlaps.contains(s)) {
+                    patched.put(s.boundary, s);
+                }
+            }
+            patched.put(setting.boundary, setting);
+            effectiveRouter.compareAndSet(router, patched);
+        }
     }
 
     private void refreshMutPipelines(Map<String, KVRangeStoreDescriptor> storeDescriptors) {

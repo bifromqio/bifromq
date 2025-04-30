@@ -49,8 +49,6 @@ public interface IBaseKVStoreClient extends IConnectable, AutoCloseable {
 
     Observable<Set<KVRangeStoreDescriptor>> describe();
 
-    Observable<NavigableMap<Boundary, KVRangeSetting>> effectiveRouter();
-
     NavigableMap<Boundary, KVRangeSetting> latestEffectiveRouter();
 
     CompletableFuture<BootstrapReply> bootstrap(String storeId, BootstrapRequest request);

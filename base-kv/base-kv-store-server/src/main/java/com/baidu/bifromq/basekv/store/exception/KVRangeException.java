@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.basekv.store.exception;
 
+import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
+
 public class KVRangeException extends RuntimeException {
     public KVRangeException(String message) {
         super(message);
@@ -34,13 +36,15 @@ public class KVRangeException extends RuntimeException {
     }
 
     public static class BadVersion extends KVRangeException {
+        public final KVRangeDescriptor latest;
 
         public BadVersion(String message) {
-            super(message);
+            this(message, null);
         }
 
-        public BadVersion(String message, Throwable cause) {
-            super(message, cause);
+        public BadVersion(String message, KVRangeDescriptor latest) {
+            super(message);
+            this.latest = latest;
         }
     }
 

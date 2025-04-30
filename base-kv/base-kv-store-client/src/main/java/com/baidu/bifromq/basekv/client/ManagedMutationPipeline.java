@@ -13,22 +13,27 @@
 
 package com.baidu.bifromq.basekv.client;
 
+import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWReply;
 import com.baidu.bifromq.basekv.store.proto.KVRangeRWRequest;
 import com.baidu.bifromq.baserpc.client.IRPCClient;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 
 class ManagedMutationPipeline implements IMutationPipeline {
     private final Logger log;
     private final Disposable disposable;
+    private final Consumer<KVRangeDescriptor> routePatcher;
     private volatile IRPCClient.IRequestPipeline<KVRangeRWRequest, KVRangeRWReply> ppln;
 
     ManagedMutationPipeline(Observable<IRPCClient.IRequestPipeline<KVRangeRWRequest, KVRangeRWReply>> pplnObservable,
+                            Consumer<KVRangeDescriptor> routePatcher,
                             Logger log) {
         this.log = log;
+        this.routePatcher = routePatcher;
         disposable = pplnObservable.subscribe(next -> {
             IRPCClient.IRequestPipeline<KVRangeRWRequest, KVRangeRWReply> old = ppln;
             ppln = next;
@@ -42,7 +47,13 @@ class ManagedMutationPipeline implements IMutationPipeline {
 
     public CompletableFuture<KVRangeRWReply> execute(KVRangeRWRequest request) {
         log.trace("Requesting rw range:req={}", request);
-        return ppln.invoke(request);
+        return ppln.invoke(request)
+            .thenApply(v -> {
+                if (v.hasLatest()) {
+                    routePatcher.accept(v.getLatest());
+                }
+                return v;
+            });
     }
 
     @Override

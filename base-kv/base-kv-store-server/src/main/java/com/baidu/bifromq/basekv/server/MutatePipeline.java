@@ -84,11 +84,14 @@ class MutatePipeline extends ResponsePipeline<KVRangeRWRequest, KVRangeRWReply> 
         CompletionStage<KVRangeRWReply>> mutateFn) {
         return mutateFn.apply(request)
             .exceptionally(unwrap(e -> {
-                if (e instanceof KVRangeException.BadVersion) {
-                    return KVRangeRWReply.newBuilder()
+                if (e instanceof KVRangeException.BadVersion badVersion) {
+                    KVRangeRWReply.Builder replyBuilder = KVRangeRWReply.newBuilder()
                         .setReqId(request.getReqId())
-                        .setCode(ReplyCode.BadVersion)
-                        .build();
+                        .setCode(ReplyCode.BadVersion);
+                    if (badVersion.latest != null) {
+                        replyBuilder.setLatest(badVersion.latest);
+                    }
+                    return replyBuilder.build();
                 }
                 if (e instanceof KVRangeStoreException.KVRangeNotFoundException
                     || e instanceof KVRangeException.TryLater) {

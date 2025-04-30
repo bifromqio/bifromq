@@ -158,7 +158,7 @@ public class KVRangeFSM implements IKVRangeFSM {
     private final Map<String, CompletableFuture<?>> cmdFutures = new ConcurrentHashMap<>();
     private final Map<String, KVRangeDumpSession> dumpSessions = Maps.newConcurrentMap();
     private final AtomicInteger taskSeqNo = new AtomicInteger();
-    private final Subject<KVRangeDescriptor> descriptorSubject = BehaviorSubject.create();
+    private final BehaviorSubject<KVRangeDescriptor> descriptorSubject = BehaviorSubject.create();
     private final Subject<List<SplitHint>> splitHintsSubject = BehaviorSubject.<List<SplitHint>>create().toSerialized();
     private final Subject<Any> factSubject = BehaviorSubject.create();
     private final KVRangeOptions opts;
@@ -213,7 +213,7 @@ public class KVRangeFSM implements IKVRangeFSM {
         long lastAppliedIndex = this.kvRange.lastAppliedIndex();
         this.linearizer = new KVRangeQueryLinearizer(wal::readIndex, queryExecutor, lastAppliedIndex, tags);
         this.queryRunner = new KVRangeQueryRunner(this.kvRange, coProc, queryExecutor, linearizer,
-            splitHinters, resetLock, tags);
+            splitHinters, this::latestLeaderDescriptor, resetLock, tags);
         this.statsCollector = new KVRangeStatsCollector(this.kvRange,
             wal, Duration.ofSeconds(opts.getStatsCollectIntervalSec()), bgExecutor);
         this.metricManager = new KVRangeMetricManager(clusterId, hostStoreId, id);
@@ -419,7 +419,8 @@ public class KVRangeFSM implements IKVRangeFSM {
         return metricManager.recordTransferLeader(() -> {
             if (ver != kvRange.version()) {
                 // version not exactly match
-                return CompletableFuture.failedFuture(new KVRangeException.BadVersion("Version Mismatch"));
+                return CompletableFuture.failedFuture(
+                    new KVRangeException.BadVersion("Version Mismatch", latestLeaderDescriptor()));
             }
             log.info("Transferring leader[ver={}, state={}]: newLeader={}",
                 print(ver), kvRange.state().getType(), newLeader);
@@ -544,7 +545,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                 new KVRangeException.InternalException("Range not open:" + KVRangeIdUtil.toString(id)));
         }
         if (!boundaryCompatible(mutationCommand.getVer(), kvRange.version())) {
-            return CompletableFuture.failedFuture(new KVRangeException.BadVersion("Version Mismatch"));
+            return CompletableFuture.failedFuture(
+                new KVRangeException.BadVersion("Version Mismatch", latestLeaderDescriptor()));
         }
         State state = kvRange.state();
         if (state.getType() == NoUse
@@ -565,7 +567,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                 new KVRangeException.InternalException("Range not open:" + KVRangeIdUtil.toString(id)));
         }
         if (managementCommand.getVer() != kvRange.version()) {
-            return CompletableFuture.failedFuture(new KVRangeException.BadVersion("Version Mismatch"));
+            return CompletableFuture.failedFuture(
+                new KVRangeException.BadVersion("Version Mismatch", latestLeaderDescriptor()));
         }
         return submitCommand(managementCommand);
     }
@@ -704,6 +707,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                     log.error("Failed to apply command", t);
                     onDone.completeExceptionally(t);
                 }
+            }
+            default -> {
+                // no nothing
             }
         }
         return onDone;
@@ -846,8 +852,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                 ChangeConfig newConfig = command.getChangeConfig();
                 if (reqVer != ver) {
                     // version not match, hint the caller
-                    onDone.complete(
-                        () -> finishCommandWithError(taskId, new KVRangeException.BadVersion("Version Mismatch")));
+                    onDone.complete(() -> finishCommandWithError(taskId,
+                        new KVRangeException.BadVersion("Version Mismatch", latestLeaderDescriptor())));
                     break;
                 }
                 if (state.getType() != Normal && state.getType() != Merged) {
@@ -987,8 +993,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                 SplitRange request = command.getSplitRange();
                 if (reqVer != ver) {
                     // version not match, hint the caller
-                    onDone.complete(
-                        () -> finishCommandWithError(taskId, new KVRangeException.BadVersion("Version Mismatch")));
+                    onDone.complete(() -> finishCommandWithError(taskId,
+                        new KVRangeException.BadVersion("Version Mismatch", latestLeaderDescriptor())));
                     break;
                 }
                 if (state.getType() != Normal) {
@@ -1074,7 +1080,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                 if (reqVer != ver) {
                     // version not match, hint the caller
                     onDone.complete(() -> finishCommandWithError(taskId,
-                        new KVRangeException.BadVersion("Version Mismatch")));
+                        new KVRangeException.BadVersion("Version Mismatch", latestLeaderDescriptor())));
                     break;
                 }
                 if (state.getType() != Normal) {
@@ -1293,8 +1299,8 @@ public class KVRangeFSM implements IKVRangeFSM {
                         }
                     }, fsmExecutor);
                 }
-                readyToMerge.whenCompleteAsync((_v, _e) -> {
-                    if (_e != null) {
+                readyToMerge.whenCompleteAsync((v1, e1) -> {
+                    if (e1 != null) {
                         onDone.completeExceptionally(
                             new KVRangeException.TryLater("Merge condition not met"));
                         return;
@@ -1394,8 +1400,8 @@ public class KVRangeFSM implements IKVRangeFSM {
             }
             case PUT, DELETE, RWCOPROC -> {
                 if (!boundaryCompatible(reqVer, ver)) {
-                    onDone.complete(
-                        () -> finishCommandWithError(taskId, new KVRangeException.BadVersion("Version Mismatch")));
+                    onDone.complete(() -> finishCommandWithError(taskId,
+                        new KVRangeException.BadVersion("Version Mismatch", latestLeaderDescriptor())));
                     break;
                 }
                 if (state.getType() == NoUse
@@ -1435,6 +1441,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                                 finishCommand(taskId, result.output());
                             });
                         }
+                        default -> {
+                            // do nothing
+                        }
                     }
                 } catch (Throwable e) {
                     onDone.complete(
@@ -1455,6 +1464,13 @@ public class KVRangeFSM implements IKVRangeFSM {
             && currentConfig.getLearnersCount() == 0
             && nextConfig.getVotersCount() == 0
             && nextConfig.getLearnersCount() == 0;
+    }
+
+    private KVRangeDescriptor latestLeaderDescriptor() {
+        if (wal.isLeader()) {
+            return descriptorSubject.getValue();
+        }
+        return null;
     }
 
     private CompletableFuture<Void> restore(KVRangeSnapshot snapshot,
@@ -1607,6 +1623,9 @@ public class KVRangeFSM implements IKVRangeFSM {
             case CANCELMERGINGREQUEST ->
                 handleCancelMergingRequest(message.getHostStoreId(), message.getCancelMergingRequest());
             case MERGEDONEREQUEST -> handleMergeDoneRequest(message.getHostStoreId(), message.getMergeDoneRequest());
+            default -> {
+                // do nothing
+            }
         }
     }
 
@@ -1631,6 +1650,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                 }
                 case Abort -> log.info("Snapshot dump aborted: session={}, follower={}", session.id(), follower);
                 case Error -> log.warn("Snapshot dump failed: session={}, follower={}", session.id(), follower);
+                default -> {
+                    // do nothing
+                }
             }
             dumpSessions.remove(session.id(), session);
         });
