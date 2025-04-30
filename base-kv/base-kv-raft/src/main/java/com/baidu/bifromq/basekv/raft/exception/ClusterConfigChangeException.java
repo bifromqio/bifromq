@@ -14,36 +14,40 @@
 package com.baidu.bifromq.basekv.raft.exception;
 
 public class ClusterConfigChangeException extends RuntimeException {
+    protected ClusterConfigChangeException(String message) {
+        super(message);
+    }
+
     public static ConcurrentChangeException concurrentChange() {
         return new ConcurrentChangeException();
     }
 
-    public static EmptyVotersException emptyVoters() {
+    public static ClusterConfigChangeException emptyVoters() {
         return new EmptyVotersException();
     }
 
-    public static LearnersOverlapException learnersOverlap() {
+    public static ClusterConfigChangeException learnersOverlap() {
         return new LearnersOverlapException();
     }
 
-    public static SlowLearnerException slowLearner() {
+    public static ClusterConfigChangeException slowLearner() {
         return new SlowLearnerException();
     }
 
-    public static LeaderStepDownException leaderStepDown() {
+    public static ClusterConfigChangeException leaderStepDown() {
         return new LeaderStepDownException();
     }
 
-    public static NotLeaderException notLeader() {
+    public static ClusterConfigChangeException notLeader() {
         return new NotLeaderException();
     }
 
-    public static NoLeaderException noLeader() {
+    public static ClusterConfigChangeException noLeader() {
         return new NoLeaderException();
     }
 
-    protected ClusterConfigChangeException(String message) {
-        super(message);
+    public static ClusterConfigChangeException cancelled() {
+        return new CancelledException();
     }
 
     public static class ConcurrentChangeException extends ClusterConfigChangeException {
@@ -86,6 +90,12 @@ public class ClusterConfigChangeException extends RuntimeException {
     public static class NoLeaderException extends ClusterConfigChangeException {
         private NoLeaderException() {
             super("No leader elected");
+        }
+    }
+
+    public static class CancelledException extends ClusterConfigChangeException {
+        private CancelledException() {
+            super("Cancelled");
         }
     }
 }

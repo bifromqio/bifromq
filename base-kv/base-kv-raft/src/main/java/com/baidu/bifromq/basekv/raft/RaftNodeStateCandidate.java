@@ -112,7 +112,7 @@ class RaftNodeStateCandidate extends RaftNodeState {
 
     @Override
     void propose(ByteString fsmCmd, CompletableFuture<Long> onDone) {
-        onDone.completeExceptionally(DropProposalException.NoLeader());
+        onDone.completeExceptionally(DropProposalException.noLeader());
     }
 
     @Override
@@ -227,6 +227,12 @@ class RaftNodeStateCandidate extends RaftNodeState {
     @Override
     void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex, CompletableFuture<Void> onDone) {
         onDone.complete(null);
+    }
+
+    @Override
+    public void stop() {
+        super.stop();
+        finishRecoveryTask(RecoveryException.cancelled());
     }
 
     RaftNodeState campaign(boolean preVote, boolean transferLeader) {

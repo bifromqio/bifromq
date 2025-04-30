@@ -14,6 +14,10 @@
 package com.baidu.bifromq.basekv.raft.exception;
 
 public class RecoveryException extends RuntimeException {
+    private RecoveryException(String message) {
+        super(message);
+    }
+
     public static RecoveryException notLostQuorum() {
         return new NotLostQuorumException();
     }
@@ -34,8 +38,8 @@ public class RecoveryException extends RuntimeException {
         return new RecoveryInProgressException();
     }
 
-    private RecoveryException(String message) {
-        super(message);
+    public static RecoveryException cancelled() {
+        return new CancelledException();
     }
 
     public static class NotLostQuorumException extends RecoveryException {
@@ -65,6 +69,12 @@ public class RecoveryException extends RuntimeException {
     public static class RecoveryInProgressException extends RecoveryException {
         private RecoveryInProgressException() {
             super("There is recovery in progress");
+        }
+    }
+
+    public static class CancelledException extends RecoveryException {
+        private CancelledException() {
+            super("Cancelled");
         }
     }
 }

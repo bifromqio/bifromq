@@ -23,37 +23,10 @@ import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 
 class ReadProgressTracker {
-    private static class ReadProgress {
-        private final List<CompletableFuture<Long>> pendingFutures;
-        private final QuorumTracker confirmTracker;
-
-        ReadProgress(ClusterConfig clusterConfig, Logger logger) {
-            pendingFutures = new ArrayList<>();
-            confirmTracker = new QuorumTracker(clusterConfig, logger);
-        }
-
-        void add(CompletableFuture<Long> future) {
-            pendingFutures.add(future);
-        }
-
-        void complete(Long readIndex) {
-            pendingFutures.forEach(future -> future.complete(readIndex));
-        }
-
-        void abort() {
-            pendingFutures.forEach(future -> future.completeExceptionally(ReadIndexException.leaderStepDown()));
-        }
-
-        int count() {
-            return pendingFutures.size();
-        }
-    }
-
     private final TreeMap<Long, ReadProgress> readProgressMap;
     private final IRaftStateStore stateStorage;
     private final Logger logger;
     private int total;
-
     ReadProgressTracker(IRaftStateStore stateStorage, Logger logger) {
         this.readProgressMap = new TreeMap<>();
         this.stateStorage = stateStorage;
@@ -92,9 +65,9 @@ class ReadProgressTracker {
         }
     }
 
-    public void abort() {
+    public void abort(ReadIndexException e) {
         logger.debug("Abort on-going read progresses");
-        readProgressMap.values().forEach(ReadProgress::abort);
+        readProgressMap.values().forEach(p -> p.abort(e));
         readProgressMap.clear();
         total = 0;
     }
@@ -108,5 +81,31 @@ class ReadProgressTracker {
 
     public int underConfirming() {
         return total;
+    }
+
+    private static class ReadProgress {
+        private final List<CompletableFuture<Long>> pendingFutures;
+        private final QuorumTracker confirmTracker;
+
+        ReadProgress(ClusterConfig clusterConfig, Logger logger) {
+            pendingFutures = new ArrayList<>();
+            confirmTracker = new QuorumTracker(clusterConfig, logger);
+        }
+
+        void add(CompletableFuture<Long> future) {
+            pendingFutures.add(future);
+        }
+
+        void complete(Long readIndex) {
+            pendingFutures.forEach(future -> future.complete(readIndex));
+        }
+
+        void abort(ReadIndexException e) {
+            pendingFutures.forEach(future -> future.completeExceptionally(e));
+        }
+
+        int count() {
+            return pendingFutures.size();
+        }
     }
 }

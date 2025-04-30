@@ -17,10 +17,14 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.raft.event.CommitEvent;
 import com.baidu.bifromq.basekv.raft.event.ElectionEvent;
 import com.baidu.bifromq.basekv.raft.event.RaftEventType;
+import com.baidu.bifromq.basekv.raft.exception.ClusterConfigChangeException;
+import com.baidu.bifromq.basekv.raft.exception.DropProposalException;
+import com.baidu.bifromq.basekv.raft.exception.LeaderTransferException;
 import com.baidu.bifromq.basekv.raft.proto.AppendEntries;
 import com.baidu.bifromq.basekv.raft.proto.AppendEntriesReply;
 import com.baidu.bifromq.basekv.raft.proto.InstallSnapshot;
@@ -439,6 +443,60 @@ public class RaftNodeStateLeaderTest extends RaftNodeStateTest {
             .build();
         raftNodeState = leader.receive("v1", appendEntries);
         assertSame(raftNodeState.getState(), RaftNodeStatus.Follower);
+    }
+
+    @Test
+    public void testStopCancelOngoingTransferLeadership() {
+        RaftNodeStateLeader leader = startUpLeader();
+        CompletableFuture<Void> onDone = new CompletableFuture<>();
+        leader.transferLeadership("v1", onDone);
+        assertFalse(onDone.isDone());
+        leader.stop();
+        assertTrue(onDone.isCompletedExceptionally());
+        try {
+            onDone.join();
+            fail();
+        } catch (Throwable e) {
+            assertTrue(e.getCause() instanceof LeaderTransferException.CancelledException);
+        }
+    }
+
+    @Test
+    public void testStopCancellingOngoingConfigChange() {
+        RaftNodeStateLeader leader = startUpLeader();
+        // nextVoters doesn't include local and v1
+        Set<String> nextVoters = new HashSet<>() {{
+            add("v2");
+            add("v3");
+        }};
+        Set<String> nextLearners = new HashSet<>() {{
+            add("l2");
+        }};
+        CompletableFuture<Void> onDone = new CompletableFuture<>();
+        leader.changeClusterConfig("cId", nextVoters, nextLearners, onDone);
+        leader.stop();
+        try {
+            onDone.join();
+            fail();
+        } catch (Throwable e) {
+            assertTrue(e.getCause() instanceof ClusterConfigChangeException.CancelledException);
+        }
+    }
+
+    @Test
+    public void testStopCancellingOngoingPropose() {
+        RaftNodeStateLeader leader = startUpLeader();
+        ByteString cmd = ByteString.copyFromUtf8("command");
+        CompletableFuture<Long> proposeDone = new CompletableFuture<>();
+        leader.propose(cmd, proposeDone);
+        assertFalse(proposeDone.isDone());
+        leader.stop();
+        try {
+            proposeDone.join();
+            fail();
+        } catch (Throwable e) {
+            assertTrue(e.getCause() instanceof DropProposalException.CancelledException);
+        }
     }
 
     private RaftNodeStateLeader startUpLeader() {

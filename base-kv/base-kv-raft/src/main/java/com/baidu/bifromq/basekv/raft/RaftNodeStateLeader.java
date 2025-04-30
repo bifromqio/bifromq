@@ -13,9 +13,11 @@
 
 package com.baidu.bifromq.basekv.raft;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
 import static com.baidu.bifromq.basekv.raft.RaftConfigChanger.State.JointConfigCommitting;
 import static com.baidu.bifromq.basekv.raft.RaftConfigChanger.State.TargetConfigCommitting;
 
+import com.baidu.bifromq.basekv.raft.exception.ClusterConfigChangeException;
 import com.baidu.bifromq.basekv.raft.exception.DropProposalException;
 import com.baidu.bifromq.basekv.raft.exception.LeaderTransferException;
 import com.baidu.bifromq.basekv.raft.exception.ReadIndexException;
@@ -50,24 +52,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 class RaftNodeStateLeader extends RaftNodeState {
-    private static class LeaderTransferTask {
-        final String nextLeader;
-        private final CompletableFuture<Void> onDone;
-
-        LeaderTransferTask(String nextLeader, CompletableFuture<Void> onDone) {
-            this.nextLeader = nextLeader;
-            this.onDone = onDone;
-        }
-
-        void abort(Throwable t) {
-            onDone.completeExceptionally(t);
-        }
-
-        void done() {
-            onDone.complete(null);
-        }
-    }
-
     private final QuorumTracker activityTracker;
     private final PeerLogTracker peerLogTracker;
     private final RaftConfigChanger configChanger;
@@ -151,8 +135,7 @@ class RaftNodeStateLeader extends RaftNodeState {
             snapshotInstaller,
             onSnapshotInstalled,
             tags);
-        configChanger.abort();
-        readProgressTracker.abort();
+        abortPendingRequests(AbortReason.LeaderStepDown);
         return nextState;
     }
 
@@ -204,8 +187,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                 // at the end of an election timeout, leader is out of touch with the majority,
                 // step down as a follower and abort any pending futures
                 log.warn("Quorum check failed[{}], leader stepped down to follower", quorumCheckResult);
-                configChanger.abort();
-                readProgressTracker.abort();
+                abortPendingRequests(AbortReason.LeaderStepDown);
                 return new RaftNodeStateFollower(
                     currentTerm(), // update term
                     commitIndex,
@@ -251,8 +233,7 @@ class RaftNodeStateLeader extends RaftNodeState {
         // update self progress
         peerLogTracker.replicateBy(stateStorage.local(), stateStorage.lastIndex());
 
-        ProposeTask prev =
-            uncommittedProposals.put(entry.getIndex(), new ProposeTask(entry.getTerm(), onDone));
+        ProposeTask prev = uncommittedProposals.put(entry.getIndex(), new ProposeTask(entry.getTerm(), onDone));
         assert prev == null;
 
         Map<String, List<RaftMessage>> appendEntriesToSend = prepareAppendEntriesIfAbsent(false);
@@ -334,8 +315,7 @@ class RaftNodeStateLeader extends RaftNodeState {
             // abort on-going config change and readIndex request if any
             log.debug("Got higher term[{}] message[{}] from peer[{}], start to step down",
                 message.getTerm(), message.getMessageTypeCase(), fromPeer);
-            configChanger.abort();
-            readProgressTracker.abort();
+            abortPendingRequests(AbortReason.LeaderStepDown);
             nextState = new RaftNodeStateFollower(
                 message.getTerm(), // update term
                 commitIndex,
@@ -414,6 +394,12 @@ class RaftNodeStateLeader extends RaftNodeState {
     void onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex, CompletableFuture<Void> onDone) {
         // ignore in leader state
         onDone.complete(null);
+    }
+
+    @Override
+    public void stop() {
+        super.stop();
+        abortPendingRequests(AbortReason.Cancelled);
     }
 
     private RaftNodeState handleAppendEntriesReply(String fromPeer, AppendEntriesReply reply) {
@@ -668,7 +654,10 @@ class RaftNodeStateLeader extends RaftNodeState {
                         // target config has been committed, step down if local server has been removed from voters
                         // abort pending read index requests if any
                         log.debug("Leader stepped down due to being removed from cluster config");
-                        readProgressTracker.abort();
+                        readProgressTracker.abort(ReadIndexException.leaderStepDown());
+                        if (leaderTransferTask != null) {
+                            leaderTransferTask.abort(LeaderTransferException.leaderStepDown());
+                        }
                         nextState = new RaftNodeStateFollower(
                             currentTerm(),
                             commitIndex,
@@ -748,20 +737,25 @@ class RaftNodeStateLeader extends RaftNodeState {
     private void handlePropose(String fromPeer, Propose propose) {
         log.trace("Received forwarded Propose request from peer[{}]", fromPeer);
         CompletableFuture<Long> onDone = new CompletableFuture<>();
-        onDone.whenComplete((v, e) -> {
+        onDone.whenComplete(unwrap((v, e) -> {
             // must be executed in raft thread
             if (e != null) {
                 log.debug("Failed to finish forwarded Propose request from peer[{}]", fromPeer, e);
+                ProposeReply.Builder replyBuilder = ProposeReply.newBuilder().setId(propose.getId());
+                assert e instanceof DropProposalException;
+                switch (((DropProposalException) e).code) {
+                    case NoLeader -> replyBuilder.setCode(ProposeReply.Code.DropByNoLeader);
+                    case Overridden -> replyBuilder.setCode(ProposeReply.Code.DropByOverridden);
+                    case ForwardTimeout -> replyBuilder.setCode(ProposeReply.Code.DropByForwardTimeout);
+                    case TransferringLeader -> replyBuilder.setCode(ProposeReply.Code.DropByLeaderTransferring);
+                    case LeaderForwardDisabled -> replyBuilder.setCode(ProposeReply.Code.DropByLeaderForwardDisabled);
+                    case ThrottleByThreshold -> replyBuilder.setCode(ProposeReply.Code.DropByMaxUnappliedEntries);
+                    case SupersededBySnapshot -> replyBuilder.setCode(ProposeReply.Code.DropBySupersededBySnapshot);
+                    default -> replyBuilder.setCode(ProposeReply.Code.DropByCancel);
+                }
                 submitRaftMessages(fromPeer, RaftMessage.newBuilder()
                     .setTerm(currentTerm())
-                    .setProposeReply(ProposeReply.newBuilder()
-                        .setId(propose.getId())
-                        // only two exceptions available now
-                        .setCode(e.getClass() == DropProposalException.TransferringLeaderException.class ?
-                            ProposeReply.Code.DropByLeaderTransferring :
-                            ProposeReply.Code.DropByMaxUnappliedEntries
-                        )
-                        .build())
+                    .setProposeReply(replyBuilder.build())
                     .build());
             } else {
                 submitRaftMessages(fromPeer, RaftMessage.newBuilder()
@@ -773,7 +767,7 @@ class RaftNodeStateLeader extends RaftNodeState {
                         .build())
                     .build());
             }
-        });
+        }));
         propose(propose.getCommand(), onDone);
     }
 
@@ -791,5 +785,47 @@ class RaftNodeStateLeader extends RaftNodeState {
         return !committed.map(logEntry -> logEntry.getTerm() == currentTerm())
             .orElseGet(() -> stateStorage.latestSnapshot().getTerm() == currentTerm());
 
+    }
+
+    private void abortPendingRequests(AbortReason reason) {
+        switch (reason) {
+            case LeaderStepDown -> {
+                configChanger.abort(ClusterConfigChangeException.leaderStepDown());
+                readProgressTracker.abort(ReadIndexException.leaderStepDown());
+                if (leaderTransferTask != null) {
+                    leaderTransferTask.abort(LeaderTransferException.leaderStepDown());
+                }
+            }
+            case Cancelled -> {
+                configChanger.abort(ClusterConfigChangeException.cancelled());
+                readProgressTracker.abort(ReadIndexException.cancelled());
+                if (leaderTransferTask != null) {
+                    leaderTransferTask.abort(LeaderTransferException.cancelled());
+                }
+            }
+        }
+    }
+
+    private enum AbortReason {
+        LeaderStepDown,
+        Cancelled
+    }
+
+    private static class LeaderTransferTask {
+        final String nextLeader;
+        private final CompletableFuture<Void> onDone;
+
+        LeaderTransferTask(String nextLeader, CompletableFuture<Void> onDone) {
+            this.nextLeader = nextLeader;
+            this.onDone = onDone;
+        }
+
+        void abort(Throwable t) {
+            onDone.completeExceptionally(t);
+        }
+
+        void done() {
+            onDone.complete(null);
+        }
     }
 }

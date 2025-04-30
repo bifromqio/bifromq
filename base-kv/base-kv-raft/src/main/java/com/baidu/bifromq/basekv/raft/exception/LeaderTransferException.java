@@ -14,40 +14,47 @@
 package com.baidu.bifromq.basekv.raft.exception;
 
 public class LeaderTransferException extends RuntimeException {
+    protected LeaderTransferException(String message) {
+        super(message);
+    }
+
     public static LeaderNotReadyException leaderNotReady() {
         return new LeaderNotReadyException();
     }
 
-    public static TransferringInProgressException transferringInProgress() {
+    public static LeaderTransferException transferringInProgress() {
         return new TransferringInProgressException();
     }
 
-    public static SelfTransferException selfTransfer() {
+    public static LeaderTransferException leaderStepDown() {
+        return new LeaderStepDownException();
+    }
+    public static LeaderTransferException selfTransfer() {
         return new SelfTransferException();
     }
 
-    public static StepDownByOtherException stepDownByOther() {
+    public static LeaderTransferException stepDownByOther() {
         return new StepDownByOtherException();
     }
 
-    public static NotFoundOrQualifiedException notFoundOrQualified() {
+    public static LeaderTransferException notFoundOrQualified() {
         return new NotFoundOrQualifiedException();
     }
 
-    public static TransferTimeoutException transferTimeout() {
+    public static LeaderTransferException transferTimeout() {
         return new TransferTimeoutException();
     }
 
-    public static NotLeaderException notLeader() {
+    public static LeaderTransferException notLeader() {
         return new NotLeaderException();
     }
 
-    public static NoLeaderException noLeader() {
+    public static LeaderTransferException noLeader() {
         return new NoLeaderException();
     }
 
-    protected LeaderTransferException(String message) {
-        super(message);
+    public static LeaderTransferException cancelled() {
+        return new CancelledException();
     }
 
     public static class LeaderNotReadyException extends LeaderTransferException {
@@ -65,6 +72,12 @@ public class LeaderTransferException extends RuntimeException {
     public static class SelfTransferException extends LeaderTransferException {
         private SelfTransferException() {
             super("Cannot transfer to self");
+        }
+    }
+
+    public static class LeaderStepDownException extends LeaderTransferException {
+        private LeaderStepDownException() {
+            super("Leader step down before transfer finished");
         }
     }
 
@@ -95,6 +108,12 @@ public class LeaderTransferException extends RuntimeException {
     public static class NoLeaderException extends LeaderTransferException {
         private NoLeaderException() {
             super("No leader elected");
+        }
+    }
+
+    public static class CancelledException extends LeaderTransferException {
+        private CancelledException() {
+            super("Cancelled");
         }
     }
 }

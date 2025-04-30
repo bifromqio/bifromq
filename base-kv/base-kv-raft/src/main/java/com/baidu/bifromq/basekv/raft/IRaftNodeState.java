@@ -32,4 +32,6 @@ public interface IRaftNodeState {
     long commitIndex();
 
     ClusterConfig latestClusterConfig();
+
+    void stop();
 }

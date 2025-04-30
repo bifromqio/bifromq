@@ -13,8 +13,6 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-import static com.baidu.bifromq.basekv.raft.exception.DropProposalException.superseded;
-
 import com.baidu.bifromq.basekv.raft.exception.ClusterConfigChangeException;
 import com.baidu.bifromq.basekv.raft.exception.DropProposalException;
 import com.baidu.bifromq.basekv.raft.exception.LeaderTransferException;
@@ -174,7 +172,8 @@ class RaftNodeStateFollower extends RaftNodeState {
         }
         if (electionElapsedTick >= randomElectionTimeoutTick) {
             electionElapsedTick = 0;
-            abortPendingRequests();
+            abortPendingReadIndexRequests(ReadIndexException.forwardTimeout());
+            abortPendingProposeRequests(DropProposalException.forwardTimeout());
             // transit to candidate only if no snapshot installation is in progress
             if (currentISSRequest == null) {
                 log.debug("Transit to candidate due to election timeout[{}]", randomElectionTimeoutTick);
@@ -204,7 +203,7 @@ class RaftNodeStateFollower extends RaftNodeState {
         }
         if (currentLeader == null) {
             log.debug("Dropped proposal due to no leader elected in current term");
-            onDone.completeExceptionally(DropProposalException.NoLeader());
+            onDone.completeExceptionally(DropProposalException.noLeader());
             return;
         }
         if (isProposeThrottled()) {
@@ -430,14 +429,6 @@ class RaftNodeStateFollower extends RaftNodeState {
                             .build())
                     .build();
                 notifySnapshotRestored();
-                abortPendingRequests();
-                // Abort all uncommitted proposals inherited from previous leader state, since they may be superseded by snapshot
-                for (Iterator<Map.Entry<Long, ProposeTask>> it = uncommittedProposals.entrySet().iterator();
-                     it.hasNext(); ) {
-                    Map.Entry<Long, ProposeTask> entry = it.next();
-                    entry.getValue().future.completeExceptionally(superseded());
-                    it.remove();
-                }
                 submitRaftMessages(iss.getLeaderId(), reply);
                 onDone.complete(null);
             } catch (Throwable e) {
@@ -456,6 +447,13 @@ class RaftNodeStateFollower extends RaftNodeState {
                 onDone.completeExceptionally(e);
             }
         }
+    }
+
+    @Override
+    public void stop() {
+        super.stop();
+        abortPendingReadIndexRequests(ReadIndexException.cancelled());
+        abortPendingProposeRequests(DropProposalException.cancelled());
     }
 
     private void handleAppendEntries(String fromLeader, AppendEntries appendEntries) {
@@ -636,6 +634,18 @@ class RaftNodeStateFollower extends RaftNodeState {
                     DropProposalException.transferringLeader());
                 case DropByMaxUnappliedEntries -> pendingOnDone.completeExceptionally(
                     DropProposalException.throttledByThreshold());
+                case DropByNoLeader -> pendingOnDone.completeExceptionally(DropProposalException.noLeader());
+                case DropByForwardTimeout ->
+                    pendingOnDone.completeExceptionally(DropProposalException.forwardTimeout());
+                case DropByOverridden -> pendingOnDone.completeExceptionally(DropProposalException.overridden());
+                case DropBySupersededBySnapshot ->
+                    pendingOnDone.completeExceptionally(DropProposalException.superseded());
+                case DropByLeaderForwardDisabled ->
+                    pendingOnDone.completeExceptionally(DropProposalException.leaderForwardDisabled());
+                default -> {
+                    assert reply.getCode() == ProposeReply.Code.DropByCancel;
+                    pendingOnDone.completeExceptionally(DropProposalException.cancelled());
+                }
             }
         }
     }
@@ -643,7 +653,8 @@ class RaftNodeStateFollower extends RaftNodeState {
     private RaftNodeState handleTimeoutNow(String fromLeader) {
         if (promotable()) {
             log.info("Transited to candidate now by request from current leader[{}]", fromLeader);
-            abortPendingRequests();
+            abortPendingReadIndexRequests(ReadIndexException.cancelled());
+            abortPendingProposeRequests(DropProposalException.cancelled());
             return new RaftNodeStateCandidate(
                 currentTerm(),
                 commitIndex,
@@ -678,7 +689,7 @@ class RaftNodeStateFollower extends RaftNodeState {
             && (vote.isEmpty() || vote.get().getTerm() < currentTerm()));
     }
 
-    private void abortPendingRequests() {
+    private void abortPendingReadIndexRequests(ReadIndexException e) {
         for (Iterator<Map.Entry<Long, Set<Integer>>> it = tickToReadRequestsMap.entrySet().iterator();
              it.hasNext(); ) {
             Map.Entry<Long, Set<Integer>> entry = it.next();
@@ -687,10 +698,13 @@ class RaftNodeStateFollower extends RaftNodeState {
                 CompletableFuture<Long> pendingOnDone = idToReadRequestMap.remove(pendingReadId);
                 if (pendingOnDone != null && !pendingOnDone.isDone()) {
                     // if not finished by requestReadIndexReply then abort it
-                    pendingOnDone.completeExceptionally(ReadIndexException.forwardTimeout());
+                    pendingOnDone.completeExceptionally(e);
                 }
             });
         }
+    }
+
+    private void abortPendingProposeRequests(DropProposalException e) {
         for (Iterator<Map.Entry<Long, Set<Integer>>> it = tickToForwardedProposesMap.entrySet().iterator();
              it.hasNext(); ) {
             Map.Entry<Long, Set<Integer>> entry = it.next();
@@ -699,7 +713,7 @@ class RaftNodeStateFollower extends RaftNodeState {
                 CompletableFuture<Long> pendingOnDone = idToForwardedProposeMap.remove(pendingProposalId);
                 if (pendingOnDone != null && !pendingOnDone.isDone()) {
                     // if not finished by requestReadIndexReply then abort it
-                    pendingOnDone.completeExceptionally(DropProposalException.forwardTimeout());
+                    pendingOnDone.completeExceptionally(e);
                 }
             });
         }

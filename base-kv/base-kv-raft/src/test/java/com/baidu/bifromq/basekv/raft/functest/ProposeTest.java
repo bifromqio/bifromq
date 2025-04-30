@@ -42,28 +42,28 @@ public class ProposeTest extends SharedRaftConfigTestTemplate {
     @Test(groups = "integration")
     public void testProposalOverridden1() {
         testProposalOverridden(true,
-                e -> assertTrue(e instanceof DropProposalException.SupersededBySnapshotException));
+            e -> assertTrue(e instanceof DropProposalException.OverriddenException));
     }
 
     @Config(preVote = false)
     @Test(groups = "integration")
     public void testProposalOverridden2() {
         testProposalOverridden(true,
-                e -> assertTrue(e instanceof DropProposalException.SupersededBySnapshotException ||
-                        e instanceof DropProposalException.OverriddenException));
+            e -> assertTrue(e instanceof DropProposalException.SupersededBySnapshotException
+                || e instanceof DropProposalException.OverriddenException));
     }
 
     @Test(groups = "integration")
     public void testProposalOverridden3() {
         testProposalOverridden(false,
-                e -> assertTrue(e instanceof DropProposalException.OverriddenException));
+            e -> assertTrue(e instanceof DropProposalException.OverriddenException));
     }
 
     @Config(preVote = false)
     @Test(groups = "integration")
     public void testProposalOverridden4() {
         testProposalOverridden(false,
-                e -> assertTrue(e instanceof DropProposalException.OverriddenException));
+            e -> assertTrue(e instanceof DropProposalException.OverriddenException));
     }
 
     private void testProposalOverridden(boolean compaction, Consumer<Throwable> assertException) {

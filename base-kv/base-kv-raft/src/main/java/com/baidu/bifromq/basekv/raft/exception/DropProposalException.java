@@ -13,78 +13,102 @@
 
 package com.baidu.bifromq.basekv.raft.exception;
 
-public class DropProposalException extends RuntimeException {
-    public static TransferringLeaderException transferringLeader() {
+public abstract class DropProposalException extends RuntimeException {
+    public final Code code;
+
+    protected DropProposalException(Code code, String message) {
+        super(message);
+        this.code = code;
+    }
+
+    public static DropProposalException transferringLeader() {
         return new TransferringLeaderException();
     }
 
-    public static ThrottleByThresholdException throttledByThreshold() {
+    public static DropProposalException throttledByThreshold() {
         return new ThrottleByThresholdException();
     }
 
-    public static NoLeaderException NoLeader() {
+    public static DropProposalException noLeader() {
         return new NoLeaderException();
     }
 
-    public static LeaderForwardDisabledException leaderForwardDisabled() {
+    public static DropProposalException leaderForwardDisabled() {
         return new LeaderForwardDisabledException();
     }
 
-    public static ForwardTimeoutException forwardTimeout() {
+    public static DropProposalException forwardTimeout() {
         return new ForwardTimeoutException();
     }
 
-    public static OverriddenException overridden() {
+    public static DropProposalException overridden() {
         return new OverriddenException();
     }
 
-    public static SupersededBySnapshotException superseded() {
+    public static DropProposalException superseded() {
         return new SupersededBySnapshotException();
     }
 
-    protected DropProposalException(String message) {
-        super(message);
+    public static CancelledException cancelled() {
+        return new CancelledException();
+    }
+
+    public enum Code {
+        TransferringLeader,
+        ThrottleByThreshold,
+        NoLeader,
+        LeaderForwardDisabled,
+        ForwardTimeout,
+        Overridden,
+        SupersededBySnapshot,
+        Cancelled
     }
 
     public static class TransferringLeaderException extends DropProposalException {
         private TransferringLeaderException() {
-            super("Proposal dropped due to on-going transferring leader");
+            super(Code.TransferringLeader, "Proposal dropped due to on-going transferring leader");
         }
     }
 
     public static class ThrottleByThresholdException extends DropProposalException {
         private ThrottleByThresholdException() {
-            super("Proposal dropped due to too many uncommitted logs");
+            super(Code.ThrottleByThreshold, "Proposal dropped due to too many uncommitted logs");
         }
     }
 
     public static class NoLeaderException extends DropProposalException {
         private NoLeaderException() {
-            super("No leader elected");
+            super(Code.NoLeader, "No leader elected");
         }
     }
 
     public static class LeaderForwardDisabledException extends DropProposalException {
         private LeaderForwardDisabledException() {
-            super("Proposal forward feature is disabled");
+            super(Code.LeaderForwardDisabled, "Proposal forward feature is disabled");
         }
     }
 
     public static class ForwardTimeoutException extends DropProposalException {
         private ForwardTimeoutException() {
-            super("Doesn't receive propose reply from leader within timeout");
+            super(Code.ForwardTimeout, "Doesn't receive propose reply from leader within timeout");
         }
     }
 
     public static class OverriddenException extends DropProposalException {
         private OverriddenException() {
-            super("Proposal dropped due to overridden by proposal from newer leader");
+            super(Code.Overridden, "Proposal dropped due to overridden by proposal from newer leader");
         }
     }
 
     public static class SupersededBySnapshotException extends DropProposalException {
         private SupersededBySnapshotException() {
-            super("Proposal dropped due to superseded by snapshot");
+            super(Code.SupersededBySnapshot, "Proposal dropped due to superseded by snapshot");
+        }
+    }
+
+    public static class CancelledException extends DropProposalException {
+        private CancelledException() {
+            super(Code.Cancelled, "Proposal dropped due to cancelled");
         }
     }
 }

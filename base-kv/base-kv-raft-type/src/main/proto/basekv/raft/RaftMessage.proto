@@ -85,6 +85,12 @@ message ProposeReply {
     Success = 0;
     DropByLeaderTransferring = 1;
     DropByMaxUnappliedEntries = 2;
+    DropByOverridden = 3;
+    DropByNoLeader = 4;
+    DropByForwardTimeout = 5;
+    DropByLeaderForwardDisabled = 6;
+    DropBySupersededBySnapshot = 7;
+    DropByCancel = 8;
   }
   uint32 id = 1;
   Code code = 2;

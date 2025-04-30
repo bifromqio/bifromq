@@ -25,51 +25,21 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Raft Node interface, which is used to interact with raft node.
+ */
 public interface IRaftNode {
-    interface IRaftEventListener {
-        /**
-         * This callback method will be executed in raft thread
-         *
-         * @param event
-         */
-        void onEvent(RaftEvent event);
-    }
-
-    interface IRaftMessageSender {
-        void send(Map<String, List<RaftMessage>> messages);
-    }
-
     /**
-     * Callback that Application must invoke after snapshot installation either successfully or failed. The returned
-     * future will be fulfilled when raft finish applying the result snapshot, and is used to synchronize following work
-     * at application side after the whole installation process has finished.
+     * Check if the raft node is started.
+     *
+     * @return true if the raft node is started, false otherwise
      */
-    interface IAfterInstalledCallback {
-        CompletableFuture<Void> call(ByteString snapshot, Throwable ex);
-    }
-
-    /**
-     * Application specific snapshot installer, which is responsible for restoring application's state to given
-     * snapshot.
-     */
-    interface ISnapshotInstaller {
-        /**
-         * Application specific async snapshot installation. Application must invoke the callback to notify the raft
-         * node about the result.
-         *
-         * @param request  the snapshot requested to be installed
-         * @param leader   the leader who sent the installation request
-         * @param callback the promise to be completed when the installation is done
-         */
-        void install(ByteString request, String leader, IAfterInstalledCallback callback);
-    }
-
     boolean isStarted();
 
     /**
      * the id of local raft node.
      *
-     * @return the if of the node
+     * @return the id of the node
      */
     String id();
 
@@ -196,4 +166,63 @@ public interface IRaftNode {
      * Stop the raft node asynchronously.
      */
     CompletableFuture<Void> stop();
+
+    /**
+     * A callback interface for receiving raft events. The callback will be executed in raft thread, so it should be
+     * non-blocking and fast.
+     */
+    interface IRaftEventListener {
+        /**
+         * This callback method will be executed in raft thread.
+         *
+         * @param event the raft event
+         */
+        void onEvent(RaftEvent event);
+    }
+
+    /**
+     * A callback interface for sending raft messages to other peers. The callback will be executed in raft thread,
+     * so it should be non-blocking and fast.
+     */
+    interface IRaftMessageSender {
+        /**
+         * This callback method will be executed in raft thread.
+         *
+         * @param messages the raft messages to be sent.
+         */
+        void send(Map<String, List<RaftMessage>> messages);
+    }
+
+    /**
+     * Callback that Application must invoke after snapshot installation either successfully or failed. The returned
+     * future will be fulfilled when raft finish applying the result snapshot, and is used to synchronize following work
+     * at application side after the whole installation process has finished.
+     */
+    interface IAfterInstalledCallback {
+        /**
+         * Application must call this method when the snapshot installation is done.
+         *
+         * @param snapshot the snapshot of FSM installed.
+         * @param ex      the exception if installation failed, null if installation succeeded.
+         *
+         * @return the future of the callback which will be completed when raft finish compacting the logs.
+         */
+        CompletableFuture<Void> call(ByteString snapshot, Throwable ex);
+    }
+
+    /**
+     * Application specific snapshot installer, which is responsible for restoring application's state to given
+     * snapshot.
+     */
+    interface ISnapshotInstaller {
+        /**
+         * Application specific async snapshot installation. Application must invoke the callback to notify the raft
+         * node about the result.
+         *
+         * @param request  the snapshot requested to be installed
+         * @param leader   the leader who sent the installation request
+         * @param callback the promise to be completed when the installation is done
+         */
+        void install(ByteString request, String leader, IAfterInstalledCallback callback);
+    }
 }

@@ -19,6 +19,7 @@ import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
+import com.baidu.bifromq.basekv.raft.exception.ReadIndexException;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import java.util.concurrent.CompletableFuture;
 import org.mockito.Mock;
@@ -91,7 +92,7 @@ public class ReadProgressTrackerTest {
 
         CompletableFuture<Long> onDone3 = new CompletableFuture<>();
         readProgressTracker.add(6L, onDone3);
-        readProgressTracker.abort();
+        readProgressTracker.abort(ReadIndexException.leaderStepDown());
         assertEquals(readProgressTracker.underConfirming(), 0);
         assertTrue(onDone1.isCompletedExceptionally());
         assertTrue(onDone2.isCompletedExceptionally());

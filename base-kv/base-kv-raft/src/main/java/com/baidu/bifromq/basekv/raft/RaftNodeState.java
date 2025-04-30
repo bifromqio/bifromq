@@ -57,6 +57,7 @@ abstract class RaftNodeState implements IRaftNodeState {
     protected final int maxUncommittedProposals;
     protected final String[] tags;
     protected volatile long commitIndex;
+
     public RaftNodeState(
         long currentTerm,
         long commitIndex,
@@ -143,6 +144,12 @@ abstract class RaftNodeState implements IRaftNodeState {
     @Override
     public final ClusterConfig latestClusterConfig() {
         return stateStorage.latestClusterConfig();
+    }
+
+    @Override
+    public void stop() {
+        uncommittedProposals.forEach(
+            (index, task) -> task.future.completeExceptionally(DropProposalException.cancelled()));
     }
 
     final ByteString latestSnapshot() {

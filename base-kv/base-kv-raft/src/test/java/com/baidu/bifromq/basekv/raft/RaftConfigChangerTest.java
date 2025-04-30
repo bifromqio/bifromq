@@ -20,6 +20,7 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
+import com.baidu.bifromq.basekv.raft.exception.ClusterConfigChangeException;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
@@ -91,7 +92,7 @@ public class RaftConfigChangerTest {
         }}, true);
         Assert.assertEquals(configChanger.state(), RaftConfigChanger.State.CatchingUp);
         assertTrue(configChanger.remotePeers().containsAll(Arrays.asList("V1", "V2", "V3", "N1", "N2", "N3", "L1")));
-        assertTrue(!onDone.isDone());
+        assertFalse(onDone.isDone());
     }
 
     @Test
@@ -222,7 +223,7 @@ public class RaftConfigChangerTest {
         assertTrue(configChanger.tick(1));
         Assert.assertEquals(configChanger.state(), RaftConfigChanger.State.TargetConfigCommitting);
         assertTrue(configChanger.remotePeers().containsAll(Arrays.asList("V1", "V2", "V3", "L1")));
-        assertTrue(!onDone.isDone());
+        assertFalse(onDone.isDone());
 
         verify(peerLogTracker).replicateBy("localId", 11);
 
@@ -286,7 +287,7 @@ public class RaftConfigChangerTest {
         assertTrue(configChanger.tick(1));
         Assert.assertEquals(configChanger.state(), RaftConfigChanger.State.JointConfigCommitting);
         assertTrue(configChanger.remotePeers().containsAll(Arrays.asList("V1", "V2", "V3", "N2", "N3", "L1", "L2")));
-        assertTrue(!onDone.isDone());
+        assertFalse(onDone.isDone());
 
         verify(peerLogTracker).replicateBy("localId", 11);
 
@@ -363,7 +364,7 @@ public class RaftConfigChangerTest {
             add("L1");
         }}, onDone);
         assertFalse(onDone.isDone());
-        configChanger.abort();
+        configChanger.abort(ClusterConfigChangeException.cancelled());
 
         verify(peerLogTracker).startTracking(new HashSet<>() {{
             add("N1");

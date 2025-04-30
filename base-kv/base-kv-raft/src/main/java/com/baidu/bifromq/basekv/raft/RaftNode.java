@@ -47,6 +47,318 @@ import lombok.NonNull;
 import org.slf4j.Logger;
 
 public final class RaftNode implements IRaftNode {
+    private final String id;
+    private final IRaftStateStore stateStorage;
+    private final RaftConfig config;
+    private final Logger log;
+    private final ExecutorService raftExecutor;
+    private final AtomicReference<RaftNodeState> stateRef = new AtomicReference<>();
+    private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
+    private final AtomicReference<CompletableFuture<Void>> stopFuture = new AtomicReference<>();
+    private final String[] tags;
+    private MetricManager metricMgr;
+    public RaftNode(RaftConfig config,
+                    IRaftStateStore stateStore,
+                    ThreadFactory threadFactory,
+                    String... tags) {
+        verifyTags(tags);
+        verifyConfig(config);
+        verifyStateStore(stateStore);
+        log = SiftLogger.getLogger(RaftNode.class, tags);
+        this.tags = tags;
+        this.stateStorage = new MetricMonitoredStateStore(stateStore, Tags.of(tags));
+        this.id = stateStorage.local();
+        this.config = config.toBuilder().build();
+        this.raftExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
+            new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new LinkedTransferQueue<>(), threadFactory), id, "raft", Tags.of(tags));
+        stateStore.addStableListener(this::onStabilized);
+    }
+
+    @Override
+    public boolean isStarted() {
+        return status.get() == Status.STARTED;
+    }
+
+    @Override
+    public String id() {
+        return id;
+    }
+
+    @Override
+    public RaftNodeStatus status() {
+        checkStarted();
+        return stateRef.get().getState();
+    }
+
+    @Override
+    public void tick() {
+        submit(() -> {
+            RaftNodeState state = stateRef.get();
+            Timer.Sample sample = Timer.start();
+            String leader = state.currentLeader();
+            RaftNodeState nextState = state.tick();
+            sample.stop(metricMgr.tickTimer);
+            if (nextState != state) {
+                stateRef.set(nextState);
+                // leader elected or candidate transit to follower
+                nextState.notifyStateChanged();
+            }
+            if (nextState.currentLeader() != null && !nextState.currentLeader().equals(leader)) {
+                nextState.notifyLeaderElected(nextState.currentLeader(), nextState.currentTerm());
+            }
+        });
+    }
+
+    @Override
+    public CompletableFuture<Long> propose(ByteString appCommand) {
+        return submit(onDone -> stateRef.get().propose(appCommand, sampleLatency(onDone, metricMgr.proposeTimer)));
+    }
+
+    private void onStabilized(long stableIndex) {
+        submit(() -> {
+            Timer.Sample sample = Timer.start();
+            RaftNodeState state = stateRef.get();
+            String leader = state.currentLeader();
+            RaftNodeState nextState = state.stableTo(stableIndex);
+            sample.stop(metricMgr.stableToTimer);
+            if (nextState != state) {
+                stateRef.set(nextState);
+                // leader elected or candidate transit to follower when acknowledging there is a leader
+                nextState.notifyStateChanged();
+            }
+            if (nextState.currentLeader() != null && !nextState.currentLeader().equals(leader)) {
+                nextState.notifyLeaderElected(nextState.currentLeader(), nextState.currentTerm());
+            }
+        });
+    }
+
+    @Override
+    public CompletableFuture<Long> readIndex() {
+        return submit(onDone -> stateRef.get().readIndex(sampleLatency(onDone, metricMgr.readIndexTimer)));
+    }
+
+    @Override
+    public void receive(String fromPeer, RaftMessage message) {
+        submit(() -> {
+            RaftNodeState state = stateRef.get();
+            String leader = state.currentLeader();
+            Timer.Sample sample = Timer.start();
+            RaftNodeState nextState = state.receive(fromPeer, message);
+            sample.stop(metricMgr.peerMsgHandlingTimer);
+            if (nextState != state) {
+                stateRef.set(nextState);
+                // leader elected or candidate transit to follower when acknowledging there is a leader
+                nextState.notifyStateChanged();
+            }
+            if (nextState.currentLeader() != null && !nextState.currentLeader().equals(leader)) {
+                nextState.notifyLeaderElected(nextState.currentLeader(), nextState.currentTerm());
+            }
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> compact(ByteString fsmSnapshot, long compactIndex) {
+        return submit(onDone -> stateRef.get()
+            .compact(fsmSnapshot, compactIndex, sampleLatency(onDone, metricMgr.compactTimer)));
+    }
+
+    @Override
+    public CompletableFuture<Void> transferLeadership(String newLeader) {
+        return submit(onDone -> stateRef.get()
+            .transferLeadership(newLeader, sampleLatency(onDone, metricMgr.transferLeadershipTimer)));
+    }
+
+    @Override
+    public CompletableFuture<Void> recover() {
+        return submit(onDone -> stateRef.get().recover(onDone));
+    }
+
+    @Override
+    public ClusterConfig latestClusterConfig() {
+        return unwrap(submit(onDone -> onDone.complete(stateRef.get().latestClusterConfig())));
+    }
+
+    @Override
+    public Boolean stepDown() {
+        return unwrap(submit(onDone -> {
+            RaftNodeState state = stateRef.get();
+            RaftNodeState nextState = state.stepDown();
+            if (nextState != state) {
+                stateRef.set(nextState);
+                onDone.complete(true);
+            } else {
+                onDone.complete(false);
+            }
+        }));
+    }
+
+    @Override
+    public ByteString latestSnapshot() {
+        return unwrap(submit(onDone -> onDone.complete(stateRef.get().latestSnapshot())));
+    }
+
+    @Override
+    public CompletableFuture<Void> changeClusterConfig(String correlateId,
+                                                       Set<String> nextVoters,
+                                                       Set<String> nextLearners) {
+        return submit(onDone -> stateRef.get().changeClusterConfig(correlateId, nextVoters, nextLearners,
+            sampleLatency(onDone, metricMgr.changeClusterConfigTimer)));
+    }
+
+    @Override
+    public CompletableFuture<Iterator<LogEntry>> retrieveCommitted(long fromIndex, long maxSize) {
+        return submit(onDone -> stateRef.get().retrieveCommitted(fromIndex, maxSize,
+            sampleLatency(onDone, metricMgr.retrieveEntriesTimer)));
+    }
+
+    @Override
+    public void start(@NonNull IRaftMessageSender sender,
+                      @NonNull IRaftEventListener listener,
+                      @NonNull IRaftNode.ISnapshotInstaller installer) {
+        if (status.compareAndSet(Status.INIT, Status.STARTING)) {
+            long currentTerm = stateStorage.currentTerm();
+            stateRef.set(new RaftNodeStateFollower(
+                currentTerm,
+                0, // commitIndex
+                null,
+                config,
+                stateStorage,
+                new SampledRaftMessageListener(sender),
+                new SampledRaftEventListener(listener),
+                new SampledSnapshotInstaller(installer),
+                this::onSnapshotRestored,
+                tags
+            ));
+            metricMgr = new MetricManager(Tags.of(tags));
+            status.set(Status.STARTED);
+            log.debug("Raft node[{}] started: term={}", id(), currentTerm);
+        }
+    }
+
+    @Override
+    public CompletableFuture<Void> stop() {
+        return switch (status.get()) {
+            // fallthrough
+            case INIT, STARTING -> CompletableFuture.failedFuture(new IllegalStateException("Raft node not started"));
+            // fallthrough
+            default -> {
+                if (stopFuture.compareAndSet(null, new CompletableFuture<>())) {
+                    log.debug("Stopping raft node[{}]", id());
+                    CompletableFuture<Void> lastTask = new CompletableFuture<>();
+                    lastTask.whenComplete((v, e) -> {
+                        raftExecutor.shutdown();
+                        stopFuture.get().complete(null);
+                    });
+                    Runnable stop = () -> {
+                        assert status.get() == Status.STARTED;
+                        status.set(Status.STOPPING);
+                        stateRef.get().stop();
+                        stateStorage.stop();
+                        metricMgr.close();
+                        status.set(Status.STOPPED);
+                        log.debug("Raft node[{}] stopped", id());
+                        lastTask.complete(null);
+                    };
+                    raftExecutor.execute(stop);
+                }
+                yield stopFuture.get();
+            }
+        };
+    }
+
+    CompletableFuture<Void> onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex) {
+        return submit(onDone -> stateRef.get().onSnapshotRestored(requested, installed, ex, onDone));
+    }
+
+    private void submit(Runnable task) {
+        submit(onDone -> {
+            task.run();
+            onDone.complete(null);
+        });
+    }
+
+    private <T> CompletableFuture<T> submit(Consumer<CompletableFuture<T>> task) {
+        CompletableFuture<T> doneFuture = new CompletableFuture<>();
+        try {
+            raftExecutor.execute(() -> {
+                switch (status.get()) {
+                    // fallthrough
+                    case INIT, STARTING ->
+                        doneFuture.completeExceptionally(new IllegalStateException("Raft node not started"));
+                    case STARTED -> {
+                        try {
+                            task.accept(doneFuture);
+                        } catch (Throwable e) {
+                            doneFuture.completeExceptionally(new InternalError(e));
+                        }
+                    }
+                    // fallthrough
+                    case STOPPING, STOPPED ->
+                        doneFuture.completeExceptionally(new IllegalStateException("Raft node has stopped"));
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            doneFuture.completeExceptionally(new IllegalStateException(e));
+        }
+        return doneFuture;
+    }
+
+    private void verifyConfig(RaftConfig config) {
+        if (config.getHeartbeatTimeoutTick() > config.getElectionTimeoutTick()) {
+            throw new IllegalArgumentException("heartbeat timeout must be less than election timeout, normally 1/10");
+        }
+    }
+
+    private void verifyStateStore(IRaftStateStore stateStorage) {
+        if (stateStorage.local() == null) {
+            throw new IllegalArgumentException("local id cannot be null");
+        }
+        if (stateStorage.lastIndex() < 0) {
+            throw new IllegalArgumentException("last index must be non-negative");
+        }
+        if (stateStorage.firstIndex() <= 0) {
+            throw new IllegalArgumentException("first index must be positive");
+        }
+        if (stateStorage.latestClusterConfig() == null) {
+            throw new IllegalArgumentException("latest cluster config cannot be null");
+        }
+        if (stateStorage.latestSnapshot() == null) {
+            throw new IllegalArgumentException("latest snapshot cannot be null");
+        }
+        ClusterConfig clusterConfig = stateStorage.latestSnapshot().getClusterConfig();
+        if (ClusterConfigHelper.isIntersect(new HashSet<>(clusterConfig.getVotersList()),
+            new HashSet<>(clusterConfig.getLearnersList()))) {
+            throw new IllegalArgumentException("voters and learners mustn't intersect with each other");
+        }
+    }
+
+    private void verifyTags(String[] tags) {
+        if (tags.length % 2 != 0) {
+            throw new IllegalArgumentException("Tags must be even number representing key/value pairs");
+        }
+    }
+
+    private <T> T unwrap(CompletableFuture<T> future) {
+        try {
+            return future.get();
+        } catch (Throwable e) {
+            throw new IllegalStateException("Future cannot be unwrapped", e);
+        }
+    }
+
+    private <T> CompletableFuture<T> sampleLatency(CompletableFuture<T> future, Timer timer) {
+        Timer.Sample sample = Timer.start();
+        future.whenComplete((v, e) -> sample.stop(timer));
+        return future;
+    }
+
+    private void checkStarted() {
+        if (status.get() != Status.STARTED) {
+            throw new IllegalStateException("Raft node not started");
+        }
+    }
+
     enum Status {
         INIT,
         STARTING,
@@ -290,318 +602,6 @@ public final class RaftNode implements IRaftNode {
                 start.stop(metricMgr.snapshotInstallTimer);
                 return callback.call(snapshot, ex);
             });
-        }
-    }
-
-    private final String id;
-    private final IRaftStateStore stateStorage;
-    private final RaftConfig config;
-    private final Logger log;
-    private final ExecutorService raftExecutor;
-    private final AtomicReference<RaftNodeState> stateRef = new AtomicReference<>();
-    private final AtomicReference<Status> status = new AtomicReference<>(Status.INIT);
-    private final AtomicReference<CompletableFuture<Void>> stopFuture = new AtomicReference<>();
-    private final String[] tags;
-    private MetricManager metricMgr;
-
-    public RaftNode(RaftConfig config,
-                    IRaftStateStore stateStore,
-                    ThreadFactory threadFactory,
-                    String... tags) {
-        verifyTags(tags);
-        verifyConfig(config);
-        verifyStateStore(stateStore);
-        log = SiftLogger.getLogger(RaftNode.class, tags);
-        this.tags = tags;
-        this.stateStorage = new MetricMonitoredStateStore(stateStore, Tags.of(tags));
-        this.id = stateStorage.local();
-        this.config = config.toBuilder().build();
-        this.raftExecutor = ExecutorServiceMetrics.monitor(Metrics.globalRegistry,
-            new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-                new LinkedTransferQueue<>(), threadFactory), id, "raft", Tags.of(tags));
-        stateStore.addStableListener(this::onStabilized);
-    }
-
-    @Override
-    public boolean isStarted() {
-        return status.get() == Status.STARTED;
-    }
-
-    @Override
-    public String id() {
-        return id;
-    }
-
-    @Override
-    public RaftNodeStatus status() {
-        checkStarted();
-        return stateRef.get().getState();
-    }
-
-    @Override
-    public void tick() {
-        submit(() -> {
-            RaftNodeState state = stateRef.get();
-            Timer.Sample sample = Timer.start();
-            String leader = state.currentLeader();
-            RaftNodeState nextState = state.tick();
-            sample.stop(metricMgr.tickTimer);
-            if (nextState != state) {
-                stateRef.set(nextState);
-                // leader elected or candidate transit to follower
-                nextState.notifyStateChanged();
-            }
-            if (nextState.currentLeader() != null && !nextState.currentLeader().equals(leader)) {
-                nextState.notifyLeaderElected(nextState.currentLeader(), nextState.currentTerm());
-            }
-        });
-    }
-
-    @Override
-    public CompletableFuture<Long> propose(ByteString appCommand) {
-        return submit(onDone -> stateRef.get().propose(appCommand, sampleLatency(onDone, metricMgr.proposeTimer)));
-    }
-
-    private void onStabilized(long stableIndex) {
-        submit(() -> {
-            Timer.Sample sample = Timer.start();
-            RaftNodeState state = stateRef.get();
-            String leader = state.currentLeader();
-            RaftNodeState nextState = state.stableTo(stableIndex);
-            sample.stop(metricMgr.stableToTimer);
-            if (nextState != state) {
-                stateRef.set(nextState);
-                // leader elected or candidate transit to follower when acknowledging there is a leader
-                nextState.notifyStateChanged();
-            }
-            if (nextState.currentLeader() != null && !nextState.currentLeader().equals(leader)) {
-                nextState.notifyLeaderElected(nextState.currentLeader(), nextState.currentTerm());
-            }
-        });
-    }
-
-    @Override
-    public CompletableFuture<Long> readIndex() {
-        return submit(onDone -> stateRef.get().readIndex(sampleLatency(onDone, metricMgr.readIndexTimer)));
-    }
-
-    @Override
-    public void receive(String fromPeer, RaftMessage message) {
-        submit(() -> {
-            RaftNodeState state = stateRef.get();
-            String leader = state.currentLeader();
-            Timer.Sample sample = Timer.start();
-            RaftNodeState nextState = state.receive(fromPeer, message);
-            sample.stop(metricMgr.peerMsgHandlingTimer);
-            if (nextState != state) {
-                stateRef.set(nextState);
-                // leader elected or candidate transit to follower when acknowledging there is a leader
-                nextState.notifyStateChanged();
-            }
-            if (nextState.currentLeader() != null && !nextState.currentLeader().equals(leader)) {
-                nextState.notifyLeaderElected(nextState.currentLeader(), nextState.currentTerm());
-            }
-        });
-    }
-
-    @Override
-    public CompletableFuture<Void> compact(ByteString fsmSnapshot, long compactIndex) {
-        return submit(onDone -> stateRef.get()
-            .compact(fsmSnapshot, compactIndex, sampleLatency(onDone, metricMgr.compactTimer)));
-    }
-
-    @Override
-    public CompletableFuture<Void> transferLeadership(String newLeader) {
-        return submit(onDone -> stateRef.get()
-            .transferLeadership(newLeader, sampleLatency(onDone, metricMgr.transferLeadershipTimer)));
-    }
-
-    @Override
-    public CompletableFuture<Void> recover() {
-        return submit(onDone -> stateRef.get().recover(onDone));
-    }
-
-    @Override
-    public ClusterConfig latestClusterConfig() {
-        return unwrap(submit(onDone -> onDone.complete(stateRef.get().latestClusterConfig())));
-    }
-
-    @Override
-    public Boolean stepDown() {
-        return unwrap(submit(onDone -> {
-            RaftNodeState state = stateRef.get();
-            RaftNodeState nextState = state.stepDown();
-            if (nextState != state) {
-                stateRef.set(nextState);
-                onDone.complete(true);
-            } else {
-                onDone.complete(false);
-            }
-        }));
-    }
-
-    @Override
-    public ByteString latestSnapshot() {
-        return unwrap(submit(onDone -> onDone.complete(stateRef.get().latestSnapshot())));
-    }
-
-    @Override
-    public CompletableFuture<Void> changeClusterConfig(String correlateId,
-                                                       Set<String> nextVoters,
-                                                       Set<String> nextLearners) {
-        return submit(onDone -> stateRef.get().changeClusterConfig(correlateId, nextVoters, nextLearners,
-            sampleLatency(onDone, metricMgr.changeClusterConfigTimer)));
-    }
-
-    @Override
-    public CompletableFuture<Iterator<LogEntry>> retrieveCommitted(long fromIndex, long maxSize) {
-        return submit(onDone -> stateRef.get().retrieveCommitted(fromIndex, maxSize,
-            sampleLatency(onDone, metricMgr.retrieveEntriesTimer)));
-    }
-
-    @Override
-    public void start(@NonNull IRaftMessageSender sender,
-                      @NonNull IRaftEventListener listener,
-                      @NonNull IRaftNode.ISnapshotInstaller installer) {
-        if (status.compareAndSet(Status.INIT, Status.STARTING)) {
-            long currentTerm = stateStorage.currentTerm();
-            stateRef.set(new RaftNodeStateFollower(
-                currentTerm,
-                0, // commitIndex
-                null,
-                config,
-                stateStorage,
-                new SampledRaftMessageListener(sender),
-                new SampledRaftEventListener(listener),
-                new SampledSnapshotInstaller(installer),
-                this::onSnapshotRestored,
-                tags
-            ));
-            metricMgr = new MetricManager(Tags.of(tags));
-            status.set(Status.STARTED);
-            log.debug("Raft node[{}] started: term={}", id(), currentTerm);
-        }
-    }
-
-    @Override
-    public CompletableFuture<Void> stop() {
-        return switch (status.get()) {
-            // fallthrough
-            case INIT, STARTING -> CompletableFuture.failedFuture(new IllegalStateException("Raft node not started"));
-            // fallthrough
-            default -> {
-                if (stopFuture.compareAndSet(null, new CompletableFuture<>())) {
-                    log.debug("Stopping raft node[{}]", id());
-                    CompletableFuture<Void> lastTask = new CompletableFuture<>();
-                    lastTask.whenComplete((v, e) -> {
-                        raftExecutor.shutdown();
-                        stopFuture.get().complete(null);
-                    });
-                    Runnable stop = () -> {
-                        assert status.get() == Status.STARTED;
-                        status.set(Status.STOPPING);
-                        stateStorage.stop();
-                        metricMgr.close();
-                        status.set(Status.STOPPED);
-                        log.debug("Raft node[{}] stopped", id());
-                        lastTask.complete(null);
-                    };
-                    raftExecutor.execute(stop);
-                }
-                yield stopFuture.get();
-            }
-        };
-    }
-
-    CompletableFuture<Void> onSnapshotRestored(ByteString requested, ByteString installed, Throwable ex) {
-        return submit(onDone -> stateRef.get().onSnapshotRestored(requested, installed, ex, onDone));
-    }
-
-    private void submit(Runnable task) {
-        submit(onDone -> {
-            task.run();
-            onDone.complete(null);
-        });
-    }
-
-    private <T> CompletableFuture<T> submit(Consumer<CompletableFuture<T>> task) {
-        CompletableFuture<T> doneFuture = new CompletableFuture<>();
-        try {
-            raftExecutor.execute(() -> {
-                switch (status.get()) {
-                    // fallthrough
-                    case INIT, STARTING ->
-                        doneFuture.completeExceptionally(new IllegalStateException("Raft node not started"));
-                    case STARTED -> {
-                        try {
-                            task.accept(doneFuture);
-                        } catch (Throwable e) {
-                            doneFuture.completeExceptionally(new InternalError(e));
-                        }
-                    }
-                    // fallthrough
-                    case STOPPING, STOPPED ->
-                        doneFuture.completeExceptionally(new IllegalStateException("Raft node has stopped"));
-                }
-            });
-        } catch (RejectedExecutionException e) {
-            doneFuture.completeExceptionally(new IllegalStateException(e));
-        }
-        return doneFuture;
-    }
-
-    private void verifyConfig(RaftConfig config) {
-        if (config.getHeartbeatTimeoutTick() > config.getElectionTimeoutTick()) {
-            throw new IllegalArgumentException("heartbeat timeout must be less than election timeout, normally 1/10");
-        }
-    }
-
-    private void verifyStateStore(IRaftStateStore stateStorage) {
-        if (stateStorage.local() == null) {
-            throw new IllegalArgumentException("local id cannot be null");
-        }
-        if (stateStorage.lastIndex() < 0) {
-            throw new IllegalArgumentException("last index must be non-negative");
-        }
-        if (stateStorage.firstIndex() <= 0) {
-            throw new IllegalArgumentException("first index must be positive");
-        }
-        if (stateStorage.latestClusterConfig() == null) {
-            throw new IllegalArgumentException("latest cluster config cannot be null");
-        }
-        if (stateStorage.latestSnapshot() == null) {
-            throw new IllegalArgumentException("latest snapshot cannot be null");
-        }
-        ClusterConfig clusterConfig = stateStorage.latestSnapshot().getClusterConfig();
-        if (ClusterConfigHelper.isIntersect(new HashSet<>(clusterConfig.getVotersList()),
-            new HashSet<>(clusterConfig.getLearnersList()))) {
-            throw new IllegalArgumentException("voters and learners mustn't intersect with each other");
-        }
-    }
-
-    private void verifyTags(String[] tags) {
-        if (tags.length % 2 != 0) {
-            throw new IllegalArgumentException("Tags must be even number representing key/value pairs");
-        }
-    }
-
-    private <T> T unwrap(CompletableFuture<T> future) {
-        try {
-            return future.get();
-        } catch (Throwable e) {
-            throw new IllegalStateException("Future cannot be unwrapped", e);
-        }
-    }
-
-    private <T> CompletableFuture<T> sampleLatency(CompletableFuture<T> future, Timer timer) {
-        Timer.Sample sample = Timer.start();
-        future.whenComplete((v, e) -> sample.stop(timer));
-        return future;
-    }
-
-    private void checkStarted() {
-        if (status.get() != Status.STARTED) {
-            throw new IllegalStateException("Raft node not started");
         }
     }
 }

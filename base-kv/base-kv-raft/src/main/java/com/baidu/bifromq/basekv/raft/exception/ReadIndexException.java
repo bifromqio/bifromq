@@ -14,6 +14,10 @@
 package com.baidu.bifromq.basekv.raft.exception;
 
 public class ReadIndexException extends RuntimeException {
+    private ReadIndexException(String message) {
+        super(message);
+    }
+
     public static ReadIndexException commitIndexNotConfirmed() {
         return new CommitIndexNotConfirmedException();
     }
@@ -30,8 +34,8 @@ public class ReadIndexException extends RuntimeException {
         return new ForwardTimeoutException();
     }
 
-    private ReadIndexException(String message) {
-        super(message);
+    public static ReadIndexException cancelled() {
+        return new CancelledException();
     }
 
     public static class CommitIndexNotConfirmedException extends ReadIndexException {
@@ -55,6 +59,12 @@ public class ReadIndexException extends RuntimeException {
     public static class ForwardTimeoutException extends ReadIndexException {
         private ForwardTimeoutException() {
             super("Doesn't receive read index from leader within timeout");
+        }
+    }
+
+    public static class CancelledException extends ReadIndexException {
+        private CancelledException() {
+            super("Cancelled");
         }
     }
 }

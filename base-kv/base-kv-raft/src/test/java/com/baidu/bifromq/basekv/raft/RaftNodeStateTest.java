@@ -19,7 +19,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import org.mockito.Mock;
 
-public abstract class RaftNodeStateTest {
+abstract class RaftNodeStateTest {
     @Mock
     protected IRaftNode.IRaftMessageSender msgSender;
     @Mock
