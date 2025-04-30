@@ -27,6 +27,7 @@ import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.common.collect.Sets;
 import java.time.Duration;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -64,14 +65,15 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
             log.info("Transfer mergee {} leader from {} to {}", KVRangeIdUtil.toString(mergee.get().id),
                 mergee.get().leader,
                 merger.get().leader);
-            cluster.transferLeader(mergee.get().leader,
-                    mergee.get().ver,
-                    mergee.get().id,
-                    merger.get().leader)
-                .toCompletableFuture().join();
             try {
-                await().atMost(Duration.ofSeconds(5)).until(() ->
-                    cluster.kvRangeSetting(mergee.get().id).leader.equals(merger.get().leader));
+                await().ignoreExceptions().atMost(Duration.ofSeconds(5)).until(() -> {
+                    cluster.transferLeader(mergee.get().leader,
+                            mergee.get().ver,
+                            mergee.get().id,
+                            merger.get().leader)
+                        .toCompletableFuture().join();
+                    return cluster.kvRangeSetting(mergee.get().id).leader.equals(merger.get().leader);
+                });
                 break;
             } catch (Throwable e) {
                 log.info("Transfer failed, try again");
@@ -136,8 +138,8 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
         KVRangeConfig range1 = cluster.kvRangeSetting(cluster.allKVRangeIds().get(1));
         AtomicReference<KVRangeConfig> merger;
         AtomicReference<KVRangeConfig> mergee;
-        if (range0.boundary.hasEndKey() &&
-            compare(range0.boundary.getEndKey(), range1.boundary.getStartKey()) <= 0) {
+        if (range0.boundary.hasEndKey()
+            && compare(range0.boundary.getEndKey(), range1.boundary.getStartKey()) <= 0) {
             merger = new AtomicReference<>(range0);
             mergee = new AtomicReference<>(range1);
         } else {
@@ -149,14 +151,15 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
             log.info("Transfer mergee {} leader from {} to {}", KVRangeIdUtil.toString(mergee.get().id),
                 mergee.get().leader,
                 merger.get().leader);
-            cluster.transferLeader(mergee.get().leader,
-                    mergee.get().ver,
-                    mergee.get().id,
-                    merger.get().leader)
-                .toCompletableFuture().join();
             try {
-                await().atMost(Duration.ofSeconds(5)).until(() ->
-                    cluster.kvRangeSetting(mergee.get().id).leader.equals(merger.get().leader));
+                await().ignoreExceptions().atMost(Duration.ofSeconds(5)).until(() -> {
+                    cluster.transferLeader(mergee.get().leader,
+                            mergee.get().ver,
+                            mergee.get().id,
+                            merger.get().leader)
+                        .toCompletableFuture().join();
+                    return cluster.kvRangeSetting(mergee.get().id).leader.equals(merger.get().leader);
+                });
                 break;
             } catch (Throwable e) {
                 log.info("Transfer failed, try again");
@@ -225,8 +228,8 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
         KVRangeConfig range1 = cluster.kvRangeSetting(cluster.allKVRangeIds().get(1));
         AtomicReference<KVRangeConfig> merger;
         AtomicReference<KVRangeConfig> mergee;
-        if (range0.boundary.hasEndKey() &&
-            compare(range0.boundary.getEndKey(), range1.boundary.getStartKey()) <= 0) {
+        if (range0.boundary.hasEndKey()
+            && compare(range0.boundary.getEndKey(), range1.boundary.getStartKey()) <= 0) {
             merger = new AtomicReference<>(range0);
             mergee = new AtomicReference<>(range1);
         } else {
@@ -238,14 +241,15 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
             log.info("Transfer mergee {} leader from {} to {}", KVRangeIdUtil.toString(mergee.get().id),
                 mergee.get().leader,
                 merger.get().leader);
-            cluster.transferLeader(mergee.get().leader,
-                    mergee.get().ver,
-                    mergee.get().id,
-                    merger.get().leader)
-                .toCompletableFuture().join();
             try {
-                await().atMost(Duration.ofSeconds(5)).until(() ->
-                    cluster.kvRangeSetting(mergee.get().id).leader == merger.get().leader);
+                await().ignoreExceptions().atMost(Duration.ofSeconds(5)).until(() -> {
+                    cluster.transferLeader(mergee.get().leader,
+                            mergee.get().ver,
+                            mergee.get().id,
+                            merger.get().leader)
+                        .toCompletableFuture().join();
+                    return cluster.kvRangeSetting(mergee.get().id).leader.equals(merger.get().leader);
+                });
                 break;
             } catch (Throwable e) {
                 log.info("Transfer failed, try again");
@@ -307,14 +311,15 @@ public class KVRangeStoreClusterMergeTest extends KVRangeStoreClusterTestTemplat
                 KVRangeIdUtil.toString(mergee.get().id),
                 mergee.get().leader,
                 merger.get().leader);
-            cluster.transferLeader(mergee.get().leader,
-                    mergee.get().ver,
-                    mergee.get().id,
-                    merger.get().leader)
-                .toCompletableFuture().join();
             try {
-                await().atMost(Duration.ofSeconds(5)).until(() ->
-                    cluster.kvRangeSetting(mergee.get().id).leader == merger.get().leader);
+                await().ignoreExceptions().atMost(Duration.ofSeconds(5)).until(() -> {
+                    cluster.transferLeader(mergee.get().leader,
+                            mergee.get().ver,
+                            mergee.get().id,
+                            merger.get().leader)
+                        .toCompletableFuture().join();
+                    return Objects.equals(cluster.kvRangeSetting(mergee.get().id).leader, merger.get().leader);
+                });
                 break;
             } catch (Throwable e) {
                 log.info("Transfer failed, try again");

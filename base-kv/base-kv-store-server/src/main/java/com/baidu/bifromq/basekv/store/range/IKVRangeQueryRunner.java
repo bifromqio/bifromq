@@ -19,7 +19,7 @@ import com.google.protobuf.ByteString;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
-public interface IKVRangeQueryRunner {
+interface IKVRangeQueryRunner {
     CompletableFuture<Boolean> exist(long ver, ByteString key, boolean linearized);
 
     CompletableFuture<Optional<ByteString>> get(long ver, ByteString key, boolean linearized);

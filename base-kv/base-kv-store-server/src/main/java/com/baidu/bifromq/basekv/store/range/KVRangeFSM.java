@@ -73,7 +73,6 @@ import com.baidu.bifromq.basekv.proto.SnapshotSyncRequest;
 import com.baidu.bifromq.basekv.proto.SplitHint;
 import com.baidu.bifromq.basekv.proto.SplitRange;
 import com.baidu.bifromq.basekv.proto.State;
-import com.baidu.bifromq.basekv.proto.TransferLeadership;
 import com.baidu.bifromq.basekv.proto.WALRaftMessages;
 import com.baidu.bifromq.basekv.raft.exception.LeaderTransferException;
 import com.baidu.bifromq.basekv.raft.exception.SnapshotException;
@@ -417,13 +416,22 @@ public class KVRangeFSM implements IKVRangeFSM {
 
     @Override
     public CompletableFuture<Void> transferLeadership(long ver, String newLeader) {
-        return metricManager.recordTransferLeader(() -> submitManagementCommand(KVRangeCommand.newBuilder()
-            .setTaskId(nextTaskId())
-            .setVer(ver)
-            .setTransferLeadership(TransferLeadership.newBuilder()
-                .setNewLeader(newLeader)
-                .build())
-            .build()));
+        return metricManager.recordTransferLeader(() -> {
+            if (ver != kvRange.version()) {
+                // version not exactly match
+                return CompletableFuture.failedFuture(new KVRangeException.BadVersion("Version Mismatch"));
+            }
+            log.info("Transferring leader[ver={}, state={}]: newLeader={}",
+                print(ver), kvRange.state().getType(), newLeader);
+            return wal.transferLeadership(newLeader)
+                .exceptionally(unwrap(e -> {
+                    if (e instanceof LeaderTransferException.NotFoundOrQualifiedException) {
+                        throw new KVRangeException.BadRequest("Failed to transfer leadership", e);
+                    } else {
+                        throw new KVRangeException.TryLater("Failed to transfer leadership", e);
+                    }
+                }));
+        });
     }
 
     @Override
@@ -974,40 +982,6 @@ public class KVRangeFSM implements IKVRangeFSM {
                         onDone.complete(NOOP);
                     }
                 }, fsmExecutor);
-            }
-            case TRANSFERLEADERSHIP -> {
-                TransferLeadership request = command.getTransferLeadership();
-                if (reqVer != ver) {
-                    // version not match, hint the caller
-                    onDone.complete(() ->
-                        finishCommandWithError(taskId, new KVRangeException.BadVersion("Version Mismatch")));
-                    break;
-                }
-                if (state.getType() != Normal) {
-                    onDone.complete(() -> finishCommandWithError(taskId,
-                        new KVRangeException.TryLater(
-                            "Transfer leader abort, range is in state:" + state.getType().name())));
-                    break;
-                }
-                log.info("Transferring leader[term={}, index={}, taskId={}, ver={}, state={}]: newLeader={}",
-                    logTerm, logIndex, taskId, print(ver), state, request.getNewLeader());
-                wal.transferLeadership(request.getNewLeader())
-                    .whenCompleteAsync(unwrap((v, e) -> {
-                        if (e != null) {
-                            log.debug("Failed to transfer leadership[newLeader={}] due to {}",
-                                request.getNewLeader(), e.getMessage());
-                            if (e instanceof LeaderTransferException.NotFoundOrQualifiedException) {
-                                finishCommandWithError(taskId, new KVRangeException.BadRequest(
-                                    "Failed to transfer leadership", e));
-                            } else {
-                                finishCommandWithError(taskId, new KVRangeException.TryLater(
-                                    "Failed to transfer leadership", e));
-                            }
-                        } else {
-                            finishCommand(taskId);
-                        }
-                    }), fsmExecutor);
-                onDone.complete(NOOP);
             }
             case SPLITRANGE -> {
                 SplitRange request = command.getSplitRange();

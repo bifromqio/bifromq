@@ -14,10 +14,6 @@ message ChangeConfig {
   repeated string learners = 2;
 }
 
-message TransferLeadership{
-  string newLeader = 1;
-}
-
 message SplitRange {
   bytes splitKey = 1;
   basekv.KVRangeId newId = 2;
@@ -62,17 +58,16 @@ message KVRangeCommand{
   uint64 ver = 2;
   oneof CommandType{
     ChangeConfig changeConfig = 4;
-    TransferLeadership transferLeadership = 5;
-    SplitRange splitRange = 6;
+    SplitRange splitRange = 5;
 
-    PrepareMergeWith prepareMergeWith = 7;
-    CancelMerging cancelMerging = 8;
-    PrepareMergeTo prepareMergeTo = 9;
-    Merge merge = 10;
-    MergeDone mergeDone = 11;
+    PrepareMergeWith prepareMergeWith = 6;
+    CancelMerging cancelMerging = 7;
+    PrepareMergeTo prepareMergeTo = 8;
+    Merge merge = 9;
+    MergeDone mergeDone = 10;
 
-    Delete delete = 12;
-    Put put = 13;
-    RWCoProcInput rwCoProc = 14;
+    Delete delete = 11;
+    Put put = 12;
+    RWCoProcInput rwCoProc = 13;
   }
 }
