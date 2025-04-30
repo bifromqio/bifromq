@@ -19,6 +19,7 @@ import static org.testng.Assert.assertEquals;
 
 import com.baidu.bifromq.basekv.proto.Boundary;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
+import com.baidu.bifromq.basekv.store.util.VerUtil;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
@@ -44,7 +45,7 @@ public class KVRangeStoreClusterSplitTest extends KVRangeStoreClusterTestTemplat
             });
 
             KVRangeConfig kvRangeSettings = cluster.kvRangeSetting(kvRangeId);
-            assertEquals(kvRangeSettings.ver, genesisKVRangeSettings.ver + 1);
+            assertEquals(kvRangeSettings.ver, VerUtil.bump(genesisKVRangeSettings.ver, true));
             if (kvRangeId.equals(genesisKVRangeId)) {
                 assertEquals(kvRangeSettings.leader, genesisKVRangeSettings.leader);
                 assertEquals(kvRangeSettings.boundary, Boundary.newBuilder()
@@ -73,7 +74,7 @@ public class KVRangeStoreClusterSplitTest extends KVRangeStoreClusterTestTemplat
                 return kvRangeSettings.clusterConfig.getVotersCount() == 3;
             });
             KVRangeConfig kvRangeSettings = cluster.kvRangeSetting(kvRangeId);
-            assertEquals(kvRangeSettings.ver, genesisKVRangeSettings.ver + 1);
+            assertEquals(kvRangeSettings.ver, VerUtil.bump(genesisKVRangeSettings.ver, true));
             if (kvRangeId.equals(genesisKVRangeId)) {
                 assertEquals(kvRangeSettings.leader, genesisKVRangeSettings.leader);
                 assertEquals(kvRangeSettings.boundary, Boundary.newBuilder()

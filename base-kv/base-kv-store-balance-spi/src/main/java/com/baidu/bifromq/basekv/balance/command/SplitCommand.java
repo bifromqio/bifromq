@@ -33,8 +33,8 @@ public class SplitCommand extends RangeCommand {
 
     @Override
     public String toString() {
-        return String.format("SplitCommand{toStore=%s, kvRangeId=%s, expectedVer=%d, splitKey=%s}",
-            getToStore(), KVRangeIdUtil.toString(getKvRangeId()), getExpectedVer(), splitKey.toStringUtf8());
+        return String.format("SplitCommand{toStore=%s, kvRangeId=%s, expectedVer=%s, splitKey=%s}",
+            getToStore(), KVRangeIdUtil.toString(getKvRangeId()), printableVer(), splitKey.toStringUtf8());
     }
 
 }

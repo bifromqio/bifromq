@@ -29,6 +29,7 @@ import com.baidu.bifromq.basekv.store.api.IKVReader;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
+import com.baidu.bifromq.basekv.store.util.VerUtil;
 import com.google.protobuf.ByteString;
 import java.util.Collections;
 import java.util.Optional;
@@ -56,7 +57,7 @@ public class KVRangeQueryRunnerTest extends MockableTest {
         KVRangeQueryRunner runner = new KVRangeQueryRunner(accessor, coProc, directExecutor(), linearizer,
             Collections.emptyList(), new StampedLock());
         when(accessor.borrowDataReader()).thenReturn(kvReader);
-        when(accessor.version()).thenReturn(1L);
+        when(accessor.version()).thenReturn(VerUtil.bump(0L, true));
 
         CompletableFuture<ROCoProcOutput> queryFuture = runner.queryCoProc(0, ROCoProcInput.newBuilder()
             .setRaw(ByteString.copyFromUtf8("key")).build(), false);

@@ -32,7 +32,7 @@ public class TransferLeadershipCommand extends RangeCommand {
 
     @Override
     public String toString() {
-        return String.format("TransferLeadershipCommand{toStore=%s, kvRangeId=%s, expectedVer=%d, newLeaderStore=%s}",
-            getToStore(), KVRangeIdUtil.toString(getKvRangeId()), getExpectedVer(), newLeaderStore);
+        return String.format("TransferLeadershipCommand{toStore=%s, kvRangeId=%s, expectedVer=%s, newLeaderStore=%s}",
+            getToStore(), KVRangeIdUtil.toString(getKvRangeId()), printableVer(), newLeaderStore);
     }
 }

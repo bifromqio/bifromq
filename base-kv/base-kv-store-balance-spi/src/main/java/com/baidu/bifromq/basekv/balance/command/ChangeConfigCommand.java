@@ -34,7 +34,7 @@ public class ChangeConfigCommand extends RangeCommand {
 
     @Override
     public String toString() {
-        return String.format("ChangeConfigCommand{toStore=%s, kvRangeId=%s, expectedVer=%d, voters=%s, learner=%s}",
-            getToStore(), KVRangeIdUtil.toString(getKvRangeId()), getExpectedVer(), voters, learners);
+        return String.format("ChangeConfigCommand{toStore=%s, kvRangeId=%s, expectedVer=%s, voters=%s, learner=%s}",
+            getToStore(), KVRangeIdUtil.toString(getKvRangeId()), printableVer(), voters, learners);
     }
 }

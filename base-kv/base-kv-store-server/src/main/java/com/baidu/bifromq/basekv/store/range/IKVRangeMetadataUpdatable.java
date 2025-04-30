@@ -19,7 +19,7 @@ import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.store.api.IKVRangeMetadata;
 
 public interface IKVRangeMetadataUpdatable<T extends IKVRangeMetadataUpdatable<T>> extends IKVRangeMetadata {
-    T bumpVer(boolean toOdd);
+    T bumpVer(boolean boundaryChange);
 
     T resetVer(long ver);
 

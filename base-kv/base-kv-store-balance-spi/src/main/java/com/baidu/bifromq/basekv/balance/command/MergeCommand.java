@@ -33,8 +33,8 @@ public class MergeCommand extends RangeCommand {
 
     @Override
     public String toString() {
-        return String.format("MergeCommand{toStore=%s, kvRangeId=%s, mergeeId=%s, expectedVer=%d}",
-            getToStore(), KVRangeIdUtil.toString(getKvRangeId()), KVRangeIdUtil.toString(mergeeId), getExpectedVer());
+        return String.format("MergeCommand{toStore=%s, kvRangeId=%s, mergeeId=%s, expectedVer=%s}",
+            getToStore(), KVRangeIdUtil.toString(getKvRangeId()), KVRangeIdUtil.toString(mergeeId), printableVer());
     }
 
 }

@@ -36,8 +36,8 @@ abstract class AbstractKVRangeMetadataUpdatable<T extends AbstractKVRangeMetadat
     }
 
     @Override
-    public final T bumpVer(boolean toOdd) {
-        resetVer(bump(version(), toOdd));
+    public final T bumpVer(boolean boundaryChange) {
+        resetVer(bump(version(), boundaryChange));
         return thisT();
     }
 

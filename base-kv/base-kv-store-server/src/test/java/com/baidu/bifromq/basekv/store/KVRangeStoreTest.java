@@ -47,6 +47,7 @@ import com.baidu.bifromq.basekv.store.exception.KVRangeException;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
 import com.baidu.bifromq.basekv.store.proto.ROCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
+import com.baidu.bifromq.basekv.store.util.VerUtil;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.google.protobuf.ByteString;
 import io.reactivex.rxjava3.core.Observable;
@@ -169,13 +170,13 @@ public class KVRangeStoreTest extends MockableTest {
         waitNormalState(rangeDescriptor, 5000);
         // split into [, key4) and [key4, )
         rangeStore.split(0, id, copyFromUtf8("key4")).toCompletableFuture().join();
-
-        rangeStore.put(1, id, copyFromUtf8("key1"), copyFromUtf8("hello")).toCompletableFuture().join();
+        long verAfterSplit = VerUtil.bump(0, true);
+        rangeStore.put(verAfterSplit, id, copyFromUtf8("key1"), copyFromUtf8("hello")).toCompletableFuture().join();
         {
             log.info("Test KeyExist");
-            assertTrue(rangeStore.exist(1, id, copyFromUtf8("key1"), true).toCompletableFuture().join());
+            assertTrue(rangeStore.exist(verAfterSplit, id, copyFromUtf8("key1"), true).toCompletableFuture().join());
 
-            assertFalse(rangeStore.exist(1, id, copyFromUtf8("key2"), true).toCompletableFuture().join());
+            assertFalse(rangeStore.exist(verAfterSplit, id, copyFromUtf8("key2"), true).toCompletableFuture().join());
         }
         {
             log.info("Test KeyExist with version mismatch");
@@ -189,7 +190,7 @@ public class KVRangeStoreTest extends MockableTest {
         {
             log.info("Test KeyExist with out-of-range key");
             try {
-                rangeStore.exist(1, id, copyFromUtf8("key4"), true).toCompletableFuture().join();
+                rangeStore.exist(verAfterSplit, id, copyFromUtf8("key4"), true).toCompletableFuture().join();
                 fail();
             } catch (Throwable e) {
                 assertTrue(e.getCause() instanceof KVRangeException.InternalException);
@@ -205,18 +206,22 @@ public class KVRangeStoreTest extends MockableTest {
         waitNormalState(rangeDescriptor, 5000);
         // split into [, key4) and [key4, )
         rangeStore.split(0, id, copyFromUtf8("key4")).toCompletableFuture().join();
+        long verAfterSplit = VerUtil.bump(0, true);
         {
             log.info("Test PutKV");
             assertEquals(
-                rangeStore.put(1, id, copyFromUtf8("key1"), copyFromUtf8("hello")).toCompletableFuture().join(),
+                rangeStore.put(verAfterSplit, id, copyFromUtf8("key1"), copyFromUtf8("hello")).toCompletableFuture()
+                    .join(),
                 ByteString.empty());
 
             assertEquals(
-                rangeStore.put(1, id, copyFromUtf8("key2"), copyFromUtf8("hello")).toCompletableFuture().join(),
+                rangeStore.put(verAfterSplit, id, copyFromUtf8("key2"), copyFromUtf8("hello")).toCompletableFuture()
+                    .join(),
                 ByteString.empty());
 
             assertEquals(
-                rangeStore.put(1, id, copyFromUtf8("key3"), copyFromUtf8("hello")).toCompletableFuture().join(),
+                rangeStore.put(verAfterSplit, id, copyFromUtf8("key3"), copyFromUtf8("hello")).toCompletableFuture()
+                    .join(),
                 ByteString.empty());
         }
         {
@@ -231,7 +236,8 @@ public class KVRangeStoreTest extends MockableTest {
         {
             log.info("Test PutKV with out-of-range key");
             try {
-                rangeStore.put(1, id, copyFromUtf8("key4"), copyFromUtf8("hello")).toCompletableFuture().join();
+                rangeStore.put(verAfterSplit, id, copyFromUtf8("key4"), copyFromUtf8("hello")).toCompletableFuture()
+                    .join();
                 fail();
             } catch (Throwable e) {
                 assertTrue(e.getCause() instanceof KVRangeException.InternalException);
@@ -246,15 +252,18 @@ public class KVRangeStoreTest extends MockableTest {
         waitNormalState(rangeDescriptor, 5000);
         // split into [, key4) and [key4, )
         rangeStore.split(0, id, copyFromUtf8("key4")).toCompletableFuture().join();
-
-        rangeStore.put(1, id, copyFromUtf8("key1"), copyFromUtf8("hello")).toCompletableFuture().join();
+        long verAfterSplit = VerUtil.bump(0, true);
+        rangeStore.put(verAfterSplit, id, copyFromUtf8("key1"), copyFromUtf8("hello")).toCompletableFuture().join();
         {
             log.info("Test Get");
-            assertEquals(rangeStore.get(1, id, copyFromUtf8("key1"), true).toCompletableFuture().join().get(),
+            assertEquals(
+                rangeStore.get(verAfterSplit, id, copyFromUtf8("key1"), true).toCompletableFuture().join().get(),
                 copyFromUtf8("hello"));
-            assertEquals(rangeStore.get(1, id, copyFromUtf8("key1"), false).toCompletableFuture().join().get(),
+            assertEquals(
+                rangeStore.get(verAfterSplit, id, copyFromUtf8("key1"), false).toCompletableFuture().join().get(),
                 copyFromUtf8("hello"));
-            assertFalse(rangeStore.get(1, id, copyFromUtf8("key2"), true).toCompletableFuture().join().isPresent());
+            assertFalse(
+                rangeStore.get(verAfterSplit, id, copyFromUtf8("key2"), true).toCompletableFuture().join().isPresent());
         }
         {
             log.info("Test Get with version mismatch");
@@ -268,7 +277,7 @@ public class KVRangeStoreTest extends MockableTest {
         {
             log.info("Test Get with out-of-range key");
             try {
-                rangeStore.get(1, id, copyFromUtf8("key4"), true).toCompletableFuture().join();
+                rangeStore.get(verAfterSplit, id, copyFromUtf8("key4"), true).toCompletableFuture().join();
                 fail();
             } catch (Throwable e) {
                 assertTrue(e.getCause() instanceof KVRangeException.InternalException);
@@ -283,17 +292,19 @@ public class KVRangeStoreTest extends MockableTest {
         waitNormalState(rangeDescriptor, 5000);
         // split into [, key4) and [key4, )
         rangeStore.split(0, id, copyFromUtf8("key4")).toCompletableFuture().join();
-        rangeStore.put(1, id, copyFromUtf8("key1"), copyFromUtf8("hello")).toCompletableFuture().join();
+        long verAfterSplit = VerUtil.bump(0, true);
+        rangeStore.put(verAfterSplit, id,
+            copyFromUtf8("key1"), copyFromUtf8("hello")).toCompletableFuture().join();
 
         {
             log.info("Test Delete");
-            ByteString delVal = rangeStore.delete(1, id, copyFromUtf8("key1")).toCompletableFuture().join();
+            ByteString delVal = rangeStore.delete(verAfterSplit, id, copyFromUtf8("key1")).toCompletableFuture().join();
             assertEquals(delVal, copyFromUtf8("hello"));
 
             assertFalse(
-                rangeStore.get(1, id, copyFromUtf8("key1"), true).toCompletableFuture().join().isPresent());
+                rangeStore.get(verAfterSplit, id, copyFromUtf8("key1"), true).toCompletableFuture().join().isPresent());
 
-            assertEquals(rangeStore.delete(1, id, copyFromUtf8("key2")).toCompletableFuture().join(),
+            assertEquals(rangeStore.delete(verAfterSplit, id, copyFromUtf8("key2")).toCompletableFuture().join(),
                 ByteString.empty());
         }
         {
@@ -308,7 +319,7 @@ public class KVRangeStoreTest extends MockableTest {
         {
             log.info("Test Delete with out-of-range key");
             try {
-                rangeStore.delete(1, id, copyFromUtf8("key4")).toCompletableFuture().join();
+                rangeStore.delete(verAfterSplit, id, copyFromUtf8("key4")).toCompletableFuture().join();
                 fail();
             } catch (Throwable e) {
                 assertTrue(e.getCause() instanceof KVRangeException.InternalException);
@@ -323,17 +334,19 @@ public class KVRangeStoreTest extends MockableTest {
         waitNormalState(rangeDescriptor, 5000);
         // split into [, key4) and [key4, )
         rangeStore.split(0, id, copyFromUtf8("key4")).toCompletableFuture().join();
-
-        rangeStore.put(1, id, copyFromUtf8("key1"), copyFromUtf8("hello")).toCompletableFuture().join();
+        long verAfterSplit = VerUtil.bump(0, true);
+        rangeStore.put(verAfterSplit, id, copyFromUtf8("key1"), copyFromUtf8("hello")).toCompletableFuture().join();
 
         {
             log.info("Test exec ReadOnly Co-Proc");
             assertEquals(
-                rangeStore.queryCoProc(1, id, toInput(copyFromUtf8("key1")), true).toCompletableFuture().join()
+                rangeStore.queryCoProc(verAfterSplit, id, toInput(copyFromUtf8("key1")), true).toCompletableFuture()
+                    .join()
                     .getRaw(),
                 copyFromUtf8("hello"));
             assertEquals(
-                rangeStore.queryCoProc(1, id, toInput(copyFromUtf8("key1")), false).toCompletableFuture().join()
+                rangeStore.queryCoProc(verAfterSplit, id, toInput(copyFromUtf8("key1")), false).toCompletableFuture()
+                    .join()
                     .getRaw(),
                 copyFromUtf8("hello"));
         }
@@ -349,7 +362,8 @@ public class KVRangeStoreTest extends MockableTest {
         {
             log.info("Test exec ReadOnly Range with wrong ranges");
             try {
-                rangeStore.queryCoProc(1, id, toInput(copyFromUtf8("key4")), true).toCompletableFuture().join();
+                rangeStore.queryCoProc(verAfterSplit, id, toInput(copyFromUtf8("key4")), true).toCompletableFuture()
+                    .join();
                 fail();
             } catch (Throwable e) {
                 assertTrue(e.getCause() instanceof KVRangeException.InternalException);
@@ -364,16 +378,19 @@ public class KVRangeStoreTest extends MockableTest {
         waitNormalState(rangeDescriptor, 5000);
         // split into [, key4) and [key4, )
         rangeStore.split(0, id, copyFromUtf8("key4")).toCompletableFuture().join();
-        rangeStore.put(1, id, copyFromUtf8("key1"), copyFromUtf8("hello")).toCompletableFuture().join();
+        long verAfterSplit = VerUtil.bump(0, true);
+        rangeStore.put(verAfterSplit, id, copyFromUtf8("key1"), copyFromUtf8("hello")).toCompletableFuture().join();
 
         {
             log.info("Test exec ReadWrite Co-Proc");
             assertEquals(
-                rangeStore.mutateCoProc(1, id, RWCoProcInput.newBuilder().setRaw(copyFromUtf8("key1_world")).build())
+                rangeStore.mutateCoProc(verAfterSplit, id,
+                        RWCoProcInput.newBuilder().setRaw(copyFromUtf8("key1_world")).build())
                     .toCompletableFuture().join().getRaw(),
                 copyFromUtf8("hello"));
 
-            assertTrue(rangeStore.get(1, id, copyFromUtf8("key1"), true).toCompletableFuture().join().isPresent());
+            assertTrue(
+                rangeStore.get(verAfterSplit, id, copyFromUtf8("key1"), true).toCompletableFuture().join().isPresent());
         }
         {
             log.info("Test exec ReadWrite CoProc with version mismatch");
@@ -388,7 +405,8 @@ public class KVRangeStoreTest extends MockableTest {
         {
             log.info("Test exec ReadWrite Range with wrong ranges");
             try {
-                rangeStore.mutateCoProc(1, id, RWCoProcInput.newBuilder().setRaw(copyFromUtf8("key4")).build())
+                rangeStore.mutateCoProc(verAfterSplit, id,
+                        RWCoProcInput.newBuilder().setRaw(copyFromUtf8("key4")).build())
                     .toCompletableFuture().join();
                 fail();
             } catch (Throwable e) {
@@ -410,6 +428,7 @@ public class KVRangeStoreTest extends MockableTest {
                 storeDescriptor -> storeDescriptor.getRangesList().size() == 2).getRangesList();
             assertEquals(combine(ls.get(0).getBoundary(), ls.get(1).getBoundary()), FULL_BOUNDARY);
         }
+        long verAfterSplit = VerUtil.bump(0, true);
         {
             log.info("Split with version mismatch test");
             // version mismatch
@@ -424,7 +443,7 @@ public class KVRangeStoreTest extends MockableTest {
             log.info("Split with invalid split key test");
             // invalid split key
             try {
-                rangeStore.split(1, id, copyFromUtf8("a")).toCompletableFuture().join();
+                rangeStore.split(verAfterSplit, id, copyFromUtf8("a")).toCompletableFuture().join();
                 fail();
             } catch (Throwable e) {
                 assertTrue(e.getCause() instanceof KVRangeException.BadRequest);

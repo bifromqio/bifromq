@@ -330,12 +330,10 @@ public class KVStoreBalanceController {
 
     private boolean isStaleCommand(BalanceCommand command) {
         if (command instanceof RangeCommand rangeCommand) {
-            if (rangeCommand.getExpectedVer() != null) {
-                Long prevCMDVer = rangeCommandHistory.getOrDefault(rangeCommand.getKvRangeId(), null);
-                if (prevCMDVer != null && prevCMDVer >= rangeCommand.getExpectedVer()) {
-                    log.debug("Ignore staled command: {}", rangeCommand);
-                    return true;
-                }
+            Long prevCMDVer = rangeCommandHistory.getOrDefault(rangeCommand.getKvRangeId(), null);
+            if (prevCMDVer != null && prevCMDVer >= rangeCommand.getExpectedVer()) {
+                log.debug("Ignore staled command: {}", rangeCommand);
+                return true;
             }
         }
         return false;

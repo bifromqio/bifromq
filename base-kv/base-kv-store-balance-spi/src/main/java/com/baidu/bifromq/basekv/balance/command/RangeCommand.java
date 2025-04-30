@@ -21,5 +21,9 @@ import lombok.experimental.SuperBuilder;
 @Setter
 @SuperBuilder
 public abstract class RangeCommand extends BalanceCommand {
-    private Long expectedVer;
+    private long expectedVer;
+
+    protected String printableVer() {
+        return (expectedVer >>> 32) + "-" + (expectedVer & 0xFFFFFFFFL);
+    }
 }

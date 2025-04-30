@@ -20,6 +20,7 @@ import com.baidu.bifromq.basekv.annotation.Cluster;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.google.protobuf.ByteString;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -282,5 +283,23 @@ public class KVRangeStoreClusterConfigChangeTest extends KVRangeStoreClusterTest
             .toCompletableFuture().join();
         await().until(() -> !cluster.isHosting(rangeSettings.leader, rangeId));
         log.info("Test done");
+    }
+
+    @Cluster(initVoters = 1)
+    @Test(groups = "integration")
+    public void configChangeDoNotAffectMutation() {
+        KVRangeId rangeId = cluster.genesisKVRangeId();
+        String newStore = cluster.addStore();
+        KVRangeConfig setting = cluster.kvRangeSetting(rangeId);
+        long ver = setting.ver;
+        cluster.changeReplicaConfig(setting.leader, setting.ver, rangeId, Sets.newHashSet(setting.leader, newStore),
+            emptySet()).toCompletableFuture().join();
+        await().ignoreExceptions().atMost(40, TimeUnit.SECONDS).until(() -> {
+            KVRangeConfig newSetting = cluster.kvRangeSetting(rangeId);
+            return newSetting.clusterConfig.getVotersCount() == 2;
+        });
+
+        cluster.put(setting.leader, ver, rangeId, ByteString.copyFromUtf8("key"), ByteString.copyFromUtf8("value"))
+            .toCompletableFuture().join();
     }
 }

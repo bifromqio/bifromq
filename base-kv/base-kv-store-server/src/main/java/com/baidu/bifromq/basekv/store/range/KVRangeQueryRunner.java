@@ -16,6 +16,7 @@ package com.baidu.bifromq.basekv.store.range;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Merged;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Removed;
 import static com.baidu.bifromq.basekv.proto.State.StateType.ToBePurged;
+import static com.baidu.bifromq.basekv.store.util.VerUtil.boundaryCompatible;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 
 import com.baidu.bifromq.basekv.proto.State;
@@ -104,9 +105,8 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
     private <ReqT, ResultT> CompletableFuture<ResultT> submit(long ver,
                                                               QueryFunction<ReqT, ResultT> queryFn,
                                                               boolean linearized) {
-        if (ver != kvRange.version()) {
-            return CompletableFuture.failedFuture(
-                new KVRangeException.BadVersion("Version Mismatch: expect=" + kvRange.version() + ", actual=" + ver));
+        if (!boundaryCompatible(ver, kvRange.version())) {
+            return CompletableFuture.failedFuture(new KVRangeException.BadVersion("Version Mismatch"));
         }
         CompletableFuture<ResultT> onDone = new CompletableFuture<>();
         runningQueries.add(onDone);
@@ -143,8 +143,7 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
         return onDone;
     }
 
-    private <ReqT, ResultT> CompletableFuture<ResultT> doQuery(long ver,
-                                                               QueryFunction<ReqT, ResultT> queryFn) {
+    private <ReqT, ResultT> CompletableFuture<ResultT> doQuery(long ver, QueryFunction<ReqT, ResultT> queryFn) {
         CompletableFuture<ResultT> onDone = new CompletableFuture<>();
         long stamp = queryLock.readLock();
         try {
@@ -152,11 +151,9 @@ class KVRangeQueryRunner implements IKVRangeQueryRunner {
             // return the borrowed reader when future completed
             onDone.whenComplete((v, e) -> kvRange.returnDataReader(dataReader));
             State state = kvRange.state();
-            if (ver != kvRange.version()) {
+            if (!boundaryCompatible(ver, kvRange.version())) {
                 queryLock.unlockRead(stamp);
-                onDone.completeExceptionally(
-                    new KVRangeException.BadVersion(
-                        "Version Mismatch: expect=" + kvRange.version() + ", actual=" + ver));
+                onDone.completeExceptionally(new KVRangeException.BadVersion("Version Mismatch"));
                 return onDone;
             }
             if (state.getType() == Merged || state.getType() == Removed || state.getType() == ToBePurged) {
