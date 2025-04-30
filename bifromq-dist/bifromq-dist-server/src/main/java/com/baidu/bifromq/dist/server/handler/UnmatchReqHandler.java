@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.dist.server.handler;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
@@ -38,7 +39,7 @@ public class UnmatchReqHandler implements IDistServiceReqHandler<UnmatchRequest,
     @Override
     public CompletableFuture<UnmatchReply> handle(UnmatchRequest request) {
         return unmatchCallScheduler.schedule(request)
-            .handle((v, e) -> {
+            .handle(unwrap((v, e) -> {
                 if (e != null) {
                     log.debug("Failed to exec UnsubRequest, tenantId={}, req={}", request.getTenantId(), request, e);
                     eventCollector.report(getLocal(UnmatchError.class)
@@ -49,7 +50,7 @@ public class UnmatchReqHandler implements IDistServiceReqHandler<UnmatchRequest,
                         .subBrokerId(request.getBrokerId())
                         .delivererKey(request.getDelivererKey())
                         .reason(e.getMessage()));
-                    if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                    if (e instanceof BackPressureException) {
                         return UnmatchReply.newBuilder()
                             .setReqId(request.getReqId())
                             .setResult(UnmatchReply.Result.BACK_PRESSURE_REJECTED)
@@ -80,7 +81,7 @@ public class UnmatchReqHandler implements IDistServiceReqHandler<UnmatchRequest,
                     }
                 }
                 return v;
-            });
+            }));
     }
 
     @Override

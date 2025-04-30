@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.mqtt.inbox;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
+
 import com.baidu.bifromq.baserpc.client.IRPCClient;
 import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.mqtt.inbox.rpc.proto.WriteReply;
@@ -46,8 +48,8 @@ class DeliveryPipeline implements IDeliverer {
                 .setRequest(request)
                 .build())
             .thenApply(WriteReply::getReply)
-            .exceptionally(e -> {
-                if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+            .exceptionally(unwrap(e -> {
+                if (e instanceof ServerNotFoundException) {
                     DeliveryReply.Builder replyBuilder = DeliveryReply.newBuilder().setCode(DeliveryReply.Code.OK);
                     Set<MatchInfo> allMatchInfos = new HashSet<>();
                     for (String tenantId : request.getPackageMap().keySet()) {
@@ -66,7 +68,7 @@ class DeliveryPipeline implements IDeliverer {
                 }
                 log.debug("Failed to deliver request: {}", request, e);
                 return DeliveryReply.newBuilder().setCode(DeliveryReply.Code.ERROR).build();
-            });
+            }));
     }
 
     @Override

@@ -11,28 +11,35 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.baserpc.utils;
+package com.baidu.bifromq.base.util;
 
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
-import java.util.function.Supplier;
 
+/**
+ * FutureTracker is a utility class that allows for tracking and managing multiple CompletableFutures.
+ */
 public final class FutureTracker {
     private final Set<CompletableFuture<?>> track = ConcurrentHashMap.newKeySet();
 
+    /**
+     * Tracks a CompletableFuture and removes it from the tracking set when it completes.
+     *
+     * @param trackedFuture the CompletableFuture to track
+     * @return the tracked CompletableFuture
+     */
     public <T> CompletableFuture<T> track(CompletableFuture<T> trackedFuture) {
         track.add(trackedFuture);
         trackedFuture.whenComplete((v, e) -> track.remove(trackedFuture));
         return trackedFuture;
     }
 
-    public <T> CompletableFuture<T> track(Supplier<CompletableFuture<T>> futureSupplier) {
-        return track(futureSupplier.get());
-    }
-
+    /**
+     * Stops tracking all futures and cancels them.
+     */
     public void stop() {
         for (CompletableFuture<?> tracked : track) {
             tracked.cancel(true);

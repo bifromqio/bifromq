@@ -11,15 +11,12 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.util;
+package com.baidu.bifromq.base.util;
 
-import static org.awaitility.Awaitility.await;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
-import com.baidu.bifromq.basekv.MockableTest;
-import com.google.common.util.concurrent.MoreExecutors;
 import io.micrometer.core.instrument.Metrics;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -33,18 +30,37 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.awaitility.Awaitility;
+import org.mockito.MockitoAnnotations;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 @Slf4j
-public class AsyncRunnerTest extends MockableTest {
+public class AsyncRunnerTest {
     private ExecutorService executor;
+    private AutoCloseable closeable;
 
-    protected void doSetup(Method method) {
+    @BeforeMethod(alwaysRun = true)
+    public final void setup(Method method) {
+        log.info("Test case[{}.{}] start", method.getDeclaringClass().getName(), method.getName());
+        closeable = MockitoAnnotations.openMocks(this);
         executor = Executors.newSingleThreadExecutor();
     }
 
-    protected void doTearDown(Method method) {
-        MoreExecutors.shutdownAndAwaitTermination(executor, 5, TimeUnit.SECONDS);
+    @SneakyThrows
+    @AfterMethod(alwaysRun = true)
+    public final void tearDown(Method method) {
+        log.info("Test case[{}.{}] finished, doing teardown",
+            method.getDeclaringClass().getName(), method.getName());
+        try {
+            log.info("Test case[{}.{}] teared down",
+                method.getDeclaringClass().getName(), method.getName());
+        } catch (Throwable e) {
+            log.warn("Test case[{}.{}] teardown exception",
+                method.getDeclaringClass().getName(), method.getName(), e);
+        }
+        closeable.close();
     }
 
     @Test
@@ -52,7 +68,7 @@ public class AsyncRunnerTest extends MockableTest {
         AsyncRunner asyncRunner = new AsyncRunner("TestRunner", executor);
         assertEquals(Metrics.globalRegistry.find("TestRunner").timers().size(), 2);
         asyncRunner = null;
-        await().forever().until(() -> {
+        Awaitility.await().forever().until(() -> {
             System.gc();
             return Metrics.globalRegistry.find("TestRunner").timers().isEmpty();
         });

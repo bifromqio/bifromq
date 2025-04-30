@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.baserpc.utils;
+package com.baidu.bifromq.base.util;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
@@ -66,15 +66,6 @@ public class FutureTrackerTest {
         CompletableFuture<Void> allDone = tracker.whenComplete((v, e) -> {
         });
         allDone.get();
-    }
-
-    @Test
-    public void testTrackWithSupplier() throws Exception {
-        CompletableFuture<String> future = new CompletableFuture<>();
-        CompletableFuture<String> tracked = tracker.track(() -> future);
-
-        future.complete("supplier");
-        assertEquals(tracked.get(), "supplier");
     }
 
     @Test

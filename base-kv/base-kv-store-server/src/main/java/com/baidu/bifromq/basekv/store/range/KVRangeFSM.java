@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
 import static com.baidu.bifromq.basekv.proto.State.StateType.ConfigChanging;
 import static com.baidu.bifromq.basekv.proto.State.StateType.Merged;
 import static com.baidu.bifromq.basekv.proto.State.StateType.MergedQuiting;
@@ -40,6 +41,7 @@ import static com.google.common.collect.Sets.union;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 
+import com.baidu.bifromq.base.util.AsyncRunner;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.baseenv.ZeroCopyParser;
 import com.baidu.bifromq.basehlc.HLC;
@@ -92,7 +94,6 @@ import com.baidu.bifromq.basekv.store.proto.ROCoProcOutput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcInput;
 import com.baidu.bifromq.basekv.store.proto.RWCoProcOutput;
 import com.baidu.bifromq.basekv.store.stats.IStatsCollector;
-import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.basekv.store.util.VerUtil;
 import com.baidu.bifromq.basekv.store.wal.IKVRangeWAL;
 import com.baidu.bifromq.basekv.store.wal.IKVRangeWALStore;
@@ -991,12 +992,11 @@ public class KVRangeFSM implements IKVRangeFSM {
                 log.info("Transferring leader[term={}, index={}, taskId={}, ver={}, state={}]: newLeader={}",
                     logTerm, logIndex, taskId, print(ver), state, request.getNewLeader());
                 wal.transferLeadership(request.getNewLeader())
-                    .whenCompleteAsync((v, e) -> {
+                    .whenCompleteAsync(unwrap((v, e) -> {
                         if (e != null) {
                             log.debug("Failed to transfer leadership[newLeader={}] due to {}",
                                 request.getNewLeader(), e.getMessage());
-                            if (e instanceof LeaderTransferException.NotFoundOrQualifiedException
-                                || e.getCause() instanceof LeaderTransferException.NotFoundOrQualifiedException) {
+                            if (e instanceof LeaderTransferException.NotFoundOrQualifiedException) {
                                 finishCommandWithError(taskId, new KVRangeException.BadRequest(
                                     "Failed to transfer leadership", e));
                             } else {
@@ -1006,7 +1006,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                         } else {
                             finishCommand(taskId);
                         }
-                    }, fsmExecutor);
+                    }), fsmExecutor);
                 onDone.complete(NOOP);
             }
             case SPLITRANGE -> {
@@ -1504,9 +1504,9 @@ public class KVRangeFSM implements IKVRangeFSM {
                     }
                 })
                 .thenCompose(f -> f)
-                .whenCompleteAsync((v, e) -> {
+                .whenCompleteAsync(unwrap((v, e) -> {
                     if (e != null) {
-                        if (e instanceof SnapshotException || e.getCause() instanceof SnapshotException) {
+                        if (e instanceof SnapshotException) {
                             log.error("Failed to apply snapshot to WAL \n{}", snapshot, e);
                             // WAL and FSM are inconsistent, need to quit and recreate again
                             quitSignal.complete(null);
@@ -1519,7 +1519,7 @@ public class KVRangeFSM implements IKVRangeFSM {
                         cmdFutures.keySet().forEach(taskId -> finishCommandWithError(taskId,
                             new KVRangeException.TryLater("Restored from snapshot, try again")));
                     }
-                }, fsmExecutor);
+                }), fsmExecutor);
         });
     }
 

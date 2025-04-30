@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.retain.store.gc;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
 import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
@@ -69,19 +70,19 @@ public class RetainStoreGCProcessor implements IRetainStoreGCProcessor {
                 log.debug("All range gc succeed");
                 return Result.OK;
             })
-            .exceptionally(e -> {
-                if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+            .exceptionally(unwrap(e -> {
+                if (e instanceof ServerNotFoundException) {
                     return Result.TRY_LATER;
                 }
-                if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+                if (e instanceof TryLaterException) {
                     return Result.TRY_LATER;
                 }
-                if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+                if (e instanceof BadVersionException) {
                     return Result.TRY_LATER;
                 }
                 log.error("Some range gc failed", e);
                 return Result.ERROR;
-            });
+            }));
     }
 
     private CompletableFuture<GCReply> gcRange(long reqId,

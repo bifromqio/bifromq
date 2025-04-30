@@ -23,11 +23,12 @@
         <module>base-cluster</module>
         <module>base-crdt</module>
         <module>base-hlc</module>
-        <module>base-logger</module>
+        <module>base-hookloader</module>
         <module>base-kv</module>
+        <module>base-logger</module>
         <module>base-rpc</module>
         <module>base-scheduler</module>
-        <module>base-hookloader</module>
+        <module>base-util</module>
 
         <module>bifromq-common-type</module>
         <module>bifromq-util</module>
@@ -265,6 +266,11 @@
             <dependency>
                 <groupId>com.baidu.bifromq</groupId>
                 <artifactId>base-kv-store-balance-controller</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
+                <artifactId>base-util</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <!-- common type -->

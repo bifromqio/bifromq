@@ -42,6 +42,10 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
+            <artifactId>base-util</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
             <artifactId>bifromq-common-type</artifactId>
         </dependency>
         <dependency>

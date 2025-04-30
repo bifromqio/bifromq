@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.inbox;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
 import static com.baidu.bifromq.mqtt.inbox.rpc.proto.SubReply.Result.ERROR;
 import static com.baidu.bifromq.mqtt.inbox.util.DelivererKeyUtil.parseServerId;
 import static com.baidu.bifromq.mqtt.inbox.util.DelivererKeyUtil.parseTenantId;
@@ -51,17 +52,16 @@ final class MqttBrokerClient implements IMqttBrokerClient {
     public CompletableFuture<CheckReply> check(CheckRequest request) {
         return rpcClient.invoke(request.getTenantId(), parseServerId(request.getDelivererKey()), request,
                 OnlineInboxBrokerGrpc.getCheckSubscriptionsMethod())
-            .exceptionally(e -> {
+            .exceptionally(unwrap(e -> {
                 log.debug("Failed to check subscription", e);
                 CheckReply.Builder replyBuilder = CheckReply.newBuilder();
                 CheckReply.Code code =
-                    e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException
-                        ? CheckReply.Code.NO_RECEIVER : CheckReply.Code.ERROR;
+                    e instanceof ServerNotFoundException ? CheckReply.Code.NO_RECEIVER : CheckReply.Code.ERROR;
                 for (MatchInfo matchInfo : request.getMatchInfoList()) {
                     replyBuilder.addCode(code);
                 }
                 return replyBuilder.build();
-            });
+            }));
     }
 
     public IDeliverer open(String delivererKey) {

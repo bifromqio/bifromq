@@ -82,21 +82,21 @@ public class BatchRetainCall extends BatchMutationCall<RetainRequest, RetainRepl
     @Override
     protected void handleException(ICallTask<RetainRequest, RetainReply, MutationCallBatcherKey> callTask,
                                    Throwable e) {
-        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+        if (e instanceof ServerNotFoundException) {
             callTask.resultPromise().complete(RetainReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setResult(RetainReply.Result.TRY_LATER)
                 .build());
             return;
         }
-        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+        if (e instanceof BadVersionException) {
             callTask.resultPromise().complete(RetainReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setResult(RetainReply.Result.TRY_LATER)
                 .build());
             return;
         }
-        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+        if (e instanceof TryLaterException) {
             callTask.resultPromise().complete(RetainReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setResult(RetainReply.Result.TRY_LATER)

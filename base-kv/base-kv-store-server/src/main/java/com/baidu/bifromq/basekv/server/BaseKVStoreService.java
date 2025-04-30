@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.basekv.server;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.FULL_BOUNDARY;
 import static com.baidu.bifromq.baserpc.server.UnaryResponse.response;
 
@@ -149,10 +150,10 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
                 .setReqId(request.getReqId())
                 .setCode(ReplyCode.Ok)
                 .build())
-            .exceptionally(e -> TransferLeadershipReply.newBuilder()
+            .exceptionally(unwrap(e -> TransferLeadershipReply.newBuilder()
                 .setReqId(request.getReqId())
                 .setCode(convertKVRangeException(e))
-                .build()), responseObserver);
+                .build())), responseObserver);
     }
 
     @Override
@@ -214,13 +215,13 @@ class BaseKVStoreService extends BaseKVStoreServiceGrpc.BaseKVStoreServiceImplBa
     }
 
     private ReplyCode convertKVRangeException(Throwable e) {
-        if (e instanceof KVRangeException.BadVersion || e.getCause() instanceof KVRangeException.BadVersion) {
+        if (e instanceof KVRangeException.BadVersion) {
             return ReplyCode.BadVersion;
         }
-        if (e instanceof KVRangeException.TryLater || e.getCause() instanceof KVRangeException.TryLater) {
+        if (e instanceof KVRangeException.TryLater) {
             return ReplyCode.TryLater;
         }
-        if (e instanceof KVRangeException.BadRequest || e.getCause() instanceof KVRangeException.BadRequest) {
+        if (e instanceof KVRangeException.BadRequest) {
             return ReplyCode.BadRequest;
         }
         log.error("Internal Error", e);

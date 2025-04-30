@@ -13,9 +13,9 @@
 
 package com.baidu.bifromq.basekv.store.wal;
 
+import com.baidu.bifromq.base.util.AsyncRunner;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
-import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;
 import com.baidu.bifromq.logger.SiftLogger;
 import io.reactivex.rxjava3.core.Observable;

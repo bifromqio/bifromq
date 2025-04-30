@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.basekv.server;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
+
 import com.baidu.bifromq.basekv.raft.exception.ReadIndexException;
 import com.baidu.bifromq.basekv.store.IKVRangeStore;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
@@ -70,31 +72,27 @@ class QueryPipeline extends ResponsePipeline<KVRangeRORequest, KVRangeROReply> {
                     log.trace("Skip submit ro range request[linearized={}] to store:\n{}", linearized, request);
                 }
                 task.queryFn.apply(request)
-                    .exceptionally(e -> {
-                        if (e instanceof KVRangeException.BadVersion
-                            || e.getCause() instanceof KVRangeException.BadVersion) {
+                    .exceptionally(unwrap(e -> {
+                        if (e instanceof KVRangeException.BadVersion) {
                             return KVRangeROReply.newBuilder()
                                 .setReqId(request.getReqId())
                                 .setCode(ReplyCode.BadVersion)
                                 .build();
                         }
                         if (e instanceof KVRangeStoreException.KVRangeNotFoundException
-                            || e.getCause() instanceof KVRangeStoreException.KVRangeNotFoundException
-                            || e instanceof KVRangeException.TryLater
-                            || e.getCause() instanceof KVRangeException.TryLater) {
+                            || e instanceof KVRangeException.TryLater) {
                             return KVRangeROReply.newBuilder()
                                 .setReqId(request.getReqId())
                                 .setCode(ReplyCode.TryLater)
                                 .build();
                         }
-                        if (e instanceof KVRangeException.BadRequest
-                            || e.getCause() instanceof KVRangeException.BadRequest) {
+                        if (e instanceof KVRangeException.BadRequest) {
                             return KVRangeROReply.newBuilder()
                                 .setReqId(request.getReqId())
                                 .setCode(ReplyCode.BadRequest)
                                 .build();
                         }
-                        if (e instanceof ReadIndexException || e.getCause() instanceof ReadIndexException) {
+                        if (e instanceof ReadIndexException) {
                             return KVRangeROReply.newBuilder()
                                 .setReqId(request.getReqId())
                                 .setCode(ReplyCode.TryLater)
@@ -105,7 +103,7 @@ class QueryPipeline extends ResponsePipeline<KVRangeRORequest, KVRangeROReply> {
                             .setReqId(request.getReqId())
                             .setCode(ReplyCode.InternalError)
                             .build();
-                    })
+                    }))
                     .thenAccept(v -> {
                         task.onDone.complete(v);
                         executing.set(false);

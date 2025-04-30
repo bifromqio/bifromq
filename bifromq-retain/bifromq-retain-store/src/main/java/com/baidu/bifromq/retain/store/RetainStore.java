@@ -13,13 +13,13 @@
 
 package com.baidu.bifromq.retain.store;
 
+import com.baidu.bifromq.base.util.AsyncRunner;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basehookloader.BaseHookLoader;
 import com.baidu.bifromq.basekv.balance.KVStoreBalanceController;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
-import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.baserpc.client.IConnectable;
 import com.baidu.bifromq.retain.store.gc.IRetainStoreGCProcessor;
 import com.baidu.bifromq.retain.store.gc.RetainStoreGCProcessor;

@@ -98,21 +98,21 @@ class BatchSubCall extends BatchMutationCall<SubRequest, SubReply> {
 
     @Override
     protected void handleException(ICallTask<SubRequest, SubReply, MutationCallBatcherKey> callTask, Throwable e) {
-        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+        if (e instanceof ServerNotFoundException) {
             callTask.resultPromise().complete(SubReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setCode(SubReply.Code.TRY_LATER)
                 .build());
             return;
         }
-        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+        if (e instanceof BadVersionException) {
             callTask.resultPromise().complete(SubReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setCode(SubReply.Code.TRY_LATER)
                 .build());
             return;
         }
-        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+        if (e instanceof TryLaterException) {
             callTask.resultPromise().complete(SubReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setCode(SubReply.Code.TRY_LATER)

@@ -13,11 +13,11 @@
 
 package com.baidu.bifromq.dist.client.scheduler;
 
+import com.baidu.bifromq.base.util.AsyncRetry;
+import com.baidu.bifromq.base.util.exception.NeedRetryException;
 import com.baidu.bifromq.baserpc.client.IRPCClient;
-import com.baidu.bifromq.basescheduler.AsyncRetry;
 import com.baidu.bifromq.basescheduler.IBatchCall;
 import com.baidu.bifromq.basescheduler.ICallTask;
-import com.baidu.bifromq.basescheduler.exception.NeedRetryException;
 import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;

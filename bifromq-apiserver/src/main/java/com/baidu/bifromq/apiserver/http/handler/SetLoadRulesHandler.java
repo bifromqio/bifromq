@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.apiserver.http.handler;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
 import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
 import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
 import static io.netty.handler.codec.http.HttpResponseStatus.CONFLICT;
@@ -83,9 +84,9 @@ final class SetLoadRulesHandler extends AbstractLoadRulesHandler implements IHTT
         try {
             Struct loadRules = fromJson(req.content().toString(io.netty.util.CharsetUtil.UTF_8));
             return metadataManager.proposeLoadRules(balancerFactoryClass, loadRules)
-                .handle((v, e) -> {
+                .handle(unwrap((v, e) -> {
                     if (e != null) {
-                        if (e.getCause() instanceof TimeoutException) {
+                        if (e instanceof TimeoutException) {
                             return new DefaultFullHttpResponse(req.protocolVersion(),
                                 REQUEST_TIMEOUT, EMPTY_BUFFER);
                         } else {
@@ -108,7 +109,7 @@ final class SetLoadRulesHandler extends AbstractLoadRulesHandler implements IHTT
                             return new DefaultFullHttpResponse(req.protocolVersion(), CONFLICT, EMPTY_BUFFER);
                         }
                     }
-                });
+                }));
         } catch (Throwable e) {
             return CompletableFuture.completedFuture(
                 new DefaultFullHttpResponse(req.protocolVersion(), INTERNAL_SERVER_ERROR,

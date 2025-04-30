@@ -94,21 +94,21 @@ class BatchCommitCall extends BatchMutationCall<CommitRequest, CommitReply> {
     @Override
     protected void handleException(ICallTask<CommitRequest, CommitReply, MutationCallBatcherKey> callTask,
                                    Throwable e) {
-        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+        if (e instanceof ServerNotFoundException) {
             callTask.resultPromise().complete(CommitReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setCode(CommitReply.Code.TRY_LATER)
                 .build());
             return;
         }
-        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+        if (e instanceof BadVersionException) {
             callTask.resultPromise().complete(CommitReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setCode(CommitReply.Code.TRY_LATER)
                 .build());
             return;
         }
-        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+        if (e instanceof TryLaterException) {
             callTask.resultPromise().complete(CommitReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setCode(CommitReply.Code.TRY_LATER)

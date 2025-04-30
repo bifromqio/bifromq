@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basescheduler.exception;
+package com.baidu.bifromq.base.util.exception;
 
 public class RetryTimeoutException extends RuntimeException {
     public RetryTimeoutException() {

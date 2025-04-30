@@ -13,9 +13,10 @@
 
 package com.baidu.bifromq.deliverer;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
+
 import com.baidu.bifromq.basescheduler.BatchCallScheduler;
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
-import com.baidu.bifromq.basescheduler.exception.RetryTimeoutException;
 import com.baidu.bifromq.sysprops.props.DataPlaneMaxBurstLatencyMillis;
 import java.time.Duration;
 import java.util.Optional;
@@ -33,16 +34,13 @@ public class MessageDeliverer extends BatchCallScheduler<DeliveryCall, DeliveryC
 
     @Override
     public CompletableFuture<DeliveryCallResult> schedule(DeliveryCall request) {
-        return super.schedule(request).exceptionally(e -> {
-            if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
-                return DeliveryCallResult.BACK_PRESSURE_REJECTED;
-            }
-            if (e instanceof RetryTimeoutException || e.getCause() instanceof RetryTimeoutException) {
+        return super.schedule(request).exceptionally(unwrap(e -> {
+            if (e instanceof BackPressureException) {
                 return DeliveryCallResult.BACK_PRESSURE_REJECTED;
             }
             log.error("Failed to schedule delivery call", e);
             return DeliveryCallResult.ERROR;
-        });
+        }));
     }
 
     @Override

@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.basekv.server;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
+
 import com.baidu.bifromq.basekv.raft.exception.DropProposalException;
 import com.baidu.bifromq.basekv.store.IKVRangeStore;
 import com.baidu.bifromq.basekv.store.exception.KVRangeException;
@@ -81,57 +83,51 @@ class MutatePipeline extends ResponsePipeline<KVRangeRWRequest, KVRangeRWReply> 
     private CompletionStage<KVRangeRWReply> mutate(KVRangeRWRequest request, Function<KVRangeRWRequest,
         CompletionStage<KVRangeRWReply>> mutateFn) {
         return mutateFn.apply(request)
-            .exceptionally(e -> {
-                if (e instanceof KVRangeException.BadVersion || e.getCause() instanceof KVRangeException.BadVersion) {
+            .exceptionally(unwrap(e -> {
+                if (e instanceof KVRangeException.BadVersion) {
                     return KVRangeRWReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(ReplyCode.BadVersion)
                         .build();
                 }
                 if (e instanceof KVRangeStoreException.KVRangeNotFoundException
-                    || e.getCause() instanceof KVRangeStoreException.KVRangeNotFoundException
-                    || e instanceof KVRangeException.TryLater || e.getCause() instanceof KVRangeException.TryLater) {
+                    || e instanceof KVRangeException.TryLater) {
                     return KVRangeRWReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(ReplyCode.TryLater)
                         .build();
                 }
-                if (e instanceof KVRangeException.BadRequest || e.getCause() instanceof KVRangeException.BadRequest) {
+                if (e instanceof KVRangeException.BadRequest) {
                     return KVRangeRWReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(ReplyCode.BadRequest)
                         .build();
                 }
-                if (e instanceof DropProposalException.TransferringLeaderException
-                    || e.getCause() instanceof DropProposalException.TransferringLeaderException) {
+                if (e instanceof DropProposalException.TransferringLeaderException) {
                     return KVRangeRWReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(ReplyCode.TryLater)
                         .build();
                 }
-                if (e instanceof DropProposalException.NoLeaderException
-                    || e.getCause() instanceof DropProposalException.NoLeaderException) {
+                if (e instanceof DropProposalException.NoLeaderException) {
                     return KVRangeRWReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(ReplyCode.TryLater)
                         .build();
                 }
-                if (e instanceof DropProposalException.ForwardTimeoutException
-                    || e.getCause() instanceof DropProposalException.ForwardTimeoutException) {
+                if (e instanceof DropProposalException.ForwardTimeoutException) {
                     return KVRangeRWReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(ReplyCode.TryLater)
                         .build();
                 }
-                if (e instanceof DropProposalException.OverriddenException
-                    || e.getCause() instanceof DropProposalException.OverriddenException) {
+                if (e instanceof DropProposalException.OverriddenException) {
                     return KVRangeRWReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(ReplyCode.TryLater)
                         .build();
                 }
-                if (e instanceof DropProposalException.SupersededBySnapshotException
-                    || e.getCause() instanceof DropProposalException.SupersededBySnapshotException) {
+                if (e instanceof DropProposalException.SupersededBySnapshotException) {
                     return KVRangeRWReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setCode(ReplyCode.TryLater)
@@ -142,6 +138,6 @@ class MutatePipeline extends ResponsePipeline<KVRangeRWRequest, KVRangeRWReply> 
                     .setReqId(request.getReqId())
                     .setCode(ReplyCode.InternalError)
                     .build();
-            });
+            }));
     }
 }

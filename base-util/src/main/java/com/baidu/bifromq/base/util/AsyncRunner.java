@@ -11,7 +11,7 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basekv.store.util;
+package com.baidu.bifromq.base.util;
 
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Metrics;
@@ -25,19 +25,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
+/**
+ * AsyncRunner is a utility class that allows for the execution of tasks asynchronously in submission order.
+ */
 public final class AsyncRunner {
     private static final Cleaner CLEANER = Cleaner.create();
-
-    private record ClosableState(Meter meter) implements Runnable {
-        @Override
-        public void run() {
-            Metrics.globalRegistry.remove(meter);
-        }
-    }
-
     private final ConcurrentLinkedDeque<Task<?>> taskQueue;
     private final Executor executor;
     private final AtomicReference<State> state = new AtomicReference<>(State.EMPTY_STOP);
@@ -182,17 +175,15 @@ public final class AsyncRunner {
         }
     }
 
+    /**
+     * Await current submitted tasks done.
+     *
+     * @return A CompletableFuture that will be completed when all submitted tasks are done.
+     */
     public CompletionStage<Void> awaitDone() {
         CompletableFuture<Void> onDone = new CompletableFuture<>();
         whenDone.whenComplete((v, e) -> onDone.complete(null));
         return onDone;
-    }
-
-    @AllArgsConstructor
-    private static class Task<T> {
-        final long submitAtNanos = System.nanoTime();
-        final Supplier<CompletableFuture<T>> supplier;
-        final CompletableFuture<T> future;
     }
 
     private enum State {
@@ -200,5 +191,19 @@ public final class AsyncRunner {
         NONEMPTY_STOP,
         NONEMPTY_RUNNING,
         EMPTY_RUNNING
+    }
+
+    private record ClosableState(Meter meter) implements Runnable {
+        @Override
+        public void run() {
+            Metrics.globalRegistry.remove(meter);
+        }
+    }
+
+    @AllArgsConstructor
+    private static class Task<T> {
+        final long submitAtNanos = System.nanoTime();
+        final Supplier<CompletableFuture<T>> supplier;
+        final CompletableFuture<T> future;
     }
 }

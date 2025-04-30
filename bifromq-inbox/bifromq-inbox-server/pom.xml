@@ -30,11 +30,15 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>base-rpc-server</artifactId>
+            <artifactId>base-kv-meta-service</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-sysprops</artifactId>
+            <artifactId>base-kv-store-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>base-rpc-server</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
@@ -42,11 +46,11 @@
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>base-kv-meta-service</artifactId>
+            <artifactId>base-util</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>base-kv-store-client</artifactId>
+            <artifactId>bifromq-sysprops</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>

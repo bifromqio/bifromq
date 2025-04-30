@@ -11,10 +11,12 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basescheduler;
+package com.baidu.bifromq.base.util;
 
-import com.baidu.bifromq.basescheduler.exception.NeedRetryException;
-import com.baidu.bifromq.basescheduler.exception.RetryTimeoutException;
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
+
+import com.baidu.bifromq.base.util.exception.NeedRetryException;
+import com.baidu.bifromq.base.util.exception.RetryTimeoutException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -85,7 +87,7 @@ public class AsyncRetry {
         }
 
         // Execute the asynchronous task.
-        executeTask(taskSupplier).whenComplete((result, t) -> {
+        executeTask(taskSupplier).whenComplete(unwrap((result, t) -> {
             // If the result satisfies the retry predicate, return it.
             if (initialBackoffNanos == 0 || !retryPredicate.test(result, t)) {
                 if (t != null) {
@@ -109,7 +111,7 @@ public class AsyncRetry {
                     retryCount + 1,
                     delayMillisSoFarNew, onDone), delayExecutor);
             }
-        });
+        }));
     }
 
     private static <T> CompletableFuture<T> executeTask(Supplier<CompletableFuture<T>> taskSupplier) {

@@ -13,6 +13,8 @@
 
 package com.baidu.bifromq.basekv.client.scheduler;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
+
 import com.baidu.bifromq.basekv.client.IQueryPipeline;
 import com.baidu.bifromq.basekv.client.exception.BadRequestException;
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
@@ -99,7 +101,7 @@ public abstract class BatchQueryCall<ReqT, RespT> implements IBatchCall<ReqT, Re
                 case BadRequest -> throw new BadRequestException();
                 default -> throw new InternalErrorException();
             })
-            .handle((v, e) -> {
+            .handle(unwrap((v, e) -> {
                 if (e != null) {
                     ICallTask<ReqT, RespT, QueryCallBatcherKey> callTask;
                     while ((callTask = batchCallTask.batchedTasks.poll()) != null) {
@@ -109,7 +111,7 @@ public abstract class BatchQueryCall<ReqT, RespT> implements IBatchCall<ReqT, Re
                     handleOutput(batchCallTask.batchedTasks, v);
                 }
                 return null;
-            })
+            }))
             .thenCompose(v -> {
                 if (recursionDepth < MAX_RECURSION_DEPTH) {
                     return fireBatchCall(recursionDepth + 1);

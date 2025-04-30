@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.inbox.server;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
 import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_DELIVERERKEY;
 import static com.baidu.bifromq.inbox.util.PipelineUtil.PIPELINE_ATTR_KEY_ID;
 
@@ -160,7 +161,7 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
                     .setSendBufferStartAfter(fetchState.lastFetchSendBufferSeq.get())
                     .build());
             long fetchTS = System.nanoTime();
-            fetcher.fetch(request).whenComplete((fetched, e) -> {
+            fetcher.fetch(request).whenComplete(unwrap((fetched, e) -> {
                 if (closed) {
                     return;
                 }
@@ -170,8 +171,7 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
                             inboxSessionMap.remove(new InboxId(v.inboxId, v.incarnation));
                             return null;
                         });
-                        if (e instanceof BatcherUnavailableException
-                            || e.getCause() instanceof BatcherUnavailableException) {
+                        if (e instanceof BatcherUnavailableException) {
                             send(InboxFetched.newBuilder()
                                 .setSessionId(fetchState.sessionId)
                                 .setInboxId(inboxId)
@@ -182,7 +182,7 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
                                 .build());
                             return;
                         }
-                        if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                        if (e instanceof BackPressureException) {
                             send(InboxFetched.newBuilder()
                                 .setSessionId(fetchState.sessionId)
                                 .setInboxId(inboxId)
@@ -249,7 +249,7 @@ final class InboxFetchPipeline extends AckStream<InboxFetchHint, InboxFetched> i
                         log.error("Unexpected error", t);
                     }
                 }
-            });
+            }));
         }
     }
 

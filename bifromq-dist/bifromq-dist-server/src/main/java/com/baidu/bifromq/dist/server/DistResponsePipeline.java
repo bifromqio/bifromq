@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.dist.server;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
 import static com.baidu.bifromq.plugin.eventcollector.ThreadLocalEventPool.getLocal;
 import static com.baidu.bifromq.plugin.eventcollector.distservice.DistError.DistErrorCode.DROP_EXCEED_LIMIT;
 import static com.baidu.bifromq.plugin.eventcollector.distservice.DistError.DistErrorCode.RPC_FAILURE;
@@ -22,9 +23,9 @@ import com.baidu.bifromq.baserpc.server.ResponsePipeline;
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.dist.rpc.proto.DistReply;
 import com.baidu.bifromq.dist.rpc.proto.DistRequest;
-import com.baidu.bifromq.dist.server.scheduler.TenantPubRequest;
 import com.baidu.bifromq.dist.server.scheduler.DistServerCallResult;
 import com.baidu.bifromq.dist.server.scheduler.IDistWorkerCallScheduler;
+import com.baidu.bifromq.dist.server.scheduler.TenantPubRequest;
 import com.baidu.bifromq.plugin.eventcollector.IEventCollector;
 import com.baidu.bifromq.plugin.eventcollector.distservice.DistError;
 import com.baidu.bifromq.plugin.eventcollector.distservice.Disted;
@@ -60,10 +61,10 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
     @Override
     protected CompletableFuture<DistReply> handleRequest(String tenantId, DistRequest request) {
         return distCallScheduler.schedule(new TenantPubRequest(tenantId, request.getMessagesList(), callQueueIdx))
-            .handle((result, e) -> {
+            .handle(unwrap((result, e) -> {
                 DistReply.Builder replyBuilder = DistReply.newBuilder().setReqId(request.getReqId());
                 if (e != null) {
-                    if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                    if (e instanceof BackPressureException) {
                         replyBuilder.setCode(DistReply.Code.BACK_PRESSURE_REJECTED);
                         eventCollector.report(getLocal(DistError.class)
                             .reqId(request.getReqId())
@@ -108,7 +109,7 @@ class DistResponsePipeline extends ResponsePipeline<DistRequest, DistReply> {
                     }
                 }
                 return replyBuilder.build();
-            });
+            }));
     }
 
     private static class DistQueueAllocator {

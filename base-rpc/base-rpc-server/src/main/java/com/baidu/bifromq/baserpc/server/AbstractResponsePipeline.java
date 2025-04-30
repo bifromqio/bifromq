@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.baserpc.server;
 
+import com.baidu.bifromq.base.util.FutureTracker;
 import com.baidu.bifromq.baserpc.metrics.RPCMetric;
-import com.baidu.bifromq.baserpc.utils.FutureTracker;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.Timer;

@@ -101,21 +101,21 @@ class BatchAttachCall extends BatchMutationCall<AttachRequest, AttachReply> {
     @Override
     protected void handleException(ICallTask<AttachRequest, AttachReply, MutationCallBatcherKey> callTask,
                                    Throwable e) {
-        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+        if (e instanceof ServerNotFoundException) {
             callTask.resultPromise().complete(AttachReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setCode(AttachReply.Code.TRY_LATER)
                 .build());
             return;
         }
-        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+        if (e instanceof BadVersionException) {
             callTask.resultPromise().complete(AttachReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setCode(AttachReply.Code.TRY_LATER)
                 .build());
             return;
         }
-        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+        if (e instanceof TryLaterException) {
             callTask.resultPromise().complete(AttachReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setCode(AttachReply.Code.TRY_LATER)

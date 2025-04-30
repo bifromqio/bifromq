@@ -26,10 +26,6 @@
     <dependencies>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
-            <artifactId>bifromq-sysprops</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.baidu.bifromq</groupId>
             <artifactId>base-hlc</artifactId>
         </dependency>
         <dependency>
@@ -39,6 +35,14 @@
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
             <artifactId>base-rpc-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>base-util</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
+            <artifactId>bifromq-sysprops</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>

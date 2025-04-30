@@ -73,19 +73,19 @@ class BatchFetchCall extends BatchQueryCall<FetchRequest, Fetched> {
 
     @Override
     protected void handleException(ICallTask<FetchRequest, Fetched, QueryCallBatcherKey> callTask, Throwable e) {
-        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+        if (e instanceof ServerNotFoundException) {
             callTask.resultPromise().complete(Fetched.newBuilder()
                 .setResult(Fetched.Result.TRY_LATER)
                 .build());
             return;
         }
-        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+        if (e instanceof BadVersionException) {
             callTask.resultPromise().complete(Fetched.newBuilder()
                 .setResult(Fetched.Result.TRY_LATER)
                 .build());
             return;
         }
-        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+        if (e instanceof TryLaterException) {
             callTask.resultPromise().complete(Fetched.newBuilder()
                 .setResult(Fetched.Result.TRY_LATER)
                 .build());

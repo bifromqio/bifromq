@@ -11,14 +11,14 @@
  * See the License for the specific language governing permissions and limitations under the License.
  */
 
-package com.baidu.bifromq.basescheduler;
+package com.baidu.bifromq.base.util;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertThrows;
 import static org.testng.Assert.fail;
 import static org.testng.AssertJUnit.assertTrue;
 
-import com.baidu.bifromq.basescheduler.exception.RetryTimeoutException;
+import com.baidu.bifromq.base.util.exception.RetryTimeoutException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;

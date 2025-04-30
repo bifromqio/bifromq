@@ -16,7 +16,7 @@ package com.baidu.bifromq.mqtt.session;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttSessionWorkingMemoryGauge;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttTransientSubCountGauge;
 
-import com.baidu.bifromq.baserpc.utils.FutureTracker;
+import com.baidu.bifromq.base.util.FutureTracker;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.mqtt.service.ILocalDistService;

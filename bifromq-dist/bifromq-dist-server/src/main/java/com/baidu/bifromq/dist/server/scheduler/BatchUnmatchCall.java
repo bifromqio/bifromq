@@ -74,21 +74,21 @@ class BatchUnmatchCall extends BatchMutationCall<UnmatchRequest, UnmatchReply> {
     @Override
     protected void handleException(ICallTask<UnmatchRequest, UnmatchReply, MutationCallBatcherKey> callTask,
                                    Throwable e) {
-        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+        if (e instanceof ServerNotFoundException) {
             callTask.resultPromise().complete(UnmatchReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setResult(UnmatchReply.Result.TRY_LATER)
                 .build());
             return;
         }
-        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+        if (e instanceof BadVersionException) {
             callTask.resultPromise().complete(UnmatchReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setResult(UnmatchReply.Result.TRY_LATER)
                 .build());
             return;
         }
-        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+        if (e instanceof TryLaterException) {
             callTask.resultPromise().complete(UnmatchReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setResult(UnmatchReply.Result.TRY_LATER)

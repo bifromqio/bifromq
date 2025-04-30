@@ -82,21 +82,21 @@ class BatchMatchCall extends BatchMutationCall<MatchRequest, MatchReply> {
 
     @Override
     protected void handleException(ICallTask<MatchRequest, MatchReply, MutationCallBatcherKey> callTask, Throwable e) {
-        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+        if (e instanceof ServerNotFoundException) {
             callTask.resultPromise().complete(MatchReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setResult(MatchReply.Result.TRY_LATER)
                 .build());
             return;
         }
-        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+        if (e instanceof BadVersionException) {
             callTask.resultPromise().complete(MatchReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setResult(MatchReply.Result.TRY_LATER)
                 .build());
             return;
         }
-        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+        if (e instanceof TryLaterException) {
             callTask.resultPromise().complete(MatchReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setResult(MatchReply.Result.TRY_LATER)

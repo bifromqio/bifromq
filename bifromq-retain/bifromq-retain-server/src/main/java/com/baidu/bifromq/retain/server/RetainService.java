@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.retain.server;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
 import static com.baidu.bifromq.baserpc.server.UnaryResponse.response;
 import static com.baidu.bifromq.deliverer.DeliveryCallResult.OK;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttRetainMatchedBytes;
@@ -76,14 +77,14 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
             } else {
                 completionStage = retainCallScheduler.schedule(request);
             }
-            return completionStage.exceptionally(e -> {
-                if (e instanceof BatcherUnavailableException || e.getCause() instanceof BatcherUnavailableException) {
+            return completionStage.exceptionally(unwrap(e -> {
+                if (e instanceof BatcherUnavailableException) {
                     return RetainReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setResult(RetainReply.Result.TRY_LATER)
                         .build();
                 }
-                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                if (e instanceof BackPressureException) {
                     return RetainReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setResult(RetainReply.Result.BACK_PRESSURE_REJECTED)
@@ -95,7 +96,7 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                     .setResult(RetainReply.Result.ERROR)
                     .build();
 
-            });
+            }));
         }, responseObserver);
     }
 
@@ -148,8 +149,8 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                     .setResult(matchCallResult.result())
                     .build());
             })
-            .exceptionally(e -> {
-                if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+            .exceptionally(unwrap(e -> {
+                if (e instanceof BackPressureException) {
                     return MatchReply.newBuilder()
                         .setReqId(request.getReqId())
                         .setResult(MatchReply.Result.BACK_PRESSURE_REJECTED)
@@ -160,7 +161,7 @@ public class RetainService extends RetainServiceGrpc.RetainServiceImplBase {
                     .setReqId(request.getReqId())
                     .setResult(MatchReply.Result.ERROR)
                     .build();
-            }), responseObserver);
+            })), responseObserver);
     }
 
     @Override

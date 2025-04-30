@@ -33,8 +33,8 @@ import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersi
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersistentSubscriptions;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalPersistentUnsubscribePerSecond;
 
+import com.baidu.bifromq.base.util.AsyncRetry;
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.basescheduler.AsyncRetry;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.rpc.proto.CommitRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;

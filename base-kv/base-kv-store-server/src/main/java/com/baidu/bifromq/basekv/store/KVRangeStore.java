@@ -19,6 +19,7 @@ import static com.baidu.bifromq.basekv.store.exception.KVRangeStoreException.ran
 import static com.baidu.bifromq.basekv.store.util.ExecutorServiceUtil.awaitShutdown;
 import static java.util.Collections.emptyList;
 
+import com.baidu.bifromq.base.util.AsyncRunner;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.localengine.ICPableKVSpace;
@@ -48,7 +49,6 @@ import com.baidu.bifromq.basekv.store.range.IKVRangeFSM;
 import com.baidu.bifromq.basekv.store.range.KVRange;
 import com.baidu.bifromq.basekv.store.range.KVRangeFSM;
 import com.baidu.bifromq.basekv.store.stats.IStatsCollector;
-import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.basekv.store.wal.IKVRangeWALStore;
 import com.baidu.bifromq.basekv.store.wal.KVRangeWALStorageEngine;
 import com.baidu.bifromq.basekv.utils.KVRangeIdUtil;

@@ -13,14 +13,15 @@
 
 package com.baidu.bifromq.inbox.server;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
 import static com.baidu.bifromq.plugin.subbroker.TypeUtil.toResult;
 
+import com.baidu.bifromq.base.util.AsyncRetry;
+import com.baidu.bifromq.base.util.exception.RetryTimeoutException;
 import com.baidu.bifromq.basekv.client.exception.BadVersionException;
 import com.baidu.bifromq.basekv.client.exception.TryLaterException;
-import com.baidu.bifromq.basescheduler.AsyncRetry;
 import com.baidu.bifromq.basescheduler.exception.BackPressureException;
 import com.baidu.bifromq.basescheduler.exception.BatcherUnavailableException;
-import com.baidu.bifromq.basescheduler.exception.RetryTimeoutException;
 import com.baidu.bifromq.inbox.record.TenantInboxInstance;
 import com.baidu.bifromq.inbox.rpc.proto.SendReply;
 import com.baidu.bifromq.inbox.rpc.proto.SendRequest;
@@ -90,22 +91,21 @@ class InboxWriter implements InboxWriterPipeline.ISendRequestHandler {
                         return false;
                     }
                     return e instanceof BatcherUnavailableException
-                        || e.getCause() instanceof BatcherUnavailableException
-                        || e instanceof TryLaterException || e.getCause() instanceof TryLaterException
-                        || e instanceof BadVersionException || e.getCause() instanceof BadVersionException;
+                        || e instanceof TryLaterException
+                        || e instanceof BadVersionException;
                 }, retryTimeoutNanos / 5, retryTimeoutNanos);
             }).toList();
         return CompletableFuture.allOf(replyFutures.toArray(new CompletableFuture[0]))
-            .handle((v, e) -> {
+            .handle(unwrap((v, e) -> {
                 if (e != null) {
-                    if (e instanceof RetryTimeoutException || e.getCause() instanceof RetryTimeoutException) {
+                    if (e instanceof RetryTimeoutException) {
                         return SendReply.newBuilder().setReqId(request.getReqId())
                             .setReply(DeliveryReply.newBuilder()
                                 .setCode(DeliveryReply.Code.BACK_PRESSURE_REJECTED)
                                 .build())
                             .build();
                     }
-                    if (e instanceof BackPressureException || e.getCause() instanceof BackPressureException) {
+                    if (e instanceof BackPressureException) {
                         return SendReply.newBuilder().setReqId(request.getReqId())
                             .setReply(DeliveryReply.newBuilder()
                                 .setCode(DeliveryReply.Code.BACK_PRESSURE_REJECTED)
@@ -147,7 +147,6 @@ class InboxWriter implements InboxWriterPipeline.ISendRequestHandler {
                     DeliveryReply.newBuilder().setCode(DeliveryReply.Code.OK)
                         .putAllResult(toResult(tenantMatchResultMap))
                         .build()).build();
-            });
+            }));
     }
-
 }

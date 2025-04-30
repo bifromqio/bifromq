@@ -13,13 +13,13 @@
 
 package com.baidu.bifromq.inbox.store;
 
+import com.baidu.bifromq.base.util.AsyncRunner;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basehookloader.BaseHookLoader;
 import com.baidu.bifromq.basekv.balance.KVStoreBalanceController;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.server.IBaseKVStoreServer;
-import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.baserpc.client.IConnectable;
 import com.baidu.bifromq.inbox.store.spi.IInboxStoreBalancerFactory;
 import com.google.common.util.concurrent.MoreExecutors;

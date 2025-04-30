@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
 import static com.baidu.bifromq.metrics.TenantMetric.MqttIngressBytes;
 import static com.baidu.bifromq.mqtt.handler.MQTTSessionIdUtil.userSessionId;
 import static com.baidu.bifromq.mqtt.handler.condition.ORCondition.or;
@@ -26,10 +27,10 @@ import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalConne
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalConnections;
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalSessionMemoryBytes;
 
+import com.baidu.bifromq.base.util.AsyncRetry;
+import com.baidu.bifromq.base.util.FutureTracker;
+import com.baidu.bifromq.base.util.exception.RetryTimeoutException;
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.baserpc.utils.FutureTracker;
-import com.baidu.bifromq.basescheduler.AsyncRetry;
-import com.baidu.bifromq.basescheduler.exception.RetryTimeoutException;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.inbox.rpc.proto.AttachRequest;
 import com.baidu.bifromq.inbox.rpc.proto.DetachReply;
@@ -236,9 +237,8 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                             }
                                             return false;
                                         }, sessionCtx.retryTimeoutNanos / 5, sessionCtx.retryTimeoutNanos)
-                                    .exceptionally(e -> {
-                                        if (e instanceof RetryTimeoutException
-                                            || e.getCause() instanceof RetryTimeoutException) {
+                                    .exceptionally(unwrap(e -> {
+                                        if (e instanceof RetryTimeoutException) {
                                             return ExistReply.newBuilder()
                                                 .setReqId(reqId)
                                                 .setCode(ExistReply.Code.TRY_LATER)
@@ -249,7 +249,7 @@ public abstract class MQTTConnectHandler extends ChannelDuplexHandler {
                                             .setReqId(reqId)
                                             .setCode(ExistReply.Code.ERROR)
                                             .build();
-                                    })
+                                    }))
                                     .thenAcceptAsync(getReply -> {
                                         switch (getReply.getCode()) {
                                             case EXIST -> {

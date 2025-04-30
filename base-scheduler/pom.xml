@@ -27,6 +27,10 @@
     <dependencies>
         <dependency>
             <groupId>com.baidu.bifromq</groupId>
+            <artifactId>base-util</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baidu.bifromq</groupId>
             <artifactId>base-hookloader</artifactId>
         </dependency>
         <dependency>

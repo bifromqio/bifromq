@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.basekv.store.stats;
 
-import com.baidu.bifromq.basekv.store.util.AsyncRunner;
+import com.baidu.bifromq.base.util.AsyncRunner;
 import com.google.common.collect.Maps;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;

@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.dist.server.scheduler;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
 import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
@@ -133,19 +134,23 @@ class BatchDistServerCall implements IBatchCall<TenantPubRequest, DistServerCall
                 batchDistBuilder.addDistPack(distPackBuilder.build());
             });
             return distWorkerClient.query(rangeReplica.storeId,
-                KVRangeRORequest.newBuilder().setReqId(reqId).setVer(rangeReplica.ver).setKvRangeId(rangeReplica.id)
-                    .setRoCoProc(ROCoProcInput.newBuilder().setDistService(
-                        DistServiceROCoProcInput.newBuilder().setBatchDist(batchDistBuilder.build()).build()).build())
-                    .build(), orderKey).exceptionally(e -> {
-                if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
-                    // map server not found to try later
-                    return KVRangeROReply.newBuilder().setReqId(reqId).setCode(ReplyCode.TryLater).build();
-                } else {
-                    log.debug("Failed to query range: {}", rangeReplica, e);
-                    // map rpc exception to internal error
-                    return KVRangeROReply.newBuilder().setReqId(reqId).setCode(ReplyCode.InternalError).build();
-                }
-            });
+                    KVRangeRORequest.newBuilder().setReqId(reqId).setVer(rangeReplica.ver).setKvRangeId(rangeReplica.id)
+                        .setRoCoProc(ROCoProcInput.newBuilder()
+                            .setDistService(DistServiceROCoProcInput.newBuilder()
+                                .setBatchDist(batchDistBuilder.build())
+                                .build())
+                            .build())
+                        .build(), orderKey)
+                .exceptionally(unwrap(e -> {
+                    if (e instanceof ServerNotFoundException) {
+                        // map server not found to try later
+                        return KVRangeROReply.newBuilder().setReqId(reqId).setCode(ReplyCode.TryLater).build();
+                    } else {
+                        log.debug("Failed to query range: {}", rangeReplica, e);
+                        // map rpc exception to internal error
+                        return KVRangeROReply.newBuilder().setReqId(reqId).setCode(ReplyCode.InternalError).build();
+                    }
+                }));
         }).toArray(CompletableFuture[]::new);
         return CompletableFuture.allOf(rangeQueryReplies).thenAccept(replies -> {
             boolean needRetry = false;

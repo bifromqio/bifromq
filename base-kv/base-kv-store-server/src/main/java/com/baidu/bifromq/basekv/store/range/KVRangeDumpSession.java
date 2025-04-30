@@ -13,13 +13,13 @@
 
 package com.baidu.bifromq.basekv.store.range;
 
+import com.baidu.bifromq.base.util.AsyncRunner;
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.basekv.proto.KVPair;
 import com.baidu.bifromq.basekv.proto.KVRangeMessage;
 import com.baidu.bifromq.basekv.proto.SaveSnapshotDataReply;
 import com.baidu.bifromq.basekv.proto.SaveSnapshotDataRequest;
 import com.baidu.bifromq.basekv.proto.SnapshotSyncRequest;
-import com.baidu.bifromq.basekv.store.util.AsyncRunner;
 import com.baidu.bifromq.logger.SiftLogger;
 import com.google.common.util.concurrent.RateLimiter;
 import io.micrometer.core.instrument.Metrics;

@@ -13,6 +13,7 @@
 
 package com.baidu.bifromq.inbox.server;
 
+import static com.baidu.bifromq.base.util.CompletableFutureUtil.unwrap;
 import static com.baidu.bifromq.basekv.client.KVRangeRouterUtil.findByBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.toBoundary;
 import static com.baidu.bifromq.basekv.utils.BoundaryUtil.upperBound;
@@ -58,11 +59,11 @@ public class TenantGCRunner implements ITenantGCRunner {
             .map(setting -> expire(setting, request.getTenantId(), request.getExpirySeconds(), request.getNow()))
             .toArray(CompletableFuture[]::new);
         return CompletableFuture.allOf(gcResults)
-            .handle((v, e) -> {
+            .handle(unwrap((v, e) -> {
                 if (e != null) {
-                    if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException
-                        || e instanceof TryLaterException || e.getCause() instanceof TryLaterException
-                        || e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+                    if (e instanceof BadVersionException
+                        || e instanceof TryLaterException
+                        || e instanceof ServerNotFoundException) {
                         return ExpireAllReply.newBuilder()
                             .setReqId(request.getReqId())
                             .setCode(ExpireAllReply.Code.TRY_LATER)
@@ -79,7 +80,7 @@ public class TenantGCRunner implements ITenantGCRunner {
                     .setReqId(request.getReqId())
                     .setCode(ExpireAllReply.Code.OK)
                     .build();
-            });
+            }));
     }
 
     private CompletableFuture<ExpireTenantReply> expire(KVRangeSetting rangeSetting,

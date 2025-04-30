@@ -97,21 +97,21 @@ class BatchUnsubCall extends BatchMutationCall<UnsubRequest, UnsubReply> {
 
     @Override
     protected void handleException(ICallTask<UnsubRequest, UnsubReply, MutationCallBatcherKey> callTask, Throwable e) {
-        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+        if (e instanceof ServerNotFoundException) {
             callTask.resultPromise().complete(UnsubReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setCode(UnsubReply.Code.TRY_LATER)
                 .build());
             return;
         }
-        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+        if (e instanceof BadVersionException) {
             callTask.resultPromise().complete(UnsubReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setCode(UnsubReply.Code.TRY_LATER)
                 .build());
             return;
         }
-        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+        if (e instanceof TryLaterException) {
             callTask.resultPromise().complete(UnsubReply.newBuilder()
                 .setReqId(callTask.call().getReqId())
                 .setCode(UnsubReply.Code.TRY_LATER)

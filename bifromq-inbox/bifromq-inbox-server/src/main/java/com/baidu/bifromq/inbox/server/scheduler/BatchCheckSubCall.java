@@ -77,15 +77,15 @@ class BatchCheckSubCall extends BatchQueryCall<CheckMatchInfo, CheckReply.Code> 
     @Override
     protected void handleException(ICallTask<CheckMatchInfo, CheckReply.Code, QueryCallBatcherKey> callTask,
                                    Throwable e) {
-        if (e instanceof ServerNotFoundException || e.getCause() instanceof ServerNotFoundException) {
+        if (e instanceof ServerNotFoundException) {
             callTask.resultPromise().complete(CheckReply.Code.TRY_LATER);
             return;
         }
-        if (e instanceof BadVersionException || e.getCause() instanceof BadVersionException) {
+        if (e instanceof BadVersionException) {
             callTask.resultPromise().complete(CheckReply.Code.TRY_LATER);
             return;
         }
-        if (e instanceof TryLaterException || e.getCause() instanceof TryLaterException) {
+        if (e instanceof TryLaterException) {
             callTask.resultPromise().complete(CheckReply.Code.TRY_LATER);
             return;
         }

@@ -55,8 +55,8 @@ import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalRetai
 import static com.bifromq.plugin.resourcethrottler.TenantResourceType.TotalSharedSubscriptions;
 import static java.util.concurrent.CompletableFuture.allOf;
 
+import com.baidu.bifromq.base.util.FutureTracker;
 import com.baidu.bifromq.basehlc.HLC;
-import com.baidu.bifromq.baserpc.utils.FutureTracker;
 import com.baidu.bifromq.dist.client.PubResult;
 import com.baidu.bifromq.inbox.storage.proto.LWT;
 import com.baidu.bifromq.inbox.storage.proto.TopicFilterOption;
