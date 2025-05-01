@@ -24,7 +24,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 
-public class MetricMonitoredStateStore implements IRaftStateStore {
+class MetricMonitoredStateStore implements IRaftStateStore {
     private final IRaftStateStore delegate;
     private final MetricManager metricManager;
 

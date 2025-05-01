@@ -84,7 +84,7 @@ class PeerLogTracker {
     }
 
     /**
-     * Current matching index
+     * Current matching index.
      *
      * @return the match log index of the peer
      */
@@ -93,7 +93,7 @@ class PeerLogTracker {
     }
 
     /**
-     * Next index to send
+     * Next index to send.
      *
      * @return the next log index to send to the peer
      */
@@ -102,7 +102,7 @@ class PeerLogTracker {
     }
 
     /**
-     * Current status
+     * Current status.
      *
      * @return the current status
      */
@@ -110,9 +110,8 @@ class PeerLogTracker {
         return replicators.get(peerId).status();
     }
 
-
     /**
-     * the amount of matchIndex advanced per tick always non-negative
+     * the amount of matchIndex advanced per tick always non-negative.
      *
      * @return the catchup rate per tick
      */
@@ -121,7 +120,7 @@ class PeerLogTracker {
     }
 
     /**
-     * a flag indicating whether the append entries for given peer should be paused
+     * a flag indicating whether the append entries for given peer should be paused.
      *
      * @return true if the replicating should be paused
      */
@@ -130,7 +129,7 @@ class PeerLogTracker {
     }
 
     /**
-     * a flag indicating whether the given peer need a heartbeat
+     * a flag indicating whether the given peer need a heartbeat.
      *
      * @return true if peer need a heartbeat
      */
@@ -139,7 +138,7 @@ class PeerLogTracker {
     }
 
     /**
-     * backoff the next index when peer follower rejected the append entries request
+     * backoff the next index when peer follower rejected the append entries request.
      *
      * @param peerRejectedIndex the index of mismatched log which is literally the prevLogIndex in appendEntries rpc
      * @param peerLastIndex     the index of last log entry in peer's raft log
@@ -151,7 +150,7 @@ class PeerLogTracker {
     }
 
     /**
-     * update the match index when peer follower accepted the append entries request
+     * update the match index when peer follower accepted the append entries request.
      *
      * @param peerLastIndex the index of last log entry in peer's raft log
      */
@@ -162,7 +161,7 @@ class PeerLogTracker {
     }
 
     /**
-     * advance the next index after sending log entries up to endIndex(inclusively) to follower
+     * advance the next index after sending log entries up to endIndex(inclusively) to follower.
      *
      * @param peerId   the peerId
      * @param endIndex the end log index

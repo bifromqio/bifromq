@@ -140,9 +140,8 @@ class RaftNodeStateLeader extends RaftNodeState {
     }
 
     @Override
-    RaftNodeState recover(CompletableFuture<Void> onDone) {
+    void recover(CompletableFuture<Void> onDone) {
         onDone.completeExceptionally(RecoveryException.notLostQuorum());
-        return this;
     }
 
     @Override
@@ -310,6 +309,9 @@ class RaftNodeStateLeader extends RaftNodeState {
                         leaderTransferTask = null;
                     }
                 }
+                default -> {
+                    // do nothing
+                }
             }
             // transition to follower according to $3.3 in raft paper
             // abort on-going config change and readIndex request if any
@@ -344,8 +346,9 @@ class RaftNodeStateLeader extends RaftNodeState {
                 case REQUESTREADINDEX -> handleRequestReadIndex(fromPeer, message.getRequestReadIndex());
                 case PROPOSE -> handlePropose(fromPeer, message.getPropose());
                 case REQUESTPREVOTE -> sendRequestPreVoteReply(fromPeer, currentTerm(), false);
-
-                // ignore other messages
+                default -> {
+                    // ignore other messages
+                }
             }
         }
         return nextState;
@@ -596,6 +599,9 @@ class RaftNodeStateLeader extends RaftNodeState {
                     peerLogTracker.replicateBy(peer, preLogIndex);
                 }
             }
+            default -> {
+                // do nothing
+            }
         }
         return messages;
     }
@@ -616,6 +622,9 @@ class RaftNodeStateLeader extends RaftNodeState {
             mIdx.sort(Long::compareTo);
             newCommitIndex = Math.min(newCommitIndex, mIdx.get(mIdx.size() - ((mIdx.size() >> 1) + 1)));
         }
+
+        // make sure the commit index never goes backward
+        newCommitIndex = Math.max(commitIndex, newCommitIndex);
 
         // only commit in leader's term according to $3.6
         Optional<LogEntry> committed = stateStorage.entryAt(newCommitIndex);
@@ -704,6 +713,9 @@ class RaftNodeStateLeader extends RaftNodeState {
                         leaderTransferTask.abort(LeaderTransferException.notFoundOrQualified());
                         leaderTransferTask = null;
                     }
+                }
+                default -> {
+                    // do nothing
                 }
             }
         }
@@ -802,6 +814,9 @@ class RaftNodeStateLeader extends RaftNodeState {
                 if (leaderTransferTask != null) {
                     leaderTransferTask.abort(LeaderTransferException.cancelled());
                 }
+            }
+            default -> {
+                // do nothing
             }
         }
     }

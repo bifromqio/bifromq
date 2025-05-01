@@ -27,6 +27,7 @@ class ReadProgressTracker {
     private final IRaftStateStore stateStorage;
     private final Logger logger;
     private int total;
+
     ReadProgressTracker(IRaftStateStore stateStorage, Logger logger) {
         this.readProgressMap = new TreeMap<>();
         this.stateStorage = stateStorage;

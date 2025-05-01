@@ -13,62 +13,61 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 
 interface IPeerLogReplicator {
 
     /**
-     * Current matching index
+     * Current matching index.
      *
-     * @return
+     * @return the index of the last log entry that has been replicated to the given peer
      */
     long matchIndex();
 
     /**
-     * Next index to send
+     * Next index to send.
      *
-     * @return
+     * @return the index of the next log entry to send to the given peer
      */
     long nextIndex();
 
     /**
-     * Current status
+     * Current status of the replicator.
      *
-     * @return
+     * @return the current status of the replicator
      */
     RaftNodeSyncState status();
 
     /**
-     * an external clock signal to drive the state machine forward in case no other stimuli available
+     * an external clock signal to drive the state machine forward in case no other stimuli happens.
      *
      * @return true if the replicator has changed its state after tick
      */
     boolean tick();
 
     /**
-     * the amount of matchIndex advanced per tick always non-negative
+     * the amount of matchIndex advanced per tick always non-negative.
      *
-     * @return
+     * @return the amount of matchIndex advanced per tick
      */
     long catchupRate();
 
     /**
-     * a flag indicating whether the append entries for given peer should be paused
+     * a flag indicating whether the append entries for given peer should be paused.
      *
-     * @return
+     * @return true if the replicator has changed its state after calling this method
      */
     boolean pauseReplicating();
 
     /**
-     * a flag indicating whether the given peer need a heartbeat due to heartbeatTimeoutTick exceed
+     * a flag indicating whether the given peer need a heartbeat due to heartbeatTimeoutTick exceed.
      *
      * @return true if peer need a heartbeat
      */
     boolean needHeartbeat();
 
     /**
-     * backoff the next index when peer follower rejected the append entries request
+     * backoff the next index when peer follower rejected the append entries request.
      *
      * @param peerRejectedIndex the index of mismatched log which is literally the prevLogIndex in appendEntries rpc
      * @param peerLastIndex     the index of last log entry in peer's raft log
@@ -77,7 +76,7 @@ interface IPeerLogReplicator {
     boolean backoff(long peerRejectedIndex, long peerLastIndex);
 
     /**
-     * update the match index when peer follower accepted the append entries request
+     * update the match index when peer follower accepted the append entries request.
      *
      * @param peerLastIndex the index of last log entry in peer's raft log
      * @return true if the replicator has changed its state after calling this method
@@ -85,9 +84,9 @@ interface IPeerLogReplicator {
     boolean confirmMatch(long peerLastIndex);
 
     /**
-     * advance the next index after sending log entries up to endIndex(inclusively) to follower
+     * advance the next index after sending log entries up to endIndex(inclusively) to follower.
      *
-     * @param endIndex
+     * @param endIndex the index of the last log entry to send to the given peer
      * @return true if the replicator has changed its state after calling this method
      */
     boolean replicateBy(long endIndex);

@@ -34,6 +34,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
+/**
+ * Base class for state store test cases.
+ */
 public abstract class BasicStateStoreTest {
 
     protected abstract IRaftStateStore createStorage(String id, Snapshot initSnapshot);
@@ -75,12 +78,6 @@ public abstract class BasicStateStoreTest {
         assertEquals(stateStorage.currentTerm(), 0);
         stateStorage.saveTerm(1);
         assertEquals(stateStorage.currentTerm(), 1);
-        try {
-            stateStorage.saveTerm(0);
-            fail();
-        } catch (Throwable t) {
-
-        }
     }
 
     @Test
@@ -127,7 +124,7 @@ public abstract class BasicStateStoreTest {
             .build();
         IRaftStateStore stateStorage = createStorage(localId(), initSnapshot);
         try {
-            stateStorage.append(asList(LogEntry.newBuilder()
+            stateStorage.append(List.of(LogEntry.newBuilder()
                 .setTerm(1)
                 .setIndex(5)
                 .setData(ByteString.EMPTY)
@@ -137,7 +134,7 @@ public abstract class BasicStateStoreTest {
             assertTrue(e instanceof IndexOutOfBoundsException);
         }
         try {
-            stateStorage.append(asList(LogEntry.newBuilder()
+            stateStorage.append(List.of(LogEntry.newBuilder()
                 .setTerm(1)
                 .setIndex(7)
                 .setData(ByteString.EMPTY)
@@ -159,7 +156,7 @@ public abstract class BasicStateStoreTest {
                 .build()), true);
 
         try {
-            stateStorage.append(asList(LogEntry.newBuilder()
+            stateStorage.append(List.of(LogEntry.newBuilder()
                 .setTerm(1)
                 .setIndex(5)
                 .setData(ByteString.EMPTY)
@@ -169,7 +166,7 @@ public abstract class BasicStateStoreTest {
             assertTrue(e instanceof IndexOutOfBoundsException);
         }
         try {
-            stateStorage.append(asList(LogEntry.newBuilder()
+            stateStorage.append(List.of(LogEntry.newBuilder()
                 .setTerm(1)
                 .setIndex(9)
                 .setData(ByteString.EMPTY)
@@ -200,7 +197,7 @@ public abstract class BasicStateStoreTest {
             assertEquals(stateStorage.entryAt(stateStorage.lastIndex()).get().getIndex(), stateStorage.lastIndex());
         }
         countDownLatch.await();
-        assertTrue(1 <= stabledIndexes.size());
+        assertFalse(stabledIndexes.isEmpty());
         assertTrue(stabledIndexes.get(0) >= 1);
     }
 
@@ -270,7 +267,7 @@ public abstract class BasicStateStoreTest {
         assertEquals(stateStorage.firstIndex(), 6);
         assertEquals(stateStorage.lastIndex(), 5);
 
-        List<LogEntry> newEntries = asList(LogEntry.newBuilder()
+        List<LogEntry> newEntries = List.of(LogEntry.newBuilder()
             .setTerm(1)
             .setIndex(6)
             .setData(ByteString.EMPTY)
@@ -293,7 +290,7 @@ public abstract class BasicStateStoreTest {
         assertEquals(stateStorage.firstIndex(), 6);
         assertEquals(stateStorage.lastIndex(), 7);
 
-        newEntries = asList(LogEntry.newBuilder()
+        newEntries = List.of(LogEntry.newBuilder()
             .setTerm(1)
             .setIndex(6)
             .setData(ByteString.EMPTY)

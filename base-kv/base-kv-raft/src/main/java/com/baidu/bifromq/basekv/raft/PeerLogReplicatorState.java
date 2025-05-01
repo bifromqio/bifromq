@@ -51,53 +51,53 @@ abstract class PeerLogReplicatorState {
     public abstract RaftNodeSyncState state();
 
     /**
-     * an external clock signal to drive the state machine forward in case no other stimuli available
+     * an external clock signal to drive the state machine forward in case no other stimuli happens.
      */
     public abstract PeerLogReplicatorState tick();
 
     /**
-     * the amount of matchIndex advanced per tick
+     * the amount of matchIndex advanced per tick.
      *
-     * @return
+     * @return the catchup rate
      */
     public abstract long catchupRate();
 
     /**
-     * a flag indicating whether the append entries for given peer should be paused
+     * a flag indicating whether the append entries for given peer should be paused.
      *
-     * @return
+     * @return true if the append entries should be paused
      */
     public abstract boolean pauseReplicating();
 
     /**
-     * a flag indicating whether the given peer need a heartbeat due to heartbeatTimeoutTick exceed
+     * a flag indicating whether the given peer need a heartbeat due to heartbeatTimeoutTick exceed.
      *
      * @return true if peer need a heartbeat
      */
     public abstract boolean needHeartbeat();
 
     /**
-     * backoff the next index when peer follower rejected the append entries request
+     * backoff the next index when peer follower rejected the append entries request.
      *
      * @param peerRejectedIndex the index of mismatched log which is literally the prevLogIndex in appendEntries rpc
      * @param peerLastIndex     the index of last log entry in peer's raft log
-     * @return
+     * @return the new state of the peer log replicator
      */
     public abstract PeerLogReplicatorState backoff(long peerRejectedIndex, long peerLastIndex);
 
     /**
-     * update the match index when peer follower accepted the append entries request
+     * update the match index when peer follower accepted the append entries request.
      *
      * @param peerLastIndex the index of last log entry in peer's raft log
-     * @return
+     * @return the new state of the peer log replicator
      */
     public abstract PeerLogReplicatorState confirmMatch(long peerLastIndex);
 
     /**
-     * advance the next index after sending log entries up to endIndex(inclusively) to follower
+     * advance the next index after sending log entries up to endIndex(inclusively) to follower.
      *
-     * @param endIndex
-     * @return
+     * @param endIndex the index of last log entry to be sent
+     * @return the new state of the peer log replicator
      */
     public abstract PeerLogReplicatorState replicateTo(long endIndex);
 }

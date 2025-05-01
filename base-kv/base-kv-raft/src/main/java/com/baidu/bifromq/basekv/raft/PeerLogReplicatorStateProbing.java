@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import org.slf4j.Logger;
 
@@ -80,7 +79,7 @@ class PeerLogReplicatorStateProbing extends PeerLogReplicatorState {
             // backoff 1 until matched or switch to snapshot sync mode
             nextIndex = Math.max(1, Math.min(peerRejectedIndex, peerLastIndex + 1)); // nextIndex >= 1
             matchIndex = Math.min(matchIndex, nextIndex - 1);
-            if (nextIndex > 0 && stateStorage.entryAt(nextIndex).isEmpty()) {
+            if (stateStorage.entryAt(nextIndex).isEmpty()) {
                 // if prev log entry is unavailable, send follower the latest snapshot
                 logger.debug("Entry[index:{}] not available for peer[{}] from "
                         + "tracker[matchIndex:{},nextIndex:{},state:{}], start syncing with snapshot",

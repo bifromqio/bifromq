@@ -29,7 +29,6 @@ import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +56,7 @@ public final class RaftNode implements IRaftNode {
     private final AtomicReference<CompletableFuture<Void>> stopFuture = new AtomicReference<>();
     private final String[] tags;
     private MetricManager metricMgr;
+
     public RaftNode(RaftConfig config,
                     IRaftStateStore stateStore,
                     ThreadFactory threadFactory,
@@ -327,8 +327,7 @@ public final class RaftNode implements IRaftNode {
             throw new IllegalArgumentException("latest snapshot cannot be null");
         }
         ClusterConfig clusterConfig = stateStorage.latestSnapshot().getClusterConfig();
-        if (ClusterConfigHelper.isIntersect(new HashSet<>(clusterConfig.getVotersList()),
-            new HashSet<>(clusterConfig.getLearnersList()))) {
+        if (clusterConfig.getVotersList().stream().anyMatch(clusterConfig.getLearnersList()::contains)) {
             throw new IllegalArgumentException("voters and learners mustn't intersect with each other");
         }
     }

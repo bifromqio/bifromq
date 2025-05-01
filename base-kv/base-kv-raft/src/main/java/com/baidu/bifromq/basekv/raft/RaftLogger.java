@@ -18,7 +18,7 @@ import com.baidu.bifromq.logger.SiftLogger;
 import org.slf4j.MDC;
 import org.slf4j.Marker;
 
-public class RaftLogger extends SiftLogger {
+class RaftLogger extends SiftLogger {
     private static final String MDC_KEY_ID = "id";
     private static final String MDC_KEY_STATE = "state";
     private static final String MDC_KEY_LEADER = "leader";

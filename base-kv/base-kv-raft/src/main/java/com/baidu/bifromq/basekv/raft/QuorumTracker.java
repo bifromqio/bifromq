@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-
 import static com.baidu.bifromq.basekv.raft.QuorumTracker.VoteResult.Won;
 
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
@@ -23,78 +22,7 @@ import java.util.Map;
 import java.util.Set;
 import org.slf4j.Logger;
 
-
 class QuorumTracker {
-    enum VoteResult {
-        Won, Lost, Pending
-    }
-
-    enum TallyResult {
-        Yes, No, Miss
-    }
-
-    static class VoteGroupResult {
-        final VoteResult result;
-        final int yes;
-        final int no;
-        final int miss;
-
-        private VoteGroupResult(int voters, int yes, int no, int miss) {
-            this.yes = yes;
-            this.no = no;
-            this.miss = miss;
-            if (voters == 0) {
-                this.result = Won;
-            } else {
-                int quorum = voters / 2 + 1;
-                if (yes >= quorum) {
-                    this.result = Won;
-                } else if (yes + miss >= quorum) {
-                    this.result = VoteResult.Pending;
-                } else {
-                    this.result = VoteResult.Lost;
-                }
-            }
-        }
-
-        @Override
-        public String toString() {
-            return "VoteGroupResult{" +
-                "result=" + result +
-                ", yes=" + yes +
-                ", no=" + no +
-                ", miss=" + miss +
-                '}';
-        }
-    }
-
-    static class JointVoteResult {
-        final VoteResult result;
-        final VoteGroupResult groupOneResult;
-        final VoteGroupResult groupTwoResult;
-
-        JointVoteResult(VoteGroupResult groupOneResult, VoteGroupResult groupTwoResult) {
-            this.groupOneResult = groupOneResult;
-            this.groupTwoResult = groupTwoResult;
-            if (groupOneResult.result == groupTwoResult.result) {
-                this.result = groupOneResult.result;
-            } else if (groupOneResult.result == VoteResult.Lost || groupTwoResult.result == VoteResult.Lost) {
-                this.result = VoteResult.Lost;
-            } else {
-                this.result = VoteResult.Pending;
-            }
-        }
-
-        @Override
-        public String toString() {
-            return "JointVoteResult{" +
-                "result=" + result +
-                ", groupOneResult=" + groupOneResult +
-                ", groupTwoResult=" + groupTwoResult +
-                '}';
-        }
-    }
-
     private final Set<String> voterGroupOne = new HashSet<>();
     private final Set<String> voterGroupTwo = new HashSet<>(); // non empty in joint config
     private final Map<String, Boolean> votes = new HashMap<>();
@@ -158,8 +86,73 @@ class QuorumTracker {
                 case Miss:
                     miss++;
                     break;
+                default: {
+                    // never happen
+                }
             }
         }
         return new VoteGroupResult(voters.size(), yes, no, miss);
+    }
+
+    enum VoteResult {
+        Won, Lost, Pending
+    }
+
+    enum TallyResult {
+        Yes, No, Miss
+    }
+
+    static class VoteGroupResult {
+        final VoteResult result;
+        final int yes;
+        final int no;
+        final int miss;
+
+        private VoteGroupResult(int voters, int yes, int no, int miss) {
+            this.yes = yes;
+            this.no = no;
+            this.miss = miss;
+            if (voters == 0) {
+                this.result = Won;
+            } else {
+                int quorum = voters / 2 + 1;
+                if (yes >= quorum) {
+                    this.result = Won;
+                } else if (yes + miss >= quorum) {
+                    this.result = VoteResult.Pending;
+                } else {
+                    this.result = VoteResult.Lost;
+                }
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "VoteGroupResult{result=" + result + ", yes=" + yes + ", no=" + no + ", miss=" + miss + '}';
+        }
+    }
+
+    static class JointVoteResult {
+        final VoteResult result;
+        final VoteGroupResult groupOneResult;
+        final VoteGroupResult groupTwoResult;
+
+        JointVoteResult(VoteGroupResult groupOneResult, VoteGroupResult groupTwoResult) {
+            this.groupOneResult = groupOneResult;
+            this.groupTwoResult = groupTwoResult;
+            if (groupOneResult.result == groupTwoResult.result) {
+                this.result = groupOneResult.result;
+            } else if (groupOneResult.result == VoteResult.Lost || groupTwoResult.result == VoteResult.Lost) {
+                this.result = VoteResult.Lost;
+            } else {
+                this.result = VoteResult.Pending;
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "JointVoteResult{result=" + result + ", groupOneResult=" + groupOneResult + ", groupTwoResult="
+                + groupTwoResult + '}';
+        }
     }
 }

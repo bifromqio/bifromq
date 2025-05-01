@@ -21,6 +21,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 
+/**
+ * Raft configuration.
+ */
 @Builder(toBuilder = true)
 @Accessors(chain = true)
 @Getter

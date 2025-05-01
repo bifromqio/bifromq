@@ -30,6 +30,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * A simple in-memory state store for testing purpose.
+ */
 public final class InMemoryStateStore implements IRaftStateStore {
     private static final StableListener DEFAULT_STABLE_LISTENER = stableListener -> {
     };
@@ -37,17 +40,22 @@ public final class InMemoryStateStore implements IRaftStateStore {
     private final LinkedList<Long> configEntryIndexes = new LinkedList<>();
     private final long flushDelayInMS;
     private final ScheduledExecutorService flusher = Executors.newSingleThreadScheduledExecutor();
-    private volatile long stabilizingIndex;
     private final AtomicBoolean flushTaskScheduled = new AtomicBoolean(false);
     private final LinkedList<LogEntry> logEntries = new LinkedList<>(); // log entry start from 1
-    private Snapshot latestSnapshot;
-
     private final AtomicLong currentTerm = new AtomicLong(0);
-
+    private volatile long stabilizingIndex;
+    private Snapshot latestSnapshot;
     private Voting currentVoting;
 
     private StableListener stableListener = DEFAULT_STABLE_LISTENER;
 
+    /**
+     * Constructor for InMemoryStateStore.
+     *
+     * @param id the id of the state store
+     * @param latestSnapshot the latest snapshot
+     * @param flushDelayInMS the delay in milliseconds for flushing
+     */
     public InMemoryStateStore(String id, Snapshot latestSnapshot, long flushDelayInMS) {
         this.id = id;
         this.latestSnapshot = latestSnapshot;
@@ -106,9 +114,9 @@ public final class InMemoryStateStore implements IRaftStateStore {
         long snapLastIndex = snapshot.getIndex();
         long snapLastTerm = snapshot.getTerm();
         Optional<LogEntry> lastEntryInSS = entryAt(snapLastIndex);
-        if ((lastEntryInSS.isPresent() && lastEntryInSS.get().getTerm() == snapLastTerm) ||
-            (lastEntryInSS.isEmpty() && latestSnapshot != null && latestSnapshot.getIndex() == snapLastIndex &&
-                latestSnapshot.getTerm() == snapLastTerm)) {
+        if ((lastEntryInSS.isPresent() && lastEntryInSS.get().getTerm() == snapLastTerm)
+            || (lastEntryInSS.isEmpty() && latestSnapshot != null && latestSnapshot.getIndex() == snapLastIndex
+            && latestSnapshot.getTerm() == snapLastTerm)) {
             // the snapshot represents partial history, it happens when compacting
             latestSnapshot = snapshot;
             long truncateBefore = Math.min(lastIndex(), snapLastIndex) + 1;
@@ -156,7 +164,7 @@ public final class InMemoryStateStore implements IRaftStateStore {
     @Override
     public Optional<LogEntry> entryAt(long index) {
         if (index < firstIndex() || index > lastIndex()) {
-            return Optional.ofNullable(null);
+            return Optional.empty();
         }
         return Optional.of(logEntries.get(offset(index)));
     }
@@ -172,7 +180,7 @@ public final class InMemoryStateStore implements IRaftStateStore {
         if (maxSize < 0) {
             maxSize = Long.MAX_VALUE;
         }
-        List<LogEntry> ret = new ArrayList();
+        List<LogEntry> ret = new ArrayList<>();
         long size = 0;
         while (lo < hi && size <= maxSize) {
             LogEntry entry = logEntries.get(offset(lo));
@@ -183,6 +191,10 @@ public final class InMemoryStateStore implements IRaftStateStore {
                     break;
                 case CONFIG:
                     size += entry.getConfig().getSerializedSize();
+                    break;
+                default: {
+                    // do nothing
+                }
             }
             lo++;
         }
@@ -231,11 +243,13 @@ public final class InMemoryStateStore implements IRaftStateStore {
         stableListener = listener;
     }
 
+    @Override
     public void stop() {
         flusher.shutdown();
         try {
             flusher.awaitTermination(5, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         } finally {
             stableListener = DEFAULT_STABLE_LISTENER;
         }

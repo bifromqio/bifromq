@@ -16,7 +16,7 @@ package com.baidu.bifromq.basekv.raft;
 import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
 
-public interface IRaftNodeState {
+interface IRaftNodeState {
     String id();
 
     RaftNodeStatus getState();

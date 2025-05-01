@@ -30,7 +30,7 @@ import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 
 /**
- * The cluster config change process goes through following phases:
+ * The cluster config change process goes through following phases.
  * <pre>
  *  1. [catching up] new added voters and learners act as non-voting members, and catching up with leader by
  *     receiving replicated log entries from leader. cluster change is not appended to log in this phase, so it's
@@ -71,6 +71,7 @@ class RaftConfigChanger {
     private long targetConfigIndex = 0;
     private ClusterConfig jointConfig;
     private ClusterConfig targetConfig;
+
     RaftConfigChanger(RaftConfig config,
                       IRaftStateStore stateStorage,
                       PeerLogTracker peerLogTracker,
@@ -102,10 +103,17 @@ class RaftConfigChanger {
             }
             this.onDone = onDone;
 
-            jointConfig = stateStorage.latestClusterConfig().toBuilder()
+            ClusterConfig latestConfig = stateStorage.latestClusterConfig();
+            Set<String> allVoters = new HashSet<>(latestConfig.getNextVotersList());
+            allVoters.addAll(nextVoters);
+            Set<String> allLearners = new HashSet<>(latestConfig.getNextLearnersList());
+            allLearners.addAll(nextLearners);
+            jointConfig = ClusterConfig.newBuilder()
                 .setCorrelateId(correlateId)
-                .addAllNextVoters(nextVoters)
-                .addAllNextLearners(nextLearners)
+                .addAllVoters(latestConfig.getVotersList())
+                .addAllLearners(latestConfig.getLearnersList())
+                .addAllNextVoters(allVoters)
+                .addAllNextLearners(allLearners)
                 .build();
             targetConfig = ClusterConfig.newBuilder()
                 .setCorrelateId(correlateId)

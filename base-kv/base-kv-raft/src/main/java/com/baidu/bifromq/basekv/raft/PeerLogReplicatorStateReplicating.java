@@ -13,13 +13,11 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import java.util.LinkedList;
 import java.util.Optional;
 import org.slf4j.Logger;
-
 
 class PeerLogReplicatorStateReplicating extends PeerLogReplicatorState {
     private final LinkedList<Long> inflightAppends;

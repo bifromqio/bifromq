@@ -125,9 +125,8 @@ class RaftNodeStateFollower extends RaftNodeState {
     }
 
     @Override
-    RaftNodeState recover(CompletableFuture<Void> onDone) {
+    void recover(CompletableFuture<Void> onDone) {
         onDone.completeExceptionally(RecoveryException.notLostQuorum());
-        return this;
     }
 
     @Override
@@ -356,7 +355,10 @@ class RaftNodeStateFollower extends RaftNodeState {
                 break;
             case TIMEOUTNOW:
                 nextState = handleTimeoutNow(fromPeer);
-            default:
+                break;
+            default: {
+                // ignore other messages
+            }
         }
         return nextState;
     }
@@ -520,15 +522,16 @@ class RaftNodeStateFollower extends RaftNodeState {
                 if (stabilizingIndexes.isEmpty()) {
                     // all entries have been stabilized
                     if (newCommitIndex <= stateStorage.lastIndex()) {
+                        log.trace("Advanced commitIndex[from:{},to:{}]", commitIndex, newCommitIndex);
                         commitIndex = newCommitIndex;
-                        log.trace("Advanced commitIndex[{}]", commitIndex);
                         // report to application
                         notifyCommit();
                     } else {
                         // entries between lastIndex and newCommitIndex missing, probably because the channel between
                         // leader and follower is lossy.
                         // In this case add it to stabilizingIndexes
-                        log.debug("Entries[from:{},to:{}] missing locally", stateStorage.lastIndex(), newCommitIndex);
+                        log.debug("Committed entries[from:{},to:{}] missing locally",
+                            stateStorage.lastIndex(), newCommitIndex);
                         stabilizingIndexes.compute(stateStorage.lastIndex(), (k, v) -> {
                             if (v == null) {
                                 v = new StabilizingTask();
@@ -541,15 +544,16 @@ class RaftNodeStateFollower extends RaftNodeState {
                 }
                 if (newCommitIndex < stabilizingIndexes.firstKey()) {
                     // if the new commitIndex has been stabilized locally, then advance local commitIndex directly
+                    log.trace("Entries before index[{}] have stabilized, Advanced commitIndex[from:{},to:{}]",
+                        stabilizingIndexes.firstKey(), commitIndex, newCommitIndex);
                     commitIndex = newCommitIndex;
-                    log.trace("Advanced commitIndex[{}]", commitIndex);
                     // report to application
                     notifyCommit();
                 } else {
                     if (newCommitIndex > stabilizingIndexes.lastKey()) {
                         // if the newCommitIndex is greater than the largest local stabilizing index
                         // add it to stabilizingIndexes and mark it has been committed
-                        log.debug("Entries[from:{},to:{}] missing locally",
+                        log.debug("Committed Entries[from:{},to:{}] missing locally",
                             stabilizingIndexes.lastKey(), newCommitIndex);
                     }
                     stabilizingIndexes.compute(stateStorage.lastIndex(), (k, v) -> {

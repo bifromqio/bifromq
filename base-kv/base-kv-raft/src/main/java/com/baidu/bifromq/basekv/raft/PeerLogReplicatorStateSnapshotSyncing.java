@@ -13,7 +13,6 @@
 
 package com.baidu.bifromq.basekv.raft;
 
-
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeSyncState;
 import org.slf4j.Logger;
 

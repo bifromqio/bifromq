@@ -94,7 +94,7 @@ abstract class RaftNodeState implements IRaftNodeState {
 
     abstract RaftNodeState stepDown();
 
-    abstract RaftNodeState recover(CompletableFuture<Void> onDone);
+    abstract void recover(CompletableFuture<Void> onDone);
 
     abstract RaftNodeState tick();
 
