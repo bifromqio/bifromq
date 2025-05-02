@@ -18,6 +18,7 @@ import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.proto.KVRangeSnapshot;
 import com.baidu.bifromq.basekv.raft.IRaftNode;
 import com.baidu.bifromq.basekv.raft.event.ElectionEvent;
+import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.RaftMessage;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
@@ -50,6 +51,8 @@ public interface IKVRangeWAL {
     Observable<ElectionEvent> election();
 
     KVRangeSnapshot latestSnapshot();
+
+    ClusterConfig latestClusterConfig();
 
     CompletableFuture<Long> propose(KVRangeCommand command);
 

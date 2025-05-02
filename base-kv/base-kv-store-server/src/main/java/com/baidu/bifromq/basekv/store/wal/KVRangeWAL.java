@@ -29,6 +29,7 @@ import com.baidu.bifromq.basekv.raft.event.RaftEvent;
 import com.baidu.bifromq.basekv.raft.event.SnapshotRestoredEvent;
 import com.baidu.bifromq.basekv.raft.event.StatusChangedEvent;
 import com.baidu.bifromq.basekv.raft.event.SyncStateChangedEvent;
+import com.baidu.bifromq.basekv.raft.proto.ClusterConfig;
 import com.baidu.bifromq.basekv.raft.proto.LogEntry;
 import com.baidu.bifromq.basekv.raft.proto.RaftMessage;
 import com.baidu.bifromq.basekv.raft.proto.RaftNodeStatus;
@@ -207,6 +208,11 @@ public class KVRangeWAL implements IKVRangeWAL, IRaftNode.ISnapshotInstaller {
     @Override
     public KVRangeSnapshot latestSnapshot() {
         return ZeroCopyParser.parse(raftNode.latestSnapshot(), KVRangeSnapshot.parser());
+    }
+
+    @Override
+    public ClusterConfig latestClusterConfig() {
+        return raftNode.latestClusterConfig();
     }
 
     @Override

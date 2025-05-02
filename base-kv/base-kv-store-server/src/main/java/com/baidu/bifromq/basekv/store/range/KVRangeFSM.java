@@ -40,6 +40,7 @@ import static com.google.common.collect.Sets.newHashSet;
 import static com.google.common.collect.Sets.union;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
 
 import com.baidu.bifromq.base.util.AsyncRunner;
 import com.baidu.bifromq.baseenv.EnvProvider;
@@ -162,6 +163,7 @@ public class KVRangeFSM implements IKVRangeFSM {
     private final Subject<List<SplitHint>> splitHintsSubject = BehaviorSubject.<List<SplitHint>>create().toSerialized();
     private final Subject<Any> factSubject = BehaviorSubject.create();
     private final KVRangeOptions opts;
+    private final AtomicBoolean recovering = new AtomicBoolean();
     private final AtomicReference<Lifecycle> lifecycle = new AtomicReference<>(Lifecycle.Init);
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final CompletableFuture<Void> closeSignal = new CompletableFuture<>();
@@ -1587,8 +1589,19 @@ public class KVRangeFSM implements IKVRangeFSM {
     private void checkZombieState() {
         if (zombieAt > 0
             && Duration.ofMillis(HLC.INST.getPhysical() - zombieAt).toSeconds() > opts.getZombieTimeoutSec()) {
-            log.info("Zombie state detected, send quit signal.");
-            quitSignal.complete(null);
+            ClusterConfig clusterConfig = wal.latestClusterConfig();
+            if (clusterConfig.getNextVotersCount() > 0
+                && clusterConfig.getVotersList().equals(singletonList(hostStoreId))) {
+                // recover from single voter change lost quorum
+                if (recovering.compareAndSet(false, true)) {
+                    log.info("Recovering from lost quorum during changing config from single voter: \n{}",
+                        clusterConfig);
+                    wal.recover().whenComplete((v, e) -> recovering.set(false));
+                }
+            } else {
+                log.info("Zombie state detected, send quit signal.");
+                quitSignal.complete(null);
+            }
         }
     }
 

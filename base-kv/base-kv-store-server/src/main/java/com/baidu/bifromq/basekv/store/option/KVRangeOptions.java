@@ -46,11 +46,12 @@ public class KVRangeOptions {
     @Builder.Default
     private int statsCollectIntervalSec = 5;
     @Builder.Default
-    private int zombieTimeoutSec = 300; // 5min
+    private int zombieTimeoutSec = 60; // 1min
     @Builder.Default
     private RaftConfig walRaftConfig = new RaftConfig()
         .setPreVote(true)
+        .setHeartbeatTimeoutTick(5) // 500ms
         .setInstallSnapshotTimeoutTick(6000) // 10min
-        .setElectionTimeoutTick(30) // 3 sec
+        .setElectionTimeoutTick(30) // 3s
         .setMaxSizePerAppend(100 * 1024 * 1024); // 100MB;
 }
