@@ -4,7 +4,7 @@
         <listener class-name="com.baidu.bifromq.test.RetryTransformer"/>
         <listener class-name="com.baidu.bifromq.test.RetryListener"/>
     </listeners>
-    <test name="IntegrationTests">
+    <test name="CoverageTests">
         <packages>
             <package name="com.baidu.bifromq.*"/>
         </packages>

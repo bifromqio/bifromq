@@ -13,27 +13,33 @@
 
 package com.baidu.bifromq.mqtt.handler;
 
+import static com.baidu.bifromq.mqtt.handler.ChannelAttrs.PEER_ADDR;
+
 import com.google.common.base.Strings;
-import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.http.HttpRequest;
 import java.net.InetSocketAddress;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * This handler is used to parse the X-Real-IP and X-Real-Port headers from the HTTP request
+ * and set the real IP and port of the client.
+ */
 @Slf4j
-@ChannelHandler.Sharable
 public class ClientAddrHandler extends ChannelInboundHandlerAdapter {
-
     private static final String X_REAL_IP = "X-Real-IP";
-
     private static final String X_REAL_PORT = "X-Real-Port";
-
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
-        if (msg instanceof HttpRequest) {
-            HttpRequest req = (HttpRequest) msg;
+        if (ctx.channel().attr(PEER_ADDR).get() != null) {
+            // Client address already set(by ProxyProtocolHandler), no need to parse headers
+            ctx.fireChannelRead(msg);
+            ctx.pipeline().remove(this);
+            return;
+        }
+        if (msg instanceof HttpRequest req) {
             String realIP = req.headers().get(X_REAL_IP);
             String realPort = req.headers().get(X_REAL_PORT);
 
@@ -42,11 +48,12 @@ public class ClientAddrHandler extends ChannelInboundHandlerAdapter {
                 try {
                     port = Integer.parseInt(realPort);
                 } catch (Exception e) {
-                    log.warn("parseInt port fail, realPort: {}, use default port: 0", realPort);
+                    log.warn("Invalid forwarded port number: {}", realPort);
                 }
                 ChannelAttrs.socketAddress(ctx, new InetSocketAddress(realIP, port));
             }
         }
         ctx.fireChannelRead(msg);
+        ctx.pipeline().remove(this);
     }
 }

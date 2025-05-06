@@ -23,6 +23,8 @@ import com.baidu.bifromq.mqtt.handler.ConditionalRejectHandler;
 import com.baidu.bifromq.mqtt.handler.ConnectionRateLimitHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTMessageDebounceHandler;
 import com.baidu.bifromq.mqtt.handler.MQTTPreludeHandler;
+import com.baidu.bifromq.mqtt.handler.ProxyProtocolDetector;
+import com.baidu.bifromq.mqtt.handler.ProxyProtocolHandler;
 import com.baidu.bifromq.mqtt.handler.condition.DirectMemPressureCondition;
 import com.baidu.bifromq.mqtt.handler.condition.HeapMemPressureCondition;
 import com.baidu.bifromq.mqtt.handler.ws.MqttOverWSHandler;
@@ -37,8 +39,10 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
+import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
+import io.netty.handler.codec.haproxy.HAProxyMessageDecoder;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpRequestDecoder;
 import io.netty.handler.codec.http.HttpResponseEncoder;
@@ -56,7 +60,6 @@ class MQTTBroker implements IMQTTBroker {
     private final EventLoopGroup bossGroup;
     private final EventLoopGroup workerGroup;
     private final RateLimiter connRateLimiter;
-    private final ClientAddrHandler remoteAddrHandler;
     private MQTTSessionContext sessionContext;
     private ChannelFuture tcpChannelF;
     private ChannelFuture tlsChannelF;
@@ -65,14 +68,13 @@ class MQTTBroker implements IMQTTBroker {
 
     public MQTTBroker(MQTTBrokerBuilder builder) {
         this.builder = builder;
-        this.bossGroup = NettyUtil.createEventLoopGroup(builder.mqttBossELGThreads,
+        bossGroup = NettyUtil.createEventLoopGroup(builder.mqttBossELGThreads,
             EnvProvider.INSTANCE.newThreadFactory("mqtt-boss-elg"));
         new NettyEventExecutorMetrics(bossGroup).bindTo(Metrics.globalRegistry);
-        this.workerGroup = NettyUtil.createEventLoopGroup(builder.mqttWorkerELGThreads,
+        workerGroup = NettyUtil.createEventLoopGroup(builder.mqttWorkerELGThreads,
             EnvProvider.INSTANCE.newThreadFactory("mqtt-worker-elg"));
         new NettyEventExecutorMetrics(workerGroup).bindTo(Metrics.globalRegistry);
         connRateLimiter = RateLimiter.create(builder.connectRateLimit);
-        remoteAddrHandler = new ClientAddrHandler();
         new NettyEventExecutorMetrics(bossGroup).bindTo(Metrics.globalRegistry);
         new NettyEventExecutorMetrics(workerGroup).bindTo(Metrics.globalRegistry);
         sessionServer = ILocalSessionServer.builder()
@@ -160,66 +162,71 @@ class MQTTBroker implements IMQTTBroker {
     }
 
     private ChannelFuture bindTCPChannel(ConnListenerBuilder.TCPConnListenerBuilder connBuilder) {
-        return buildChannel(connBuilder, new ChannelInitializer<SocketChannel>() {
+        return buildChannel(connBuilder, new MQTTChannelInitializer() {
             @Override
             protected void initChannel(SocketChannel ch) {
+                super.initChannel(ch);
                 ch.pipeline().addLast("connRateLimiter", new ConnectionRateLimitHandler(connRateLimiter,
-                    builder.eventCollector, pipeline -> {
-                    pipeline.addLast("trafficShaper",
+                    builder.eventCollector, p -> {
+                    p.addLast("trafficShaper",
                         new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
-                    pipeline.addLast(MqttEncoder.class.getName(), MqttEncoder.INSTANCE);
+                    p.addLast(MqttEncoder.class.getName(), MqttEncoder.INSTANCE);
                     // insert PacketFilter here
-                    pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
-                    pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                    pipeline.addLast(ConditionalRejectHandler.NAME,
+                    p.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
+                    p.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
+                    p.addLast(ConditionalRejectHandler.NAME,
                         new ConditionalRejectHandler(
                             or(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE),
                             sessionContext.eventCollector));
-                    pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
+                    p.addLast(MQTTPreludeHandler.NAME,
+                        new MQTTPreludeHandler(builder.connectTimeoutSeconds));
                 }));
             }
         });
     }
 
     private ChannelFuture bindTLSChannel(ConnListenerBuilder.TLSConnListenerBuilder connBuilder) {
-        return buildChannel(connBuilder, new ChannelInitializer<SocketChannel>() {
+        return buildChannel(connBuilder, new MQTTChannelInitializer() {
             @Override
             protected void initChannel(SocketChannel ch) {
+                super.initChannel(ch);
                 ch.pipeline().addLast("connRateLimiter", new ConnectionRateLimitHandler(connRateLimiter,
-                    builder.eventCollector, pipeline -> {
-                    pipeline.addLast("ssl", connBuilder.sslContext.newHandler(ch.alloc()));
-                    pipeline.addLast("trafficShaper",
+                    builder.eventCollector, p -> {
+                    p.addLast("ssl", connBuilder.sslContext.newHandler(ch.alloc()));
+                    p.addLast("trafficShaper",
                         new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
-                    pipeline.addLast(MqttEncoder.class.getName(), MqttEncoder.INSTANCE);
+                    p.addLast(MqttEncoder.class.getName(), MqttEncoder.INSTANCE);
                     // insert PacketFilter here
-                    pipeline.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
-                    pipeline.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
-                    pipeline.addLast(ConditionalRejectHandler.NAME,
+                    p.addLast(MqttDecoder.class.getName(), new MqttDecoder(builder.maxBytesInMessage));
+                    p.addLast(MQTTMessageDebounceHandler.NAME, new MQTTMessageDebounceHandler());
+                    p.addLast(ConditionalRejectHandler.NAME,
                         new ConditionalRejectHandler(
                             or(DirectMemPressureCondition.INSTANCE, HeapMemPressureCondition.INSTANCE),
                             sessionContext.eventCollector));
-                    pipeline.addLast(MQTTPreludeHandler.NAME, new MQTTPreludeHandler(builder.connectTimeoutSeconds));
+                    p.addLast(MQTTPreludeHandler.NAME,
+                        new MQTTPreludeHandler(builder.connectTimeoutSeconds));
                 }));
             }
         });
     }
 
     private ChannelFuture bindWSChannel(ConnListenerBuilder.WSConnListenerBuilder connBuilder) {
-        return buildChannel(connBuilder, new ChannelInitializer<SocketChannel>() {
+        return buildChannel(connBuilder, new MQTTChannelInitializer() {
             @Override
             protected void initChannel(SocketChannel ch) {
+                super.initChannel(ch);
                 ch.pipeline().addLast("connRateLimiter", new ConnectionRateLimitHandler(connRateLimiter,
-                    builder.eventCollector, pipeline -> {
-                    pipeline.addLast("trafficShaper",
+                    builder.eventCollector, p -> {
+                    p.addLast("trafficShaper",
                         new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
-                    pipeline.addLast("httpEncoder", new HttpResponseEncoder());
-                    pipeline.addLast("httpDecoder", new HttpRequestDecoder());
-                    pipeline.addLast("remoteAddr", remoteAddrHandler);
-                    pipeline.addLast("aggregator", new HttpObjectAggregator(65536));
-                    pipeline.addLast("webSocketOnly", new WebSocketOnlyHandler(connBuilder.path()));
-                    pipeline.addLast("webSocketHandler", new WebSocketServerProtocolHandler(connBuilder.path(),
+                    p.addLast("httpEncoder", new HttpResponseEncoder());
+                    p.addLast("httpDecoder", new HttpRequestDecoder());
+                    p.addLast("remoteAddr", new ClientAddrHandler());
+                    p.addLast("aggregator", new HttpObjectAggregator(65536));
+                    p.addLast("webSocketOnly", new WebSocketOnlyHandler(connBuilder.path()));
+                    p.addLast("webSocketHandler", new WebSocketServerProtocolHandler(connBuilder.path(),
                         MQTT_SUBPROTOCOL_CSV_LIST));
-                    pipeline.addLast("webSocketHandshakeListener", new MqttOverWSHandler(
+                    p.addLast("webSocketHandshakeListener", new MqttOverWSHandler(
                         builder.maxBytesInMessage, builder.connectTimeoutSeconds, sessionContext.eventCollector));
                 }));
             }
@@ -227,38 +234,52 @@ class MQTTBroker implements IMQTTBroker {
     }
 
     private ChannelFuture bindWSSChannel(ConnListenerBuilder.WSSConnListenerBuilder connBuilder) {
-        return buildChannel(connBuilder, new ChannelInitializer<SocketChannel>() {
+        return buildChannel(connBuilder, new MQTTChannelInitializer() {
             @Override
             protected void initChannel(SocketChannel ch) {
+                super.initChannel(ch);
                 ch.pipeline().addLast("connRateLimiter", new ConnectionRateLimitHandler(connRateLimiter,
-                    builder.eventCollector, pipeline -> {
-                    pipeline.addLast("ssl", connBuilder.sslContext.newHandler(ch.alloc()));
-                    pipeline.addLast("trafficShaper",
+                    builder.eventCollector, p -> {
+                    p.addLast("ssl", connBuilder.sslContext.newHandler(ch.alloc()));
+                    p.addLast("trafficShaper",
                         new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
-                    pipeline.addLast("httpEncoder", new HttpResponseEncoder());
-                    pipeline.addLast("httpDecoder", new HttpRequestDecoder());
-                    pipeline.addLast("remoteAddr", remoteAddrHandler);
-                    pipeline.addLast("aggregator", new HttpObjectAggregator(65536));
-                    pipeline.addLast("webSocketOnly", new WebSocketOnlyHandler(connBuilder.path()));
-                    pipeline.addLast("webSocketHandler", new WebSocketServerProtocolHandler(connBuilder.path(),
+                    p.addLast("httpEncoder", new HttpResponseEncoder());
+                    p.addLast("httpDecoder", new HttpRequestDecoder());
+                    p.addLast(ClientAddrHandler.class.getName(), new ClientAddrHandler());
+                    p.addLast("aggregator", new HttpObjectAggregator(65536));
+                    p.addLast("webSocketOnly", new WebSocketOnlyHandler(connBuilder.path()));
+                    p.addLast("webSocketHandler", new WebSocketServerProtocolHandler(connBuilder.path(),
                         MQTT_SUBPROTOCOL_CSV_LIST));
-                    pipeline.addLast("webSocketHandshakeListener", new MqttOverWSHandler(
+                    p.addLast("webSocketHandshakeListener", new MqttOverWSHandler(
                         builder.maxBytesInMessage, builder.connectTimeoutSeconds, sessionContext.eventCollector));
                 }));
             }
         });
     }
 
+    @SuppressWarnings("unchecked")
     private <T extends ConnListenerBuilder<T>> ChannelFuture buildChannel(T builder,
-                                                                          final ChannelInitializer<?> channelInitializer) {
+                                                                          final MQTTChannelInitializer chInitializer) {
         ServerBootstrap b = new ServerBootstrap();
         b.group(bossGroup, workerGroup)
             .channel(NettyUtil.determineServerSocketChannelClass(bossGroup))
-            .childHandler(channelInitializer)
+            .childHandler(chInitializer)
             .childAttr(ChannelAttrs.MQTT_SESSION_CTX, sessionContext);
         builder.options.forEach((k, v) -> b.option((ChannelOption<? super Object>) k, v));
         builder.childOptions.forEach((k, v) -> b.childOption((ChannelOption<? super Object>) k, v));
         // Bind and start to accept incoming connections.
         return b.bind(builder.host, builder.port);
+    }
+
+    private abstract static class MQTTChannelInitializer extends ChannelInitializer<SocketChannel> {
+        @Override
+        protected void initChannel(SocketChannel ch) {
+            ChannelPipeline pipeline = ch.pipeline();
+            // handler for proxy protocol v1 and v2
+            pipeline
+                .addLast(ProxyProtocolDetector.class.getName(), new ProxyProtocolDetector())
+                .addLast(HAProxyMessageDecoder.class.getName(), new HAProxyMessageDecoder())
+                .addLast(ProxyProtocolHandler.class.getName(), new ProxyProtocolHandler());
+        }
     }
 }
