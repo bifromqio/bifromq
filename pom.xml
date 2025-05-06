@@ -46,6 +46,7 @@
 
         <module>build</module>
         <module>coverage-report</module>
+        <module>testsuites</module>
     </modules>
     <packaging>pom</packaging>
 

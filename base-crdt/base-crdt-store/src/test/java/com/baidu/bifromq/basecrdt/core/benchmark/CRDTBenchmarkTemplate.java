@@ -28,7 +28,6 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
-import org.testng.annotations.Ignore;
 import org.testng.annotations.Test;
 
 @Slf4j
@@ -50,8 +49,7 @@ public abstract class CRDTBenchmarkTemplate {
 
     protected abstract void doSetup();
 
-    @Test
-    @Ignore
+    @Test(enabled = false)
     public void test() {
         Options opt = new OptionsBuilder()
             .include(this.getClass().getSimpleName())

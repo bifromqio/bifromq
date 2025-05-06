@@ -1,5 +1,9 @@
 <!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd" >
 <suite name="BifroMQ Unit Test Suite">
+    <listeners>
+        <listener class-name="com.baidu.bifromq.test.RetryTransformer"/>
+        <listener class-name="com.baidu.bifromq.test.RetryListener"/>
+    </listeners>
     <test name="UnitTests">
         <groups>
             <run>

@@ -31,13 +31,12 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
-import org.testng.annotations.Ignore;
 import org.testng.annotations.Test;
 
 @Slf4j
 public abstract class BenchmarkTemplate {
-    private Path dbRootDir;
     protected IKVEngine<? extends ICPableKVSpace> kvEngine;
+    private Path dbRootDir;
 
     @Setup
     public void setup() {
@@ -76,8 +75,7 @@ public abstract class BenchmarkTemplate {
     }
 
 
-    @Test
-    @Ignore
+    @Test(enabled = false)
     public void test() {
         Options opt = new OptionsBuilder()
             .include(this.getClass().getSimpleName())
