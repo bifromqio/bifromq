@@ -17,6 +17,8 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: maven
+      - name: Install TestSuites
+        run: mvn install -pl testsuites -am
       - name: Build with Maven
         run: mvn clean verify -P build-coverage
       - name: Coveralls

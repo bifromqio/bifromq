@@ -15,11 +15,13 @@ package com.baidu.bifromq.test;
 
 import java.util.HashSet;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
 import org.testng.IRetryAnalyzer;
 import org.testng.ITestContext;
 import org.testng.ITestListener;
 import org.testng.ITestResult;
 
+@Slf4j
 public class RetryListener implements ITestListener {
     private final Set<ITestResult> retriedSuccess = new HashSet<>();
 
@@ -37,7 +39,7 @@ public class RetryListener implements ITestListener {
     @Override
     public void onFinish(ITestContext context) {
         for (ITestResult result : retriedSuccess) {
-            System.out.printf("[RETRY SUCCESS] %s.%s passed after retry%n",
+            log.info("[RETRY SUCCESS] {}.{} passed after retry%n",
                 result.getTestClass().getName(), result.getMethod().getMethodName());
         }
     }

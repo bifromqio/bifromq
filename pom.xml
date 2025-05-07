@@ -137,8 +137,7 @@
         <maven.bos.plugin.version>0.0.2</maven.bos.plugin.version>
 
         <!-- build properties -->
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.release>17</maven.compiler.release>
         <source.encoding>UTF-8</source.encoding>
         <release.version>${project.version}</release.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -726,6 +725,11 @@
                 <version>${paho.mqtt.version}</version>
                 <scope>test</scope>
             </dependency>
+            <dependency>
+                <groupId>com.baidu.bifromq</groupId>
+                <artifactId>testsuites</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -773,9 +777,25 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>${maven.compiler.plugin.version}</version>
                     <configuration>
-                        <source>${maven.compiler.source}</source>
-                        <target>${maven.compiler.target}</target>
+                        <release>${maven.compiler.release}</release>
                         <encoding>${source.encoding}</encoding>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>${lombok.version}</version>
+                            </path>
+                            <path>
+                                <groupId>org.openjdk.jmh</groupId>
+                                <artifactId>jmh-generator-annprocess</artifactId>
+                                <version>${jmh.version}</version>
+                            </path>
+                            <path>
+                                <groupId>org.pf4j</groupId>
+                                <artifactId>pf4j</artifactId>
+                                <version>${pf4j.version}</version>
+                            </path>
+                        </annotationProcessorPaths>
                     </configuration>
                 </plugin>
                 <plugin>
@@ -788,7 +808,7 @@
                     <artifactId>maven-javadoc-plugin</artifactId>
                     <version>${maven.javadoc.plugin.version}</version>
                     <configuration>
-                        <source>${maven.compiler.source}</source>
+                        <release>${maven.compiler.release}</release>
                         <!--  keep only errors and warnings  -->
                         <quiet>true</quiet>
                         <failOnError>false</failOnError>
@@ -870,6 +890,21 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven.surefire.plugin.version}</version>
+                    <configuration>
+                        <argLine>
+                            ${argLine} -XX:+EnableDynamicAgentLoading -Djdk.instrument.traceUsage=false
+                        </argLine>
+                        <excludes>
+                            <exclude>**/benchmark/**</exclude>
+                        </excludes>
+                        <additionalClasspathDependencies>
+                            <dependency>
+                                <groupId>com.baidu.bifromq</groupId>
+                                <artifactId>testsuites</artifactId>
+                                <version>${project.version}</version>
+                            </dependency>
+                        </additionalClasspathDependencies>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -1019,7 +1054,8 @@
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
                             <suiteXmlFiles>
-                                <suiteXmlFile>${maven.multiModuleProjectDirectory}/testsuites/UnitTests.xml
+                                <suiteXmlFile>
+                                    ${maven.multiModuleProjectDirectory}/testsuites/UnitTests.xml
                                 </suiteXmlFile>
                             </suiteXmlFiles>
                         </configuration>
@@ -1040,9 +1076,8 @@
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
                             <suiteXmlFiles>
-                                <suiteXmlFile>${maven.multiModuleProjectDirectory}/testsuites/UnitTests.xml
-                                </suiteXmlFile>
-                                <suiteXmlFile>${maven.multiModuleProjectDirectory}/testsuites/IntegrationTests.xml
+                                <suiteXmlFile>
+                                    ${maven.multiModuleProjectDirectory}/testsuites/CoverageTests.xml
                                 </suiteXmlFile>
                             </suiteXmlFiles>
                         </configuration>

@@ -33,8 +33,7 @@
         <maven-clean-plugin.version>3.4.1</maven-clean-plugin.version>
 
         <!-- build properties -->
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.release>17</maven.compiler.release>
         <source.encoding>UTF-8</source.encoding>
         <release.version>${project.version}</release.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -117,8 +116,7 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>${maven-compiler-plugin.version}</version>
                     <configuration>
-                        <source>${maven.compiler.source}</source>
-                        <target>${maven.compiler.target}</target>
+                        <release>${maven.compiler.release}</release>
                         <encoding>${source.encoding}</encoding>
                     </configuration>
                 </plugin>
