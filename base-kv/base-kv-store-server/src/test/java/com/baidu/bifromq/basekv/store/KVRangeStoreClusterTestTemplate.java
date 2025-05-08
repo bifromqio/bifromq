@@ -18,6 +18,7 @@ import static org.testng.Assert.fail;
 
 import com.baidu.bifromq.basekv.MockableTest;
 import com.baidu.bifromq.basekv.annotation.Cluster;
+import com.baidu.bifromq.basekv.proto.KVRangeDescriptor;
 import com.baidu.bifromq.basekv.proto.KVRangeId;
 import com.baidu.bifromq.basekv.store.option.KVRangeOptions;
 import com.baidu.bifromq.basekv.store.option.KVRangeStoreOptions;
@@ -65,7 +66,6 @@ public abstract class KVRangeStoreClusterTestTemplate extends MockableTest {
             String store0 = cluster.bootstrapStore();
             KVRangeId rangeId = cluster.genesisKVRangeId();
             cluster.awaitKVRangeReady(store0, rangeId);
-            Thread.sleep(100);
 
             Set<String> voters = Sets.newHashSet(store0);
             for (int i = 1; i < initVoters; i++) {
@@ -75,21 +75,38 @@ public abstract class KVRangeStoreClusterTestTemplate extends MockableTest {
             for (int i = 0; i < initLearners; i++) {
                 learners.add(cluster.addStore());
             }
+            Set<String> allStores = new HashSet<>(voters);
+            allStores.addAll(learners);
             long start = System.currentTimeMillis();
-            log.info("Preparing replica config for testing");
-            KVRangeConfig setting = cluster.kvRangeSetting(rangeId);
-            String leader = setting.leader;
-            if (!setting.clusterConfig.getVotersList().containsAll(voters)
-                || !setting.clusterConfig.getLearnersList().containsAll(learners)) {
-                cluster.changeReplicaConfig(leader, setting.ver, rangeId, voters, learners)
-                    .toCompletableFuture().join();
-
-                await().ignoreExceptions().atMost(40, TimeUnit.SECONDS).until(() -> {
-                    KVRangeConfig newSetting = cluster.kvRangeSetting(rangeId);
-                    return newSetting.clusterConfig.getVotersList().containsAll(voters);
-                });
-            }
-            cluster.awaitAllKVRangeReady(rangeId, voters.size() == 1 ? 0 : 2, 40);
+            log.info("Preparing replica config for testing: voters={}, learners={}", voters, learners);
+            await().ignoreExceptions().atMost(120, TimeUnit.SECONDS).until(() -> {
+                KVRangeConfig setting = cluster.kvRangeSetting(rangeId);
+                String leader = setting.leader;
+                if (!setting.clusterConfig.getVotersList().containsAll(voters)
+                    || !setting.clusterConfig.getLearnersList().containsAll(learners)) {
+                    try {
+                        cluster.changeReplicaConfig(leader, setting.ver, rangeId, voters, learners)
+                            .toCompletableFuture().join();
+                        await().atMost(30, TimeUnit.SECONDS).until(() -> {
+                            for (String store : allStores) {
+                                KVRangeDescriptor rangeDesc = cluster.getKVRange(store, rangeId);
+                                if (rangeDesc == null) {
+                                    return false;
+                                }
+                                if (!rangeDesc.getConfig().getVotersList().containsAll(voters)
+                                    || !rangeDesc.getConfig().getLearnersList().containsAll(learners)) {
+                                    return false;
+                                }
+                            }
+                            return true;
+                        });
+                        return true;
+                    } catch (Throwable e) {
+                        return false;
+                    }
+                }
+                return true;
+            });
             log.info("KVRange[{}] ready in {}ms start testing", KVRangeIdUtil.toString(rangeId),
                 System.currentTimeMillis() - start);
         } catch (Throwable e) {

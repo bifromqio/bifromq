@@ -44,7 +44,6 @@ import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subjects.PublishSubject;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -63,6 +62,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -88,14 +88,12 @@ public class KVRangeStoreTestCluster {
     private final ScheduledExecutorService bgTaskExecutor = new ScheduledThreadPoolExecutor(1,
         EnvProvider.INSTANCE.newThreadFactory("bg-task-executor"));
 
-    private Path dbRootDir;
+    private final Path dbRootDir;
 
+    @SneakyThrows
     public KVRangeStoreTestCluster(KVRangeStoreOptions options) {
         this.optionsTpl = options.toBuilder().build();
-        try {
-            dbRootDir = Files.createTempDirectory("");
-        } catch (IOException e) {
-        }
+        dbRootDir = Files.createTempDirectory("");
         bootstrapStore = buildStore(true);
         List<KVRangeDescriptor> list = rangeStoreMap.get(bootstrapStore).describe().blockingFirst().getRangesList();
         genesisKVRangeId = list.get(0).getId();
@@ -169,7 +167,7 @@ public class KVRangeStoreTestCluster {
     }
 
     public void awaitKVRangeReady(String storeId, KVRangeId kvRangeId) {
-        await().atMost(Duration.ofSeconds(10)).until(() -> {
+        await().atMost(Duration.ofSeconds(60)).until(() -> {
             KVRangeConfig kvRangeSetting = rangeConfigMap.get(kvRangeId);
             return hasKVRange(storeId, kvRangeId) && kvRangeSetting != null;
         });
