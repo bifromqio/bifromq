@@ -64,7 +64,7 @@
             <defaultValue>default</defaultValue>
         </discriminator>
         <sift>
-            <appender name="${sift_key}" class="ch.qos.logback.core.FileAppender">
+            <appender name="${sift_key}" class="ch.qos.logback.core.rolling.RollingFileAppender">
                 <file>${logDir}/crdt/${sift_key}.log</file>
                 <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
                     <fileNamePattern>${logDir}/crdt/${sift_key}.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
@@ -83,7 +83,7 @@
             <defaultValue>default</defaultValue>
         </discriminator>
         <sift>
-            <appender name="${sift_key}" class="ch.qos.logback.core.FileAppender">
+            <appender name="${sift_key}" class="ch.qos.logback.core.rolling.RollingFileAppender">
                 <file>${logDir}/basekv/${sift_key}-raft.log</file>
                 <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
                     <fileNamePattern>${logDir}/basekv/${sift_key}-raft.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
@@ -102,7 +102,7 @@
             <defaultValue>default</defaultValue>
         </discriminator>
         <sift>
-            <appender name="${sift_key}" class="ch.qos.logback.core.FileAppender">
+            <appender name="${sift_key}" class="ch.qos.logback.core.rolling.RollingFileAppender">
                 <file>${logDir}/basekv/${sift_key}-balancer.log</file>
                 <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
                     <fileNamePattern>${logDir}/basekv/${sift_key}-balancer.%d{yyyy-MM-dd_HH}.log
@@ -122,7 +122,7 @@
             <defaultValue>default</defaultValue>
         </discriminator>
         <sift>
-            <appender name="${sift_key}" class="ch.qos.logback.core.FileAppender">
+            <appender name="${sift_key}" class="ch.qos.logback.core.rolling.RollingFileAppender">
                 <file>${logDir}/basekv/${sift_key}-client.log</file>
                 <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
                     <fileNamePattern>${logDir}/basekv/${sift_key}-client.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
@@ -141,7 +141,7 @@
             <defaultValue>default</defaultValue>
         </discriminator>
         <sift>
-            <appender name="${sift_key}" class="ch.qos.logback.core.FileAppender">
+            <appender name="${sift_key}" class="ch.qos.logback.core.rolling.RollingFileAppender">
                 <file>${logDir}/basekv/${sift_key}.log</file>
                 <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
                     <fileNamePattern>${logDir}/basekv/${sift_key}.%d{yyyy-MM-dd_HH}.log</fileNamePattern>
