@@ -15,8 +15,7 @@ package com.baidu.bifromq.mqtt;
 
 import static com.baidu.bifromq.mqtt.handler.condition.ORCondition.or;
 
-import com.baidu.bifromq.baseenv.EnvProvider;
-import com.baidu.bifromq.baserpc.utils.NettyUtil;
+import com.baidu.bifromq.baseenv.NettyEnv;
 import com.baidu.bifromq.mqtt.handler.ChannelAttrs;
 import com.baidu.bifromq.mqtt.handler.ClientAddrHandler;
 import com.baidu.bifromq.mqtt.handler.ConditionalRejectHandler;
@@ -68,11 +67,9 @@ class MQTTBroker implements IMQTTBroker {
 
     public MQTTBroker(MQTTBrokerBuilder builder) {
         this.builder = builder;
-        bossGroup = NettyUtil.createEventLoopGroup(builder.mqttBossELGThreads,
-            EnvProvider.INSTANCE.newThreadFactory("mqtt-boss-elg"));
+        bossGroup = NettyEnv.createEventLoopGroup(builder.mqttBossELGThreads, "mqtt-boss-elg");
         new NettyEventExecutorMetrics(bossGroup).bindTo(Metrics.globalRegistry);
-        workerGroup = NettyUtil.createEventLoopGroup(builder.mqttWorkerELGThreads,
-            EnvProvider.INSTANCE.newThreadFactory("mqtt-worker-elg"));
+        workerGroup = NettyEnv.createEventLoopGroup(builder.mqttWorkerELGThreads, "mqtt-worker-elg");
         new NettyEventExecutorMetrics(workerGroup).bindTo(Metrics.globalRegistry);
         connRateLimiter = RateLimiter.create(builder.connectRateLimit);
         new NettyEventExecutorMetrics(bossGroup).bindTo(Metrics.globalRegistry);
@@ -260,9 +257,8 @@ class MQTTBroker implements IMQTTBroker {
     @SuppressWarnings("unchecked")
     private <T extends ConnListenerBuilder<T>> ChannelFuture buildChannel(T builder,
                                                                           final MQTTChannelInitializer chInitializer) {
-        ServerBootstrap b = new ServerBootstrap();
-        b.group(bossGroup, workerGroup)
-            .channel(NettyUtil.determineServerSocketChannelClass(bossGroup))
+        ServerBootstrap b = new ServerBootstrap().group(bossGroup, workerGroup)
+            .channel(NettyEnv.determineServerSocketChannelClass(bossGroup))
             .childHandler(chInitializer)
             .childAttr(ChannelAttrs.MQTT_SESSION_CTX, sessionContext);
         builder.options.forEach((k, v) -> b.option((ChannelOption<? super Object>) k, v));

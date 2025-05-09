@@ -14,6 +14,7 @@
 package com.baidu.bifromq.basecluster.transport;
 
 import com.baidu.bifromq.basecluster.transport.proto.Packet;
+import com.baidu.bifromq.baseenv.NettyEnv;
 import com.baidu.bifromq.basehlc.HLC;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
@@ -77,6 +78,7 @@ public final class TCPTransport extends AbstractTransport {
     private final AtomicInteger nextChannelKey = new AtomicInteger(0);
     private final Bootstrap clientBootstrap;
     private final ChannelFuture tcpListeningChannel;
+
     @Builder
     TCPTransport(@NonNull String env, InetSocketAddress bindAddr, SslContext serverSslContext,
                  SslContext clientSslContext, TCPTransportOptions opts) {
@@ -87,7 +89,7 @@ public final class TCPTransport extends AbstractTransport {
                 "maxBufferSizeInBytes must be a positive number");
             Preconditions.checkArgument(opts.maxChannelsPerHost > 0, "maxChannelsPerHost must be a positive number");
             this.opts = opts.toBuilder().build();
-            elg = NettyUtil.getEventLoopGroup(4, "cluster-tcp-transport");
+            elg = NettyEnv.createEventLoopGroup(4, "cluster-tcp-transport");
             clientBootstrap = setupTcpClient(clientSslContext);
             tcpListeningChannel = setupTcpServer(bindAddr, serverSslContext);
             InetSocketAddress localAddress = (InetSocketAddress) tcpListeningChannel.channel().localAddress();
@@ -117,7 +119,7 @@ public final class TCPTransport extends AbstractTransport {
     private Bootstrap setupTcpClient(SslContext sslContext) {
         Bootstrap clientBootstrap = new Bootstrap();
         clientBootstrap.group(elg)
-            .channel(NettyUtil.getSocketChannelClass())
+            .channel(NettyEnv.getSocketChannelClass())
             .option(ChannelOption.TCP_NODELAY, true)
             .option(ChannelOption.SO_KEEPALIVE, true)
             .option(ChannelOption.WRITE_BUFFER_WATER_MARK,
@@ -145,7 +147,7 @@ public final class TCPTransport extends AbstractTransport {
     private ChannelFuture setupTcpServer(InetSocketAddress serverAddr, SslContext sslContext) {
         ServerBootstrap serverBootstrap = new ServerBootstrap();
         return serverBootstrap.group(elg)
-            .channel(NettyUtil.getServerSocketChannelClass())
+            .channel(NettyEnv.getServerSocketChannelClass())
             .childOption(ChannelOption.TCP_NODELAY, true)
             .childOption(ChannelOption.SO_KEEPALIVE, true)
             .localAddress(serverAddr)

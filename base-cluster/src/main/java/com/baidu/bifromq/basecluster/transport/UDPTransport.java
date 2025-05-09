@@ -13,10 +13,8 @@
 
 package com.baidu.bifromq.basecluster.transport;
 
-import static com.baidu.bifromq.basecluster.transport.NettyUtil.getDatagramChannelClass;
-import static com.baidu.bifromq.basecluster.transport.NettyUtil.getEventLoopGroup;
-
 import com.baidu.bifromq.basecluster.transport.proto.Packet;
+import com.baidu.bifromq.baseenv.NettyEnv;
 import com.baidu.bifromq.basehlc.HLC;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.micrometer.core.instrument.Counter;
@@ -48,46 +46,23 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public final class UDPTransport extends AbstractTransport {
-    @ChannelHandler.Sharable
-    private class Bridger extends SimpleChannelInboundHandler<DatagramPacket> {
-
-        @Override
-        protected void channelRead0(ChannelHandlerContext ctx, DatagramPacket dp) {
-            // ctx.channel().remoteAddress() is null when DatagramChannel is not in 'connected' mode
-            recvBytes.increment(dp.content().readableBytes());
-            try {
-                byte[] data = new byte[dp.content().readableBytes()];
-                dp.content().readBytes(data);
-                Packet packet = Packet.parseFrom(data);
-                transportLatency.record(HLC.INST.getPhysical(packet.getHlc() - HLC.INST.get()));
-                doReceive(packet, dp.sender(), dp.recipient());
-            } catch (InvalidProtocolBufferException e) {
-                log.error("Unable to decode packet, just ignore");
-            }
-        }
-    }
-
     private final Counter sendBytes;
     private final Counter recvBytes;
     private final DistributionSummary transportLatency;
-
     private final EventLoopGroup elg;
-
     private final Channel channel;
-
     private final Bridger bridger;
     private final InetSocketAddress localAddress;
-
 
     @Builder
     UDPTransport(@NonNull String env, InetSocketAddress bindAddr) {
         super(env);
         try {
             bridger = new Bridger();
-            elg = getEventLoopGroup(4, "cluster-udp-transport");
+            elg = NettyEnv.createEventLoopGroup(4, "cluster-udp-transport");
             Bootstrap bootstrap = new Bootstrap();
             channel = bootstrap.group(elg)
-                .channel(getDatagramChannelClass())
+                .channel(NettyEnv.getDatagramChannelClass())
                 .localAddress(bindAddr)
                 .handler(new ChannelInitializer<DatagramChannel>() {
                     @Override
@@ -158,5 +133,24 @@ public final class UDPTransport extends AbstractTransport {
             .onErrorComplete()
             .subscribe(doneSignal::onComplete);
         return doneSignal;
+    }
+
+    @ChannelHandler.Sharable
+    private class Bridger extends SimpleChannelInboundHandler<DatagramPacket> {
+
+        @Override
+        protected void channelRead0(ChannelHandlerContext ctx, DatagramPacket dp) {
+            // ctx.channel().remoteAddress() is null when DatagramChannel is not in 'connected' mode
+            recvBytes.increment(dp.content().readableBytes());
+            try {
+                byte[] data = new byte[dp.content().readableBytes()];
+                dp.content().readBytes(data);
+                Packet packet = Packet.parseFrom(data);
+                transportLatency.record(HLC.INST.getPhysical(packet.getHlc() - HLC.INST.get()));
+                doReceive(packet, dp.sender(), dp.recipient());
+            } catch (InvalidProtocolBufferException e) {
+                log.error("Unable to decode packet, just ignore");
+            }
+        }
     }
 }

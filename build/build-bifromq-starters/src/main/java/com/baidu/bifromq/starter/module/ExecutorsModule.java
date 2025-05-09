@@ -14,7 +14,7 @@
 package com.baidu.bifromq.starter.module;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
-import com.baidu.bifromq.baserpc.utils.NettyUtil;
+import com.baidu.bifromq.baseenv.NettyEnv;
 import com.baidu.bifromq.starter.config.StandaloneConfig;
 import com.google.inject.AbstractModule;
 import com.google.inject.Inject;
@@ -29,6 +29,16 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import javax.inject.Singleton;
 
 public class ExecutorsModule extends AbstractModule {
+    @Override
+    protected void configure() {
+        bind(EventLoopGroup.class).annotatedWith(Names.named("rpcClientEventLoop"))
+            .toProvider(RPCClientEventLoopProvider.class)
+            .in(Singleton.class);
+        bind(ScheduledExecutorService.class).annotatedWith(Names.named("bgTaskScheduler"))
+            .toProvider(BackgroundTaskSchedulerProvider.class)
+            .in(Singleton.class);
+    }
+
     private static class RPCClientEventLoopProvider implements Provider<EventLoopGroup> {
         private final StandaloneConfig config;
 
@@ -39,9 +49,8 @@ public class ExecutorsModule extends AbstractModule {
 
         @Override
         public EventLoopGroup get() {
-            EventLoopGroup eventLoopGroup = NettyUtil.createEventLoopGroup(
-                config.getRpcConfig().getClientEventLoopThreads(),
-                EnvProvider.INSTANCE.newThreadFactory("rpc-client-worker-elg"));
+            EventLoopGroup eventLoopGroup = NettyEnv.createEventLoopGroup(
+                config.getRpcConfig().getClientEventLoopThreads(), "rpc-client-worker-elg");
             new NettyEventExecutorMetrics(eventLoopGroup).bindTo(Metrics.globalRegistry);
             return eventLoopGroup;
         }
@@ -61,15 +70,5 @@ public class ExecutorsModule extends AbstractModule {
                 new ScheduledThreadPoolExecutor(config.getBgTaskThreads(),
                     EnvProvider.INSTANCE.newThreadFactory("bg-task-executor")), "bg-task-executor");
         }
-    }
-
-    @Override
-    protected void configure() {
-        bind(EventLoopGroup.class).annotatedWith(Names.named("rpcClientEventLoop"))
-            .toProvider(RPCClientEventLoopProvider.class)
-            .in(Singleton.class);
-        bind(ScheduledExecutorService.class).annotatedWith(Names.named("bgTaskScheduler"))
-            .toProvider(BackgroundTaskSchedulerProvider.class)
-            .in(Singleton.class);
     }
 }

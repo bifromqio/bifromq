@@ -13,11 +13,10 @@
 
 package com.baidu.bifromq.baserpc.server;
 
-import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.baseenv.NettyEnv;
 import com.baidu.bifromq.baserpc.server.interceptor.TenantAwareServerInterceptor;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceServerRegister;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
-import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import io.grpc.Metadata;
@@ -56,6 +55,7 @@ class RPCServer implements IRPCServer {
     private final EventLoopGroup workerEventLoopGroup;
     private final Server inProcServer;
     private final Server interProcServer;
+
     RPCServer(RPCServerBuilder builder) {
         Preconditions.checkArgument(!Strings.isNullOrEmpty(builder.host) && !"0.0.0.0".equals(builder.host),
             "Invalid host");
@@ -88,17 +88,15 @@ class RPCServer implements IRPCServer {
         if (builder.sslContext != null) {
             nettyServerBuilder.sslContext(builder.sslContext);
         }
-        bossEventLoopGroup = NettyUtil.createEventLoopGroup(1,
-            EnvProvider.INSTANCE.newThreadFactory("rpc-server-boss-elg"));
+        bossEventLoopGroup = NettyEnv.createEventLoopGroup(1, "rpc-server-boss-elg");
         new NettyEventExecutorMetrics(bossEventLoopGroup).bindTo(Metrics.globalRegistry);
-        workerEventLoopGroup = NettyUtil.createEventLoopGroup(builder.workerThreads,
-            EnvProvider.INSTANCE.newThreadFactory("rpc-server-worker-elg"));
+        workerEventLoopGroup = NettyEnv.createEventLoopGroup(builder.workerThreads, "rpc-server-worker-elg");
         new NettyEventExecutorMetrics(workerEventLoopGroup).bindTo(Metrics.globalRegistry);
         // if null, GRPC managed shared eventloop group will be used
         nettyServerBuilder
             .bossEventLoopGroup(bossEventLoopGroup)
             .workerEventLoopGroup(workerEventLoopGroup)
-            .channelType(NettyUtil.determineServerSocketChannelClass(bossEventLoopGroup));
+            .channelType(NettyEnv.determineServerSocketChannelClass(bossEventLoopGroup));
         bindServiceToServer(nettyServerBuilder);
         interProcServer = nettyServerBuilder.build();
     }

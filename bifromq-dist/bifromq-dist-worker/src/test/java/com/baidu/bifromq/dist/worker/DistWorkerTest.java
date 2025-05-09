@@ -37,6 +37,7 @@ import com.baidu.bifromq.basecluster.IAgentHost;
 import com.baidu.bifromq.basecrdt.service.CRDTServiceOptions;
 import com.baidu.bifromq.basecrdt.service.ICRDTService;
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.baseenv.NettyEnv;
 import com.baidu.bifromq.basehlc.HLC;
 import com.baidu.bifromq.basekv.client.IBaseKVStoreClient;
 import com.baidu.bifromq.basekv.client.KVRangeSetting;
@@ -55,7 +56,6 @@ import com.baidu.bifromq.basekv.utils.BoundaryUtil;
 import com.baidu.bifromq.baserpc.server.IRPCServer;
 import com.baidu.bifromq.baserpc.server.RPCServerBuilder;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
-import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistReply;
 import com.baidu.bifromq.dist.rpc.proto.BatchDistRequest;
@@ -200,7 +200,7 @@ public abstract class DistWorkerTest {
 
         storeClient = IBaseKVStoreClient
             .newBuilder()
-            .eventLoopGroup(NettyUtil.createEventLoopGroup())
+            .eventLoopGroup(NettyEnv.createEventLoopGroup("store-client"))
             .clusterId(IDistWorker.CLUSTER_NAME)
             .trafficService(trafficService)
             .metaService(metaService)

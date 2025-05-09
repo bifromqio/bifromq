@@ -13,7 +13,7 @@
 
 package com.baidu.bifromq.baserpc.client;
 
-import static com.baidu.bifromq.baserpc.utils.NettyUtil.determineSocketChannelClass;
+import static com.baidu.bifromq.baseenv.NettyEnv.determineSocketChannelClass;
 
 import com.baidu.bifromq.baseenv.EnvProvider;
 import com.baidu.bifromq.baserpc.BluePrint;

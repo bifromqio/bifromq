@@ -19,10 +19,9 @@ import com.baidu.bifromq.apiserver.http.IHTTPRequestHandlersFactory;
 import com.baidu.bifromq.apiserver.http.IHTTPRouteMap;
 import com.baidu.bifromq.apiserver.http.handler.RequestHandlersFactory;
 import com.baidu.bifromq.basecluster.IAgentHost;
-import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.baseenv.NettyEnv;
 import com.baidu.bifromq.basekv.metaservice.IBaseKVMetaService;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
-import com.baidu.bifromq.baserpc.utils.NettyUtil;
 import com.baidu.bifromq.dist.client.IDistClient;
 import com.baidu.bifromq.inbox.client.IInboxClient;
 import com.baidu.bifromq.plugin.settingprovider.ISettingProvider;
@@ -47,10 +46,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class APIServer implements IAPIServer {
-    enum State {
-        INIT, STARTING, STARTED, STARTING_FAILED, STOPPING, STOPPED
-    }
-
     private final String host;
     private final int port;
     private final EventLoopGroup bossGroup;
@@ -77,10 +72,8 @@ public class APIServer implements IAPIServer {
         Preconditions.checkArgument(port >= 0);
         this.host = host;
         this.port = port;
-        this.bossGroup = NettyUtil.createEventLoopGroup(1,
-            EnvProvider.INSTANCE.newThreadFactory("api-server-boss-elg"));
-        this.workerGroup = NettyUtil.createEventLoopGroup(workerThreads,
-            EnvProvider.INSTANCE.newThreadFactory("api-server-worker-elg"));
+        this.bossGroup = NettyEnv.createEventLoopGroup(1, "api-server-boss-elg");
+        this.workerGroup = NettyEnv.createEventLoopGroup(workerThreads, "api-server-worker-elg");
         IHTTPRequestHandlersFactory handlersFactory = new RequestHandlersFactory(agentHost,
             trafficService,
             metaService,
@@ -148,8 +141,7 @@ public class APIServer implements IAPIServer {
             // TODO - externalize following configs if needed
             .option(ChannelOption.SO_BACKLOG, 128)
             .option(ChannelOption.SO_REUSEADDR, true)
-            .childOption(ChannelOption.TCP_NODELAY, true)
-            .channel(NettyUtil.determineServerSocketChannelClass(bossGroup))
+            .channel(NettyEnv.determineServerSocketChannelClass(bossGroup))
             .childHandler(channelInitializer);
         if (Epoll.isAvailable()) {
             b.option(EpollChannelOption.EPOLL_MODE, EpollMode.EDGE_TRIGGERED);
@@ -159,5 +151,9 @@ public class APIServer implements IAPIServer {
 
     private void checkStarted() {
         Preconditions.checkState(state.get() == State.STARTED, "APIServer not started");
+    }
+
+    enum State {
+        INIT, STARTING, STARTED, STARTING_FAILED, STOPPING, STOPPED
     }
 }

@@ -37,9 +37,7 @@ public abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C>> {
         if (Epoll.isAvailable()) {
             options.put(EpollChannelOption.EPOLL_MODE, EpollMode.EDGE_TRIGGERED);
         }
-        childOptions.put(ChannelOption.TCP_NODELAY, true);
         childOptions.put(ChannelOption.SO_KEEPALIVE, true);
-
     }
 
     @SuppressWarnings("unchecked")
