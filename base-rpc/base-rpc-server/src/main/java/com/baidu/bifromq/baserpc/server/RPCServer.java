@@ -28,7 +28,7 @@ import io.grpc.ServerCallExecutorSupplier;
 import io.grpc.ServerInterceptors;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
-import io.grpc.inprocess.InProcServerBuilder;
+import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.netty.NettyServerBuilder;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.netty4.NettyEventExecutorMetrics;
@@ -64,7 +64,7 @@ class RPCServer implements IRPCServer {
         this.trafficService = builder.trafficService;
         this.serviceDefinitions = builder.serviceDefinitions;
 
-        ServerBuilder<?> serverBuilder = InProcServerBuilder.forName(this.id)
+        ServerBuilder<?> serverBuilder = InProcessServerBuilder.forName(this.id)
             .callExecutor(new ServerCallExecutorSupplier() {
                 @Override
                 public <ReqT, RespT> Executor getExecutor(ServerCall<ReqT, RespT> call, Metadata metadata) {
@@ -73,7 +73,6 @@ class RPCServer implements IRPCServer {
             });
         bindServiceToServer(serverBuilder);
         inProcServer = serverBuilder.build();
-
 
         NettyServerBuilder nettyServerBuilder = NettyServerBuilder
             .forAddress(new InetSocketAddress(builder.host, builder.port))

@@ -21,7 +21,7 @@ import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceLandscape;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceServerRegister;
 import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceTrafficService;
 import com.baidu.bifromq.baserpc.trafficgovernor.ServerEndpoint;
-import io.grpc.inprocess.InProcSocketAddress;
+import io.grpc.inprocess.InProcessSocketAddress;
 import java.net.InetSocketAddress;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -51,7 +51,8 @@ public class RPCServiceLandscapeTest extends RPCServiceAnnouncerTest {
         IRPCServiceLandscape serviceLandscape = trafficService.getServiceLandscape(service);
         await().until(() -> {
             Set<ServerEndpoint> servers = serviceLandscape.serverEndpoints().blockingFirst();
-            return servers.stream().anyMatch(s -> s.id().equals(server) && s.hostAddr() instanceof InProcSocketAddress);
+            return servers.stream()
+                .anyMatch(s -> s.id().equals(server) && s.hostAddr() instanceof InProcessSocketAddress);
         });
 
         // stop the server
@@ -86,7 +87,8 @@ public class RPCServiceLandscapeTest extends RPCServiceAnnouncerTest {
         // new server discovered
         await().until(() -> {
             Set<ServerEndpoint> servers = trafficDirector.serverEndpoints().blockingFirst();
-            return servers.stream().anyMatch(s -> s.id().equals(server) && s.hostAddr() instanceof InProcSocketAddress);
+            return servers.stream()
+                .anyMatch(s -> s.id().equals(server) && s.hostAddr() instanceof InProcessSocketAddress);
         });
         // stop the server
         serverReg.stop();
@@ -107,7 +109,8 @@ public class RPCServiceLandscapeTest extends RPCServiceAnnouncerTest {
         // server discovered again
         await().until(() -> {
             Set<ServerEndpoint> servers = trafficDirector.serverEndpoints().blockingFirst();
-            return servers.stream().anyMatch(s -> s.id().equals(server) && s.hostAddr() instanceof InProcSocketAddress);
+            return servers.stream()
+                .anyMatch(s -> s.id().equals(server) && s.hostAddr() instanceof InProcessSocketAddress);
         });
 
         clientTrafficService.close();

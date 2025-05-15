@@ -22,7 +22,7 @@ import com.baidu.bifromq.baserpc.proto.RPCServer;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 import com.google.protobuf.ByteString;
-import io.grpc.inprocess.InProcSocketAddress;
+import io.grpc.inprocess.InProcessSocketAddress;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
@@ -140,7 +140,8 @@ class RPCServiceTrafficManager extends RPCServiceAnnouncer
             server.getHost(),
             server.getPort(),
             GlobalProcessId.ID.equals(server.getGpid())
-                ? new InProcSocketAddress(server.getId()) : new InetSocketAddress(server.getHost(), server.getPort()),
+                ? new InProcessSocketAddress(server.getId())
+                : new InetSocketAddress(server.getHost(), server.getPort()),
             Sets.newHashSet(server.getGroupList()),
             server.getAttrsMap(),
             GlobalProcessId.ID.equals(server.getGpid()));

@@ -78,9 +78,9 @@
     </licenses>
 
     <scm>
-        <url>https://github.com/baidu/bifromq</url>
-        <connection>scm:git:git://github.com/baidu/bifromq.git</connection>
-        <developerConnection>scm:git:ssh://git@github.com/baidu/bifromq.git</developerConnection>
+        <url>https://github.com/bifromqio/bifromq</url>
+        <connection>scm:git:git://github.com/bifromqio/bifromq.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/bifromqio/bifromq.git</developerConnection>
         <tag>HEAD</tag>
     </scm>
 
@@ -90,18 +90,18 @@
         <bouncycastle.version>1.78.1</bouncycastle.version>
         <caffeine.version>3.1.8</caffeine.version>
         <guice.version>6.0.0</guice.version>
-        <grpc.version>1.68.2</grpc.version>
+        <grpc.version>1.72.0</grpc.version>
         <guava.version>33.2.1-jre</guava.version>
         <jackson.dataformat.version>2.18.1</jackson.dataformat.version>
         <javax.annotation.api.version>1.3.2</javax.annotation.api.version>
         <javax.ws.rs-api.version>2.1.1</javax.ws.rs-api.version>
         <lombok.version>1.18.34</lombok.version>
-        <logback.version>1.5.6</logback.version>
+        <logback.version>1.5.18</logback.version>
         <micrometer.version>1.11.12</micrometer.version>
-        <netty.version>4.1.118.Final</netty.version>
+        <netty.version>4.1.121.Final</netty.version>
         <pcollections.version>4.0.2</pcollections.version>
         <pf4j.version>3.13.0</pf4j.version>
-        <protobuf-java.version>3.25.5</protobuf-java.version>
+        <protobuf-java.version>4.30.2</protobuf-java.version>
         <reflections.verion>0.10.2</reflections.verion>
         <rocksdb.version>9.7.3</rocksdb.version>
         <rxjava3.version>3.1.10</rxjava3.version>
@@ -610,13 +610,10 @@
             </dependency>
             <dependency>
                 <groupId>com.google.protobuf</groupId>
-                <artifactId>protobuf-java</artifactId>
+                <artifactId>protobuf-bom</artifactId>
                 <version>${protobuf-java.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.google.protobuf</groupId>
-                <artifactId>protobuf-java-util</artifactId>
-                <version>${protobuf-java.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
             <dependency>
                 <groupId>org.pf4j</groupId>

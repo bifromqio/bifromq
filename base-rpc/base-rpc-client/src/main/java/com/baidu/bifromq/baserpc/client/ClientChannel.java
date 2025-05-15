@@ -13,9 +13,8 @@
 
 package com.baidu.bifromq.baserpc.client;
 
-import static com.baidu.bifromq.baseenv.NettyEnv.determineSocketChannelClass;
-
 import com.baidu.bifromq.baseenv.EnvProvider;
+import com.baidu.bifromq.baseenv.NettyEnv;
 import com.baidu.bifromq.baserpc.BluePrint;
 import com.baidu.bifromq.baserpc.client.interceptor.TenantAwareClientInterceptor;
 import com.baidu.bifromq.baserpc.client.loadbalancer.IServerSelector;
@@ -30,8 +29,9 @@ import io.grpc.ConnectivityState;
 import io.grpc.LoadBalancerProvider;
 import io.grpc.LoadBalancerRegistry;
 import io.grpc.ManagedChannel;
-import io.grpc.netty.LocalInProcNettyChannelBuilder;
+import io.grpc.netty.InProcAware;
 import io.grpc.netty.NegotiationType;
+import io.grpc.netty.NettyChannelBuilder;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import io.netty.channel.EventLoopGroup;
@@ -82,29 +82,31 @@ class ClientChannel implements IClientChannel {
                     EnvProvider.INSTANCE.newThreadFactory(serviceUniqueName + "-client-executor")),
                 serviceUniqueName + "-rpc-client-executor");
         }
-        LocalInProcNettyChannelBuilder internalChannelBuilder = LocalInProcNettyChannelBuilder
+        String target = TrafficGovernorNameResolverProvider.SCHEME + "://" + serviceUniqueName;
+        NettyChannelBuilder internalChannelBuilder = NettyChannelBuilder
             .forTarget(TrafficGovernorNameResolverProvider.SCHEME + "://" + serviceUniqueName)
             .keepAliveTime(keepAliveInSec <= 0 ? 600 : keepAliveInSec, TimeUnit.SECONDS)
             .keepAliveWithoutCalls(true)
-            .idleTimeout(idleTimeoutInSec <= 0 ? (365 * 24 * 3600) : idleTimeoutInSec, TimeUnit.SECONDS)
-            .maxInboundMessageSize(Integer.MAX_VALUE)
-            .defaultLoadBalancingPolicy(loadBalancerProvider.getPolicyName())
-            .executor(executorService);
+            .maxInboundMessageSize(Integer.MAX_VALUE);
         if (sslContext != null) {
             internalChannelBuilder
                 .negotiationType(NegotiationType.TLS)
-                .intercept(new TenantAwareClientInterceptor())
                 .sslContext(sslContext);
         } else {
             internalChannelBuilder
-                .negotiationType(NegotiationType.PLAINTEXT)
-                .intercept(new TenantAwareClientInterceptor());
+                .negotiationType(NegotiationType.PLAINTEXT);
         }
         if (eventLoopGroup != null) {
             internalChannelBuilder.eventLoopGroup(eventLoopGroup)
-                .channelType(determineSocketChannelClass(eventLoopGroup));
+                .channelType(NettyEnv.determineSocketChannelClass(eventLoopGroup));
         }
-        internalChannel = internalChannelBuilder.build();
+
+        internalChannel = InProcAware.wrap(target, internalChannelBuilder)
+            .idleTimeout(idleTimeoutInSec <= 0 ? (365 * 24 * 3600) : idleTimeoutInSec, TimeUnit.SECONDS)
+            .defaultLoadBalancingPolicy(loadBalancerProvider.getPolicyName())
+            .intercept(new TenantAwareClientInterceptor())
+            .executor(executorService)
+            .build();
         ConnStateListener connStateListener = (server, connState) ->
             connStateSubject.onNext(IRPCClient.ConnState.values()[connState.ordinal()]);
         startStateListener(connStateListener);
