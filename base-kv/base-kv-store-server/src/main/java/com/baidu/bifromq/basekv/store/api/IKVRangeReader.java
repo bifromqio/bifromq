@@ -13,12 +13,9 @@
 
 package com.baidu.bifromq.basekv.store.api;
 
-import javax.annotation.concurrent.NotThreadSafe;
-
 /**
- * Thread-Unsafe reader to access the consistent view of KVRange
+ * Thread-Unsafe reader to access the consistent view of KVRange.
  */
-@NotThreadSafe
 public interface IKVRangeReader extends IKVRangeMetadata {
 
     IKVReader newDataReader();

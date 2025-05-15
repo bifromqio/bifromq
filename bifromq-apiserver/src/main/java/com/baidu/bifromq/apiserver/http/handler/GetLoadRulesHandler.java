@@ -36,11 +36,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 

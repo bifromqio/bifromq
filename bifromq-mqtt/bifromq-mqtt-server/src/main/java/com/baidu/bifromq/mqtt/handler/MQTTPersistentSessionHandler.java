@@ -65,6 +65,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import io.micrometer.core.instrument.Timer;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttMessage;
+import jakarta.annotation.Nullable;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -73,7 +74,6 @@ import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 
 /**

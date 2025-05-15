@@ -85,16 +85,16 @@
             <artifactId>slf4j-api</artifactId>
         </dependency>
         <dependency>
-            <groupId>javax.ws.rs</groupId>
-            <artifactId>javax.ws.rs-api</artifactId>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
         </dependency>
         <dependency>
             <groupId>io.swagger.core.v3</groupId>
-            <artifactId>swagger-core</artifactId>
+            <artifactId>swagger-core-jakarta</artifactId>
         </dependency>
         <dependency>
             <groupId>io.swagger.core.v3</groupId>
-            <artifactId>swagger-jaxrs2</artifactId>
+            <artifactId>swagger-jaxrs2-jakarta</artifactId>
         </dependency>
         <!-- test dependencies -->
         <dependency>
@@ -111,7 +111,7 @@
         <plugins>
             <plugin>
                 <groupId>io.swagger.core.v3</groupId>
-                <artifactId>swagger-maven-plugin</artifactId>
+                <artifactId>swagger-maven-plugin-jakarta</artifactId>
                 <version>${swagger.version}</version>
                 <configuration>
                     <outputPath>${project.build.directory}/swagger</outputPath>

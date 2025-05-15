@@ -24,9 +24,9 @@ import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
 import io.micrometer.core.instrument.binder.netty4.NettyEventExecutorMetrics;
 import io.netty.channel.EventLoopGroup;
+import jakarta.inject.Singleton;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
-import javax.inject.Singleton;
 
 public class ExecutorsModule extends AbstractModule {
     @Override

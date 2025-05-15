@@ -30,13 +30,13 @@ import io.grpc.Channel;
 import io.grpc.Context;
 import io.grpc.MethodDescriptor;
 import io.grpc.stub.StreamObserver;
+import jakarta.annotation.Nullable;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
-import javax.annotation.Nullable;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 

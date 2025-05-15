@@ -13,8 +13,8 @@
 
 package com.baidu.bifromq.retain.store.gc;
 
+import jakarta.annotation.Nullable;
 import java.util.concurrent.CompletableFuture;
-import javax.annotation.Nullable;
 
 public interface IRetainStoreGCProcessor {
     CompletableFuture<Result> gc(long reqId,

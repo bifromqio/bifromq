@@ -38,11 +38,43 @@ import com.google.inject.Provider;
 import com.google.inject.name.Names;
 import io.netty.channel.EventLoopGroup;
 import io.netty.handler.ssl.SslContext;
+import jakarta.inject.Named;
+import jakarta.inject.Singleton;
 import java.util.Optional;
-import javax.inject.Named;
-import javax.inject.Singleton;
 
 public class CoreServiceModule extends AbstractModule {
+    @Override
+    protected void configure() {
+        bind(SharedResourcesHolder.class).toProvider(SharedCloseableResourcesProvider.class).in(Singleton.class);
+        bind(IAgentHost.class).toProvider(AgentHostProvider.class).in(Singleton.class);
+        bind(ICRDTService.class).toProvider(CRDTServiceProvider.class).in(Singleton.class);
+        bind(IBaseKVMetaService.class).toProvider(BaseKVMetaServiceProvider.class).in(Singleton.class);
+        bind(IRPCServiceTrafficService.class).toProvider(RPCServiceTrafficServiceProvider.class).in(Singleton.class);
+
+        bind(IDistClient.class).toProvider(DistClientProvider.class).in(Singleton.class);
+        bind(IBaseKVStoreClient.class)
+            .annotatedWith(Names.named("distWorkerClient"))
+            .toProvider(DistWorkerClientProvider.class)
+            .in(Singleton.class);
+
+        bind(IInboxClient.class).toProvider(InboxClientProvider.class).in(Singleton.class);
+        bind(IBaseKVStoreClient.class)
+            .annotatedWith(Names.named("inboxStoreClient"))
+            .toProvider(InboxStoreClientProvider.class)
+            .in(Singleton.class);
+
+        bind(IRetainClient.class).toProvider(RetainClientProvider.class).in(Singleton.class);
+        bind(IBaseKVStoreClient.class)
+            .annotatedWith(Names.named("retainStoreClient"))
+            .toProvider(RetainStoreClientProvider.class)
+            .in(Singleton.class);
+
+        bind(ISessionDictClient.class).toProvider(SessionDictClientProvider.class).in(Singleton.class);
+
+        bind(IMqttBrokerClient.class).toProvider(MQTTBrokerClientProvider.class).in(Singleton.class);
+
+    }
+
     private static class SharedCloseableResourcesProvider implements Provider<SharedResourcesHolder> {
 
         @Override
@@ -374,37 +406,5 @@ public class CoreServiceModule extends AbstractModule {
                 .sslContext(sslContext)
                 .build();
         }
-    }
-
-    @Override
-    protected void configure() {
-        bind(SharedResourcesHolder.class).toProvider(SharedCloseableResourcesProvider.class).in(Singleton.class);
-        bind(IAgentHost.class).toProvider(AgentHostProvider.class).in(Singleton.class);
-        bind(ICRDTService.class).toProvider(CRDTServiceProvider.class).in(Singleton.class);
-        bind(IBaseKVMetaService.class).toProvider(BaseKVMetaServiceProvider.class).in(Singleton.class);
-        bind(IRPCServiceTrafficService.class).toProvider(RPCServiceTrafficServiceProvider.class).in(Singleton.class);
-
-        bind(IDistClient.class).toProvider(DistClientProvider.class).in(Singleton.class);
-        bind(IBaseKVStoreClient.class)
-            .annotatedWith(Names.named("distWorkerClient"))
-            .toProvider(DistWorkerClientProvider.class)
-            .in(Singleton.class);
-
-        bind(IInboxClient.class).toProvider(InboxClientProvider.class).in(Singleton.class);
-        bind(IBaseKVStoreClient.class)
-            .annotatedWith(Names.named("inboxStoreClient"))
-            .toProvider(InboxStoreClientProvider.class)
-            .in(Singleton.class);
-
-        bind(IRetainClient.class).toProvider(RetainClientProvider.class).in(Singleton.class);
-        bind(IBaseKVStoreClient.class)
-            .annotatedWith(Names.named("retainStoreClient"))
-            .toProvider(RetainStoreClientProvider.class)
-            .in(Singleton.class);
-
-        bind(ISessionDictClient.class).toProvider(SessionDictClientProvider.class).in(Singleton.class);
-
-        bind(IMqttBrokerClient.class).toProvider(MQTTBrokerClientProvider.class).in(Singleton.class);
-
     }
 }

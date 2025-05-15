@@ -29,10 +29,18 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import jakarta.inject.Singleton;
 import java.util.Optional;
-import javax.inject.Singleton;
 
 public class RPCClientSSLContextModule extends AbstractModule {
+    @Override
+    protected void configure() {
+        bind(new TypeLiteral<Optional<SslContext>>() {
+        }).annotatedWith(Names.named("rpcClientSSLContext"))
+            .toProvider(RPCClientSSLContextProvider.class)
+            .in(Singleton.class);
+    }
+
     private static class RPCClientSSLContextProvider implements Provider<Optional<SslContext>> {
         private final StandaloneConfig config;
 
@@ -68,13 +76,5 @@ public class RPCClientSSLContextModule extends AbstractModule {
                 throw new RuntimeException("Fail to initialize RPC client SSLContext", e);
             }
         }
-    }
-
-    @Override
-    protected void configure() {
-        bind(new TypeLiteral<Optional<SslContext>>() {
-        }).annotatedWith(Names.named("rpcClientSSLContext"))
-            .toProvider(RPCClientSSLContextProvider.class)
-            .in(Singleton.class);
     }
 }

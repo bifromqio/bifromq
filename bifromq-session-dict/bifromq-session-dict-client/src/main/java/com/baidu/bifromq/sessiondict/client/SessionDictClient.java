@@ -37,10 +37,10 @@ import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.base.Strings;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.reactivex.rxjava3.core.Observable;
+import jakarta.annotation.Nullable;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j

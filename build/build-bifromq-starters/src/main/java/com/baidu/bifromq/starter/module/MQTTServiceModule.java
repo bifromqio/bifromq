@@ -33,8 +33,8 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import com.google.inject.TypeLiteral;
+import jakarta.inject.Singleton;
 import java.util.Optional;
-import javax.inject.Singleton;
 
 public class MQTTServiceModule extends AbstractModule {
     @Override

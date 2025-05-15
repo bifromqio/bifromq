@@ -22,10 +22,17 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import com.google.inject.TypeLiteral;
+import jakarta.inject.Singleton;
 import java.util.Optional;
-import javax.inject.Singleton;
 
 public class SessionDictServiceModule extends AbstractModule {
+    @Override
+    protected void configure() {
+        bind(new TypeLiteral<Optional<ISessionDictServer>>() {
+        }).toProvider(SessionDictServerProvider.class)
+            .in(Singleton.class);
+    }
+
     private static class SessionDictServerProvider implements Provider<Optional<ISessionDictServer>> {
         private final StandaloneConfig config;
         private final ServiceInjector injector;
@@ -50,12 +57,5 @@ public class SessionDictServiceModule extends AbstractModule {
                 .defaultGroupTags(serverConfig.getDefaultGroups())
                 .build());
         }
-    }
-
-    @Override
-    protected void configure() {
-        bind(new TypeLiteral<Optional<ISessionDictServer>>() {
-        }).toProvider(SessionDictServerProvider.class)
-            .in(Singleton.class);
     }
 }

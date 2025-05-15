@@ -33,9 +33,9 @@ import com.baidu.bifromq.baserpc.client.exception.ServerNotFoundException;
 import com.baidu.bifromq.retain.rpc.proto.GCReply;
 import com.baidu.bifromq.retain.rpc.proto.GCRequest;
 import com.baidu.bifromq.retain.rpc.proto.RetainServiceRWCoProcInput;
+import jakarta.annotation.Nullable;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
-import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j

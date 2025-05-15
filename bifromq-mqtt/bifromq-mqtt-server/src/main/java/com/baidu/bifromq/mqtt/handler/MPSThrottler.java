@@ -14,12 +14,10 @@
 package com.baidu.bifromq.mqtt.handler;
 
 import java.util.concurrent.TimeUnit;
-import javax.annotation.concurrent.NotThreadSafe;
 
 /**
- * simple mps throttler with 'hard' maximum mps limit, mps could be reset
+ * simple mps throttler with 'hard' maximum mps limit, mps could be reset.
  */
-@NotThreadSafe
 public class MPSThrottler {
     private int maxMPS;
     private long lastSec = 0;

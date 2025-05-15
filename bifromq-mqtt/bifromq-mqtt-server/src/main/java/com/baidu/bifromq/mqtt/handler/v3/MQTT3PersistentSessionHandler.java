@@ -22,7 +22,7 @@ import com.baidu.bifromq.mqtt.handler.TenantSettings;
 import com.baidu.bifromq.mqtt.handler.condition.Condition;
 import com.baidu.bifromq.type.ClientInfo;
 import io.netty.channel.ChannelHandlerContext;
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 import lombok.Builder;
 
 public final class MQTT3PersistentSessionHandler extends MQTTPersistentSessionHandler {

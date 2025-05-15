@@ -17,11 +17,11 @@ import static java.util.Collections.emptyMap;
 
 import io.grpc.MethodDescriptor;
 import io.reactivex.rxjava3.core.Observable;
+import jakarta.annotation.Nullable;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import javax.annotation.Nullable;
 
 /**
  * The RPC client interface.
@@ -32,64 +32,12 @@ public interface IRPCClient extends IConnectable {
         return new RPCClientBuilder();
     }
 
-
-    /**
-     * The interface for managed request-response pipeline.
-     *
-     * @param <ReqT>  the request type
-     * @param <RespT> the response type
-     */
-    interface IRequestPipeline<ReqT, RespT> {
-        boolean isClosed();
-
-        CompletableFuture<RespT> invoke(ReqT req);
-
-        void close();
-    }
-
-    /**
-     * The interface for managed bi-di message stream, which will automatically handle load balance change.
-     *
-     * @param <MsgT> the message received from server
-     * @param <AckT> the ack send to server
-     */
-    interface IMessageStream<MsgT, AckT> {
-        boolean isClosed();
-
-        /**
-         * Send ack to server.
-         *
-         * @param ack the ack
-         */
-        void ack(AckT ack);
-
-        /**
-         * Register a message consumer.
-         *
-         * @param consumer the consumer
-         */
-        void onMessage(Consumer<MsgT> consumer);
-
-        /**
-         * Register a retarget event consumer.
-         *
-         * @param consumer the consumer
-         */
-        void onRetarget(Consumer<Long> consumer);
-
-        /**
-         * Close the stream.
-         */
-        void close();
-    }
-
     /**
      * The observable of live servers.
      *
      * @return an observable of connectable servers with a map of metadata attached
      */
     Observable<Map<String, Map<String, String>>> serverList();
-
 
     default <ReqT, RespT> CompletableFuture<RespT> invoke(String tenantId,
                                                           @Nullable String desiredServerId,
@@ -172,9 +120,59 @@ public interface IRPCClient extends IConnectable {
                                                                 Supplier<Map<String, String>> metadataSupplier,
                                                                 MethodDescriptor<AckT, MsgT> methodDesc);
 
-
     /**
      * Close the client.
      */
     void stop();
+
+    /**
+     * The interface for managed request-response pipeline.
+     *
+     * @param <ReqT>  the request type
+     * @param <RespT> the response type
+     */
+    interface IRequestPipeline<ReqT, RespT> {
+        boolean isClosed();
+
+        CompletableFuture<RespT> invoke(ReqT req);
+
+        void close();
+    }
+
+
+    /**
+     * The interface for managed bi-di message stream, which will automatically handle load balance change.
+     *
+     * @param <MsgT> the message received from server
+     * @param <AckT> the ack send to server
+     */
+    interface IMessageStream<MsgT, AckT> {
+        boolean isClosed();
+
+        /**
+         * Send ack to server.
+         *
+         * @param ack the ack
+         */
+        void ack(AckT ack);
+
+        /**
+         * Register a message consumer.
+         *
+         * @param consumer the consumer
+         */
+        void onMessage(Consumer<MsgT> consumer);
+
+        /**
+         * Register a retarget event consumer.
+         *
+         * @param consumer the consumer
+         */
+        void onRetarget(Consumer<Long> consumer);
+
+        /**
+         * Close the stream.
+         */
+        void close();
+    }
 }

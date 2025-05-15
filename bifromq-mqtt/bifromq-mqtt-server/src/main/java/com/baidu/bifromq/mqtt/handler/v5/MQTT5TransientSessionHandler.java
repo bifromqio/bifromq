@@ -24,7 +24,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.mqtt.MqttConnectMessage;
 import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageType;
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 import lombok.Builder;
 
 public final class MQTT5TransientSessionHandler extends MQTTTransientSessionHandler {

@@ -28,9 +28,9 @@ import io.netty.handler.codec.mqtt.MqttSubAckMessage;
 import io.netty.handler.codec.mqtt.MqttSubscribeMessage;
 import io.netty.handler.codec.mqtt.MqttUnsubAckMessage;
 import io.netty.handler.codec.mqtt.MqttUnsubscribeMessage;
+import jakarta.annotation.Nullable;
 import java.util.List;
 import java.util.Optional;
-import javax.annotation.Nullable;
 
 public interface IMQTTProtocolHelper {
     UserProperties getUserProps(MqttPublishMessage mqttMessage);

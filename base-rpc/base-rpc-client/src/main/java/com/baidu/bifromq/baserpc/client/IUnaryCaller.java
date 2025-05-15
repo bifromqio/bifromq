@@ -15,9 +15,9 @@ package com.baidu.bifromq.baserpc.client;
 
 import static java.util.Collections.emptyMap;
 
+import jakarta.annotation.Nullable;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import javax.annotation.Nullable;
 
 /**
  * The caller for unary RPC.

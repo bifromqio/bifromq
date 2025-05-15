@@ -33,21 +33,14 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import javax.annotation.CheckForNull;
 
 class SessionRegistry implements ISessionRegistry {
+    private static final ServerRedirection NO_MOVE =
+        ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build();
     static Comparator<MqttClientKey> ClientKeyComparator = (key1, key2) -> Comparator
         .comparing(MqttClientKey::userId)
         .thenComparing(MqttClientKey::clientId)
         .compare(key1, key2);
-
-    private static class SessionCounter {
-        private final AtomicInteger total = new AtomicInteger();
-        private final AtomicInteger persistent = new AtomicInteger();
-    }
-
-    private static final ServerRedirection NO_MOVE =
-        ServerRedirection.newBuilder().setType(ServerRedirection.Type.NO_MOVE).build();
     private static final NavigableMap<MqttClientKey, ClientInfo> EMPTY_MAP = new TreeMap<>(ClientKeyComparator);
     private final Map<String, NavigableMap<MqttClientKey, ClientInfo>> tenantSessions = Maps.newConcurrentMap();
     private final Map<String, SessionCounter> sessionCounters = Maps.newConcurrentMap();
@@ -155,8 +148,6 @@ class SessionRegistry implements ISessionRegistry {
                 .values()
                 .iterator();
 
-
-            @CheckForNull
             @Override
             protected SessionRegistration computeNext() {
                 if (sessionOwners.hasNext()) {
@@ -181,8 +172,6 @@ class SessionRegistry implements ISessionRegistry {
                 .values()
                 .iterator();
 
-
-            @CheckForNull
             @Override
             protected SessionRegistration computeNext() {
                 if (sessionOwners.hasNext()) {
@@ -210,5 +199,10 @@ class SessionRegistry implements ISessionRegistry {
     private boolean isPersistent(ClientInfo sessionOwner) {
         return sessionOwner.getMetadataOrDefault(MQTT_CLIENT_SESSION_TYPE, MQTT_CLIENT_SESSION_TYPE_T_VALUE)
             .equals(MQTT_CLIENT_SESSION_TYPE_P_VALUE);
+    }
+
+    private static class SessionCounter {
+        private final AtomicInteger total = new AtomicInteger();
+        private final AtomicInteger persistent = new AtomicInteger();
     }
 }

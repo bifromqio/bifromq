@@ -37,10 +37,10 @@ import com.google.inject.Key;
 import com.google.inject.Provider;
 import com.google.inject.TypeLiteral;
 import com.google.inject.name.Names;
+import jakarta.inject.Singleton;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.ScheduledExecutorService;
-import javax.inject.Singleton;
 
 public class RetainServiceModule extends AbstractModule {
     @Override

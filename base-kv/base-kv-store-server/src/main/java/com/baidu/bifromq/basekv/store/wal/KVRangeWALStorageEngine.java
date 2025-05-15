@@ -30,13 +30,11 @@ import com.google.common.collect.Sets;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.annotation.concurrent.NotThreadSafe;
 import org.slf4j.Logger;
 
 /**
  * WALStore engine.
  */
-@NotThreadSafe
 public class KVRangeWALStorageEngine implements IKVRangeWALStoreEngine {
     private final Logger log;
     private final String clusterId;

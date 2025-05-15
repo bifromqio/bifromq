@@ -26,13 +26,23 @@ import com.baidu.bifromq.plugin.subbroker.SubBrokerManager;
 import com.baidu.bifromq.starter.config.StandaloneConfig;
 import com.google.inject.AbstractModule;
 import com.google.inject.Inject;
-import javax.inject.Singleton;
+import jakarta.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import org.pf4j.PluginManager;
-import org.slf4j.Logger;
 
 @Slf4j
 public class PluginModule extends AbstractModule {
+    @Override
+    protected void configure() {
+        bind(PluginManager.class).toProvider(PluginManagerProvider.class).in(Singleton.class);
+        bind(ISubBrokerManager.class).toProvider(SubBrokerManagerProvider.class).in(Singleton.class);
+        bind(AuthProviderManager.class).toProvider(AuthProviderManagerProvider.class).in(Singleton.class);
+        bind(EventCollectorManager.class).toProvider(EventCollectorManagerProvider.class).in(Singleton.class);
+        bind(ResourceThrottlerManager.class).toProvider(ResourceThrottlerManagerProvider.class).in(Singleton.class);
+        bind(SettingProviderManager.class).toProvider(SettingProviderManagerProvider.class).in(Singleton.class);
+        bind(ClientBalancerManager.class).toProvider(ClientBalancerManagerProvider.class).in(Singleton.class);
+    }
+
     private static class PluginManagerProvider extends SharedResourceProvider<BifroMQPluginManager> {
 
         @Inject
@@ -169,16 +179,5 @@ public class PluginModule extends AbstractModule {
         public ISubBrokerManager share() {
             return new SubBrokerManager(pluginManager, mqttBrokerClient, inboxClient);
         }
-    }
-
-    @Override
-    protected void configure() {
-        bind(PluginManager.class).toProvider(PluginManagerProvider.class).in(Singleton.class);
-        bind(ISubBrokerManager.class).toProvider(SubBrokerManagerProvider.class).in(Singleton.class);
-        bind(AuthProviderManager.class).toProvider(AuthProviderManagerProvider.class).in(Singleton.class);
-        bind(EventCollectorManager.class).toProvider(EventCollectorManagerProvider.class).in(Singleton.class);
-        bind(ResourceThrottlerManager.class).toProvider(ResourceThrottlerManagerProvider.class).in(Singleton.class);
-        bind(SettingProviderManager.class).toProvider(SettingProviderManagerProvider.class).in(Singleton.class);
-        bind(ClientBalancerManager.class).toProvider(ClientBalancerManagerProvider.class).in(Singleton.class);
     }
 }

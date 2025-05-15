@@ -31,9 +31,14 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
-import javax.inject.Singleton;
+import jakarta.inject.Singleton;
 
 public class RPCServerBuilderModule extends AbstractModule {
+    @Override
+    protected void configure() {
+        bind(RPCServerBuilder.class).toProvider(RPCServerBuilderProvider.class).in(Singleton.class);
+    }
+
     private static class RPCServerBuilderProvider implements Provider<RPCServerBuilder> {
         private final StandaloneConfig config;
         private final IRPCServiceTrafficService trafficService;
@@ -77,10 +82,5 @@ public class RPCServerBuilderModule extends AbstractModule {
                 throw new RuntimeException("Fail to initialize server SSLContext", e);
             }
         }
-    }
-
-    @Override
-    protected void configure() {
-        bind(RPCServerBuilder.class).toProvider(RPCServerBuilderProvider.class).in(Singleton.class);
     }
 }

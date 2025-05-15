@@ -24,10 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
-import javax.annotation.concurrent.NotThreadSafe;
 
-
-@NotThreadSafe
 final class LoadRecordWindow {
     private final Function<ByteString, Optional<ByteString>> toSplitKey;
     private final AtomicInteger records = new AtomicInteger();

@@ -20,12 +20,12 @@ import com.baidu.bifromq.baserpc.metrics.RPCMetric;
 import io.grpc.CallOptions;
 import io.grpc.MethodDescriptor;
 import io.reactivex.rxjava3.subjects.PublishSubject;
+import jakarta.annotation.Nullable;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j

@@ -39,20 +39,20 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Path("/landscape/store")
 class GetStoreLandscapeHandler extends AbstractLoadRulesHandler {
     private static final String STORE_SERVICE_NAME_SUFFIX = "@basekv.BaseKVStoreService";
-    private final IRPCServiceTrafficService trafficService;
     protected final Map<String, IRPCServiceTrafficGovernor> governorMap = new ConcurrentHashMap<>();
+    private final IRPCServiceTrafficService trafficService;
     private final CompositeDisposable disposable = new CompositeDisposable();
 
     GetStoreLandscapeHandler(IBaseKVMetaService metaService, IRPCServiceTrafficService trafficService) {

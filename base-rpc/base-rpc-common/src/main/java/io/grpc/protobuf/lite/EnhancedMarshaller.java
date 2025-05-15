@@ -22,10 +22,10 @@ import com.google.protobuf.Parser;
 import com.google.protobuf.UnknownFieldSet;
 import io.grpc.KnownLength;
 import io.grpc.MethodDescriptor;
+import jakarta.annotation.Nullable;
 import java.io.InputStream;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
-import javax.annotation.Nullable;
 import lombok.SneakyThrows;
 
 /**
@@ -78,7 +78,7 @@ public class EnhancedMarshaller<T> implements MethodDescriptor.PrototypeMarshall
         if (stream instanceof ProtoInputStream protoStream) {
             if (protoStream.parser() == parser) {
                 @SuppressWarnings("unchecked")
-                T message = (T) ((ProtoInputStream) stream).message();
+                T message = (T) protoStream.message();
                 return message;
             }
         }

@@ -114,10 +114,10 @@ import io.netty.handler.codec.mqtt.MqttMessage;
 import io.netty.handler.codec.mqtt.MqttMessageBuilders;
 import io.netty.handler.codec.mqtt.MqttProperties;
 import io.netty.handler.codec.mqtt.MqttReasonCodeAndPropertiesVariableHeader;
+import jakarta.annotation.Nullable;
 import java.net.InetSocketAddress;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j

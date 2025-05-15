@@ -26,8 +26,8 @@ import com.baidu.bifromq.sessiondict.rpc.proto.SubRequest;
 import com.baidu.bifromq.sessiondict.rpc.proto.UnsubReply;
 import com.baidu.bifromq.sessiondict.rpc.proto.UnsubRequest;
 import com.baidu.bifromq.type.ClientInfo;
+import jakarta.annotation.Nullable;
 import java.util.concurrent.CompletableFuture;
-import javax.annotation.Nullable;
 
 public interface ISessionDictClient extends IConnectable, AutoCloseable {
 
