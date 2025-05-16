@@ -17,7 +17,10 @@ import com.baidu.bifromq.baserpc.trafficgovernor.IRPCServiceLandscape;
 import io.grpc.NameResolver;
 import io.grpc.NameResolverProvider;
 import io.grpc.NameResolverRegistry;
+import java.net.SocketAddress;
 import java.net.URI;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.AccessLevel;
@@ -60,5 +63,10 @@ public class TrafficGovernorNameResolverProvider extends NameResolverProvider {
     @Override
     public String getDefaultScheme() {
         return SCHEME;
+    }
+
+    @Override
+    public Collection<Class<? extends SocketAddress>> getProducedSocketAddressTypes() {
+        return Collections.singleton(SocketAddress.class);
     }
 }
