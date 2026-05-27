@@ -960,9 +960,6 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         }
         // confirm up to the current seq
         onConfirm(confirmingMsg.seq);
-        if (resendTask != null && !resendTask.isDone()) {
-            resendTask.cancel(true);
-        }
     }
 
     protected abstract void onConfirm(long seq);
