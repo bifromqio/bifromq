@@ -24,6 +24,7 @@ import static io.netty.handler.codec.mqtt.MqttMessageType.PUBREL;
 import static org.apache.bifromq.mqtt.handler.MQTTSessionIdUtil.userSessionId;
 import static org.apache.bifromq.plugin.eventcollector.EventType.DISCARD;
 import static org.apache.bifromq.plugin.eventcollector.EventType.EXCEED_RECEIVING_LIMIT;
+import static org.apache.bifromq.plugin.eventcollector.EventType.IDLE;
 import static org.apache.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC;
 import static org.apache.bifromq.plugin.eventcollector.EventType.INVALID_TOPIC_FILTER;
 import static org.apache.bifromq.plugin.eventcollector.EventType.MALFORMED_TOPIC;
@@ -726,6 +727,35 @@ public class MQTT3TransientSessionHandlerTest extends BaseSessionHandlerTest {
             assertEquals(message.variableHeader().topicName(), topic);
         }
         verifyEvent(MQTT_SESSION_START, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED, QOS0_PUSHED);
+    }
+
+    @Test
+    public void qos0PubDoesNotRefreshSessionKeepAlive() {
+        mockCheckPermission(true);
+        mockDistMatch(true);
+        transientSessionHandler.subscribe(System.nanoTime(), topicFilter, QoS.AT_MOST_ONCE);
+        channel.runPendingTasks();
+        ArgumentCaptor<Long> longCaptor = ArgumentCaptor.forClass(Long.class);
+        verify(localDistService).match(anyLong(), eq(topicFilter), longCaptor.capture(), any());
+
+        testTicker.advanceTimeBy(100, TimeUnit.SECONDS);
+        channel.advanceTimeBy(100, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+        assertTrue(channel.isActive());
+
+        transientSessionHandler.publish(s2cMessageList(topic, 1, QoS.AT_MOST_ONCE),
+            Collections.singleton(new IMQTTTransientSession.MatchedTopicFilter(topicFilter, longCaptor.getValue())));
+        channel.runPendingTasks();
+        MqttPublishMessage message = channel.readOutbound();
+        assertEquals(message.fixedHeader().qosLevel().value(), QoS.AT_MOST_ONCE_VALUE);
+        assertEquals(message.variableHeader().topicName(), topic);
+
+        testTicker.advanceTimeBy(81, TimeUnit.SECONDS);
+        channel.advanceTimeBy(81, TimeUnit.SECONDS);
+        channel.runScheduledPendingTasks();
+
+        assertFalse(channel.isActive());
+        verifyEvent(MQTT_SESSION_START, QOS0_PUSHED, IDLE);
     }
 
     @Test

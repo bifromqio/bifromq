@@ -1063,7 +1063,6 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         write(pubMsg).addListener(f -> {
             memUsage.addAndGet(-msgSize);
             if (f.isSuccess()) {
-                lastActiveAtNanos = sessionCtx.nanoTime();
                 if (settings.debugMode) {
                     eventCollector.report(getLocal(QoS0Pushed.class)
                         .isRetain(msg.isRetain())
