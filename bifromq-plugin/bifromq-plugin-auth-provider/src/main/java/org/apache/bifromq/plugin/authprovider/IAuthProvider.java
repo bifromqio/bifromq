@@ -89,6 +89,12 @@ public interface IAuthProvider extends ExtensionPoint {
                     if (mqtt3AuthResult.getReject().hasReason()) {
                         failedBuilder.setReason(mqtt3AuthResult.getReject().getReason());
                     }
+                    if (mqtt3AuthResult.getReject().hasTenantId()) {
+                        failedBuilder.setTenantId(mqtt3AuthResult.getReject().getTenantId());
+                    }
+                    if (mqtt3AuthResult.getReject().hasUserId()) {
+                        failedBuilder.setUserId(mqtt3AuthResult.getReject().getUserId());
+                    }
                     mqtt5AuthResultBuilder.setFailed(failedBuilder.build());
                 }
             }
