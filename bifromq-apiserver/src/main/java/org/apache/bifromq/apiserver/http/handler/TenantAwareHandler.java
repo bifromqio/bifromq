@@ -61,7 +61,6 @@ abstract class TenantAwareHandler implements IHTTPRequestHandler {
             response.headers().set(CONTENT_LENGTH, 0);
             return CompletableFuture.completedFuture(response);
         }
-        req.retain();
         return handle(reqId, tenantId, req);
     }
 

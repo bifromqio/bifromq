@@ -960,9 +960,6 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         }
         // confirm up to the current seq
         onConfirm(confirmingMsg.seq);
-        if (resendTask != null && !resendTask.isDone()) {
-            resendTask.cancel(true);
-        }
     }
 
     protected abstract void onConfirm(long seq);
@@ -1066,7 +1063,6 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
         write(pubMsg).addListener(f -> {
             memUsage.addAndGet(-msgSize);
             if (f.isSuccess()) {
-                lastActiveAtNanos = sessionCtx.nanoTime();
                 if (settings.debugMode) {
                     eventCollector.report(getLocal(QoS0Pushed.class)
                         .isRetain(msg.isRetain())
