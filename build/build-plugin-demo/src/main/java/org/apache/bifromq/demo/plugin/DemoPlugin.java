@@ -29,9 +29,11 @@ import io.micrometer.core.instrument.config.MeterFilter;
 import io.micrometer.core.instrument.distribution.DistributionStatisticConfig;
 import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
+import io.prometheus.client.exporter.common.TextFormat;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.bifromq.plugin.BifroMQPlugin;
@@ -79,10 +81,12 @@ public class DemoPlugin extends BifroMQPlugin<DemoPluginContext> {
         try {
             prometheusExportServer = HttpServer.create(new InetSocketAddress(exportPort), 0);
             prometheusExportServer.createContext(getContext(), httpExchange -> {
-                String response = registry.scrape();
-                httpExchange.sendResponseHeaders(200, response.getBytes().length);
+                byte[] response = registry.scrape().getBytes(StandardCharsets.UTF_8);
+                httpExchange.getResponseHeaders()
+                    .set("Content-Type", TextFormat.CONTENT_TYPE_004);
+                httpExchange.sendResponseHeaders(200, response.length);
                 try (OutputStream os = httpExchange.getResponseBody()) {
-                    os.write(response.getBytes());
+                    os.write(response);
                 }
             });
             serverThread = new Thread(prometheusExportServer::start);
