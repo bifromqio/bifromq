@@ -42,6 +42,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -151,15 +152,6 @@ class GetStoreRangesHandler extends AbstractLandscapeHandler {
     }
 
     private String toHex(ByteString bs) {
-        StringBuilder sb = new StringBuilder(bs.size() * 5);
-        for (int i = 0; i < bs.size(); i++) {
-            byte b = bs.byteAt(i);
-            if (b >= 32 && b <= 126) {
-                sb.append((char) b);
-            } else {
-                sb.append(String.format("0x%02X", b));
-            }
-        }
-        return sb.toString();
+        return HexFormat.of().formatHex(bs.toByteArray());
     }
 }
