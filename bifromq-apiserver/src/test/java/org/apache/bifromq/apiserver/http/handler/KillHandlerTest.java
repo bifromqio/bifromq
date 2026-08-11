@@ -35,12 +35,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertThrows;
-import static org.testng.Assert.assertTrue;
 
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import org.apache.bifromq.sessiondict.client.ISessionDictClient;
 import org.apache.bifromq.sessiondict.rpc.proto.KillReply;
@@ -254,12 +254,7 @@ public class KillHandlerTest extends AbstractHTTPRequestHandlerTest<KillHandler>
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
-        handler.handle(reqId, tenantId, req);
-        FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
-        assertEquals(response.protocolVersion(), req.protocolVersion());
-        assertEquals(response.status(), HttpResponseStatus.BAD_REQUEST);
-        assertTrue(response.content().readableBytes() > 0);
+        assertRepeatedValidationResponse(reqId, tenantId, req, "Invalid server redirect value");
     }
 
     @Test
@@ -275,15 +270,26 @@ public class KillHandlerTest extends AbstractHTTPRequestHandlerTest<KillHandler>
         long reqId = 123;
         String tenantId = "bifromq_dev";
 
-        KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
-        handler.handle(reqId, tenantId, req);
-        FullHttpResponse response = handler.handle(reqId, tenantId, req).join();
-        assertEquals(response.protocolVersion(), req.protocolVersion());
-        assertEquals(response.status(), HttpResponseStatus.BAD_REQUEST);
-        assertTrue(response.content().readableBytes() > 0);
+        assertRepeatedValidationResponse(reqId, tenantId, req, "Server reference exceeds 65535 bytes");
     }
 
     private DefaultFullHttpRequest buildRequest() {
         return buildRequest(HttpMethod.DELETE);
+    }
+
+    private void assertRepeatedValidationResponse(long reqId, String tenantId, DefaultFullHttpRequest req,
+                                                  String expectedContent) {
+        KillHandler handler = new KillHandler(settingProvider, sessionDictClient);
+        FullHttpResponse firstResponse = handler.handle(reqId, tenantId, req).join();
+        firstResponse.release();
+
+        FullHttpResponse secondResponse = handler.handle(reqId + 1, tenantId, req).join();
+        try {
+            assertEquals(secondResponse.protocolVersion(), req.protocolVersion());
+            assertEquals(secondResponse.status(), HttpResponseStatus.BAD_REQUEST);
+            assertEquals(secondResponse.content().toString(StandardCharsets.UTF_8), expectedContent);
+        } finally {
+            secondResponse.release();
+        }
     }
 }
