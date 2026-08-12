@@ -31,7 +31,6 @@ import static org.apache.bifromq.apiserver.http.handler.utils.HeaderUtils.getCli
 import static org.apache.bifromq.apiserver.http.handler.utils.HeaderUtils.getHeader;
 
 import com.google.common.base.Strings;
-import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -47,6 +46,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.Path;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -65,10 +65,8 @@ final class KillHandler extends TenantAwareHandler {
     private static final String SERVER_REDIRECT_VALUE_TEMP_USE = "temp_use";
     private static final Set<String> SERVER_REDIRECT_VALUES =
         Set.of(SERVER_REDIRECT_VALUE_NO, SERVER_REDIRECT_VALUE_MOVE, SERVER_REDIRECT_VALUE_TEMP_USE);
-    private static final ByteBuf INVALID_SERVER_REDIRECT =
-        Unpooled.wrappedBuffer("Invalid server redirect value".getBytes());
-    private static final ByteBuf TOO_LONG_SERVER_REFERENCE =
-        Unpooled.wrappedBuffer("Server reference exceeds 65535 bytes".getBytes());
+    private static final String INVALID_SERVER_REDIRECT = "Invalid server redirect value";
+    private static final String TOO_LONG_SERVER_REFERENCE = "Server reference exceeds 65535 bytes";
     private final ISessionDictClient sessionDictClient;
 
     KillHandler(ISettingProvider settingProvider, ISessionDictClient sessionDictClient) {
@@ -119,11 +117,13 @@ final class KillHandler extends TenantAwareHandler {
         Map<String, String> clientMeta = getClientMeta(req);
         if (serverRedirect != null && !SERVER_REDIRECT_VALUES.contains(serverRedirect)) {
             return CompletableFuture.completedFuture(
-                new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, INVALID_SERVER_REDIRECT));
+                new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
+                    Unpooled.copiedBuffer(INVALID_SERVER_REDIRECT, StandardCharsets.UTF_8)));
         }
         if (serverReference != null && serverReference.length() > MAX_SERVER_REFERENCE_LENGTH) {
             return CompletableFuture.completedFuture(
-                new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, TOO_LONG_SERVER_REFERENCE));
+                new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
+                    Unpooled.copiedBuffer(TOO_LONG_SERVER_REFERENCE, StandardCharsets.UTF_8)));
         }
 
         ServerRedirection serverRedirection = buildServerRedirection(serverRedirect, serverReference);

@@ -51,6 +51,7 @@ import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import org.mockito.Mock;
 import org.testng.annotations.Test;
@@ -128,11 +129,42 @@ public class PubHandlerTest extends AbstractHTTPRequestHandlerTest<PubHandler> {
     }
 
     @Test
-    public void pubWithWrongExpirySeconds() {
+    public void repeatedInvalidQoSResponseHasReadableContent() {
         DefaultFullHttpRequest req = buildRequest();
         req.headers().set(HEADER_TOPIC.header, "/greeting");
         req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
         req.headers().set(HEADER_QOS.header, "3");
+
+        assertRepeatedValidationResponse(req, HttpResponseStatus.BAD_REQUEST, "Invalid QoS");
+    }
+
+    @Test
+    public void repeatedUnacceptedTopicResponseHasReadableContent() {
+        DefaultFullHttpRequest req = buildRequest();
+        req.headers().set(HEADER_TOPIC.header, "a".repeat(256));
+        req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
+        req.headers().set(HEADER_QOS.header, "1");
+
+        assertRepeatedValidationResponse(req, HttpResponseStatus.FORBIDDEN, "Unaccepted Topic");
+    }
+
+    @Test
+    public void repeatedInvalidExpiryResponseHasReadableContent() {
+        DefaultFullHttpRequest req = buildRequest();
+        req.headers().set(HEADER_TOPIC.header, "/greeting");
+        req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
+        req.headers().set(HEADER_QOS.header, "1");
+        req.headers().set(HEADER_EXPIRY_SECONDS.header, "0");
+
+        assertRepeatedValidationResponse(req, HttpResponseStatus.BAD_REQUEST, "Invalid expiry seconds");
+    }
+
+    @Test
+    public void pubWithWrongExpirySeconds() {
+        DefaultFullHttpRequest req = buildRequest();
+        req.headers().set(HEADER_TOPIC.header, "/greeting");
+        req.headers().set(HEADER_CLIENT_TYPE.header, "admin_team");
+        req.headers().set(HEADER_QOS.header, "1");
         req.headers().set(HEADER_CLIENT_META_PREFIX + "age", "4");
         req.headers().set(HEADER_EXPIRY_SECONDS.header, "0");
         long reqId = 123;
@@ -194,5 +226,20 @@ public class PubHandlerTest extends AbstractHTTPRequestHandlerTest<PubHandler> {
 
     private DefaultFullHttpRequest buildRequest() {
         return buildRequest(HttpMethod.POST);
+    }
+
+    private void assertRepeatedValidationResponse(DefaultFullHttpRequest req, HttpResponseStatus expectedStatus,
+                                                  String expectedContent) {
+        PubHandler handler = new PubHandler(settingProvider, distClient);
+        FullHttpResponse firstResponse = handler.handle(123, "bifromq_dev", req).join();
+        firstResponse.release();
+
+        FullHttpResponse secondResponse = handler.handle(124, "bifromq_dev", req).join();
+        try {
+            assertEquals(secondResponse.status(), expectedStatus);
+            assertEquals(secondResponse.content().toString(StandardCharsets.UTF_8), expectedContent);
+        } finally {
+            secondResponse.release();
+        }
     }
 }

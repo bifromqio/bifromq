@@ -30,7 +30,6 @@ import static org.apache.bifromq.apiserver.http.handler.utils.HeaderUtils.getCli
 import static org.apache.bifromq.apiserver.http.handler.utils.HeaderUtils.getHeader;
 
 import com.google.protobuf.ByteString;
-import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -46,6 +45,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -61,9 +61,9 @@ import org.apache.bifromq.type.QoS;
 
 @Path("/pub")
 final class PubHandler extends TenantAwareHandler {
-    private static final ByteBuf UNACCEPTED_TOPIC = Unpooled.wrappedBuffer("Unaccepted Topic".getBytes());
-    private static final ByteBuf INVALID_QOS = Unpooled.wrappedBuffer("Invalid QoS".getBytes());
-    private static final ByteBuf INVALID_EXPIRY_SECONDS = Unpooled.wrappedBuffer("Invalid expiry seconds".getBytes());
+    private static final String UNACCEPTED_TOPIC = "Unaccepted Topic";
+    private static final String INVALID_QOS = "Invalid QoS";
+    private static final String INVALID_EXPIRY_SECONDS = "Invalid expiry seconds";
     private final IDistClient distClient;
     private final ISettingProvider settingProvider;
 
@@ -114,15 +114,18 @@ final class PubHandler extends TenantAwareHandler {
             .orElse(Integer.MAX_VALUE);
         if (!TopicUtil.checkTopicFilter(topic, tenantId, settingProvider)) {
             return CompletableFuture.completedFuture(
-                new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN, UNACCEPTED_TOPIC));
+                new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN,
+                    Unpooled.copiedBuffer(UNACCEPTED_TOPIC, StandardCharsets.UTF_8)));
         }
         if (qos < 0 || qos > 2) {
             return CompletableFuture.completedFuture(
-                new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, INVALID_QOS));
+                new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
+                    Unpooled.copiedBuffer(INVALID_QOS, StandardCharsets.UTF_8)));
         }
         if (expirySeconds <= 0) {
             return CompletableFuture.completedFuture(
-                new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST, INVALID_EXPIRY_SECONDS));
+                new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,
+                    Unpooled.copiedBuffer(INVALID_EXPIRY_SECONDS, StandardCharsets.UTF_8)));
         }
         String clientType = getHeader(HEADER_CLIENT_TYPE, req, true);
         Map<String, String> clientMeta = getClientMeta(req);
