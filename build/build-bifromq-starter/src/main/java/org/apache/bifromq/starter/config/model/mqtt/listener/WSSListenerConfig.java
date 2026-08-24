@@ -31,4 +31,6 @@ public class WSSListenerConfig {
     private int port = 8443;
     private String wsPath = "/mqtt";
     private ServerSSLContextConfig sslConfig;
+    private boolean enableProxyProtocol = true;
+    private boolean enableClientAddressHeader = true;
 }

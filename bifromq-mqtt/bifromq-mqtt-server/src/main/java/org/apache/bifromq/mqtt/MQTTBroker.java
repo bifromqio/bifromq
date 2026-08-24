@@ -170,7 +170,7 @@ class MQTTBroker implements IMQTTBroker {
     }
 
     private ChannelFuture bindTCPChannel(ConnListenerBuilder.TCPConnListenerBuilder connBuilder) {
-        return buildChannel(connBuilder, new MQTTChannelInitializer() {
+        return buildChannel(connBuilder, new MQTTChannelInitializer(connBuilder.enableProxyProtocol) {
             @Override
             protected void initChannel(SocketChannel ch) {
                 super.initChannel(ch);
@@ -194,7 +194,7 @@ class MQTTBroker implements IMQTTBroker {
     }
 
     private ChannelFuture bindTLSChannel(ConnListenerBuilder.TLSConnListenerBuilder connBuilder) {
-        return buildChannel(connBuilder, new MQTTChannelInitializer() {
+        return buildChannel(connBuilder, new MQTTChannelInitializer(connBuilder.enableProxyProtocol) {
             @Override
             protected void initChannel(SocketChannel ch) {
                 super.initChannel(ch);
@@ -219,7 +219,7 @@ class MQTTBroker implements IMQTTBroker {
     }
 
     private ChannelFuture bindWSChannel(ConnListenerBuilder.WSConnListenerBuilder connBuilder) {
-        return buildChannel(connBuilder, new MQTTChannelInitializer() {
+        return buildChannel(connBuilder, new MQTTChannelInitializer(connBuilder.enableProxyProtocol) {
             @Override
             protected void initChannel(SocketChannel ch) {
                 super.initChannel(ch);
@@ -229,7 +229,9 @@ class MQTTBroker implements IMQTTBroker {
                         new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
                     p.addLast("httpEncoder", new HttpResponseEncoder());
                     p.addLast("httpDecoder", new HttpRequestDecoder());
-                    p.addLast("remoteAddr", new ClientAddrHandler());
+                    if (connBuilder.clientAddressHeaderEnabled()) {
+                        p.addLast("remoteAddr", new ClientAddrHandler());
+                    }
                     p.addLast("aggregator", new HttpObjectAggregator(65536));
                     p.addLast("webSocketOnly", new WebSocketOnlyHandler(connBuilder.path()));
                     p.addLast("webSocketHandler", new WebSocketServerProtocolHandler(connBuilder.path(),
@@ -242,7 +244,7 @@ class MQTTBroker implements IMQTTBroker {
     }
 
     private ChannelFuture bindWSSChannel(ConnListenerBuilder.WSSConnListenerBuilder connBuilder) {
-        return buildChannel(connBuilder, new MQTTChannelInitializer() {
+        return buildChannel(connBuilder, new MQTTChannelInitializer(connBuilder.enableProxyProtocol) {
             @Override
             protected void initChannel(SocketChannel ch) {
                 super.initChannel(ch);
@@ -253,7 +255,9 @@ class MQTTBroker implements IMQTTBroker {
                         new ChannelTrafficShapingHandler(builder.writeLimit, builder.readLimit));
                     p.addLast("httpEncoder", new HttpResponseEncoder());
                     p.addLast("httpDecoder", new HttpRequestDecoder());
-                    p.addLast(ClientAddrHandler.class.getName(), new ClientAddrHandler());
+                    if (connBuilder.clientAddressHeaderEnabled()) {
+                        p.addLast(ClientAddrHandler.class.getName(), new ClientAddrHandler());
+                    }
                     p.addLast("aggregator", new HttpObjectAggregator(65536));
                     p.addLast("webSocketOnly", new WebSocketOnlyHandler(connBuilder.path()));
                     p.addLast("webSocketHandler", new WebSocketServerProtocolHandler(connBuilder.path(),
@@ -279,14 +283,22 @@ class MQTTBroker implements IMQTTBroker {
     }
 
     private abstract static class MQTTChannelInitializer extends ChannelInitializer<SocketChannel> {
+        private final boolean enableProxyProtocol;
+
+        private MQTTChannelInitializer(boolean enableProxyProtocol) {
+            this.enableProxyProtocol = enableProxyProtocol;
+        }
+
         @Override
         protected void initChannel(SocketChannel ch) {
-            ChannelPipeline pipeline = ch.pipeline();
-            // handler for proxy protocol v1 and v2
-            pipeline
-                .addLast(ProxyProtocolDetector.class.getName(), new ProxyProtocolDetector())
-                .addLast(HAProxyMessageDecoder.class.getName(), new HAProxyMessageDecoder())
-                .addLast(ProxyProtocolHandler.class.getName(), new ProxyProtocolHandler());
+            if (enableProxyProtocol) {
+                ChannelPipeline pipeline = ch.pipeline();
+                // handler for proxy protocol v1 and v2
+                pipeline
+                    .addLast(ProxyProtocolDetector.class.getName(), new ProxyProtocolDetector())
+                    .addLast(HAProxyMessageDecoder.class.getName(), new HAProxyMessageDecoder())
+                    .addLast(ProxyProtocolHandler.class.getName(), new ProxyProtocolHandler());
+            }
         }
     }
 }

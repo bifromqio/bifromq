@@ -89,12 +89,14 @@ public class MQTTServiceModule extends AbstractModule {
                 brokerBuilder.buildTcpConnListener()
                     .host(serverConfig.getTcpListener().getHost())
                     .port(serverConfig.getTcpListener().getPort())
+                    .enableProxyProtocol(serverConfig.getTcpListener().isEnableProxyProtocol())
                     .buildListener();
             }
             if (serverConfig.getTlsListener().isEnable()) {
                 brokerBuilder.buildTLSConnListener()
                     .host(serverConfig.getTlsListener().getHost())
                     .port(serverConfig.getTlsListener().getPort())
+                    .enableProxyProtocol(serverConfig.getTlsListener().isEnableProxyProtocol())
                     .sslContext(buildServerSslContext(serverConfig.getTlsListener().getSslConfig()))
                     .buildListener();
             }
@@ -103,6 +105,8 @@ public class MQTTServiceModule extends AbstractModule {
                     .host(serverConfig.getWsListener().getHost())
                     .port(serverConfig.getWsListener().getPort())
                     .path(serverConfig.getWsListener().getWsPath())
+                    .enableProxyProtocol(serverConfig.getWsListener().isEnableProxyProtocol())
+                    .enableClientAddressHeader(serverConfig.getWsListener().isEnableClientAddressHeader())
                     .buildListener();
             }
             if (serverConfig.getWssListener().isEnable()) {
@@ -110,6 +114,8 @@ public class MQTTServiceModule extends AbstractModule {
                     .host(serverConfig.getWssListener().getHost())
                     .port(serverConfig.getWssListener().getPort())
                     .path(serverConfig.getWssListener().getWsPath())
+                    .enableProxyProtocol(serverConfig.getWssListener().isEnableProxyProtocol())
+                    .enableClientAddressHeader(serverConfig.getWssListener().isEnableClientAddressHeader())
                     .sslContext(buildServerSslContext(serverConfig.getWssListener().getSslConfig()))
                     .buildListener();
             }
