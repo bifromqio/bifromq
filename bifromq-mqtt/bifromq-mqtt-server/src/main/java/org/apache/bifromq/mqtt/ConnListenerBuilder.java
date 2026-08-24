@@ -35,6 +35,7 @@ public abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C>> {
     private final MQTTBrokerBuilder serverBuilder;
     protected String host;
     protected int port;
+    protected boolean enableProxyProtocol = true;
 
     ConnListenerBuilder(MQTTBrokerBuilder builder) {
         serverBuilder = builder;
@@ -60,6 +61,11 @@ public abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C>> {
     public C port(int port) {
         Preconditions.checkArgument(port > 0, "port");
         this.port = port;
+        return thisT();
+    }
+
+    public C enableProxyProtocol(boolean enableProxyProtocol) {
+        this.enableProxyProtocol = enableProxyProtocol;
         return thisT();
     }
 
@@ -120,6 +126,7 @@ public abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C>> {
 
     public static final class WSConnListenerBuilder extends ConnListenerBuilder<WSConnListenerBuilder> {
         private String path = "mqtt";
+        private boolean enableClientAddressHeader = true;
 
         WSConnListenerBuilder(MQTTBrokerBuilder builder) {
             super(builder);
@@ -133,10 +140,20 @@ public abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C>> {
             this.path = path;
             return this;
         }
+
+        public WSConnListenerBuilder enableClientAddressHeader(boolean enableClientAddressHeader) {
+            this.enableClientAddressHeader = enableClientAddressHeader;
+            return this;
+        }
+
+        public boolean clientAddressHeaderEnabled() {
+            return enableClientAddressHeader;
+        }
     }
 
     public static final class WSSConnListenerBuilder extends SecuredConnListenerBuilder<WSSConnListenerBuilder> {
         private String path;
+        private boolean enableClientAddressHeader = true;
 
         WSSConnListenerBuilder(MQTTBrokerBuilder builder) {
             super(builder);
@@ -149,6 +166,15 @@ public abstract class ConnListenerBuilder<C extends ConnListenerBuilder<C>> {
         public WSSConnListenerBuilder path(String path) {
             this.path = path;
             return this;
+        }
+
+        public WSSConnListenerBuilder enableClientAddressHeader(boolean enableClientAddressHeader) {
+            this.enableClientAddressHeader = enableClientAddressHeader;
+            return this;
+        }
+
+        public boolean clientAddressHeaderEnabled() {
+            return enableClientAddressHeader;
         }
     }
 }

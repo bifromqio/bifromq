@@ -30,4 +30,5 @@ public class TLSListenerConfig {
     private String host;
     private int port = 1884;
     private ServerSSLContextConfig sslConfig;
+    private boolean enableProxyProtocol = true;
 }
