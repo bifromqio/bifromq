@@ -403,7 +403,7 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
             resendTask.cancel(true);
         }
         if (noDelayLWT != null) {
-            addBgTask(pubWillMessage(noDelayLWT));
+            addBgTask(doPubLastWill(noDelayLWT));
         }
         cancelStallTask();
         Sets.newHashSet(fgTasks).forEach(t -> t.cancel(true));
@@ -1510,27 +1510,6 @@ public abstract class MQTTSessionHandler extends MQTTMessageHandler implements I
                 handleProtocolResponse(
                     helper().onQoS2DistDenied(topic, packetId, distMessage, checkResult));
                 return CompletableFuture.completedFuture(null);
-            });
-    }
-
-    private CompletableFuture<Void> pubWillMessage(LWT willMessage) {
-        return authProvider.checkPermission(clientInfo(), buildPubAction(willMessage.getTopic(),
-                willMessage.getMessage()
-                    .getPubQoS(),
-                willMessage.getMessage().getIsRetain()))
-            .thenCompose(checkResult -> {
-                assert ctx.executor().inEventLoop();
-                if (checkResult.hasGranted()) {
-                    return doPubLastWill(willMessage);
-                } else {
-                    sessionCtx.eventCollector.report(getLocal(PubActionDisallow.class)
-                        .isLastWill(true)
-                        .topic(willMessage.getTopic())
-                        .qos(willMessage.getMessage().getPubQoS())
-                        .isRetain(willMessage.getMessage().getIsRetain())
-                        .clientInfo(clientInfo));
-                    return CompletableFuture.completedFuture(null);
-                }
             });
     }
 
